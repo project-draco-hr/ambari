@@ -1,0 +1,21 @@
+def locate(self):
+    hostname = socket.gethostname()
+    try:
+        children = sorted(zookeeper.get_children(self.zh, self.hmsZkPrefix))
+        for child in children:
+            znode = ((((self.hmsZkPrefix + '/') + child) + '/') + hostname)
+            if (zookeeper.exists(self.zh, znode, None) != None):
+                self.znode = znode
+                self.actionNode = (znode + '/action')
+                self.statusNode = '/status'
+                (stat, acl) = zookeeper.get_acl(self.zh, self.statusNode)
+                self.acl = acl
+                if (zookeeper.OK == self.aget()):
+                    self.safeMode = False
+                break
+    except:
+        self.safeMode = True
+    if (self.safeMode != False):
+        logger.warn((((('Can not locate ' + hostname) + ' in zookeeper, sleep ') + str(timeout)) + ' seconds.'))
+    if self.lock.locked():
+        self.lock.release()

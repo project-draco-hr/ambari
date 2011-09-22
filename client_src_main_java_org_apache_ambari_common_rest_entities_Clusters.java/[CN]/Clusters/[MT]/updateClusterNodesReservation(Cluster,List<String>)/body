@@ -1,0 +1,46 @@
+{
+  ConcurrentHashMap<String,Node> all_nodes=Nodes.getInstance().getNodes();
+  List<String> specified_node_range=new ArrayList<String>();
+  for (  String nodeRangeExpression : nodeRangeExpressions) {
+    specified_node_range.addAll(getHostnamesFromRangeExpression(nodeRangeExpression));
+  }
+  List<String> nodes_currently_allocated=new ArrayList<String>();
+  for (  Node n : Nodes.getInstance().getNodes().values()) {
+    if (n.getNodeState().getClusterName().equals(cls.getClusterDefinition().getName())) {
+      nodes_currently_allocated.add(n.getName());
+    }
+  }
+  List<String> nodes_to_allocate=new ArrayList<String>(specified_node_range);
+  nodes_to_allocate.removeAll(nodes_currently_allocated);
+  List<String> nodes_to_deallocate=new ArrayList<String>(nodes_currently_allocated);
+  nodes_to_deallocate.removeAll(specified_node_range);
+  List<String> preallocatedhosts=new ArrayList<String>();
+  for (  String n : nodes_to_allocate) {
+    if (all_nodes.containsKey(n) && all_nodes.get(n).getNodeState().getClusterName() != null) {
+      preallocatedhosts.add(n);
+    }
+  }
+  if (!preallocatedhosts.isEmpty()) {
+    Exception e=new Exception("Some of the nodes specified for the cluster roles are allocated to other cluster: [" + preallocatedhosts + "]");
+    throw new WebApplicationException(e,Response.Status.CONFLICT);
+  }
+  for (  String node_name : nodes_to_allocate) {
+    if (all_nodes.containsKey(node_name)) {
+synchronized (all_nodes.get(node_name)) {
+        all_nodes.get(node_name).getNodeState().setClusterName(cls.getClusterDefinition().getName());
+      }
+    }
+ else {
+      Node node=new Node(node_name);
+      node.reserveNodeForCluster(cls.getClusterDefinition().getName(),true);
+      Nodes.getInstance().getNodes().put(node_name,node);
+    }
+  }
+  for (  String node_name : nodes_to_deallocate) {
+    if (all_nodes.containsKey(node_name)) {
+synchronized (all_nodes.get(node_name)) {
+        all_nodes.get(node_name).releaseNodeFromCluster();
+      }
+    }
+  }
+}

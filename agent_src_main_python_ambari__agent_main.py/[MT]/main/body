@@ -1,0 +1,54 @@
+def main():
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGUSR1, debug)
+    if ((len(sys.argv) > 1) and (sys.argv[1] == 'stop')):
+        try:
+            f = open(pidfile, 'r')
+            pid = f.read()
+            pid = int(pid)
+            f.close()
+            os.kill(pid, signal.SIGTERM)
+            time.sleep(5)
+            if os.path.exists(pidfile):
+                raise Exception('PID file still exists.')
+            os._exit(0)
+        except Exception as err:
+            traceback.print_exc(file=sys.stdout)
+            os._exit(1)
+    if os.path.isfile(pidfile):
+        print ('%s already exists, exiting' % pidfile)
+        sys.exit(1)
+    else:
+        retCode = createDaemon()
+        pid = str(os.getpid())
+        file(pidfile, 'w').write(pid)
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s %(filename)s:%(lineno)d - %(message)s')
+    rotateLog = logging.handlers.RotatingFileHandler(logfile, 'a', 10000000, 10)
+    rotateLog.setFormatter(formatter)
+    logger.addHandler(rotateLog)
+    zeroconf = dnsResolver()
+    credential = None
+    if os.path.exists('/etc/hms/hms.ini'):
+        config = ConfigParser.RawConfigParser()
+        config.read('/etc/hms/hms.ini')
+        zkservers = config.get('zookeeper', 'quorum')
+        try:
+            credential = ((config.get('zookeeper', 'user') + ':') + config.get('zookeeper', 'password'))
+        except Exception as err:
+            credential = None
+    else:
+        zkservers = ''
+    while (zkservers == ''):
+        zkservers = zeroconf.find('_zookeeper._tcp')
+        if (zkservers == ''):
+            logger.warn('Unable to locate zookeeper, sleeping 30 seconds')
+            loop = 0
+            while (loop < 10):
+                time.sleep(3)
+                loop = (loop + 1)
+    logger.info((('Connecting to ' + zkservers) + '.'))
+    zc = ZooKeeperCommunicator(zkservers, credential)
+    zc.start()
+    zc.run()
