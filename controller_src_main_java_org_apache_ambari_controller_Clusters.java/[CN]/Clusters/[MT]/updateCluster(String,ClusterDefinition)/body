@@ -1,17 +1,28 @@
 {
-  int i;
-  ClusterDefinition cls=null;
-  for (i=0; i < operational_clusters.size(); i++) {
-    if (operational_clusters.get(i).equals(clusterName)) {
-      cls=operational_clusters.get(i);
-      break;
+  if (c.getName() == null || c.getName().equals("") || !c.getName().equals(clusterName)) {
+    Exception e=new Exception("Cluster name in resource URI [" + clusterName + "] does not match with one specified in update request element");
+    throw new WebApplicationException(e,Response.Status.BAD_REQUEST);
+  }
+  if (!this.operational_clusters.containsKey(clusterName)) {
+    Exception e=new Exception("Cluster [" + clusterName + "] does not exits");
+    throw new WebApplicationException(e,Response.Status.NOT_FOUND);
+  }
+  Cluster cls=this.operational_clusters.get(clusterName);
+synchronized (cls.getClusterDefinition()) {
+    if (c.getBlueprintName() != null)     cls.getClusterDefinition().setBlueprintName(c.getBlueprintName());
+    if (c.getDescription() != null)     cls.getClusterDefinition().setDescription(c.getDescription());
+    if (c.getGoalState() != null)     cls.getClusterDefinition().setGoalState(c.getGoalState());
+    if (c.getActiveServices() != null)     cls.getClusterDefinition().setActiveServices(c.getActiveServices());
+    if (c.getNodeRangeExpressions() != null) {
+      cls.getClusterDefinition().setNodeRangeExpressions(c.getNodeRangeExpressions());
+      updateClusterNodesReservation(cls,c.getNodeRangeExpressions());
     }
-  }
-  if (i == operational_clusters.size()) {
-    throw new Exception("Specified cluster [" + clusterName + "] does not exists");
-  }
-synchronized (cls) {
-    if (c.getDescription() != null)     cls.setDescription(c.getDescription());
+    if (c.getRoleToNodesMap() != null) {
+      cls.getClusterDefinition().setRoleToNodesMap(c.getRoleToNodesMap());
+      updateNodeToRolesAssociation(cls.getClusterDefinition(),c.getRoleToNodesMap());
+    }
+    cls.getClusterState().setLastUpdateTime(new Date());
+    cls.setRevision(cls.getRevision() + 1);
   }
   return;
 }
