@@ -1,0 +1,35 @@
+{
+  if (stackLocation == null || stackLocation.equals("")) {
+    Exception e=new Exception("Query parameter url must be specified");
+    throw new WebApplicationException(e,Response.Status.BAD_REQUEST);
+  }
+  URL stackLocationURL;
+  try {
+    stackLocationURL=new URL(stackLocation);
+  }
+ catch (  MalformedURLException e) {
+    throw new WebApplicationException(e,Response.Status.BAD_REQUEST);
+  }
+  ObjectMapper m=new ObjectMapper();
+  InputStream is=stackLocationURL.openStream();
+  Stack stack=m.readValue(is,Stack.class);
+  if (stacks.containsKey(stack.getName())) {
+    if (stacks.get(stack.getName()).containsKey(stack.getStackRevision())) {
+      Exception e=new Exception("Specified stack [Name:" + stack.getName() + ", Revision: ["+ stack.getStackRevision()+ "] is already imported");
+      throw new WebApplicationException(e,Response.Status.BAD_REQUEST);
+    }
+ else {
+      stacks.get(stack.getName()).put(stack.getStackRevision(),stack);
+      Blueprint blueprint=importDefaultBlueprint(stack);
+      this.default_blueprints.put(stack.getName() + ":" + stack.getStackRevision(),blueprint);
+    }
+  }
+ else {
+    ConcurrentHashMap<Integer,Stack> x=new ConcurrentHashMap<Integer,Stack>();
+    x.put(stack.getStackRevision(),stack);
+    this.stacks.put(stack.getName(),x);
+    Blueprint blueprint=importDefaultBlueprint(stack);
+    this.default_blueprints.put(stack.getName() + ":" + stack.getStackRevision(),blueprint);
+  }
+  return stack;
+}
