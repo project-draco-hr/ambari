@@ -1,18 +1,28 @@
 {
   String cname=cls.getClusterDefinition().getName();
   ConcurrentHashMap<String,Node> all_nodes=Nodes.getInstance().getNodes();
-  List<String> specified_node_range=new ArrayList<String>();
-  specified_node_range.addAll(getHostnamesFromRangeExpressions(nodeRangeExpressions));
-  List<String> nodes_currently_allocated=new ArrayList<String>();
+  List<String> cluster_node_range=new ArrayList<String>();
+  cluster_node_range.addAll(getHostnamesFromRangeExpressions(nodeRangeExpressions));
+  List<String> nodes_specified_using_role_association=new ArrayList<String>();
+  for (  RoleToNodesMapEntry e : cls.getClusterDefinition().getRoleToNodesMap().getRoleToNodesMapEntry()) {
+    List<String> hosts=getHostnamesFromRangeExpressions(e.getNodeRangeExpressions());
+    nodes_specified_using_role_association.addAll(hosts);
+  }
+  nodes_specified_using_role_association.removeAll(cluster_node_range);
+  if (!nodes_specified_using_role_association.isEmpty()) {
+    String msg="Some nodes explicityly associated with roles using RoleToNodesMap do not belong in the " + "golbal node range specified for the cluster : [" + nodes_specified_using_role_association + "]";
+    throw new WebApplicationException((new ExceptionResponse(msg,Response.Status.BAD_REQUEST)).get());
+  }
+  List<String> nodes_currently_allocated_to_cluster=new ArrayList<String>();
   for (  Node n : Nodes.getInstance().getNodes().values()) {
     if (n.getNodeState().getClusterName().equals(cls.getClusterDefinition().getName())) {
-      nodes_currently_allocated.add(n.getName());
+      nodes_currently_allocated_to_cluster.add(n.getName());
     }
   }
-  List<String> nodes_to_allocate=new ArrayList<String>(specified_node_range);
-  nodes_to_allocate.removeAll(nodes_currently_allocated);
-  List<String> nodes_to_deallocate=new ArrayList<String>(nodes_currently_allocated);
-  nodes_to_deallocate.removeAll(specified_node_range);
+  List<String> nodes_to_allocate=new ArrayList<String>(cluster_node_range);
+  nodes_to_allocate.removeAll(nodes_currently_allocated_to_cluster);
+  List<String> nodes_to_deallocate=new ArrayList<String>(nodes_currently_allocated_to_cluster);
+  nodes_to_deallocate.removeAll(cluster_node_range);
   List<String> preallocatedhosts=new ArrayList<String>();
   for (  String n : nodes_to_allocate) {
     if (all_nodes.containsKey(n) && (all_nodes.get(n).getNodeState().getClusterName() != null || all_nodes.get(n).getNodeState().getAllocatedToCluster())) {
@@ -20,8 +30,8 @@
     }
   }
   if (!preallocatedhosts.isEmpty()) {
-    Exception e=new Exception("Some of the nodes specified for the cluster roles are allocated to other cluster: [" + preallocatedhosts + "]");
-    throw new WebApplicationException(e,Response.Status.CONFLICT);
+    String msg="Some of the nodes specified for the cluster roles are allocated to other cluster: [" + preallocatedhosts + "]";
+    throw new WebApplicationException((new ExceptionResponse(msg,Response.Status.CONFLICT)).get());
   }
   for (  String node_name : nodes_to_allocate) {
     if (all_nodes.containsKey(node_name)) {
