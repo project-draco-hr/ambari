@@ -5,6 +5,7 @@
       return response;
     }
   }
+  short responseId=(short)(Short.parseShort(response.getResponseId()) + 1);
   Node node=Nodes.getInstance().getNodes().get(heartbeat.getHostname());
   NodeState state=node.getNodeState();
   GregorianCalendar c=new GregorianCalendar();
@@ -12,14 +13,31 @@
   state.setLastHeartbeatTime(DatatypeFactory.newInstance().newXMLGregorianCalendar(c));
   Cluster cluster=Clusters.getInstance().getClusterByName(state.getClusterName());
   ClusterContext clusterContext=new ClusterContextImpl(cluster,node);
-  List<ServerStatus> servers=heartbeat.getServersStatus();
-  org.apache.ambari.resource.statemachine.Cluster stateMachineCluster=StateMachineInvoker.getStateMachineClusterInstance(state.getClusterName());
-  List<Action> actions=new ArrayList<Action>();
-synchronized (this) {
-    actions=responseMap.get(node.getName());
+  List<Action> allActions=new ArrayList<Action>();
+  if (heartbeat.getIdle()) {
+    List<ServerStatus> serverStatuses=heartbeat.getServersStatus();
+    StartedComponentServers componentServers=new StartedComponentServers();
+    for (    ServerStatus status : serverStatuses) {
+      if (status.getState() == State.STARTED) {
+        componentServers.serverStarted(status.getComponent(),status.getServerName());
+      }
+    }
+    org.apache.ambari.resource.statemachine.Cluster clusterSMobject=StateMachineInvoker.getStateMachineClusterInstance(state.getClusterName());
+    List<Service> clusterServices=clusterSMobject.getServices();
+    for (    Service service : clusterServices) {
+      List<Role> roles=service.getRoles();
+      for (      Role role : roles) {
+        if (role.shouldStart() && !componentServers.isStarted(role.getAssociatedService().getServiceName(),role.getRoleName())) {
+          HDFSPluginImpl plugin=new HDFSPluginImpl();
+          List<Action> actions=plugin.startRoleServer(clusterContext,role.getRoleName());
+          allActions.addAll(actions);
+        }
+      }
+    }
   }
   ControllerResponse r=new ControllerResponse();
-  r.setActions(actions);
+  r.setResponseId(String.valueOf(responseId));
+  r.setActions(allActions);
   agentToHeartbeatResponseMap.put(heartbeat.getHostname(),r);
   return r;
 }
