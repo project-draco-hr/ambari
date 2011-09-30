@@ -15,22 +15,51 @@
   ClusterContext clusterContext=new ClusterContextImpl(cluster,node);
   List<Action> allActions=new ArrayList<Action>();
   if (heartbeat.getIdle()) {
-    List<ServerStatus> serverStatuses=heartbeat.getServersStatus();
+    List<ServerStatus> roleStatuses=heartbeat.getServersStatus();
     StartedComponentServers componentServers=new StartedComponentServers();
-    for (    ServerStatus status : serverStatuses) {
-      if (status.getState() == State.STARTED) {
-        componentServers.serverStarted(status.getComponent(),status.getRole());
-      }
+    for (    ServerStatus status : roleStatuses) {
+      componentServers.roleServerStarted(status.getComponent(),status.getServerName());
     }
     org.apache.ambari.resource.statemachine.Cluster clusterSMobject=StateMachineInvoker.getStateMachineClusterInstance(state.getClusterName());
     List<Service> clusterServices=clusterSMobject.getServices();
     for (    Service service : clusterServices) {
       List<Role> roles=service.getRoles();
       for (      Role role : roles) {
-        if (role.shouldStart() && !componentServers.isStarted(role.getAssociatedService().getServiceName(),role.getRoleName())) {
-          HDFSPluginImpl plugin=new HDFSPluginImpl();
-          List<Action> actions=plugin.startRoleServer(clusterContext,role.getRoleName());
-          allActions.addAll(actions);
+        boolean roleServerRunning=componentServers.isStarted(role.getAssociatedService().getServiceName(),role.getRoleName());
+        HDFSPluginImpl plugin=new HDFSPluginImpl();
+        if (role.shouldStart()) {
+          if (!roleServerRunning) {
+            short retryCount=retryCountForRole.get(role);
+            if (retryCount > MAX_RETRY_COUNT) {
+              StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.S_START_FAILURE,role));
+              retryCountForRole.reset(role);
+              continue;
+            }
+            List<Action> actions=plugin.startRoleServer(clusterContext,role.getRoleName());
+            allActions.addAll(actions);
+            retryCountForRole.incr(role);
+          }
+          if (roleServerRunning) {
+            retryCountForRole.reset(role);
+            StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.S_START_SUCCESS,role));
+          }
+        }
+        if (role.shouldStop()) {
+          if (roleServerRunning) {
+            short retryCount=retryCountForRole.get(role);
+            if (retryCount > MAX_RETRY_COUNT) {
+              StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.S_STOP_FAILURE,role));
+              retryCountForRole.reset(role);
+              continue;
+            }
+            List<Action> actions=plugin.stopRoleServer(clusterContext,role.getRoleName());
+            allActions.addAll(actions);
+            retryCountForRole.incr(role);
+          }
+          if (!roleServerRunning) {
+            retryCountForRole.reset(role);
+            StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.S_STOP_SUCCESS,role));
+          }
         }
       }
     }
