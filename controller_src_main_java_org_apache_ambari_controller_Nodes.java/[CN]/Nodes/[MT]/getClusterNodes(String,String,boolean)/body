@@ -1,0 +1,28 @@
+{
+  List<Node> list=new ArrayList<Node>();
+  ClusterDefinition c=Clusters.getInstance().getClusterDefinition(clusterName);
+  if (c.getNodeRangeExpressions() == null) {
+    String msg="No nodes are reserved for the cluster. Typically cluster in ATTIC state does not have any nodes reserved";
+    throw new WebApplicationException((new ExceptionResponse(msg,Response.Status.NO_CONTENT)).get());
+  }
+  List<String> hosts=Clusters.getInstance().getHostnamesFromRangeExpressions(c.getNodeRangeExpressions());
+  for (  String host : hosts) {
+    if (!this.nodes.containsKey(host)) {
+      String msg="Node [" + host + "] is expected to be registered w/ controller but not locatable";
+      throw new WebApplicationException((new ExceptionResponse(msg,Response.Status.INTERNAL_SERVER_ERROR)).get());
+    }
+    Node n=this.nodes.get(host);
+    if (roleName != null && !roleName.equals("")) {
+      if (!n.getNodeState().getNodeRoleNames().contains(roleName)) {
+        continue;
+      }
+    }
+    GregorianCalendar cal=new GregorianCalendar();
+    cal.setTime(new Date());
+    XMLGregorianCalendar curTime=DatatypeFactory.newInstance().newXMLGregorianCalendar(cal);
+    if ((alive && getTimeDiffInMillis(curTime,n.getNodeState().getLastHeartbeatTime()) < NODE_NOT_RESPONDING_DURATION) || (!alive && getTimeDiffInMillis(curTime,n.getNodeState().getLastHeartbeatTime()) >= NODE_NOT_RESPONDING_DURATION)) {
+      list.add(this.nodes.get(host));
+    }
+  }
+  return list;
+}
