@@ -6,7 +6,8 @@
     }
   }
   short responseId=(short)(Short.parseShort(response.getResponseId()) + 1);
-  Node node=Nodes.getInstance().getNodes().get(heartbeat.getHostname());
+  String hostname=heartbeat.getHostname();
+  Node node=Nodes.getInstance().getNodes().get(hostname);
   NodeState state=node.getNodeState();
   GregorianCalendar c=new GregorianCalendar();
   c.setTime(new Date());
@@ -29,35 +30,35 @@
         HDFSPluginImpl plugin=new HDFSPluginImpl();
         if (role.shouldStart()) {
           if (!roleServerRunning) {
-            short retryCount=retryCountForRole.get(role);
+            short retryCount=retryCountForRole.get(hostname);
             if (retryCount > MAX_RETRY_COUNT) {
               StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.START_FAILURE,role));
-              retryCountForRole.reset(role);
+              retryCountForRole.resetAttemptCount(hostname);
               continue;
             }
             List<Action> actions=plugin.startRoleServer(clusterContext,role.getRoleName());
             allActions.addAll(actions);
-            retryCountForRole.incr(role);
+            retryCountForRole.incrAttemptCount(hostname);
           }
           if (roleServerRunning) {
-            retryCountForRole.reset(role);
+            retryCountForRole.resetAttemptCount(hostname);
             StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.START_SUCCESS,role));
           }
         }
         if (role.shouldStop()) {
           if (roleServerRunning) {
-            short retryCount=retryCountForRole.get(role);
+            short retryCount=retryCountForRole.get(hostname);
             if (retryCount > MAX_RETRY_COUNT) {
               StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.STOP_FAILURE,role));
-              retryCountForRole.reset(role);
+              retryCountForRole.resetAttemptCount(hostname);
               continue;
             }
             List<Action> actions=plugin.stopRoleServer(clusterContext,role.getRoleName());
             allActions.addAll(actions);
-            retryCountForRole.incr(role);
+            retryCountForRole.incrAttemptCount(hostname);
           }
           if (!roleServerRunning) {
-            retryCountForRole.reset(role);
+            retryCountForRole.resetAttemptCount(hostname);
             StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.STOP_SUCCESS,role));
           }
         }
