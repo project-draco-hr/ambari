@@ -16,12 +16,13 @@
   ClusterContext clusterContext=new ClusterContextImpl(cluster,node);
   List<Action> allActions=new ArrayList<Action>();
   if (heartbeat.getIdle()) {
-    List<ServerStatus> roleStatuses=heartbeat.getServersStatus();
+    String desiredBlueprint=cluster.getLatestClusterDefinition().getBlueprintName();
+    String desiredBlueprintRev=cluster.getLatestClusterDefinition().getBlueprintRevision();
+    String desiredClusterId=cluster.getID();
+    ClusterFSM desiredClusterFSM=StateMachineInvoker.getStateMachineClusterInstance(desiredClusterId,desiredBlueprint,desiredBlueprintRev);
     StartedComponentServers componentServers=new StartedComponentServers();
-    for (    ServerStatus status : roleStatuses) {
-      componentServers.roleServerStarted(status.getComponent(),status.getRole());
-    }
-    ClusterFSM clusterSMobject=StateMachineInvoker.getStateMachineClusterInstance(cluster.getID(),cluster.getLatestClusterDefinition().getBlueprintName(),cluster.getLatestClusterDefinition().getBlueprintRevision());
+    List<Action> installAndUninstallActions=getInstallAndUninstallActions(heartbeat,desiredClusterFSM,clusterContext,componentServers);
+    ClusterFSM clusterSMobject=StateMachineInvoker.getStateMachineClusterInstance(desiredClusterId,desiredBlueprint,desiredBlueprintRev);
     List<ServiceFSM> clusterServices=clusterSMobject.getServices();
     for (    ServiceFSM service : clusterServices) {
       List<RoleFSM> roles=service.getRoles();
