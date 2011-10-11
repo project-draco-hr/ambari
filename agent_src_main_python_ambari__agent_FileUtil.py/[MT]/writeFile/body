@@ -1,19 +1,35 @@
-def writeFile(parts):
+def writeFile(action, result):
+    fileInfo = action['file']
     try:
-        user = parts[1]
-        if isinstance(user, str):
+        user = fileInfo['owner']
+        if (isinstance(user, int) != True):
             user = getpwnam(user)[2]
-        group = parts[2]
-        if isinstance(group, str):
+        group = fileInfo['group']
+        if (isinstance(group, int) != True):
             group = getgrnam(group)[2]
-        permission = parts[3]
-        filename = parts[4]
-        content = parts[5]
+        permission = int(fileInfo['permission'])
+        umask = int(fileInfo['umask'])
+        filename = fileInfo['path']
+        content = fileInfo['data']
+        oldMask = os.umask(0)
+        os.umask(int(umask))
+        prefix = os.path.dirname(filename)
+        try:
+            os.makedirs(prefix)
+        except OSError as err:
+            if (err.errno == errno.EEXIST):
+                pass
+            else:
+                raise
         f = open(filename, 'w')
         f.write(content)
         f.close()
         os.chmod(filename, permission)
         os.chown(filename, user, group)
-        return {'exit_code': 0, }
+        os.umask(oldMask)
+        result['exitCode'] = 0
+        return result
     except Exception as err:
-        return {'exit_code': 1, 'stderr': traceback.format_exc(), }
+        result['exitCode'] = 1
+        result['stderr'] = traceback.format_exc()
+        return result
