@@ -4,20 +4,39 @@
   Client client=Client.create(config);
   WebResource service=client.resource(getBaseURI());
   ClusterDefinition clsDef=new ClusterDefinition();
-  clsDef.setName(this.clusterName);
-  clsDef.setBlueprintName(this.blueprint);
-  clsDef.setNodes(this.nodeRangeExpressions);
-  clsDef.setGoalState(this.goalState);
-  clsDef.setBlueprintRevision(this.blueprint_revision);
-  clsDef.setActiveServices(splitServices(this.activeServices));
-  clsDef.setDescription(this.description);
-  clsDef.setRoleToNodesMap(getRoleToNodesMap(this.roleToNodeExpressions));
-  ClientResponse response=service.path("clusters").accept(MediaType.APPLICATION_JSON).type(MediaType.APPLICATION_JSON).post(ClientResponse.class,clsDef);
+  clsDef.setName(line.getOptionValue("name"));
+  clsDef.setBlueprintName(line.getOptionValue("blueprint"));
+  clsDef.setNodes(line.getOptionValue("nodes"));
+  clsDef.setGoalState(line.getOptionValue("goalstate"));
+  clsDef.setBlueprintRevision(line.getOptionValue("revision"));
+  clsDef.setActiveServices(splitServices(line.getOptionValue("services")));
+  clsDef.setDescription(line.getOptionValue("desc"));
+  clsDef.setRoleToNodesMap(getRoleToNodesList(line.getOptionProperties("role")));
+  ClientResponse response=service.path("clusters").queryParam("dry_run",dry_run).accept(MediaType.APPLICATION_JSON).type(MediaType.APPLICATION_JSON).post(ClientResponse.class,clsDef);
   if (response.getStatus() != 200) {
     System.err.println("Cluster create command failed. Reason [Code: <" + response.getStatus() + ">, Message: <"+ response.getHeaders().getFirst("ErrorMessage")+ ">]");
     System.exit(-1);
   }
   ClusterDefinition def=response.getEntity(ClusterDefinition.class);
   System.out.println("CLUSTER NAME [" + def.getName() + "]");
-  System.out.println("CLUSTER NAME [" + def.getDescription() + "]");
+  System.out.println("CLUSTER DESC [" + def.getDescription() + "]");
+  if (!line.hasOption("wait")) {
+    return;
+  }
+  ClusterState clusterState;
+  for (; ; ) {
+    response=service.path("clusters/" + def.getName() + "/state").accept(MediaType.APPLICATION_JSON).type(MediaType.APPLICATION_JSON).get(ClientResponse.class);
+    if (response.getStatus() != 200) {
+      System.err.println("Failed to get the cluster state. Reason [Code: <" + response.getStatus() + ">, Message: <"+ response.getHeaders().getFirst("ErrorMessage")+ ">]");
+      System.exit(-1);
+    }
+    clusterState=response.getEntity(ClusterState.class);
+    if (clusterState.getState().equals(def.getGoalState())) {
+      break;
+    }
+    System.out.println("Waiting for cluster [" + def.getName() + "] to get to desired goalstate");
+    Thread.sleep(15 * 60000);
+  }
+  System.out.println("Cluster Goal State [" + def.getGoalState());
+  System.out.println("Cluster state [" + clusterState.getState());
 }

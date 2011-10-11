@@ -3,6 +3,17 @@
     String msg="Cluster Name must be specified and must be non-empty string";
     throw new WebApplicationException((new ExceptionResponse(msg,Response.Status.BAD_REQUEST)).get());
   }
+  if (cdef.getDescription() == null) {
+    cdef.setDescription("Ambari cluster : [" + cdef.getName() + "]");
+  }
+  if (cdef.getGoalState() == null) {
+    cdef.setGoalState(cdef.GOAL_STATE_INACTIVE);
+  }
+  if (cdef.getActiveServices() == null) {
+    List<String> services=new ArrayList<String>();
+    services.add("ALL");
+    cdef.setActiveServices(services);
+  }
 synchronized (operational_clusters) {
     if (operational_clusters.containsKey(cdef.getName())) {
       String msg="Cluster [" + cdef.getName() + "] already exists";
@@ -14,21 +25,33 @@ synchronized (operational_clusters) {
     clsState.setCreationTime(requestTime);
     clsState.setLastUpdateTime(requestTime);
     clsState.setDeployTime((Date)null);
-    clsState.setState(ClusterState.CLUSTER_STATE_INACTIVE);
+    if (cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ATTIC)) {
+      clsState.setState(ClusterState.CLUSTER_STATE_ATTIC);
+    }
+ else {
+      clsState.setState(ClusterDefinition.GOAL_STATE_INACTIVE);
+    }
     cls.setID(UUID.randomUUID().toString());
     cls.addClusterDefinition(cdef);
     cls.setClusterState(clsState);
-    if (cdef.getNodes() != null) {
+    if (dry_run) {
+      List<RoleToNodes> role2NodesList=generateRoleToNodesListBasedOnNodeAttributes(cdef);
+      cdef.setRoleToNodesMap(role2NodesList);
+      return cdef;
+    }
+    if (cdef.getNodes() != null && !cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ATTIC)) {
       updateClusterNodesReservation(cls.getID(),cdef);
     }
-    if (cdef.getRoleToNodes() != null) {
+    if (!cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ATTIC)) {
+      if (cdef.getRoleToNodes() == null) {
+        List<RoleToNodes> role2NodesList=generateRoleToNodesListBasedOnNodeAttributes(cdef);
+        cdef.setRoleToNodesMap(role2NodesList);
+      }
       updateNodeToRolesAssociation(cdef.getNodes(),cdef.getRoleToNodes());
-    }
- else {
     }
     this.operational_clusters.put(cdef.getName(),cls);
     this.operational_clusters_id_to_name.put(cls.getID(),cdef.getName());
-    if (cdef.getGoalState().equals(ClusterState.CLUSTER_STATE_ACTIVE)) {
+    if (cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ACTIVE)) {
       org.apache.ambari.resource.statemachine.ClusterFSM cs=StateMachineInvoker.createCluster(cls);
     }
   }
