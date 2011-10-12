@@ -17,16 +17,21 @@
   List<Action> allActions=new ArrayList<Action>();
   if (heartbeat.getIdle()) {
     String desiredClusterId=cluster.getID();
-    StartedComponentServers componentServers=new StartedComponentServers();
-    allActions=getStopAndUninstallActions(heartbeat,clusterContext,componentServers);
-    ClusterFSM clusterSMobject=StateMachineInvoker.getStateMachineClusterInstance(desiredClusterId);
-    List<ServiceFSM> clusterServices=clusterSMobject.getServices();
+    InstalledOrStartedComponents componentServers=new InstalledOrStartedComponents();
+    ClusterFSM clusterFsm=StateMachineInvoker.getStateMachineClusterInstance(desiredClusterId);
+    allActions=inspectAgentState(heartbeat,clusterContext,componentServers,clusterFsm);
+    List<ServiceFSM> clusterServices=clusterFsm.getServices();
     for (    ServiceFSM service : clusterServices) {
       List<RoleFSM> roles=service.getRoles();
       for (      RoleFSM role : roles) {
+        boolean roleInstalled=componentServers.isInstalled(role.getAssociatedService().getServiceName(),role.getRoleName());
         boolean roleServerRunning=componentServers.isStarted(role.getAssociatedService().getServiceName(),role.getRoleName());
         HDFSPluginImpl plugin=new HDFSPluginImpl();
         if (role.shouldStart()) {
+          if (!roleInstalled) {
+            allActions.addAll(plugin.install(clusterContext));
+            continue;
+          }
           if (!roleServerRunning) {
             short retryCount=retryCountForRole.get(hostname,role.getRoleName());
             if (retryCount > MAX_RETRY_COUNT) {
@@ -58,6 +63,9 @@
           if (!roleServerRunning) {
             retryCountForRole.resetAttemptCount(hostname,role.getRoleName());
             StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.STOP_SUCCESS,role));
+          }
+          if (roleInstalled && clusterFsm.getClusterState().equals(ClusterState.CLUSTER_STATE_ATTIC)) {
+            allActions.addAll(plugin.uninstall(clusterContext));
           }
         }
       }
