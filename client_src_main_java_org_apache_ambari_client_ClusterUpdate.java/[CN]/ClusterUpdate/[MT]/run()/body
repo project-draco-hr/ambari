@@ -1,0 +1,47 @@
+{
+  parseCommandLine();
+  ClientConfig config=new DefaultClientConfig();
+  Client client=Client.create(config);
+  WebResource service=client.resource(getBaseURI());
+  ClusterDefinition clsDef=new ClusterDefinition();
+  clsDef.setName(line.getOptionValue("name"));
+  clsDef.setBlueprintName(line.getOptionValue("blueprint"));
+  clsDef.setNodes(line.getOptionValue("nodes"));
+  clsDef.setGoalState(line.getOptionValue("goalstate"));
+  clsDef.setBlueprintRevision(line.getOptionValue("revision"));
+  clsDef.setActiveServices(splitServices(line.getOptionValue("services")));
+  clsDef.setDescription(line.getOptionValue("desc"));
+  clsDef.setRoleToNodesMap(getRoleToNodesList(line.getOptionProperties("role")));
+  ClientResponse response=service.path("clusters/" + clsDef.getName()).queryParam("dry_run",dry_run).accept(MediaType.APPLICATION_JSON).type(MediaType.APPLICATION_JSON).put(ClientResponse.class,clsDef);
+  if (response.getStatus() != 200) {
+    System.err.println("Cluster update command failed. Reason [Code: <" + response.getStatus() + ">, Message: <"+ response.getHeaders().getFirst("ErrorMessage")+ ">]");
+    System.exit(-1);
+  }
+  ClusterDefinition def=response.getEntity(ClusterDefinition.class);
+  if (line.hasOption("dry_run")) {
+    System.out.println("Cluster: [" + def.getName() + "] updated. Mode: dry_run.\n");
+    printClusterDefinition(def);
+    return;
+  }
+  if (!line.hasOption("wait") || !line.hasOption("goalstate")) {
+    System.out.println("Cluster: [" + def.getName() + "] updated.\n");
+    printClusterDefinition(def);
+    return;
+  }
+  ClusterState clusterState;
+  for (; ; ) {
+    response=service.path("clusters/" + def.getName() + "/state").accept(MediaType.APPLICATION_JSON).type(MediaType.APPLICATION_JSON).get(ClientResponse.class);
+    if (response.getStatus() != 200) {
+      System.err.println("Failed to get the cluster state. Reason [Code: <" + response.getStatus() + ">, Message: <"+ response.getHeaders().getFirst("ErrorMessage")+ ">]");
+      System.exit(-1);
+    }
+    clusterState=response.getEntity(ClusterState.class);
+    if (clusterState.getState().equals(def.getGoalState())) {
+      break;
+    }
+    System.out.println("Waiting for cluster [" + def.getName() + "] to get to desired goalstate of ["+ def.getGoalState()+ "]");
+    Thread.sleep(15 * 60000);
+  }
+  System.out.println("Cluster: [" + def.getName() + "] updated. Cluster state: ["+ clusterState.getState()+ "]\n");
+  printClusterDefinition(def);
+}
