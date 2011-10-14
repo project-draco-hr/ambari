@@ -31,23 +31,17 @@ def main():
     rotateLog.setFormatter(formatter)
     logger.addHandler(rotateLog)
     credential = None
-    if os.path.exists('/etc/ambari/ambari.ini'):
-        config.read('/etc/ambari/ambari.ini')
-        try:
-            credential = {}
-            credential['user'] = config.get('controller', 'user')
-            credential['password'] = config.get('controller', 'password')
-            controllerUrl = config.get('controller', 'url')
-        except Exception as err:
-            credential = None
-            controllerUrl = 'http://localhost:4080'
-    else:
-        credential = None
-        controllerUrl = 'http://localhost:4080'
-    logger.info(('Connecting to controller at: ' + controllerUrl))
-    print controllerUrl
-    print credential
-    controller = Controller(controllerUrl, credential)
+    try:
+        config = AmbariConfig.config
+        if os.path.exists('/etc/ambari/ambari.ini'):
+            config.read('/etc/ambari/ambari.ini')
+            AmbariConfig.setConfig(config)
+        else:
+            raise Exception('No config found, use default')
+    except Exception as err:
+        logger.warn(err)
+    logger.info(('Connecting to controller at: ' + config.get('controller', 'url')))
+    controller = Controller(config)
     controller.start()
     controller.run()
     logger.info('finished')
