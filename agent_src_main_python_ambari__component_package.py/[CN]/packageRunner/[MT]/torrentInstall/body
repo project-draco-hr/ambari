@@ -1,0 +1,32 @@
+def torrentInstall(self, cluster, role, package, dryRun):
+    if (string.find(package, 'http://') == 0):
+        urllib.urlretrieve(package, (packageRunner.downloadDir + os.path.basename(package)))
+        tFile = (packageRunner.downloadDir + os.path.basename(package))
+    else:
+        tFile = package
+    q.put(tFile)
+    while (not q.empty()):
+        self.torrentDownload(q.get())
+    fileList = self.torrentInfo(tFile)
+    try:
+        list = []
+        for p in fileList:
+            if (dryRun == 'true'):
+                continue
+            if (string.find(p, '.tar.gz') > 0):
+                result = self.tarballInstall(cluster, role, p)
+            elif (string.find(p, '.rpm') > 0):
+                list.append((packageRunner.downloadDir + p))
+            else:
+                ' Install fails if the file type is unknown. '
+                list = []
+                result = []
+                result['exit_code'] = 1
+                break
+        if (len(list) > 0):
+            result = self.rpmInstall(list)
+        if (result['exit_code'] != 0):
+            raise Exception((p + ' install error.'))
+    except Exception as err:
+        return {'exit_code': 1, 'output': '', 'error': str(err), }
+    return {'exit_code': 0, 'output': 'install completed.', 'error': '', }

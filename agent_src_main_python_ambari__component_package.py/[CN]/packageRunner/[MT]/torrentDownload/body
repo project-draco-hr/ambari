@@ -1,0 +1,46 @@
+def torrentDownload(self, package):
+    sh = shellRunner()
+    startTime = time.time()
+    script = ['transmission-daemon', '-y', '-O', '-M', '-w', packageRunner.downloadDir, '-g', (packageRunner.ambariPrefix + '/var/cache/config')]
+    result = sh.run(script)
+    for wait in [1, 1, 2, 2, 5]:
+        script = ['transmission-remote', '-l']
+        result = sh.run(script)
+        if (result['exit_code'] == 0):
+            break
+        time.sleep(wait)
+    if (result['exit_code'] != 0):
+        raise Exception(('Unable to start transmission-daemon, exit_code:' + str(result['exit_code'])))
+    script = ['transmission-remote', '-a', package, '--torrent-done-script', '/usr/bin/ambari-torrent-callback']
+    result = sh.run(script)
+    if (result['exit_code'] != 0):
+        raise Exception('Unable to issue transmission-remote command')
+    trackerComplete = (packageRunner.ambariPrefix + '/var/tmp/tracker')
+    while True:
+        if os.path.exists(trackerComplete):
+            break
+        script = ['transmission-remote', '-t', '1', '--reannounce']
+        sh.run(script)
+        time.sleep(5)
+    endTime = time.time()
+    duration = (endTime - startTime)
+    os.remove(trackerComplete)
+    code = 0
+    script = ['transmission-remote', '-t', '1', '-r']
+    result = sh.run(script)
+    if (result['exit_code'] != 0):
+        code = result['exit_code']
+        logger.warn(((('Can not remove torrent, output: ' + result['output']) + ' error: ') + result['error']))
+    script = ['transmission-remote', '--exit']
+    result = sh.run(script)
+    if (result['exit_code'] != 0):
+        code = result['exit_code']
+        logger.warn(((('Can not shutdown torrent client, output: ' + result['output']) + ' error: ') + result['error']))
+    output = ('%s downloaded duration: %d seconds.' % (package, duration))
+    while True:
+        ' Make sure transmission-daemon is properly terminated '
+        script = ['transmission-remote', '-l']
+        result = sh.run(script)
+        if (result['exit_code'] != 0):
+            break
+    return {'exit_code': code, 'output': output, 'error': '', }
