@@ -1,0 +1,42 @@
+{
+  parseCommandLine();
+  ClientConfig config=new DefaultClientConfig();
+  Client client=Client.create(config);
+  WebResource service=client.resource(getBaseURI());
+  boolean verbose=line.hasOption("verbose");
+  String allocated="";
+  if (line.hasOption("allocated")) {
+    allocated=line.getOptionValue("allocated");
+  }
+  String alive="";
+  if (line.hasOption("alive")) {
+    alive=line.getOptionValue("alive");
+  }
+  ClientResponse response;
+  response=service.path("nodes").queryParam("alive",alive).queryParam("allocated",allocated).accept(MediaType.APPLICATION_JSON).type(MediaType.APPLICATION_JSON).get(ClientResponse.class);
+  if (response.getStatus() == 204) {
+    System.exit(0);
+  }
+  if (response.getStatus() != 200) {
+    System.err.println("node list command failed. Reason [Code: <" + response.getStatus() + ">, Message: <"+ response.getHeaders().getFirst("ErrorMessage")+ ">]");
+    System.exit(-1);
+  }
+  List<Node> nodes=response.getEntity(new GenericType<List<Node>>(){
+  }
+);
+  if (!verbose) {
+    System.out.println("[NAME]\t[LAST HEARTBEAT TIME]\t[NODE_SERVICES]\t[CLUSTER_ID]\n");
+    for (    Node node : nodes) {
+      String clusterID="";
+      if (node.getNodeState().getClusterID() != null)       clusterID=node.getNodeState().getClusterID();
+      System.out.println("[" + node.getName() + "]\t"+ "["+ node.getNodeState().getLastHeartbeatTime()+ "]\t"+ "["+ node.getNodeState().getNodeServers()+ "]\t"+ "["+ clusterID+ "]\n");
+    }
+  }
+ else {
+    System.out.println("Node List:\n");
+    for (    Node node : nodes) {
+      printNodeInformation(node);
+      System.out.println("\n");
+    }
+  }
+}
