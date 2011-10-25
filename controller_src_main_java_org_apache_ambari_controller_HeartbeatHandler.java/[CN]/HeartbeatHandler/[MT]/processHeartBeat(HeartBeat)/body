@@ -8,24 +8,24 @@
   short responseId=(short)(heartbeat.getResponseId() + 1);
   String hostname=heartbeat.getHostname();
   Date heartbeatTime=new Date(System.currentTimeMillis());
-  String clusterId=null;
+  String clusterName=null;
   long clusterRev=0L;
   Nodes.getInstance().checkAndUpdateNode(hostname,heartbeatTime);
   List<Action> allActions=new ArrayList<Action>();
-  clusterId=Nodes.getInstance().getNode(hostname).getNodeState().getClusterID();
-  if (clusterId != null) {
-    clusterRev=Clusters.getInstance().getClusterByID(clusterId).getLatestRevision();
+  clusterName=Nodes.getInstance().getNode(hostname).getNodeState().getClusterName();
+  if (clusterName != null) {
+    clusterRev=Clusters.getInstance().getClusterByName(clusterName).getLatestRevision();
   }
   ComponentAndRoleStates componentStates=new ComponentAndRoleStates();
   inspectAgentState(heartbeat,componentStates);
   Set<ClusterIdAndRev> clustersNodeBelongsTo=componentStates.getClustersNodeBelongsTo();
   if (heartbeat.getIdle()) {
     for (    ClusterIdAndRev clusterIdAndRev : clustersNodeBelongsTo) {
-      if (!isCompatible(clusterIdAndRev.getClusterId(),clusterIdAndRev.getRevision(),clusterId,clusterRev)) {
+      if (!isCompatible(clusterIdAndRev.getClusterId(),clusterIdAndRev.getRevision(),clusterName,clusterRev)) {
         createStopAndUninstallActions(componentStates,allActions,clusterIdAndRev,true);
         continue;
       }
-      Cluster cluster=Clusters.getInstance().getClusterByID(clusterIdAndRev.getClusterId());
+      Cluster cluster=Clusters.getInstance().getClusterByName(clusterIdAndRev.getClusterId());
       ClusterFSM clusterFsm=StateMachineInvoker.getStateMachineClusterInstance(clusterIdAndRev.getClusterId());
       List<ServiceFSM> clusterServices=clusterFsm.getServices();
       for (      ServiceFSM service : clusterServices) {
@@ -41,11 +41,11 @@
               if (!roleInstalled) {
                 Action action=new Action();
                 action.setKind(Kind.CREATE_STRUCTURE_ACTION);
-                fillDetailsAndAddAction(action,allActions,clusterId,clusterRev,service.getServiceName(),role.getRoleName());
+                fillDetailsAndAddAction(action,allActions,clusterName,clusterRev,service.getServiceName(),role.getRoleName());
                 action=plugin.install(cluster.getName(),role.getRoleName());
-                fillDetailsAndAddAction(action,allActions,clusterId,clusterRev,service.getServiceName(),role.getRoleName());
-                action=plugin.configure(clusterId,role.getRoleName());
-                fillDetailsAndAddAction(action,allActions,clusterId,clusterRev,service.getServiceName(),role.getRoleName());
+                fillDetailsAndAddAction(action,allActions,clusterName,clusterRev,service.getServiceName(),role.getRoleName());
+                action=plugin.configure(clusterName,role.getRoleName());
+                fillDetailsAndAddAction(action,allActions,clusterName,clusterRev,service.getServiceName(),role.getRoleName());
                 continue;
               }
               if (role.getRoleName().equals("-client")) {
@@ -53,7 +53,7 @@
               }
               if (!roleServerRunning) {
                 Action action=plugin.startServer(cluster.getName(),role.getRoleName());
-                fillDetailsAndAddAction(action,allActions,clusterId,clusterRev,service.getServiceName(),role.getRoleName());
+                fillDetailsAndAddAction(action,allActions,clusterName,clusterRev,service.getServiceName(),role.getRoleName());
               }
               if (roleServerRunning && agentRoleStateChanged) {
                 StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.START_SUCCESS,role));
@@ -65,14 +65,14 @@
                 roleServerRunning=false;
               }
               if (roleServerRunning) {
-                addAction(getStopRoleAction(clusterId,clusterRev,role.getAssociatedService().getServiceName(),role.getRoleName()),allActions);
+                addAction(getStopRoleAction(clusterName,clusterRev,role.getAssociatedService().getServiceName(),role.getRoleName()),allActions);
               }
               if (!roleServerRunning && agentRoleStateChanged) {
                 StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.STOP_SUCCESS,role));
               }
               if (roleInstalled && clusterFsm.getClusterState().equals(ClusterState.CLUSTER_STATE_ATTIC)) {
                 Action action=plugin.uninstall(cluster.getName(),role.getRoleName());
-                fillDetailsAndAddAction(action,allActions,clusterId,clusterRev,role.getAssociatedService().getServiceName(),role.getRoleName());
+                fillDetailsAndAddAction(action,allActions,clusterName,clusterRev,role.getAssociatedService().getServiceName(),role.getRoleName());
               }
             }
           }
