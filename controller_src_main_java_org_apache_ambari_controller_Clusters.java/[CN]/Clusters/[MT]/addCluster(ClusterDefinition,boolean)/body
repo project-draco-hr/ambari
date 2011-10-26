@@ -1,44 +1,42 @@
 {
   validateClusterDefinition(cdef);
-synchronized (operational_clusters) {
-    if (operational_clusters.containsKey(cdef.getName())) {
-      String msg="Cluster [" + cdef.getName() + "] already exists";
-      throw new WebApplicationException((new ExceptionResponse(msg,Response.Status.CONFLICT)).get());
-    }
-    Date requestTime=new Date();
-    Cluster cls=new Cluster();
-    ClusterState clsState=new ClusterState();
-    clsState.setCreationTime(requestTime);
-    clsState.setLastUpdateTime(requestTime);
-    clsState.setDeployTime((Date)null);
-    if (cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ATTIC)) {
-      clsState.setState(ClusterState.CLUSTER_STATE_ATTIC);
-    }
+  if (operational_clusters.containsKey(cdef.getName())) {
+    String msg="Cluster [" + cdef.getName() + "] already exists";
+    throw new WebApplicationException((new ExceptionResponse(msg,Response.Status.CONFLICT)).get());
+  }
+  Date requestTime=new Date();
+  Cluster cls=new Cluster();
+  ClusterState clsState=new ClusterState();
+  clsState.setCreationTime(requestTime);
+  clsState.setLastUpdateTime(requestTime);
+  clsState.setDeployTime((Date)null);
+  if (cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ATTIC)) {
+    clsState.setState(ClusterState.CLUSTER_STATE_ATTIC);
+  }
  else {
-      clsState.setState(ClusterDefinition.GOAL_STATE_INACTIVE);
-    }
-    cls.addClusterDefinition(cdef);
-    cls.setClusterState(clsState);
-    if (dry_run) {
+    clsState.setState(ClusterDefinition.GOAL_STATE_INACTIVE);
+  }
+  cls.addClusterDefinition(cdef);
+  cls.setClusterState(clsState);
+  if (dry_run) {
+    List<RoleToNodes> role2NodesList=generateRoleToNodesListBasedOnNodeAttributes(cdef);
+    cdef.setRoleToNodesMap(role2NodesList);
+    return cdef;
+  }
+  if (cdef.getNodes() != null && !cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ATTIC)) {
+    updateClusterNodesReservation(cls.getName(),cdef);
+  }
+  if (!cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ATTIC)) {
+    if (cdef.getRoleToNodes() == null) {
       List<RoleToNodes> role2NodesList=generateRoleToNodesListBasedOnNodeAttributes(cdef);
       cdef.setRoleToNodesMap(role2NodesList);
-      return cdef;
     }
-    if (cdef.getNodes() != null && !cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ATTIC)) {
-      updateClusterNodesReservation(cls.getName(),cdef);
-    }
-    if (!cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ATTIC)) {
-      if (cdef.getRoleToNodes() == null) {
-        List<RoleToNodes> role2NodesList=generateRoleToNodesListBasedOnNodeAttributes(cdef);
-        cdef.setRoleToNodesMap(role2NodesList);
-      }
-      updateNodeToRolesAssociation(cdef.getNodes(),cdef.getRoleToNodes());
-    }
-    this.operational_clusters.put(cdef.getName(),cls);
-    if (cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ACTIVE)) {
-      org.apache.ambari.resource.statemachine.ClusterFSM cs=StateMachineInvoker.createCluster(cls,cls.getLatestRevision(),cls.getClusterState());
-      cs.activate();
-    }
+    updateNodeToRolesAssociation(cdef.getNodes(),cdef.getRoleToNodes());
+  }
+  this.operational_clusters.put(cdef.getName(),cls);
+  if (cdef.getGoalState().equals(ClusterDefinition.GOAL_STATE_ACTIVE)) {
+    org.apache.ambari.resource.statemachine.ClusterFSM cs=StateMachineInvoker.createCluster(cls,cls.getLatestRevision(),cls.getClusterState());
+    cs.activate();
   }
   return cdef;
 }
