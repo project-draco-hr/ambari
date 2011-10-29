@@ -12,30 +12,39 @@
   long clusterRev=0L;
   Nodes.getInstance().checkAndUpdateNode(hostname,heartbeatTime);
   List<Action> allActions=new ArrayList<Action>();
-  clusterName=Nodes.getInstance().getNode(hostname).getNodeState().getClusterName();
-  if (clusterName != null) {
-    clusterRev=Clusters.getInstance().getClusterByName(clusterName).getLatestRevision();
-  }
-  ComponentAndRoleStates componentStates=new ComponentAndRoleStates();
-  inspectAgentState(heartbeat,componentStates);
-  Set<ClusterIdAndRev> clustersNodeBelongsTo=componentStates.getClustersNodeBelongsTo();
   if (heartbeat.getIdle()) {
-    for (    ClusterIdAndRev clusterIdAndRev : clustersNodeBelongsTo) {
-      if (!isCompatible(clusterIdAndRev.getClusterId(),clusterIdAndRev.getRevision(),clusterName,clusterRev)) {
+    clusterName=Nodes.getInstance().getNode(hostname).getNodeState().getClusterName();
+    if (clusterName != null) {
+      clusterRev=Clusters.getInstance().getClusterByName(clusterName).getLatestRevision();
+    }
+    ComponentAndRoleStates componentStates=new ComponentAndRoleStates();
+    inspectAgentState(heartbeat,componentStates);
+    Set<ClusterNameAndRev> clustersNodeBelongsTo=componentStates.getClustersNodeBelongsTo();
+    boolean newNode=false;
+    if (clusterName != null) {
+      newNode=checkAndAddClusterIds(clustersNodeBelongsTo,clusterName,clusterRev);
+    }
+    for (    ClusterNameAndRev clusterIdAndRev : clustersNodeBelongsTo) {
+      if (!isCompatible(clusterIdAndRev.getClusterName(),clusterIdAndRev.getRevision(),clusterName,clusterRev)) {
         createStopAndUninstallActions(componentStates,allActions,clusterIdAndRev,true);
         continue;
       }
-      Cluster cluster=Clusters.getInstance().getClusterByName(clusterIdAndRev.getClusterId());
-      ClusterFSM clusterFsm=StateMachineInvoker.getStateMachineClusterInstance(clusterIdAndRev.getClusterId());
+      Cluster cluster=Clusters.getInstance().getClusterByName(clusterIdAndRev.getClusterName());
+      ClusterFSM clusterFsm=StateMachineInvoker.getStateMachineClusterInstance(clusterIdAndRev.getClusterName());
       List<ServiceFSM> clusterServices=clusterFsm.getServices();
       for (      ServiceFSM service : clusterServices) {
         List<RoleFSM> roles=service.getRoles();
         for (        RoleFSM role : roles) {
           boolean nodePlayingRole=nodePlayingRole(hostname,role.getRoleName());
           if (nodePlayingRole) {
-            boolean roleInstalled=componentStates.isInstalled(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
-            boolean roleServerRunning=componentStates.isStarted(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName()) || componentStates.isStartInProgress(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
-            boolean agentRoleStateChanged=componentStates.hasStateChanged(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
+            boolean roleInstalled=false;
+            boolean roleServerRunning=false;
+            boolean agentRoleStateChanged=false;
+            if (!newNode) {
+              componentStates.isInstalled(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
+              roleServerRunning=componentStates.isStarted(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName()) || componentStates.isStartInProgress(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
+              agentRoleStateChanged=componentStates.hasStateChanged(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
+            }
             ComponentPlugin plugin=cluster.getComponentDefinition(service.getServiceName());
             if (role.shouldStart()) {
               if (!roleInstalled) {
@@ -63,7 +72,7 @@
               }
             }
           }
-          checkAndCreateActions(cluster,clusterFsm,clusterIdAndRev,service,heartbeat,allActions,componentStates);
+          checkAndCreateActions(cluster,clusterFsm,clusterIdAndRev,newNode,service,heartbeat,allActions,componentStates);
         }
       }
       createStopAndUninstallActions(componentStates,allActions,clusterIdAndRev,false);
