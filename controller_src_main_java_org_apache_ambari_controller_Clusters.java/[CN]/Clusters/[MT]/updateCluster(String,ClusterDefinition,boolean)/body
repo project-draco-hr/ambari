@@ -1,85 +1,85 @@
 {
-synchronized (this.operational_clusters) {
-    if (!this.operational_clusters.containsKey(clusterName)) {
-      return addCluster(c,dry_run);
-    }
+  if (!clusterExists(clusterName)) {
+    return addCluster(c,dry_run);
   }
-  Cluster cls=this.operational_clusters.get(clusterName);
+  Cluster cls=getClusterByName(clusterName);
   ClusterDefinition newcd=new ClusterDefinition();
-synchronized (cls.getClusterDefinitionRevisionsList()) {
-    newcd.setName(clusterName);
-    if (c.getStackName() != null) {
-      newcd.setStackName(c.getStackName());
-    }
- else {
-      newcd.setStackName(cls.getLatestClusterDefinition().getStackName());
-    }
-    if (c.getStackRevision() != null) {
-      newcd.setStackRevision(c.getStackRevision());
-    }
- else {
-      newcd.setStackRevision(cls.getLatestClusterDefinition().getStackRevision());
-    }
-    if (c.getDescription() != null) {
-      newcd.setDescription(c.getDescription());
-    }
- else {
-      newcd.setDescription(cls.getLatestClusterDefinition().getDescription());
-    }
-    if (c.getGoalState() != null) {
-      newcd.setGoalState(c.getGoalState());
-    }
- else {
-      newcd.setGoalState(cls.getLatestClusterDefinition().getGoalState());
-    }
-    if (c.getActiveServices() != null) {
-      newcd.setActiveServices(c.getActiveServices());
-    }
- else {
-      newcd.setActiveServices(cls.getLatestClusterDefinition().getActiveServices());
-    }
-    boolean updateNodesReservation=false;
-    boolean updateNodeToRolesAssociation=false;
-    if (c.getNodes() != null) {
-      newcd.setNodes(c.getNodes());
-      updateNodesReservation=true;
-    }
- else {
-      newcd.setNodes(cls.getLatestClusterDefinition().getNodes());
-    }
-    if (c.getRoleToNodes() != null) {
-      newcd.setRoleToNodesMap(c.getRoleToNodes());
-      updateNodeToRolesAssociation=true;
-    }
-    if (newcd.getGoalState().equals(ClusterState.CLUSTER_STATE_ATTIC)) {
-      cls.getClusterState().setLastUpdateTime(new Date());
-      cls.addClusterDefinition(newcd);
-      return cls.getLatestClusterDefinition();
-    }
-    validateClusterDefinition(newcd);
-    if (dry_run) {
-      System.out.println("Dry run for update cluster..");
-      return newcd;
-    }
-    if (updateNodesReservation) {
-      updateClusterNodesReservation(cls.getName(),c);
-    }
-    if (updateNodeToRolesAssociation) {
-      updateNodeToRolesAssociation(newcd.getNodes(),c.getRoleToNodes());
-    }
-    cls.getClusterState().setLastUpdateTime(new Date());
-    cls.addClusterDefinition(newcd);
-    ClusterFSM clusterFSM=StateMachineInvoker.getStateMachineClusterInstance(cls.getName());
-    if (c.getGoalState().equals(ClusterState.CLUSTER_STATE_ACTIVE)) {
-      clusterFSM.activate();
-    }
- else     if (c.getGoalState().equals(ClusterState.CLUSTER_STATE_INACTIVE)) {
-      clusterFSM.deactivate();
-    }
- else     if (c.getGoalState().equals(ClusterState.CLUSTER_STATE_ATTIC)) {
-      clusterFSM.deactivate();
-      clusterFSM.terminate();
-    }
+  newcd.setName(clusterName);
+  if (c.getStackName() != null) {
+    newcd.setStackName(c.getStackName());
   }
-  return cls.getLatestClusterDefinition();
+ else {
+    newcd.setStackName(cls.getClusterDefinition(-1).getStackName());
+  }
+  if (c.getStackRevision() != null) {
+    newcd.setStackRevision(c.getStackRevision());
+  }
+ else {
+    newcd.setStackRevision(cls.getClusterDefinition(-1).getStackRevision());
+  }
+  if (c.getDescription() != null) {
+    newcd.setDescription(c.getDescription());
+  }
+ else {
+    newcd.setDescription(cls.getClusterDefinition(-1).getDescription());
+  }
+  if (c.getGoalState() != null) {
+    newcd.setGoalState(c.getGoalState());
+  }
+ else {
+    newcd.setGoalState(cls.getClusterDefinition(-1).getGoalState());
+  }
+  if (c.getActiveServices() != null) {
+    newcd.setActiveServices(c.getActiveServices());
+  }
+ else {
+    newcd.setActiveServices(cls.getClusterDefinition(-1).getActiveServices());
+  }
+  boolean updateNodesReservation=false;
+  boolean updateNodeToRolesAssociation=false;
+  if (c.getNodes() != null) {
+    newcd.setNodes(c.getNodes());
+    updateNodesReservation=true;
+  }
+ else {
+    newcd.setNodes(cls.getClusterDefinition(-1).getNodes());
+  }
+  if (c.getRoleToNodes() != null) {
+    newcd.setRoleToNodesMap(c.getRoleToNodes());
+    updateNodeToRolesAssociation=true;
+  }
+  if (newcd.getGoalState().equals(ClusterState.CLUSTER_STATE_ATTIC)) {
+    ClusterState cs=cls.getClusterState();
+    cs.setLastUpdateTime(Util.getXMLGregorianCalendar(new Date()));
+    cls.updateClusterDefinition(newcd);
+    cls.updateClusterState(cs);
+    return cls.getClusterDefinition(-1);
+  }
+  validateClusterDefinition(newcd);
+  if (dry_run) {
+    System.out.println("Dry run for update cluster..");
+    return newcd;
+  }
+  ClusterState cs=cls.getClusterState();
+  cs.setLastUpdateTime(Util.getXMLGregorianCalendar(new Date()));
+  cls.updateClusterDefinition(newcd);
+  cls.updateClusterState(cs);
+  if (updateNodesReservation) {
+    updateClusterNodesReservation(cls.getName(),c);
+  }
+  if (updateNodeToRolesAssociation) {
+    updateNodeToRolesAssociation(newcd.getNodes(),c.getRoleToNodes());
+  }
+  ClusterFSM clusterFSM=StateMachineInvoker.getStateMachineClusterInstance(cls.getName());
+  if (c.getGoalState().equals(ClusterState.CLUSTER_STATE_ACTIVE)) {
+    clusterFSM.activate();
+  }
+ else   if (c.getGoalState().equals(ClusterState.CLUSTER_STATE_INACTIVE)) {
+    clusterFSM.deactivate();
+  }
+ else   if (c.getGoalState().equals(ClusterState.CLUSTER_STATE_ATTIC)) {
+    clusterFSM.deactivate();
+    clusterFSM.terminate();
+  }
+  return cls.getClusterDefinition(-1);
 }
