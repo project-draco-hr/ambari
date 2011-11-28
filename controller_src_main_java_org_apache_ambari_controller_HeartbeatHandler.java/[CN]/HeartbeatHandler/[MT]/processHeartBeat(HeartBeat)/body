@@ -1,4 +1,7 @@
 {
+  String hostname=heartbeat.getHostname();
+  Date heartbeatTime=new Date(System.currentTimeMillis());
+  Nodes.getInstance().checkAndUpdateNode(hostname,heartbeatTime);
   ControllerResponse response=agentToHeartbeatResponseMap.get(heartbeat.getHostname());
   if (response != null) {
     if (response.getResponseId() == heartbeat.getResponseId()) {
@@ -6,77 +9,37 @@
     }
   }
   short responseId=(short)(heartbeat.getResponseId() + 1);
-  String hostname=heartbeat.getHostname();
-  Date heartbeatTime=new Date(System.currentTimeMillis());
   String clusterName=null;
-  long clusterRev=0L;
-  Nodes.getInstance().checkAndUpdateNode(hostname,heartbeatTime);
+  int clusterRev=0;
   List<Action> allActions=new ArrayList<Action>();
   if (heartbeat.getIdle()) {
-    clusterName=Nodes.getInstance().getNode(hostname).getNodeState().getClusterName();
-    if (clusterName != null) {
-      clusterRev=Clusters.getInstance().getClusterByName(clusterName).getLatestRevisionNumber();
-    }
-    ComponentAndRoleStates componentStates=new ComponentAndRoleStates();
-    inspectAgentState(heartbeat,componentStates);
-    Set<ClusterNameAndRev> clustersNodeBelongsTo=componentStates.getClustersNodeBelongsTo();
-    boolean newNode=false;
-    if (clusterName != null) {
-      newNode=checkAndAddClusterIds(clustersNodeBelongsTo,clusterName,clusterRev);
-    }
+    List<ClusterNameAndRev> clustersNodeBelongsTo=getClustersNodeBelongsTo(hostname);
     for (    ClusterNameAndRev clusterIdAndRev : clustersNodeBelongsTo) {
-      if (!isCompatible(clusterIdAndRev.getClusterName(),clusterIdAndRev.getRevision(),clusterName,clusterRev)) {
-        createStopAndUninstallActions(componentStates,allActions,clusterIdAndRev,true);
-        continue;
-      }
-      Cluster cluster=Clusters.getInstance().getClusterByName(clusterIdAndRev.getClusterName());
-      ClusterFSM clusterFsm=StateMachineInvoker.getStateMachineClusterInstance(clusterIdAndRev.getClusterName());
+      String deployScript=Clusters.getInstance().getInstallAndConfigureScript(clusterName,clusterRev);
+      Cluster cluster=Clusters.getInstance().getClusterByName(clusterName);
+      ClusterFSM clusterFsm=StateMachineInvoker.getStateMachineClusterInstance(clusterName);
       List<ServiceFSM> clusterServices=clusterFsm.getServices();
       for (      ServiceFSM service : clusterServices) {
         List<RoleFSM> roles=service.getRoles();
         for (        RoleFSM role : roles) {
           boolean nodePlayingRole=nodePlayingRole(hostname,role.getRoleName());
           if (nodePlayingRole) {
-            boolean roleInstalled=false;
-            boolean roleServerRunning=false;
-            boolean agentRoleStateChanged=false;
-            if (!newNode) {
-              roleInstalled=componentStates.isInstalled(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
-              roleServerRunning=componentStates.isStarted(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName()) || componentStates.isStartInProgress(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
-              agentRoleStateChanged=componentStates.hasStateChanged(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
-            }
             ComponentPlugin plugin=cluster.getComponentDefinition(service.getServiceName());
             if (role.shouldStart()) {
-              if (!roleInstalled) {
-                createDirStructureAction(clusterIdAndRev,cluster,service.getServiceName(),role.getRoleName(),plugin,allActions);
-                continue;
-              }
-              if (role.getRoleName().contains("-client")) {
-                roleServerRunning=true;
-              }
-              if (!roleServerRunning) {
-                Action action=plugin.startServer(cluster.getName(),role.getRoleName());
-                fillDetailsAndAddAction(action,allActions,clusterName,clusterRev,service.getServiceName(),role.getRoleName());
-              }
-              if (roleServerRunning && agentRoleStateChanged) {
+              Action action=plugin.startServer(cluster.getName(),role.getRoleName());
+              fillDetailsAndAddAction(action,allActions,clusterName,clusterRev,service.getServiceName(),role.getRoleName());
+              if (wasStartRoleSuccessful(clusterIdAndRev,role.getRoleName(),response,heartbeat)) {
                 StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.START_SUCCESS,role));
               }
-              componentStates.continueRunning(clusterIdAndRev,role.getAssociatedService().getServiceName(),role.getRoleName());
             }
             if (role.shouldStop()) {
-              if (role.getRoleName().contains("-client")) {
-                roleServerRunning=false;
-              }
-              if (!roleServerRunning && agentRoleStateChanged) {
+              if (wasStopRoleSuccessful(clusterIdAndRev,role.getRoleName(),response,heartbeat)) {
                 StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.STOP_SUCCESS,role));
               }
             }
           }
         }
-        checkAndCreateActions(cluster,clusterFsm,clusterIdAndRev,newNode,service,heartbeat,allActions,componentStates);
-      }
-      if (!newNode) {
-        createStopAndUninstallActions(componentStates,allActions,clusterIdAndRev,false);
+        checkAndCreateActions(cluster,clusterFsm,clusterIdAndRev,service,heartbeat,allActions);
       }
     }
   }
