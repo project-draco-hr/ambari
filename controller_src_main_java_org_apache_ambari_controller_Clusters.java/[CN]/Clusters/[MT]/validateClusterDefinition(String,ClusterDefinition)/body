@@ -28,8 +28,19 @@
       bp=Stacks.getInstance().getStack(bp.getParentName(),Integer.parseInt(bp.getParentRevision()));
     }
   }
+  ConcurrentHashMap<String,Node> all_nodes=Nodes.getInstance().getNodes();
   List<String> cluster_node_range=new ArrayList<String>();
   cluster_node_range.addAll(getHostnamesFromRangeExpressions(cdef.getNodes()));
+  List<String> preallocatedhosts=new ArrayList<String>();
+  for (  String n : cluster_node_range) {
+    if (all_nodes.containsKey(n) && (all_nodes.get(n).getNodeState().getClusterName() != null || all_nodes.get(n).getNodeState().getAllocatedToCluster())) {
+      preallocatedhosts.add(n);
+    }
+  }
+  if (!preallocatedhosts.isEmpty()) {
+    String msg="Some of the nodes specified for the cluster roles are allocated to other cluster: [" + preallocatedhosts + "]";
+    throw new WebApplicationException((new ExceptionResponse(msg,Response.Status.CONFLICT)).get());
+  }
   if (cdef.getRoleToNodesMap() != null) {
     List<String> nodes_specified_using_role_association=new ArrayList<String>();
     for (    RoleToNodes e : cdef.getRoleToNodesMap()) {
