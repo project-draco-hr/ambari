@@ -14,9 +14,17 @@
   List<Action> allActions=new ArrayList<Action>();
   if (heartbeat.getIdle()) {
     List<ClusterNameAndRev> clustersNodeBelongsTo=getClustersNodeBelongsTo(hostname);
+    String script=clusters.getInstallAndConfigureScript(clustersNodeBelongsTo.get(0).getClusterName(),clustersNodeBelongsTo.get(0).getRevision());
+    if (script == null) {
+      return createResponse(responseId,allActions,heartbeat);
+    }
+    getInstallAndConfigureAction(script,allActions);
+    if (!installAndConfigDone(script,heartbeat)) {
+      return createResponse(responseId,allActions,heartbeat);
+    }
     for (    ClusterNameAndRev clusterIdAndRev : clustersNodeBelongsTo) {
-      String script=clusters.getInstallAndConfigureScript(clusterName,clusterRev);
-      getInstallAndConfigureAction(script,clusterIdAndRev,allActions);
+      clusterName=clusterIdAndRev.getClusterName();
+      clusterRev=clusterIdAndRev.getRevision();
       Cluster cluster=clusters.getClusterByName(clusterName);
       ClusterFSM clusterFsm=StateMachineInvoker.getStateMachineClusterInstance(clusterName);
       List<ServiceFSM> clusterServices=clusterFsm.getServices();
@@ -29,12 +37,12 @@
             if (role.shouldStart()) {
               Action action=plugin.startServer(cluster.getName(),role.getRoleName());
               fillDetailsAndAddAction(action,allActions,clusterName,clusterRev,service.getServiceName(),role.getRoleName());
-              if (wasStartRoleSuccessful(clusterIdAndRev,role.getRoleName(),response,heartbeat)) {
+              if (wasStartRoleSuccessful(clusterIdAndRev,service.getServiceName(),role.getRoleName(),response,heartbeat)) {
                 StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.START_SUCCESS,role));
               }
             }
             if (role.shouldStop()) {
-              if (wasStopRoleSuccessful(clusterIdAndRev,role.getRoleName(),response,heartbeat)) {
+              if (wasStopRoleSuccessful(clusterIdAndRev,service.getServiceName(),role.getRoleName(),response,heartbeat)) {
                 StateMachineInvoker.getAMBARIEventHandler().handle(new RoleEvent(RoleEventType.STOP_SUCCESS,role));
               }
             }
@@ -44,9 +52,5 @@
       }
     }
   }
-  ControllerResponse r=new ControllerResponse();
-  r.setResponseId(responseId);
-  r.setActions(allActions);
-  agentToHeartbeatResponseMap.put(heartbeat.getHostname(),r);
-  return r;
+  return createResponse(responseId,allActions,heartbeat);
 }
