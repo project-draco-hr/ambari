@@ -1,0 +1,33 @@
+{
+  try {
+    Stat stat=new Stat();
+    String clusterPath=ZOOKEEPER_CLUSTERS_ROOT_PATH + "/" + clusterDef.getName();
+    int newRev=0;
+    String clusterRevisionPath=clusterPath + "/" + newRev;
+    String clusterLatestRevisionNumberPath=clusterPath + "/latestRevisionNumber";
+    if (zk.exists(clusterPath,false) == null) {
+      createDirectory(clusterPath,new byte[0],false);
+      createDirectory(clusterRevisionPath,JAXBUtil.write(clusterDef),false);
+      createDirectory(clusterLatestRevisionNumberPath,(new Integer(newRev)).toString().getBytes(),false);
+    }
+ else {
+      String latestRevision=new String(zk.getData(clusterLatestRevisionNumberPath,false,stat));
+      newRev=Integer.parseInt(latestRevision) + 1;
+      clusterRevisionPath=clusterPath + "/" + newRev;
+      if (clusterDef.getRevision() != null) {
+        if (!latestRevision.equals(clusterDef.getRevision())) {
+          throw new IOException("Latest cluster definition does not match " + "the one client intends to modify!");
+        }
+      }
+      createDirectory(clusterRevisionPath,JAXBUtil.write(clusterDef),false);
+      zk.setData(clusterLatestRevisionNumberPath,(new Integer(newRev)).toString().getBytes(),-1);
+    }
+    return newRev;
+  }
+ catch (  KeeperException e) {
+    throw new IOException(e);
+  }
+catch (  InterruptedException e1) {
+    throw new IOException(e1);
+  }
+}
