@@ -1,16 +1,28 @@
 def installAndConfigAction(self, action):
-    w = self.writeFileAction(action)
+    w = self.writeFileAction(action, self.getInstallFilename(action['id']))
     commandResult = {}
     if (w['exitCode'] != 0):
-        commandResult['output'] = out
-        commandResult['error'] = err
-        commandResult['exitCode'] = exitCode
+        commandResult['error'] = w['error']
+        commandResult['exitCode'] = w['exitCode']
         r['commandResult'] = commandResult
         return r
+    logger.info('Command to run ')
+    if ('command' not in action):
+        filepath = getFilePath(action, self.getInstallFilename(action['id']))
+        p = self.sh.run(['/bin/cat', AmbariConfig.config.get('puppet', 'driver')])
+        if (p['exitCode'] != 0):
+            commandResult['error'] = p['error']
+            commandResult['exitCode'] = p['exitCode']
+            r['commandResult'] = commandResult
+            return r
+        print ('The contents of the static file ' + p['output'])
+        appendToFile(p['output'], filepath)
+        action['command'] = [AmbariConfig.config.get('puppet', 'commandpath'), filepath]
+        print ('PUPPET COMMAND : ' + action['command'])
+    logger.info(action['command'])
     r = self.sh.run(action['command'])
     if (r['exitCode'] != 0):
-        commandResult['output'] = out
-        commandResult['error'] = err
+        commandResult['error'] = r['error']
     else:
         installScriptHash = action['id']
     commandResult['exitCode'] = r['exitCode']
