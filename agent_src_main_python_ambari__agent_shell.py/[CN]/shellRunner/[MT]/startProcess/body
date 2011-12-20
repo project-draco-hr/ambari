@@ -4,34 +4,43 @@ def startProcess(self, clusterId, clusterDefinitionRevision, component, role, sc
     os.chdir(self.getWorkDir(clusterId, role))
     oldUid = os.getuid()
     try:
-        user = getpwnam(user)[2]
-        os.setuid(user)
+        if (user is not None):
+            user = getpwnam(user)[2]
+        else:
+            user = os.getuid()
+        threadLocal.uid = user
     except Exception:
         logger.warn(('%s %s %s can not switch user for START_ACTION.' % (clusterId, component, role)))
     code = 0
     commandResult = {}
     process = self.getServerKey(clusterId, clusterDefinitionRevision, component, role)
     if (not (process in serverTracker)):
-        cmd = sys.executable
         tempfilename = tempfile.mktemp()
-        tmp = open(tempfilename, 'w')
-        tmp.write(script['script'])
-        tmp.close()
-        cmd = ('%s %s %s' % (cmd, tempfilename, ' '.join(script['param'])))
+        noteTempFile(tempfilename)
         child_pid = os.fork()
         if (child_pid == 0):
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, close_fds=True)
-            (out, err) = p.communicate()
-            code = p.wait()
-            os.unlink(tempfilename)
-            serverTracker[process] = None
+            try:
+                signal.signal(signal.SIGINT, SIG_DFL)
+                signal.signal(signal.SIGTERM, SIG_DFL)
+                self.changeUid()
+                cmd = sys.executable
+                tmp = open(tempfilename, 'w')
+                tmp.write(script['script'])
+                tmp.close()
+                cmd = ('%s %s %s' % (cmd, tempfilename, ' '.join(script['param'])))
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, close_fds=True)
+                (out, err) = p.communicate()
+                code = p.wait()
+                os.unlink(tempfilename)
+                os._exit(1)
+            except:
+                os._exit(1)
         else:
             serverTracker[process] = child_pid
             commandResult['exitCode'] = 0
         result['commandResult'] = commandResult
     try:
         os.chdir(oldDir)
-        os.setuid(oldUid)
     except Exception:
         logger.warn(('%s %s %s can not restore environment for START_ACTION.' % (clusterId, component, role)))
     return result
