@@ -2,16 +2,27 @@
   String hostname=heartbeat.getHostname();
   Date heartbeatTime=new Date(System.currentTimeMillis());
   nodes.checkAndUpdateNode(hostname,heartbeatTime);
+  boolean firstContact=heartbeat.getFirstContact();
   ControllerResponse prevResponse=agentToHeartbeatResponseMap.get(heartbeat.getHostname());
+  if (firstContact || prevResponse == null) {
+    nodes.markNodeHealthy(hostname);
+  }
   if (prevResponse != null) {
     if (prevResponse.getResponseId() != heartbeat.getResponseId()) {
       return prevResponse;
     }
   }
+  List<CommandResult> commandResult;
+  if ((commandResult=failedActions(heartbeat)) != null && !commandResult.isEmpty()) {
+    nodes.markNodeUnhealthy(hostname,commandResult);
+  }
   short responseId=(short)(heartbeat.getResponseId() + 1);
   String clusterName=null;
   int clusterRev=0;
   List<Action> allActions=new ArrayList<Action>();
+  if (nodes.getHeathOfNode(hostname) == NodeState.UNHEALTHY) {
+    return createResponse(responseId,allActions,heartbeat);
+  }
   if (heartbeat.getIdle()) {
     List<ClusterNameAndRev> clustersNodeBelongsTo=getClustersNodeBelongsTo(hostname);
     if (clustersNodeBelongsTo.isEmpty()) {

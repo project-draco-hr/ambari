@@ -1,0 +1,74 @@
+{
+  CommandResult failedCommandResult=new CommandResult();
+  final String stdout="FAILED_COMMAND_STDOUT";
+  failedCommandResult.setExitCode(1);
+  failedCommandResult.setStdOut(stdout);
+  CommandResult successCommandResult=new CommandResult();
+  successCommandResult.setExitCode(0);
+  final MarkCallTracker mUnhealthy=new MarkCallTracker();
+  doAnswer(new Answer<Void>(){
+    public Void answer(    InvocationOnMock invocation){
+      mUnhealthy.methodCalled=true;
+      for (      Object obj : invocation.getArguments()) {
+        if (String.class.isAssignableFrom(obj.getClass())) {
+          if (((String)obj).equals("localhost")) {
+            mUnhealthy.hostnameMatched=true;
+          }
+        }
+        if (ArrayList.class.isAssignableFrom(obj.getClass())) {
+          List<CommandResult> results=(List<CommandResult>)obj;
+          for (          CommandResult result : results) {
+            if (result.getExitCode() == 1) {
+              if (result.getStdOut().equals(stdout)) {
+                mUnhealthy.stdoutMatched=true;
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+  }
+).when(nodes).markNodeUnhealthy(anyString(),any(List.class));
+  final MarkCallTracker mHealthy=new MarkCallTracker();
+  doAnswer(new Answer<Void>(){
+    public Void answer(    InvocationOnMock invocation){
+      mHealthy.methodCalled=true;
+      for (      Object obj : invocation.getArguments()) {
+        if (String.class.isAssignableFrom(obj.getClass())) {
+          if (((String)obj).equals("localhost")) {
+            mHealthy.hostnameMatched=true;
+          }
+        }
+      }
+      return null;
+    }
+  }
+).when(nodes).markNodeHealthy(anyString());
+  List<ActionResult> actionResults=new ArrayList<ActionResult>();
+  ActionResult failedAction=new ActionResult();
+  failedAction.setCommandResult(failedCommandResult);
+  actionResults.add(failedAction);
+  heartbeat.setActionResults(actionResults);
+  HeartbeatHandler handler=new HeartbeatHandler(clusters,nodes,driver,invoker);
+  mUnhealthy.stdoutMatched=false;
+  mUnhealthy.hostnameMatched=false;
+  mHealthy.methodCalled=false;
+  handler.processHeartBeat(heartbeat);
+  assert(mUnhealthy.stdoutMatched == true && mUnhealthy.hostnameMatched == true);
+  actionResults=new ArrayList<ActionResult>();
+  ActionResult successAction=new ActionResult();
+  successAction.setCommandResult(successCommandResult);
+  actionResults.add(successAction);
+  heartbeat.setActionResults(actionResults);
+  mUnhealthy.methodCalled=false;
+  mHealthy.methodCalled=false;
+  handler.processHeartBeat(heartbeat);
+  assert(mUnhealthy.methodCalled == false && mHealthy.methodCalled == false);
+  heartbeat.setFirstContact(true);
+  mHealthy.methodCalled=false;
+  mHealthy.hostnameMatched=false;
+  mUnhealthy.methodCalled=false;
+  handler.processHeartBeat(heartbeat);
+  assert(mHealthy.methodCalled == true && mHealthy.hostnameMatched == true && mUnhealthy.methodCalled == false);
+}
