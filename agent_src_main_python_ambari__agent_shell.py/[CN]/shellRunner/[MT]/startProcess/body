@@ -1,7 +1,10 @@
 def startProcess(self, clusterId, clusterDefinitionRevision, component, role, script, user, result):
     global serverTracker
     oldDir = os.getcwd()
-    os.chdir(self.getWorkDir(clusterId, role))
+    try:
+        os.chdir(self.getWorkDir(clusterId, role))
+    except Exception:
+        logger.warn(('%s %s %s can not switch dir for START_ACTION.' % (clusterId, component, role)))
     oldUid = os.getuid()
     try:
         if (user is not None):
@@ -15,27 +18,16 @@ def startProcess(self, clusterId, clusterDefinitionRevision, component, role, sc
     commandResult = {}
     process = self.getServerKey(clusterId, clusterDefinitionRevision, component, role)
     if (not (process in serverTracker)):
-        tempfilename = tempfile.mktemp()
-        noteTempFile(tempfilename)
-        child_pid = os.fork()
-        if (child_pid == 0):
-            try:
-                self.changeUid()
-                cmd = sys.executable
-                tmp = open(tempfilename, 'w')
-                tmp.write(script['script'])
-                tmp.close()
-                cmd = ('%s %s %s' % (cmd, tempfilename, ' '.join(script['param'])))
-                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, close_fds=True)
-                (out, err) = p.communicate()
-                code = p.wait()
-                os.unlink(tempfilename)
-                os._exit(1)
-            except:
-                os._exit(1)
-        else:
-            serverTracker[process] = child_pid
-            commandResult['exitCode'] = 0
+        try:
+            plauncher = processlauncher(script, user)
+            plauncher.start()
+            plauncher.blockUntilProcessCreation()
+        except Exception:
+            traceback.print_exc()
+            logger.warn(('Can not launch process for %s %s %s' % (clusterId, component, role)))
+            code = (-1)
+        serverTracker[process] = plauncher
+        commandResult['exitCode'] = code
         result['commandResult'] = commandResult
     try:
         os.chdir(oldDir)
