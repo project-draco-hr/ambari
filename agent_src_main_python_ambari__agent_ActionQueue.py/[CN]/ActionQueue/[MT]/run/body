@@ -7,8 +7,10 @@ def run(self):
             exitCode = 1
             retryCount = 1
             while ((exitCode != 0) and (retryCount <= self.maxRetries)):
+                result = {}
                 try:
-                    result = switches.get(action['kind'], self.unknownAction)(action)
+                    actionCopy = copy.copy(action)
+                    result = switches.get(action['kind'], self.unknownAction)(actionCopy)
                     if ('commandResult' in result):
                         commandResult = result['commandResult']
                         exitCode = commandResult['exitCode']
@@ -26,10 +28,14 @@ def run(self):
                         commandResult = result['commandResult']
                         if ('exitCode' in commandResult):
                             exitCode = commandResult['exitCode']
+                        else:
+                            exitCode = 1
+                    else:
+                        result['commandResult'] = {'exitCode': 1, 'output': '', 'error': '', }
+                logger.warn(('Retrying %s in %d seconds' % (str(action), self.sleepInterval)))
                 time.sleep(self.sleepInterval)
                 retryCount += 1
             if (exitCode != 0):
-                result = self.genResult(action)
                 result['exitCode'] = exitCode
                 result['retryActionCount'] = (retryCount - 1)
             else:
