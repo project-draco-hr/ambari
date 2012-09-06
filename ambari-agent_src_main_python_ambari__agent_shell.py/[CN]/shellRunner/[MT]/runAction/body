@@ -1,0 +1,53 @@
+def runAction(self, clusterId, component, role, user, command, cleanUpCommand, result):
+    oldDir = os.getcwd()
+    os.chdir(self.getWorkDir(clusterId, role))
+    oldUid = os.getuid()
+    try:
+        if (user is not None):
+            user = getpwnam(user)[2]
+        else:
+            user = oldUid
+        threadLocal.uid = user
+    except Exception:
+        logger.warn(('%s %s %s can not switch user for RUN_ACTION.' % (clusterId, component, role)))
+    code = 0
+    cmd = sys.executable
+    tempfilename = tempfile.mktemp()
+    tmp = open(tempfilename, 'w')
+    tmp.write(command['script'])
+    tmp.close()
+    cmd = ('%s %s %s' % (cmd, tempfilename, ' '.join(command['param'])))
+    commandResult = {}
+    p = subprocess.Popen(cmd, preexec_fn=changeUid, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, close_fds=True)
+    (out, err) = p.communicate()
+    code = p.wait()
+    if (code != 0):
+        commandResult['output'] = out
+        commandResult['error'] = err
+    commandResult['exitCode'] = code
+    result['commandResult'] = commandResult
+    os.unlink(tempfilename)
+    if (code != 0):
+        tempfilename = tempfile.mktemp()
+        tmp = open(tempfilename, 'w')
+        tmp.write(command['script'])
+        tmp.close()
+        cmd = sys.executable
+        cmd = ('%s %s %s' % (cmd, tempfilename, ' '.join(cleanUpCommand['param'])))
+        cleanUpCode = 0
+        cleanUpResult = {}
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, close_fds=True)
+        (out, err) = p.communicate()
+        cleanUpCode = p.wait()
+        if (cleanUpCode != 0):
+            cleanUpResult['output'] = out
+            cleanUpResult['error'] = err
+        cleanUpResult['exitCode'] = cleanUpCode
+        result['cleanUpResult'] = cleanUpResult
+        os.unlink(tempfilename)
+        os._exit(1)
+    try:
+        os.chdir(oldDir)
+    except Exception:
+        logger.warn(('%s %s %s can not restore environment for RUN_ACTION.' % (clusterId, component, role)))
+    return result

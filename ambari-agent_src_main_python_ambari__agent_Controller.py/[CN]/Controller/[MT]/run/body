@@ -1,0 +1,32 @@
+def run(self):
+    id = '-1'
+    opener = urllib2.build_opener()
+    urllib2.install_opener(opener)
+    retry = False
+    firstTime = True
+    while True:
+        try:
+            if (retry == False):
+                data = json.dumps(self.heartbeat.build(id))
+                logger.debug(data)
+            req = urllib2.Request(self.url, data, {'Content-Type': 'application/json', })
+            f = urllib2.urlopen(req)
+            response = f.read()
+            f.close()
+            data = json.loads(response)
+            id = int(data['responseId'])
+            self.actionQueue.put(data)
+            if ((retry == True) or (firstTime == True)):
+                logger.info('Controller connection established')
+                firstTime = False
+            retry = False
+        except Exception as err:
+            retry = True
+            if ('code' in err):
+                logger.error(err.code)
+            else:
+                logger.error(('Unable to connect to: ' + self.url), exc_info=True)
+        if self.actionQueue.isIdle():
+            time.sleep(30)
+        else:
+            time.sleep(1)

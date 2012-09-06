@@ -1,0 +1,45 @@
+def run(self):
+    global clusterId, clusterDefinitionRevision
+    while (not self.stopped()):
+        while (not q.empty()):
+            action = q.get()
+            switches = {'START_ACTION': self.startAction, 'RUN_ACTION': self.runAction, 'CREATE_STRUCTURE_ACTION': self.createStructureAction, 'DELETE_STRUCTURE_ACTION': self.deleteStructureAction, 'WRITE_FILE_ACTION': self.writeFileAction, 'INSTALL_AND_CONFIG_ACTION': self.installAndConfigAction, 'NO_OP_ACTION': self.noOpAction, }
+            exitCode = 1
+            retryCount = 1
+            while ((exitCode != 0) and (retryCount <= self.maxRetries)):
+                result = {}
+                try:
+                    actionCopy = copy.copy(action)
+                    result = switches.get(action['kind'], self.unknownAction)(actionCopy)
+                    if ('commandResult' in result):
+                        commandResult = result['commandResult']
+                        exitCode = commandResult['exitCode']
+                        if (exitCode == 0):
+                            break
+                        else:
+                            logger.warn(((str(action) + ' exited with code ') + str(exitCode)))
+                    else:
+                        exitCode = 0
+                        break
+                except Exception as err:
+                    traceback.print_exc()
+                    logger.warn(err)
+                    if ('commandResult' in result):
+                        commandResult = result['commandResult']
+                        if ('exitCode' in commandResult):
+                            exitCode = commandResult['exitCode']
+                        else:
+                            exitCode = 1
+                    else:
+                        result['commandResult'] = {'exitCode': 1, 'output': '', 'error': '', }
+                logger.warn(('Retrying %s in %d seconds' % (str(action), self.sleepInterval)))
+                time.sleep(self.sleepInterval)
+                retryCount += 1
+            if (exitCode != 0):
+                result['exitCode'] = exitCode
+                result['retryActionCount'] = (retryCount - 1)
+            else:
+                result['retryActionCount'] = retryCount
+            r.put(result)
+        if (not self.stopped()):
+            time.sleep(5)

@@ -1,0 +1,22 @@
+def run(self):
+    try:
+        tempfilename = tempfile.mktemp()
+        noteTempFile(tempfilename)
+        pythoncmd = sys.executable
+        tmp = open(tempfilename, 'w')
+        tmp.write(self.script['script'])
+        tmp.close()
+        threadLocal.uid = self.uid
+        self.cmd = ('%s %s %s' % (pythoncmd, tempfilename, ' '.join(self.script['param'])))
+        logger.info(('Launching %s as uid %d' % (self.cmd, self.uid)))
+        p = subprocess.Popen(self.cmd, preexec_fn=self.changeUidAndSetSid, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, close_fds=True)
+        logger.info(('Launched %s; PID %d' % (self.cmd, p.pid)))
+        self.serverpid = p.pid
+        (self.out, self.err) = p.communicate()
+        self.code = p.wait()
+        logger.info(('%s; PID %d exited with code %d \nSTDOUT: %s\nSTDERR %s' % (self.cmd, p.pid, self.code, self.out, self.err)))
+    except:
+        logger.warn(('Exception encountered while launching : ' + self.cmd))
+        traceback.print_exc()
+    os.unlink(self.getpidfile())
+    os.unlink(tempfilename)
