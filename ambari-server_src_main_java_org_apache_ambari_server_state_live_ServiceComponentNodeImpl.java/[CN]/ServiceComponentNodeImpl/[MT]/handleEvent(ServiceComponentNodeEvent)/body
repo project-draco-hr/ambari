@@ -1,3 +1,25 @@
 {
-  stateMachine.doTransition(event.getType(),event);
+  if (LOG.isDebugEnabled()) {
+    LOG.debug("Handling ServiceComponentNodeEvent event," + " eventType=" + event.getType().name() + ", event="+ event.toString());
+  }
+  ServiceComponentNodeState oldState=getState();
+  try {
+    writeLock.lock();
+    try {
+      stateMachine.doTransition(event.getType(),event);
+      state.setState(stateMachine.getCurrentState());
+    }
+ catch (    InvalidStateTransitonException e) {
+      LOG.error("Can't handle ServiceComponentNodeEvent event at" + " current state" + ", serviceComponentName=" + this.getServiceComponentName() + ", hostName="+ this.getNodeName()+ ", currentState="+ oldState+ ", eventType="+ event.getType()+ ", event="+ event);
+      throw e;
+    }
+  }
+  finally {
+    writeLock.unlock();
+  }
+  if (oldState.getLiveState() != getState().getLiveState()) {
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("ServiceComponentNode transitioned to a new state" + ", serviceComponentName=" + this.getServiceComponentName() + ", hostName="+ this.getNodeName()+ ", oldState="+ oldState+ ", currentState="+ getState()+ ", eventType="+ event.getType().name()+ ", event="+ event);
+    }
+  }
 }
