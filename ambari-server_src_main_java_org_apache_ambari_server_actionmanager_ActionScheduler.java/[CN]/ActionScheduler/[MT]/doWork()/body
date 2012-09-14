@@ -1,0 +1,28 @@
+{
+  List<Stage> stages=db.getQueuedStages();
+  if (stages == null || stages.isEmpty()) {
+    return;
+  }
+  boolean operationFailure=false;
+  for (  Stage s : stages) {
+    Map<Role,Map<String,HostRoleCommand>> roleToHrcMap=getInvertedRoleMap(s);
+    boolean moveToNextStage=true;
+    for (    Role r : roleToHrcMap.keySet()) {
+      processPendingsAndReschedule(s,roleToHrcMap.get(r));
+      RoleStatus roleStatus=getRoleStatus(roleToHrcMap.get(r),s.getSuccessFactor(r));
+      if (!roleStatus.isRoleSuccessful()) {
+        if (!roleStatus.isRoleInProgress()) {
+          operationFailure=true;
+          break;
+        }
+        moveToNextStage=false;
+      }
+    }
+    if (operationFailure) {
+      db.abortOperation(s.getRequestId());
+    }
+    if (operationFailure || !moveToNextStage) {
+      break;
+    }
+  }
+}
