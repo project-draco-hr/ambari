@@ -1,0 +1,26 @@
+{
+  Set<PropertyId> ids=new HashSet<PropertyId>(request.getPropertyIds());
+  if (ids == null || ids.isEmpty()) {
+    ids=getPropertyIds();
+  }
+ else {
+    if (predicate != null) {
+      ids.addAll(PredicateHelper.getPropertyIds(predicate));
+    }
+    ids.retainAll(getPropertyIds());
+  }
+  String host=resource.getPropertyValue(new PropertyIdImpl("host_name","HostRoles",false));
+  String component=resource.getPropertyValue(new PropertyIdImpl("component_name","HostRoles",false));
+  host=hackHostName(host);
+  String cluster=COMPONENT_MAP.get(component);
+  if (cluster == null) {
+    return true;
+  }
+  for (  PropertyId propertyId : ids) {
+    String property=(propertyId.getCategory() == null ? "" : propertyId.getCategory() + ".") + propertyId.getName();
+    List<GangliaMetric> properties=GangliaHelper.getGangliaProperty(GANGLIA_SOURCE,cluster,host,property);
+    double[][] dataPoints=properties.get(0).getDatapoints();
+    resource.setProperty(propertyId,getTemporalValue(dataPoints));
+  }
+  return true;
+}

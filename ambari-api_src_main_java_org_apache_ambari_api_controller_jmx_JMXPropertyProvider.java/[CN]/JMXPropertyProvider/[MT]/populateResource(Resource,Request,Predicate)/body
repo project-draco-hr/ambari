@@ -1,0 +1,35 @@
+{
+  if (getPropertyIds().isEmpty()) {
+    return true;
+  }
+  Set<PropertyId> ids=new HashSet<PropertyId>(request.getPropertyIds());
+  if (ids == null || ids.isEmpty()) {
+    ids=getPropertyIds();
+  }
+ else {
+    if (predicate != null) {
+      ids.addAll(PredicateHelper.getPropertyIds(predicate));
+    }
+    ids.retainAll(getPropertyIds());
+  }
+  String hostName=hosts.get(resource.getPropertyValue(new PropertyIdImpl("host_name","HostRoles",false)));
+  String port=JMX_PORTS.get(resource.getPropertyValue(new PropertyIdImpl("component_name","HostRoles",false)));
+  String jmxSource=hostName + ":" + port;
+  if (hostName == null || port == null || jmxSource == null) {
+    return true;
+  }
+  JMXMetrics metrics=JMXHelper.getJMXMetrics(jmxSource,null);
+  for (  Map<String,String> propertyMap : metrics.getBeans()) {
+    String category=propertyMap.get("tag.context");
+    if (category != null) {
+      for (      Map.Entry<String,String> entry : propertyMap.entrySet()) {
+        String name=entry.getKey();
+        PropertyIdImpl propertyId=new PropertyIdImpl(name,category,false);
+        if (ids.contains(propertyId)) {
+          resource.setProperty(propertyId,entry.getValue());
+        }
+      }
+    }
+  }
+  return true;
+}
