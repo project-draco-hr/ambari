@@ -1,0 +1,19 @@
+{
+  List<String> allHosts=fsm.getAllHosts();
+  long now=System.currentTimeMillis();
+  for (  String host : allHosts) {
+    HostState hostState=fsm.getHostState(host);
+    long lastHeartbeat=hostState.getLastHeartbeat();
+    if (lastHeartbeat + 5 * threadWakeupInterval < now) {
+      fsm.updateStatus(host,"HEARTBEAT_EXPIRED");
+      actionQueue.dequeueAll(host);
+      actionManager.handleLostHost(host);
+    }
+    if (hostState == HostState.WAITING_FOR_HOST_STATUS_UPDATES) {
+      long timeSpentInState=hostState.getTimeInState();
+      if (timeSpentInState + 5 * threadWakeupInterval < now) {
+        fsm.updateStatus(host,"GO_BACK_TO_INIT");
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  Clusters fsm=mock(Clusters.class);
+  ActionQueue aq=new ActionQueue();
+  ActionManager am=mock(ActionManager.class);
+  HostState hs=HostState.WAITING_FOR_HOST_STATUS_UPDATES;
+  List<String> allHosts=new ArrayList<String>();
+  allHosts.add("host1");
+  when(fsm.getAllHosts()).thenReturn(allHosts);
+  when(fsm.getHostState("host1")).thenReturn(hs);
+  aq.enqueue("host1",new ExecutionCommand());
+  HeartbeatMonitor hm=new HeartbeatMonitor(fsm,aq,am,100);
+  hm.start();
+  Thread.sleep(120);
+  assertEquals(0,aq.dequeueAll("host1").size());
+  verify(am,times(1)).handleLostHost("host1");
+  verify(fsm,times(2)).updateStatus(eq("host1"),anyString());
+  hm.shutdown();
+}

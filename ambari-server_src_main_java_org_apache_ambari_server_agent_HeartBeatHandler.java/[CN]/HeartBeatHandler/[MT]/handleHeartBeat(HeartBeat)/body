@@ -1,7 +1,27 @@
 {
   HeartBeatResponse response=new HeartBeatResponse();
-  response.setAgentCommands(new ArrayList<AgentCommand>());
   response.setClusterId("test");
   response.setResponseId(0L);
+  List<String> clusterNames=clusterFsm.getClusters(heartbeat.getHostname());
+  try {
+    clusterFsm.handleHeartbeat(heartbeat.getHostname(),heartbeat.getTimestamp());
+  }
+ catch (  Exception ex) {
+    clusterFsm.updateStatus(heartbeat.getHostname(),"GO_TO_INIT");
+    RegistrationCommand regCmd=new RegistrationCommand();
+    List<AgentCommand> cmds=new ArrayList<AgentCommand>();
+    cmds.add(regCmd);
+    response.setAgentCommands(cmds);
+    return response;
+  }
+  List<CommandReport> reports=heartbeat.getCommandReports();
+  actionManager.actionResponse(heartbeat.getHostname(),reports);
+  for (  ComponentStatus status : heartbeat.componentStatus) {
+    clusterFsm.updateStatus(heartbeat.getHostname(),status.status);
+  }
+  if (clusterFsm.isNodeActive(heartbeat.getHostname())) {
+    List<AgentCommand> cmds=actionQueue.dequeueAll(heartbeat.getHostname());
+    response.setAgentCommands(cmds);
+  }
   return response;
 }

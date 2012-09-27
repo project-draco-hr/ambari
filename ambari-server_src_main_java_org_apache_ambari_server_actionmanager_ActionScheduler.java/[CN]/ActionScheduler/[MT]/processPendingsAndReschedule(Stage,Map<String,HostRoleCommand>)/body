@@ -5,21 +5,24 @@
       continue;
     }
     long now=System.currentTimeMillis();
-    if (now > hrc.getLastAttemptTime() + actionTimeout) {
+    if (now > stage.getLastAttemptTime(host) + actionTimeout) {
       LOG.info("Host:" + host + ", role:"+ hrc.getRole()+ ", actionId:"+ stage.getActionId()+ " timed out");
-      if (hrc.getAttemptCount() >= maxAttempts) {
+      if (stage.getAttemptCount(host) >= maxAttempts) {
         LOG.warn("Host:" + host + ", role:"+ hrc.getRole()+ ", actionId:"+ stage.getActionId()+ " expired");
-        ServiceComponentHostEvent timeoutEvent=new ServiceComponentHostEvent(ServiceComponentHostEventType.HOST_SVCCOMP_OP_FAILED,hrc.getRole().toString(),hrc.getHostName(),now);
+        ServiceComponentHostEvent timeoutEvent=new ServiceComponentHostEvent(ServiceComponentHostEventType.HOST_SVCCOMP_OP_FAILED,hrc.getRole().toString(),host,now);
         try {
-          fsmObject.getCluster(stage.getClusterName()).handleServiceComponentHostEvent("",hrc.getRole().toString(),hrc.getHostName(),timeoutEvent);
+          fsmObject.getCluster(stage.getClusterName()).handleServiceComponentHostEvent("",hrc.getRole().toString(),host,timeoutEvent);
         }
  catch (        InvalidStateTransitonException e) {
           e.printStackTrace();
         }
-        db.timeoutHostRole(stage.getRequestId(),stage.getStageId(),hrc.getRole());
+catch (        AmbariException e) {
+          e.printStackTrace();
+        }
+        db.timeoutHostRole(host,stage.getRequestId(),stage.getStageId(),hrc.getRole());
       }
  else {
-        scheduleHostRole(stage,hrc);
+        scheduleHostRole(stage,host,hrc);
       }
     }
   }
