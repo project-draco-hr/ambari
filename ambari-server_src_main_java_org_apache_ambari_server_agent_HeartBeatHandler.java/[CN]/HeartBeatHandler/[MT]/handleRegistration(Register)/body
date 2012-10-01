@@ -1,11 +1,20 @@
 {
   String hostname=register.getHostname();
-  List<String> roles=clusterFsm.getHostComponents(hostname);
+  long now=System.currentTimeMillis();
+  List<StatusCommand> cmds=new ArrayList<StatusCommand>();
+  for (  Cluster cl : clusterFsm.getClustersForHost(hostname)) {
+    List<ServiceComponentHost> roleList=cl.getServiceComponentHosts(hostname);
+    List<String> roles=new ArrayList<String>();
+    for (    ServiceComponentHost sch : roleList) {
+      roles.add(sch.getServiceComponentName());
+    }
+    StatusCommand statusCmd=new StatusCommand();
+    statusCmd.setRoles(roles);
+    cmds.add(statusCmd);
+  }
   Host hostObject=clusterFsm.getHost(hostname);
   RegistrationResponse response=new RegistrationResponse();
-  StatusCommand statusCmd=new StatusCommand();
-  statusCmd.setRoles(roles);
-  response.setCommand(statusCmd);
-  hostObject.handleEvent(new HostEvent(hostname,HostEventType.HOST_REGISTRATION_REQUEST));
+  response.setCommand(cmds);
+  hostObject.handleEvent(new HostRegistrationRequestEvent(hostname,new AgentVersion("v1"),now,register.getHardwareProfile()));
   return response;
 }
