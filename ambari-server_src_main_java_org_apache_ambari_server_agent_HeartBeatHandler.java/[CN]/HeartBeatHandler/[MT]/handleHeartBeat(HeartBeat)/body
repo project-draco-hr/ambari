@@ -1,13 +1,13 @@
 {
   HeartBeatResponse response=new HeartBeatResponse();
-  response.setClusterId("test");
   response.setResponseId(0L);
-  List<String> clusterNames=clusterFsm.getClusters(heartbeat.getHostname());
+  String hostname=heartbeat.getHostname();
+  Host hostObject=clusterFsm.getHost(hostname);
   try {
-    clusterFsm.handleHeartbeat(heartbeat.getHostname(),heartbeat.getTimestamp());
+    hostObject.handleEvent(new HostEvent(hostname,HostEventType.HOST_HEARTBEAT_HEALTHY));
   }
- catch (  Exception ex) {
-    clusterFsm.updateStatus(heartbeat.getHostname(),"GO_TO_INIT");
+ catch (  InvalidStateTransitonException ex) {
+    hostObject.setState(HostState.INIT);
     RegistrationCommand regCmd=new RegistrationCommand();
     List<AgentCommand> cmds=new ArrayList<AgentCommand>();
     cmds.add(regCmd);
@@ -15,11 +15,19 @@
     return response;
   }
   List<CommandReport> reports=heartbeat.getCommandReports();
-  actionManager.actionResponse(heartbeat.getHostname(),reports);
-  for (  ComponentStatus status : heartbeat.componentStatus) {
-    clusterFsm.updateStatus(heartbeat.getHostname(),status.status);
+  actionManager.actionResponse(hostname,reports);
+  List<Cluster> clusters=clusterFsm.getClusters(hostname);
+  for (  Cluster cl : clusters) {
+    for (    ComponentStatus status : heartbeat.componentStatus) {
+      if (status.getClusterName() == cl.getClusterName()) {
+        ServiceComponentHost scHost=cl.getServiceComponentHost(status.getServiceName(),status.getComponentName(),hostname);
+        ServiceComponentHostState currentState=scHost.getState();
+        ServiceComponentHostLiveState liveState=ServiceComponentHostLiveState.valueOf(ServiceComponentHostLiveState.class,status.getStatus());
+        scHost.setState(new ServiceComponentHostState(currentState.getConfigVersion(),currentState.getStackVersion(),liveState));
+      }
+    }
   }
-  if (clusterFsm.isNodeActive(heartbeat.getHostname())) {
+  if (hostObject.getState().equals(HostState.HEALTHY)) {
     List<AgentCommand> cmds=actionQueue.dequeueAll(heartbeat.getHostname());
     response.setAgentCommands(cmds);
   }
