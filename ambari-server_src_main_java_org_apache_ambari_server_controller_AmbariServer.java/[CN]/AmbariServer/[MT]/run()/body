@@ -1,5 +1,6 @@
 {
-  server=new Server();
+  server=new Server(CLIENT_API_PORT);
+  serverForAgent=new Server();
   try {
     ClassPathXmlApplicationContext parentSpringAppContext=new ClassPathXmlApplicationContext();
     parentSpringAppContext.refresh();
@@ -15,7 +16,10 @@
     server.setHandler(webAppContext);
     certMan.initRootCert();
     Context root=webAppContext;
+    Context agentroot=new Context(serverForAgent,"/",Context.SESSIONS);
     ServletHolder rootServlet=root.addServlet(DefaultServlet.class,"/");
+    rootServlet.setInitOrder(1);
+    rootServlet=agentroot.addServlet(DefaultServlet.class,"/");
     rootServlet.setInitOrder(1);
     root.addFilter(SecurityFilter.class,"/*",1);
     SslSocketConnector sslConnectorTwoWay=new SslSocketConnector();
@@ -41,8 +45,8 @@
     sslConnectorOneWay.setKeystoreType("PKCS12");
     sslConnectorOneWay.setTruststoreType("PKCS12");
     sslConnectorOneWay.setNeedClientAuth(false);
-    server.addConnector(sslConnectorOneWay);
-    server.addConnector(sslConnectorTwoWay);
+    serverForAgent.addConnector(sslConnectorOneWay);
+    serverForAgent.addConnector(sslConnectorTwoWay);
     ServletHolder sh=new ServletHolder(ServletContainer.class);
     sh.setInitParameter("com.sun.jersey.config.property.resourceConfigClass","com.sun.jersey.api.core.PackagesResourceConfig");
     sh.setInitParameter("com.sun.jersey.config.property.packages","org.apache.ambari.server.api.rest");
@@ -51,17 +55,17 @@
     ServletHolder agent=new ServletHolder(ServletContainer.class);
     agent.setInitParameter("com.sun.jersey.config.property.resourceConfigClass","com.sun.jersey.api.core.PackagesResourceConfig");
     agent.setInitParameter("com.sun.jersey.config.property.packages","org.apache.ambari.server.agent.rest");
-    root.addServlet(agent,"/agent/*");
+    agentroot.addServlet(agent,"/agent/*");
     agent.setInitOrder(3);
     ServletHolder cert=new ServletHolder(ServletContainer.class);
     cert.setInitParameter("com.sun.jersey.config.property.resourceConfigClass","com.sun.jersey.api.core.PackagesResourceConfig");
     cert.setInitParameter("com.sun.jersey.config.property.packages","org.apache.ambari.server.security.unsecured.rest");
-    root.addServlet(cert,"/cert/*");
+    agentroot.addServlet(cert,"/cert/*");
     cert.setInitOrder(4);
     ServletHolder certs=new ServletHolder(ServletContainer.class);
     certs.setInitParameter("com.sun.jersey.config.property.resourceConfigClass","com.sun.jersey.api.core.PackagesResourceConfig");
     certs.setInitParameter("com.sun.jersey.config.property.packages","org.apache.ambari.server.security.unsecured.rest");
-    root.addServlet(cert,"/certs/*");
+    agentroot.addServlet(cert,"/certs/*");
     certs.setInitOrder(5);
     ServletHolder resources=new ServletHolder(ServletContainer.class);
     resources.setInitParameter("com.sun.jersey.config.property.resourceConfigClass","com.sun.jersey.api.core.PackagesResourceConfig");
@@ -69,8 +73,10 @@
     root.addServlet(resources,"/resources/*");
     resources.setInitOrder(6);
     server.setStopAtShutdown(true);
+    serverForAgent.setStopAtShutdown(true);
     springAppContext.start();
     server.start();
+    serverForAgent.start();
     LOG.info("Started Server");
     server.join();
     LOG.info("Joined the Server");
