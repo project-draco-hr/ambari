@@ -1,0 +1,27 @@
+{
+  Set<String> predicateTables=getTables(PredicateHelper.getPropertyIds(predicate));
+  if (predicateTables.size() > 1 || !predicateTables.contains(table)) {
+    for (    String predicateTable : predicateTables) {
+      getImportedKeys(connection,predicateTable);
+    }
+    getPrimaryKeys(connection,table);
+    getImportedKeys(connection,table);
+    Set<PropertyId> pkPropertyIds=primaryKeys.get(table);
+    String sql=getSelectSQL(pkPropertyIds,predicate);
+    Statement statement=connection.createStatement();
+    ResultSet rs=statement.executeQuery(sql);
+    ResultSetMetaData metaData=rs.getMetaData();
+    int columnCount=metaData.getColumnCount();
+    Set<BasePredicate> predicates=new HashSet<BasePredicate>();
+    while (rs.next()) {
+      for (int i=1; i <= columnCount; ++i) {
+        PropertyIdImpl propertyId=new PropertyIdImpl(metaData.getColumnName(i),metaData.getTableName(i),false);
+        if (pkPropertyIds.contains(propertyId)) {
+          predicates.add(new EqualsPredicate(propertyId,rs.getString(i)));
+        }
+      }
+    }
+    predicate=predicates.size() == 0 ? null : predicates.size() > 1 ? new AndPredicate(predicates.toArray(new BasePredicate[2])) : predicates.iterator().next();
+  }
+  return predicate;
+}

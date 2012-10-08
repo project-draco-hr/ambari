@@ -8,20 +8,21 @@
     factory.registerSingleton("guiceInjector",injector);
     String[] contextLocations={SPRING_CONTEXT_LOCATION};
     ClassPathXmlApplicationContext springAppContext=new ClassPathXmlApplicationContext(contextLocations,parentSpringAppContext);
-    WebAppContext webAppContext=new WebAppContext(warUrlString,CONTEXT_PATH);
+    Context root=new Context(server,CONTEXT_PATH,Context.ALL);
     GenericWebApplicationContext springWebAppContext=new GenericWebApplicationContext();
-    springWebAppContext.setServletContext(webAppContext.getServletContext());
+    springWebAppContext.setServletContext(root.getServletContext());
     springWebAppContext.setParent(springAppContext);
-    webAppContext.getServletContext().setAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE,springWebAppContext);
-    server.setHandler(webAppContext);
+    root.getServletContext().setAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE,springWebAppContext);
     certMan.initRootCert();
-    Context root=webAppContext;
     Context agentroot=new Context(serverForAgent,"/",Context.SESSIONS);
     ServletHolder rootServlet=root.addServlet(DefaultServlet.class,"/");
     rootServlet.setInitOrder(1);
     rootServlet=agentroot.addServlet(DefaultServlet.class,"/");
     rootServlet.setInitOrder(1);
-    root.addFilter(SecurityFilter.class,"/*",1);
+    DelegatingFilterProxy springSecurityFilter=new DelegatingFilterProxy();
+    springSecurityFilter.setTargetBeanName("springSecurityFilterChain");
+    root.addFilter(new FilterHolder(springSecurityFilter),"/*",1);
+    agentroot.addFilter(SecurityFilter.class,"/*",1);
     SslSocketConnector sslConnectorTwoWay=new SslSocketConnector();
     sslConnectorTwoWay.setPort(CLIENT_TWO_WAY);
     Map<String,String> configsMap=configs.getConfigsMap();
@@ -55,6 +56,7 @@
     ServletHolder agent=new ServletHolder(ServletContainer.class);
     agent.setInitParameter("com.sun.jersey.config.property.resourceConfigClass","com.sun.jersey.api.core.PackagesResourceConfig");
     agent.setInitParameter("com.sun.jersey.config.property.packages","org.apache.ambari.server.agent.rest");
+    agent.setInitParameter("com.sun.jersey.api.json.POJOMappingFeature","true");
     agentroot.addServlet(agent,"/agent/*");
     agent.setInitOrder(3);
     ServletHolder cert=new ServletHolder(ServletContainer.class);
@@ -78,6 +80,8 @@
     server.start();
     serverForAgent.start();
     LOG.info("********* Started Server **********");
+    ActionManager manager=injector.getInstance(ActionManager.class);
+    manager.start();
     server.join();
     LOG.info("Joined the Server");
   }

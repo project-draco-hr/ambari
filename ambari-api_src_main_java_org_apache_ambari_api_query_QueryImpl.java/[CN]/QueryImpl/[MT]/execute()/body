@@ -1,20 +1,25 @@
 {
-  initialize();
   Result result=createResult();
-  Iterable<Resource> iterResource=getClusterController().getResources(m_resourceDefinition.getType(),createRequest(),m_predicate);
-  List<Resource> listResources=new ArrayList<Resource>();
-  for (  Resource resource : iterResource) {
-    listResources.add(resource);
+  if (m_resourceDefinition.getId() == null) {
+    Schema schema=getClusterController().getSchema(m_resourceDefinition.getType());
+    addProperty(schema.getKeyPropertyId(m_resourceDefinition.getType()));
+    result.getResultTree().setProperty("isCollection","true");
   }
-  result.addResources("/",listResources);
-  for (  Map.Entry<ResourceDefinition,Query> entry : m_mapSubQueries.entrySet()) {
-    Query query=entry.getValue();
-    ResourceDefinition resDef=entry.getKey();
-    if (m_mapProperties.isEmpty() || m_mapProperties.containsKey(resDef.getId() == null ? resDef.getPluralName() : resDef.getSingularName())) {
-      Map<String,List<Resource>> mapSubResults=query.execute().getResources();
-      List<Resource> listSubResources=mapSubResults.get("/");
-      String subResourceName=resDef.getId() == null ? resDef.getPluralName() : resDef.getSingularName();
-      result.addResources(subResourceName,listSubResources);
+  if (m_mapQueryProperties.isEmpty() && m_mapSubResources.isEmpty()) {
+    m_mapSubResources.putAll(m_resourceDefinition.getSubResources());
+  }
+  Predicate predicate=createPredicate(m_resourceDefinition);
+  Iterable<Resource> iterResource=getClusterController().getResources(m_resourceDefinition.getType(),createRequest(),predicate);
+  for (  Resource resource : iterResource) {
+    TreeNode<Resource> node=result.getResultTree().addChild(resource,null);
+    for (    Map.Entry<String,ResourceDefinition> entry : m_mapSubResources.entrySet()) {
+      String subResCategory=entry.getKey();
+      ResourceDefinition r=entry.getValue();
+      r.setParentId(m_resourceDefinition.getType(),resource.getPropertyValue(getClusterController().getSchema(m_resourceDefinition.getType()).getKeyPropertyId(m_resourceDefinition.getType())));
+      TreeNode<Resource> childResult=r.getQuery().execute().getResultTree();
+      childResult.setName(subResCategory);
+      childResult.setProperty("isCollection","false");
+      node.addChild(childResult);
     }
   }
   return result;

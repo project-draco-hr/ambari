@@ -1,0 +1,71 @@
+{
+  if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getServiceName() == null || request.getServiceName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty()) {
+    throw new AmbariException("Invalid arguments");
+  }
+  if (LOG.isDebugEnabled()) {
+    LOG.debug("Received a updateComponent request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", request="+ request);
+  }
+  final Cluster cluster=clusters.getCluster(request.getClusterName());
+  final Service s=cluster.getService(request.getServiceName());
+  final ServiceComponent sc=s.getServiceComponent(request.getComponentName());
+  if (request.getConfigVersions() != null) {
+    throw new AmbariException("Unsupported operation - config updates not" + " allowed");
+  }
+  if (request.getDesiredState() == null) {
+    return null;
+  }
+  State newState=State.valueOf(request.getDesiredState());
+  if (!newState.isValidDesiredState()) {
+    throw new AmbariException("Invalid desired state");
+  }
+  State oldState=sc.getDesiredState();
+  if (newState == oldState) {
+    return null;
+  }
+  List<ServiceComponentHost> changedScHosts=new ArrayList<ServiceComponentHost>();
+  for (  ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+    if (newState == sch.getDesiredState()) {
+      continue;
+    }
+    changedScHosts.add(sch);
+  }
+  long nowTimestamp=System.currentTimeMillis();
+  long requestId=requestCounter.incrementAndGet();
+  List<Stage> stages=new ArrayList<Stage>();
+  Stage stage=createNewStage(cluster,requestId);
+  for (  ServiceComponentHost scHost : changedScHosts) {
+    Map<String,Config> configs=null;
+    ServiceComponentHostEvent event;
+    State oldSchState=scHost.getDesiredState();
+switch (newState) {
+case INSTALLED:
+      if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED) {
+        event=new ServiceComponentHostInstallEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+      }
+ else       if (oldSchState == State.STARTED) {
+        event=new ServiceComponentHostStopEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+      }
+ else {
+        throw new AmbariException("Invalid transition" + ", oldDesiredState=" + oldSchState + ", newDesiredState"+ newState);
+      }
+    break;
+case STARTED:
+  if (oldSchState == State.INSTALLED) {
+    event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+  }
+ else {
+    throw new AmbariException("Invalid transition" + ", oldDesiredState=" + oldSchState + ", newDesiredState"+ newState);
+  }
+break;
+default :
+throw new AmbariException("Unsupported state change operation");
+}
+HostAction ha=createHostAction(stage,scHost,configs,event,nowTimestamp);
+stage.addHostAction(scHost.getHostName(),ha);
+}
+for (ServiceComponentHost sch : changedScHosts) {
+sch.setDesiredState(newState);
+}
+actionManager.sendActions(stages);
+return new TrackActionResponse(requestId);
+}
