@@ -26,16 +26,22 @@
   for (  ServiceComponent sc : s.getServiceComponents().values()) {
     State oldScState=sc.getDesiredState();
     if (newState == oldScState) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Ignoring ServiceComponent" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", currentState="+ sc.getDesiredState()+ ", newState="+ newState);
+      }
       continue;
     }
+    LOG.debug("Handling update to ServiceComponent" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", currentState="+ sc.getDesiredState()+ ", newState="+ newState);
     changedComps.add(sc);
     for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
       if (newState == sch.getDesiredState()) {
+        LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ sch.getDesiredState()+ ", newState="+ newState);
         continue;
       }
       if (!changedScHosts.containsKey(sc.getName())) {
         changedScHosts.put(sc.getName(),new ArrayList<ServiceComponentHost>());
       }
+      LOG.debug("Handling update to ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ sch.getDesiredState()+ ", newState="+ newState);
       changedScHosts.get(sc.getName()).add(sch);
     }
   }
@@ -47,11 +53,13 @@
   long nowTimestamp=System.currentTimeMillis();
   long requestId=requestCounter.incrementAndGet();
   List<Stage> stages=new ArrayList<Stage>();
+  long stageId=0;
   for (  String compName : orderedCompNames) {
     if (!changedScHosts.containsKey(compName) || changedScHosts.get(compName).isEmpty()) {
       continue;
     }
     Stage stage=createNewStage(cluster,requestId);
+    stage.setStageId(++stageId);
     for (    ServiceComponentHost scHost : changedScHosts.get(compName)) {
       Map<String,Config> configs=null;
       ServiceComponentHostEvent event;
@@ -82,6 +90,7 @@ throw new AmbariException("Unsupported state change operation");
 HostAction ha=createHostAction(stage,scHost,configs,event,nowTimestamp);
 stage.addHostAction(scHost.getHostName(),ha);
 }
+stages.add(stage);
 }
 for (ServiceComponent sc : changedComps) {
 sc.setDesiredState(newState);
@@ -90,6 +99,9 @@ for (List<ServiceComponentHost> schosts : changedScHosts.values()) {
 for (ServiceComponentHost sch : schosts) {
 sch.setDesiredState(newState);
 }
+}
+if (LOG.isDebugEnabled()) {
+LOG.debug("Triggering Action Manager" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", stagesCount="+ stages.size());
 }
 actionManager.sendActions(stages);
 return new TrackActionResponse(requestId);
