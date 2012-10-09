@@ -11,6 +11,9 @@
     throw new AmbariException("Unsupported operation - config updates not" + " allowed");
   }
   if (request.getDesiredState() == null) {
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Nothing to do for new updateService request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", newDesiredState=null");
+    }
     return null;
   }
   State newState=State.valueOf(request.getDesiredState());
@@ -19,6 +22,9 @@
   }
   State oldState=s.getDesiredState();
   if (newState == oldState) {
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Nothing to do for new updateService request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", oldDesiredState="+ oldState+ ", newDesiredState="+ newState);
+    }
     return null;
   }
   List<ServiceComponent> changedComps=new ArrayList<ServiceComponent>();
@@ -62,15 +68,15 @@
     stage.setStageId(++stageId);
     for (    ServiceComponentHost scHost : changedScHosts.get(compName)) {
       Map<String,Config> configs=null;
-      ServiceComponentHostEvent event;
+      RoleCommand roleCommand;
       State oldSchState=scHost.getDesiredState();
 switch (newState) {
 case INSTALLED:
         if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED) {
-          event=new ServiceComponentHostInstallEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+          roleCommand=RoleCommand.INSTALL;
         }
  else         if (oldSchState == State.STARTED) {
-          event=new ServiceComponentHostStopEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+          roleCommand=RoleCommand.STOP;
         }
  else {
           throw new AmbariException("Invalid transition" + ", oldDesiredState=" + oldSchState + ", newDesiredState"+ newState);
@@ -78,7 +84,7 @@ case INSTALLED:
       break;
 case STARTED:
     if (oldSchState == State.INSTALLED) {
-      event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+      roleCommand=RoleCommand.START;
     }
  else {
       throw new AmbariException("Invalid transition" + ", oldDesiredState=" + oldSchState + ", newDesiredState"+ newState);
@@ -87,7 +93,7 @@ case STARTED:
 default :
 throw new AmbariException("Unsupported state change operation");
 }
-HostAction ha=createHostAction(stage,scHost,configs,event,nowTimestamp);
+HostAction ha=createHostAction(stage,scHost,configs,roleCommand,nowTimestamp);
 stage.addHostAction(scHost.getHostName(),ha);
 }
 if (LOG.isDebugEnabled()) {
