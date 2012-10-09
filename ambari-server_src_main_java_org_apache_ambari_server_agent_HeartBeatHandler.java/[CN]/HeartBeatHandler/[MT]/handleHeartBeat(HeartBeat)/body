@@ -22,6 +22,32 @@
   }
   List<CommandReport> reports=heartbeat.getReports();
   actionManager.actionResponse(hostname,reports);
+  for (  CommandReport report : reports) {
+    String clusterName=report.getClusterName();
+    if ((clusterName == null) || "".equals(clusterName)) {
+      clusterName="cluster1";
+    }
+    Cluster cl=clusterFsm.getCluster(report.getClusterName());
+    String service=report.getServiceName();
+    if (service == null || "".equals(service)) {
+      service="HDFS";
+    }
+    Service svc=cl.getService(service);
+    ServiceComponent svcComp=svc.getServiceComponent(report.getRole());
+    ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
+    try {
+      if (report.getStatus().equals("COMPLETED")) {
+        scHost.handleEvent(new ServiceComponentHostOpSucceededEvent(scHost.getServiceComponentName(),hostname,now));
+      }
+ else       if (report.getStatus().equals("FAILED")) {
+        scHost.handleEvent(new ServiceComponentHostOpSucceededEvent(scHost.getServiceComponentName(),hostname,now));
+      }
+    }
+ catch (    InvalidStateTransitonException ex) {
+      throw new AmbariException("State machine exception",ex);
+    }
+    LOG.info("Report for " + report.toString() + ", processed successfully");
+  }
   Set<Cluster> clusters=clusterFsm.getClustersForHost(hostname);
   for (  Cluster cl : clusters) {
     for (    ComponentStatus status : heartbeat.componentStatus) {
