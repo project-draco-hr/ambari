@@ -1,30 +1,46 @@
 {
-  LOG.info("Scheduler wakes up");
   List<Stage> stages=db.getStagesInProgress();
+  LOG.info("Scheduler wakes up, number of stages to look at:" + stages.size());
   if (stages == null || stages.isEmpty()) {
     LOG.info("No stage in progress..nothing to do");
     return;
   }
-  boolean operationFailure=false;
   for (  Stage s : stages) {
-    Map<Role,Map<String,HostRoleCommand>> roleToHrcMap=getInvertedRoleMap(s);
-    boolean moveToNextStage=true;
-    for (    Role r : roleToHrcMap.keySet()) {
-      processPendingsAndReschedule(s,roleToHrcMap.get(r));
-      RoleStatus roleStatus=getRoleStatus(roleToHrcMap.get(r),s.getSuccessFactor(r));
-      if (!roleStatus.isRoleSuccessful()) {
-        if (!roleStatus.isRoleInProgress()) {
-          operationFailure=true;
-          break;
-        }
-        moveToNextStage=false;
+    List<ExecutionCommand> commandsToSchedule=new ArrayList<ExecutionCommand>();
+    Map<String,RoleStats> roleStats=processInProgressStage(s,commandsToSchedule);
+    boolean failed=false;
+    for (    String role : roleStats.keySet()) {
+      RoleStats stats=roleStats.get(role);
+      LOG.info("Stats for role:" + role + ", stats="+ stats);
+      if (stats.isRoleFailed()) {
+        failed=true;
+        break;
       }
     }
-    if (operationFailure) {
+    if (failed) {
+      LOG.warn("Operation completely failed, borting request id:" + s.getRequestId());
       db.abortOperation(s.getRequestId());
+      return;
     }
-    if (operationFailure || !moveToNextStage) {
-      break;
+    for (    ExecutionCommand cmd : commandsToSchedule) {
+      try {
+        scheduleHostRole(s,cmd);
+      }
+ catch (      InvalidStateTransitonException e) {
+        LOG.warn("Could not schedule host role " + cmd.toString(),e);
+        db.abortHostRole(cmd.getHostname(),s.getRequestId(),s.getStageId(),cmd.getRole());
+      }
+    }
+    boolean goToNextStage=true;
+    for (    String role : roleStats.keySet()) {
+      RoleStats stats=roleStats.get(role);
+      if (!stats.isSuccessFactorMet()) {
+        goToNextStage=false;
+        break;
+      }
+    }
+    if (!goToNextStage) {
+      return;
     }
   }
 }
