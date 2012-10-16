@@ -10,14 +10,16 @@
   when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
   when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
   when(serviceObj.getCluster()).thenReturn(oneClusterMock);
-  ActionDBAccessorImpl db=mock(ActionDBAccessorImpl.class);
+  ActionDBAccessor db=new ActionDBInMemoryImpl();
   String hostname="ahost.ambari.apache.org";
   List<Stage> stages=new ArrayList<Stage>();
   Stage s=StageUtils.getATestStage(1,977,hostname);
   stages.add(s);
-  when(db.getStagesInProgress()).thenReturn(stages);
-  ActionScheduler scheduler=new ActionScheduler(100,100,db,aq,fsm,3);
+  db.persistActions(stages);
+  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3);
   scheduler.start();
-  Thread.sleep(500);
-  verify(db,atLeastOnce()).timeoutHostRole(hostname,1,977,Role.NAMENODE);
+  while (!stages.get(0).getHostRoleStatus(hostname,"NAMENODE").equals(HostRoleStatus.TIMEDOUT)) {
+    Thread.sleep(100);
+  }
+  assertEquals(stages.get(0).getHostRoleStatus(hostname,"NAMENODE"),HostRoleStatus.TIMEDOUT);
 }
