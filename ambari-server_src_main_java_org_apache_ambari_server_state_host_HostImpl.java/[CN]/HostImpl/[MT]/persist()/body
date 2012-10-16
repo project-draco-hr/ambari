@@ -1,0 +1,32 @@
+{
+  try {
+    writeLock.lock();
+    if (!persisted) {
+      hostDAO.create(hostEntity);
+      hostStateDAO.create(hostStateEntity);
+      if (!hostEntity.getClusterEntities().isEmpty()) {
+        for (        ClusterEntity clusterEntity : hostEntity.getClusterEntities()) {
+          clusterEntity.getHostEntities().add(hostEntity);
+          clusterDAO.merge(clusterEntity);
+          try {
+            clusters.getClusterById(clusterEntity.getClusterId()).refresh();
+          }
+ catch (          AmbariException e) {
+            LOG.error(e);
+            throw new RuntimeException("Cluster '" + clusterEntity.getClusterId() + "' was removed",e);
+          }
+        }
+      }
+      hostEntity=hostDAO.merge(hostEntity);
+      hostStateEntity=hostStateDAO.merge(hostStateEntity);
+      persisted=true;
+    }
+ else {
+      hostDAO.merge(hostEntity);
+      hostStateDAO.merge(hostStateEntity);
+    }
+  }
+  finally {
+    writeLock.unlock();
+  }
+}

@@ -13,14 +13,27 @@
   configsMap.put(LDAP_USER_DEFAULT_ROLE_KEY,properties.getProperty(LDAP_USER_DEFAULT_ROLE_KEY,LDAP_USER_DEFAULT_ROLE_DEFAULT));
   configsMap.put(RESOURCES_DIR_KEY,properties.getProperty(RESOURCES_DIR_KEY,RESOURCES_DIR_DEFAULT));
   configsMap.put(SRVR_CRT_PASS_LEN_KEY,properties.getProperty(SRVR_CRT_PASS_LEN_KEY,SRVR_CRT_PASS_LEN_DEFAULT));
-  try {
-    String randStr=RandomStringUtils.randomAlphanumeric(Integer.parseInt(configsMap.get(SRVR_CRT_PASS_LEN_KEY)));
-    File passFile=new File(configsMap.get(SRVR_KSTR_DIR_KEY) + File.separator + configsMap.get(SRVR_CRT_PASS_FILE_KEY));
-    FileUtils.writeStringToFile(passFile,randStr);
-    configsMap.put(SRVR_CRT_PASS_KEY,randStr);
+  File passFile=new File(configsMap.get(SRVR_KSTR_DIR_KEY) + File.separator + configsMap.get(SRVR_CRT_PASS_FILE_KEY));
+  String randStr=null;
+  if (!passFile.exists()) {
+    LOG.info("Generation of file with password");
+    try {
+      randStr=RandomStringUtils.randomAlphanumeric(Integer.parseInt(configsMap.get(SRVR_CRT_PASS_LEN_KEY)));
+      FileUtils.writeStringToFile(passFile,randStr);
+    }
+ catch (    IOException e) {
+      e.printStackTrace();
+      throw new RuntimeException("Error reading certificate password from file");
+    }
   }
- catch (  IOException e) {
-    e.printStackTrace();
-    throw new RuntimeException("Error reading certificate password from file");
+ else {
+    LOG.info("Reading password from existing file");
+    try {
+      randStr=FileUtils.readFileToString(passFile);
+    }
+ catch (    IOException e) {
+      LOG.error(e.getStackTrace());
+    }
   }
+  configsMap.put(SRVR_CRT_PASS_KEY,randStr);
 }
