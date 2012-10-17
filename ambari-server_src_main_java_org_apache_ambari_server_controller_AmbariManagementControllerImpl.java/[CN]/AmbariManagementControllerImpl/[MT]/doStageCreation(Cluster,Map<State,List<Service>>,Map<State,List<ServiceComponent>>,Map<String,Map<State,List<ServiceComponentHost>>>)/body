@@ -1,0 +1,79 @@
+{
+  long nowTimestamp=System.currentTimeMillis();
+  long requestId=actionManager.getNextRequestId();
+  long stageId=0;
+  Stage stage=createNewStage(cluster,requestId);
+  stage.setStageId(stageId);
+  for (  String compName : changedScHosts.keySet()) {
+    for (    State newState : changedScHosts.get(compName).keySet()) {
+      for (      ServiceComponentHost scHost : changedScHosts.get(compName).get(newState)) {
+        Map<String,Config> configs=null;
+        RoleCommand roleCommand;
+        State oldSchState=scHost.getDesiredState();
+        ServiceComponentHostEvent event;
+switch (newState) {
+case INSTALLED:
+          if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED) {
+            roleCommand=RoleCommand.INSTALL;
+            event=new ServiceComponentHostInstallEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+          }
+ else           if (oldSchState == State.STARTED) {
+            roleCommand=RoleCommand.STOP;
+            event=new ServiceComponentHostStopEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+          }
+ else {
+            throw new AmbariException("Invalid transition" + ", oldDesiredState=" + oldSchState + ", newDesiredState"+ newState);
+          }
+        break;
+case STARTED:
+      if (oldSchState == State.INSTALLED) {
+        roleCommand=RoleCommand.START;
+        event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+      }
+ else {
+        throw new AmbariException("Invalid transition" + ", oldDesiredState=" + oldSchState + ", newDesiredState"+ newState);
+      }
+    break;
+default :
+  throw new AmbariException("Unsupported state change operation");
+}
+if (LOG.isDebugEnabled()) {
+LOG.debug("Create a new host action" + ", requestId=" + requestId + ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", roleCommand="+ roleCommand.name());
+}
+createHostAction(stage,scHost,configs,roleCommand,nowTimestamp,event);
+}
+}
+}
+if (changedServices != null) {
+for (Entry<State,List<Service>> entry : changedServices.entrySet()) {
+State newState=entry.getKey();
+for (Service s : entry.getValue()) {
+s.setDesiredState(newState);
+}
+}
+}
+if (changedComps != null) {
+for (Entry<State,List<ServiceComponent>> entry : changedComps.entrySet()) {
+State newState=entry.getKey();
+for (ServiceComponent sc : entry.getValue()) {
+sc.setDesiredState(newState);
+}
+}
+}
+for (Map<State,List<ServiceComponentHost>> stateScHostMap : changedScHosts.values()) {
+for (Entry<State,List<ServiceComponentHost>> entry : stateScHostMap.entrySet()) {
+State newState=entry.getKey();
+for (ServiceComponentHost sch : entry.getValue()) {
+sch.setDesiredState(newState);
+}
+}
+}
+RoleGraph rg=new RoleGraph(rco);
+rg.build(stage);
+List<Stage> stages=rg.getStages();
+if (LOG.isDebugEnabled()) {
+LOG.debug("Triggering Action Manager" + ", clusterName=" + cluster.getClusterName() + ", requestId="+ requestId+ ", stagesCount="+ stages.size());
+}
+actionManager.sendActions(stages);
+return new TrackActionResponse(requestId);
+}

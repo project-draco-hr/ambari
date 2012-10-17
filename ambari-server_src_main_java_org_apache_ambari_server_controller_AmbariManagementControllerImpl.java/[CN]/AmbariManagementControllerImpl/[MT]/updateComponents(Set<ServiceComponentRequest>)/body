@@ -1,0 +1,82 @@
+{
+  if (requests.isEmpty()) {
+    return null;
+  }
+  Map<State,List<ServiceComponent>> changedComps=new HashMap<State,List<ServiceComponent>>();
+  Map<String,Map<State,List<ServiceComponentHost>>> changedScHosts=new HashMap<String,Map<State,List<ServiceComponentHost>>>();
+  Set<String> clusterNames=new HashSet<String>();
+  Map<String,Map<String,Set<String>>> componentNames=new HashMap<String,Map<String,Set<String>>>();
+  Set<State> seenNewStates=new HashSet<State>();
+  for (  ServiceComponentRequest request : requests) {
+    if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getServiceName() == null || request.getServiceName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty()) {
+      throw new AmbariException("Invalid arguments");
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Received a updateComponent request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", request="+ request);
+    }
+    clusterNames.add(request.getClusterName());
+    if (clusterNames.size() > 1) {
+      throw new AmbariException("Updates to multiple clusters is not" + " supported");
+    }
+    if (!componentNames.containsKey(request.getClusterName())) {
+      componentNames.put(request.getClusterName(),new HashMap<String,Set<String>>());
+    }
+    if (!componentNames.get(request.getClusterName()).containsKey(request.getServiceName())) {
+      componentNames.get(request.getClusterName()).put(request.getServiceName(),new HashSet<String>());
+    }
+    if (componentNames.get(request.getClusterName()).get(request.getServiceName()).contains(request.getComponentName())) {
+      throw new AmbariException("Invalid request contains duplicate" + " service components");
+    }
+    componentNames.get(request.getClusterName()).get(request.getServiceName()).add(request.getComponentName());
+    Cluster cluster=clusters.getCluster(request.getClusterName());
+    Service s=cluster.getService(request.getServiceName());
+    ServiceComponent sc=s.getServiceComponent(request.getComponentName());
+    if (request.getConfigVersions() != null) {
+      throw new AmbariException("Unsupported operation - config updates not" + " allowed");
+    }
+    if (request.getDesiredState() == null || request.getDesiredState().isEmpty()) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Nothing to do for new updateServiceComponent request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", newDesiredState=null");
+      }
+      continue;
+    }
+    State newState=State.valueOf(request.getDesiredState());
+    if (!newState.isValidDesiredState()) {
+      throw new AmbariException("Invalid desired state");
+    }
+    seenNewStates.add(newState);
+    State oldState=sc.getDesiredState();
+    if (newState != oldState) {
+      if (!changedComps.containsKey(newState)) {
+        changedComps.put(newState,new ArrayList<ServiceComponent>());
+      }
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Handling update to ServiceComponent" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", currentState="+ sc.getDesiredState()+ ", newState="+ newState);
+      }
+      changedComps.get(newState).add(sc);
+    }
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      if (newState == sch.getDesiredState()) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ sch.getDesiredState()+ ", newState="+ newState);
+        }
+        continue;
+      }
+      if (!changedScHosts.containsKey(sc.getName())) {
+        changedScHosts.put(sc.getName(),new HashMap<State,List<ServiceComponentHost>>());
+      }
+      if (!changedScHosts.get(sc.getName()).containsKey(newState)) {
+        changedScHosts.get(sc.getName()).put(newState,new ArrayList<ServiceComponentHost>());
+      }
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Handling update to ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ sch.getDesiredState()+ ", newState="+ newState);
+      }
+      changedScHosts.get(sc.getName()).get(newState).add(sch);
+    }
+  }
+  if (seenNewStates.size() > 1) {
+    throw new AmbariException("Cannot handle different desired state changes" + " for a set of service components at the same time");
+  }
+  Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
+  return doStageCreation(cluster,null,changedComps,changedScHosts);
+}

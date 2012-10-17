@@ -1,0 +1,78 @@
+{
+  if (requests.isEmpty()) {
+  }
+  Map<String,Map<String,Set<String>>> componentNames=new HashMap<String,Map<String,Set<String>>>();
+  Set<String> duplicates=new HashSet<String>();
+  for (  ServiceComponentRequest request : requests) {
+    if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getServiceName() == null || request.getServiceName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty()) {
+      throw new AmbariException("Invalid arguments" + ", clustername, servicename and componentname should be" + " non-null and non-empty");
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Received a createComponent request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", request="+ request);
+    }
+    if (!componentNames.containsKey(request.getClusterName())) {
+      componentNames.put(request.getClusterName(),new HashMap<String,Set<String>>());
+    }
+    if (!componentNames.get(request.getClusterName()).containsKey(request.getServiceName())) {
+      componentNames.get(request.getClusterName()).put(request.getServiceName(),new HashSet<String>());
+    }
+    if (componentNames.get(request.getClusterName()).get(request.getServiceName()).contains(request.getComponentName())) {
+      duplicates.add(request.getServiceName() + "-" + request.getComponentName());
+      continue;
+    }
+    componentNames.get(request.getClusterName()).get(request.getServiceName()).add(request.getComponentName());
+    if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
+      State state=State.valueOf(request.getDesiredState());
+      if (!state.isValidDesiredState() || state != State.INIT) {
+        throw new AmbariException("Invalid desired state" + " only INIT state allowed during creation" + ", providedDesiredState="+ request.getDesiredState());
+      }
+    }
+    Cluster cluster=clusters.getCluster(request.getClusterName());
+    Service s=cluster.getService(request.getServiceName());
+    try {
+      ServiceComponent sc=s.getServiceComponent(request.getComponentName());
+      if (sc != null) {
+        duplicates.add(request.getServiceName() + "-" + request.getComponentName());
+        continue;
+      }
+    }
+ catch (    AmbariException e) {
+    }
+  }
+  if (componentNames.size() != 1) {
+    throw new AmbariException("Invalid arguments - updates allowed only one" + " cluster at a time");
+  }
+  if (!duplicates.isEmpty()) {
+    StringBuilder names=new StringBuilder();
+    boolean first=true;
+    for (    String cName : duplicates) {
+      if (!first) {
+        names.append(",");
+      }
+      first=false;
+      names.append(cName);
+    }
+    throw new AmbariException("Invalid request" + " contains duplicates within request or" + " already existing service components"+ ", duplicateServiceComponentsNames="+ names.toString());
+  }
+  for (  ServiceComponentRequest request : requests) {
+    Cluster cluster=clusters.getCluster(request.getClusterName());
+    Service s=cluster.getService(request.getServiceName());
+    ServiceComponent sc=serviceComponentFactory.createNew(s,request.getComponentName());
+    sc.setDesiredStackVersion(s.getDesiredStackVersion());
+    if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
+      State state=State.valueOf(request.getDesiredState());
+      sc.setDesiredState(state);
+    }
+ else {
+      sc.setDesiredState(s.getDesiredState());
+    }
+    Map<String,Config> configs=new HashMap<String,Config>();
+    if (request.getConfigVersions() == null) {
+    }
+ else {
+    }
+    sc.updateDesiredConfigs(configs);
+    s.addServiceComponent(sc);
+    sc.persist();
+  }
+}

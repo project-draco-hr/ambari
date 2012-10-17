@@ -1,0 +1,90 @@
+{
+  if (requests.isEmpty()) {
+  }
+  Map<String,Map<String,Map<String,Set<String>>>> hostComponentNames=new HashMap<String,Map<String,Map<String,Set<String>>>>();
+  Set<String> duplicates=new HashSet<String>();
+  for (  ServiceComponentHostRequest request : requests) {
+    if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty() || request.getHostname() == null || request.getHostname().isEmpty()) {
+      throw new AmbariException("Invalid arguments");
+    }
+    if (request.getServiceName() == null || request.getServiceName().isEmpty()) {
+      request.setServiceName("HDFS");
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Received a createHostComponent request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", hostname="+ request.getHostname()+ ", request="+ request);
+    }
+    if (!hostComponentNames.containsKey(request.getClusterName())) {
+      hostComponentNames.put(request.getClusterName(),new HashMap<String,Map<String,Set<String>>>());
+    }
+    if (!hostComponentNames.get(request.getClusterName()).containsKey(request.getServiceName())) {
+      hostComponentNames.get(request.getClusterName()).put(request.getServiceName(),new HashMap<String,Set<String>>());
+    }
+    if (!hostComponentNames.get(request.getClusterName()).get(request.getServiceName()).containsKey(request.getComponentName())) {
+      hostComponentNames.get(request.getClusterName()).get(request.getServiceName()).put(request.getComponentName(),new HashSet<String>());
+    }
+    if (hostComponentNames.get(request.getClusterName()).get(request.getServiceName()).get(request.getComponentName()).contains(request.getHostname())) {
+      duplicates.add(request.getServiceName() + "-" + request.getComponentName()+ "-"+ request.getHostname());
+      continue;
+    }
+    hostComponentNames.get(request.getClusterName()).get(request.getServiceName()).get(request.getComponentName()).add(request.getHostname());
+    if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
+      State state=State.valueOf(request.getDesiredState());
+      if (!state.isValidDesiredState() || state != State.INIT) {
+        throw new AmbariException("Invalid desired state" + " only INIT state allowed during creation" + ", providedDesiredState="+ request.getDesiredState());
+      }
+    }
+    Cluster cluster=clusters.getCluster(request.getClusterName());
+    Service s=cluster.getService(request.getServiceName());
+    ServiceComponent sc=s.getServiceComponent(request.getComponentName());
+    try {
+      ServiceComponentHost sch=sc.getServiceComponentHost(request.getHostname());
+      if (sch != null) {
+        duplicates.add(request.getServiceName() + "-" + request.getComponentName()+ "-"+ request.getHostname());
+        continue;
+      }
+    }
+ catch (    AmbariException e) {
+    }
+  }
+  if (hostComponentNames.size() != 1) {
+    throw new AmbariException("Invalid arguments - updates allowed only one" + " cluster at a time");
+  }
+  if (!duplicates.isEmpty()) {
+    StringBuilder names=new StringBuilder();
+    boolean first=true;
+    for (    String hName : duplicates) {
+      if (!first) {
+        names.append(",");
+      }
+      first=false;
+      names.append(hName);
+    }
+    throw new AmbariException("Invalid request" + " contains duplicates within request or" + " already existing host components"+ ", duplicateServiceComponentHostNames="+ names.toString());
+  }
+  for (  ServiceComponentHostRequest request : requests) {
+    Cluster cluster=clusters.getCluster(request.getClusterName());
+    Service s=cluster.getService(request.getServiceName());
+    ServiceComponent sc=s.getServiceComponent(request.getComponentName());
+    boolean isClient=true;
+    if (sc.getName().equals("NAMENODE") || sc.getName().equals("DATANODE") || sc.getName().equals("SECONDARY_NAMENODE")) {
+      isClient=false;
+    }
+    ServiceComponentHost sch=serviceComponentHostFactory.createNew(sc,request.getHostname(),isClient);
+    if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
+      State state=State.valueOf(request.getDesiredState());
+      sch.setDesiredState(state);
+    }
+ else {
+      sch.setDesiredState(sc.getDesiredState());
+    }
+    sch.setDesiredStackVersion(sc.getDesiredStackVersion());
+    Map<String,Config> configs=new HashMap<String,Config>();
+    if (request.getConfigVersions() == null) {
+    }
+ else {
+    }
+    sch.updateDesiredConfigs(configs);
+    sc.addServiceComponentHost(sch);
+    sch.persist();
+  }
+}
