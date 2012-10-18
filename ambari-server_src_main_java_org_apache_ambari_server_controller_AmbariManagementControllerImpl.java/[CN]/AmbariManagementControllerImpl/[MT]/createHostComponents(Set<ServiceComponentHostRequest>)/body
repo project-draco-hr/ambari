@@ -1,5 +1,7 @@
 {
   if (requests.isEmpty()) {
+    LOG.warn("Received an empty requests set");
+    return;
   }
   Map<String,Map<String,Map<String,Set<String>>>> hostComponentNames=new HashMap<String,Map<String,Map<String,Set<String>>>>();
   Set<String> duplicates=new HashSet<String>();
@@ -36,6 +38,18 @@
     Cluster cluster=clusters.getCluster(request.getClusterName());
     Service s=cluster.getService(request.getServiceName());
     ServiceComponent sc=s.getServiceComponent(request.getComponentName());
+    Host host=clusters.getHost(request.getHostname());
+    Set<Cluster> mappedClusters=clusters.getClustersForHost(host.getHostName());
+    boolean validCluster=false;
+    for (    Cluster mappedCluster : mappedClusters) {
+      if (mappedCluster.getClusterName().equals(request.getClusterName())) {
+        validCluster=true;
+        break;
+      }
+    }
+    if (!validCluster) {
+      throw new AmbariException("Invalid request as host does not belong to" + " given cluster" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", hostname="+ request.getHostname());
+    }
     try {
       ServiceComponentHost sch=sc.getServiceComponentHost(request.getHostname());
       if (sch != null) {

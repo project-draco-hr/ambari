@@ -1,18 +1,41 @@
 {
-  if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getServiceName() == null || request.getServiceName().isEmpty()) {
+  if (request.getClusterName() == null || request.getClusterName().isEmpty()) {
     throw new AmbariException("Invalid arguments");
   }
   final Cluster cluster=clusters.getCluster(request.getClusterName());
-  final Service s=cluster.getService(request.getServiceName());
   Set<ServiceComponentResponse> response=new HashSet<ServiceComponentResponse>();
   if (request.getComponentName() != null) {
+    if (request.getServiceName() == null) {
+      throw new AmbariException("Invalid arguments");
+    }
+    Service s=cluster.getService(request.getServiceName());
     ServiceComponent sc=s.getServiceComponent(request.getComponentName());
     response.add(sc.convertToResponse());
     return response;
   }
-  Map<String,ServiceComponent> allSvcComps=s.getServiceComponents();
-  for (  ServiceComponent sc : allSvcComps.values()) {
-    response.add(sc.convertToResponse());
+  boolean checkDesiredState=false;
+  State desiredStateToCheck=null;
+  if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
+    desiredStateToCheck=State.valueOf(request.getDesiredState());
+    if (!desiredStateToCheck.isValidDesiredState()) {
+      throw new AmbariException("Invalid arguments");
+    }
+    checkDesiredState=true;
+  }
+  Set<Service> services=new HashSet<Service>();
+  if (request.getServiceName() != null && !request.getServiceName().isEmpty()) {
+    services.add(cluster.getService(request.getServiceName()));
+  }
+ else {
+    services.addAll(cluster.getServices().values());
+  }
+  for (  Service s : services) {
+    for (    ServiceComponent sc : s.getServiceComponents().values()) {
+      if (checkDesiredState && (desiredStateToCheck != sc.getDesiredState())) {
+        continue;
+      }
+      response.add(sc.convertToResponse());
+    }
   }
   return response;
 }
