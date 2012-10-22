@@ -1,0 +1,31 @@
+def runCommand(self, command):
+    result = {}
+    taskId = '0'
+    if command.has_key('taskId'):
+        taskId = command['taskId']
+    puppetEnv = os.environ
+    siteppFileName = os.path.join(self.tmpDir, (('site-' + taskId) + '.pp'))
+    generateManifest(command, siteppFileName, (self.puppetModule + '/modules'))
+    puppetcommand = self.puppetCommand(siteppFileName)
+    ' Run the command and make sure the output gets propagated'
+    rubyLib = ''
+    if os.environ.has_key('RUBYLIB'):
+        rubyLib = os.environ['RUBYLIB']
+        logger.info(('Ruby Lib env from Env ' + rubyLib))
+    rubyLib = ((((rubyLib + ':') + self.facterLib()) + ':') + self.puppetLib())
+    puppetEnv['RUBYLIB'] = rubyLib
+    logger.info(('Setting RUBYLIB as: ' + rubyLib))
+    logger.info(('Running command ' + pprint.pformat(puppetcommand)))
+    puppet = subprocess.Popen(puppetcommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=puppetEnv)
+    stderr_out = puppet.communicate()
+    error = 'none'
+    if (puppet.returncode != 0):
+        error = stderr_out[1]
+        result['stderr'] = error
+        logging.error(('Error running puppet: ' + stderr_out[1]))
+        pass
+    puppetOutput = stderr_out[0]
+    result['exitcode'] = puppet.returncode
+    result['stdout'] = puppetOutput
+    logger.info(('ExitCode : \n' + str(result['exitcode'])))
+    return result
