@@ -45,23 +45,33 @@
     if (!newState.isValidDesiredState()) {
       throw new AmbariException("Invalid desired state");
     }
+    if (sc.isClientComponent() && !newState.isValidClientComponentState()) {
+      throw new AmbariException("Invalid desired state for a client" + " component");
+    }
     seenNewStates.add(newState);
-    State oldState=sc.getDesiredState();
-    if (newState != oldState) {
+    State oldScState=sc.getDesiredState();
+    if (newState != oldScState) {
+      if (!isValidTransition(oldScState,newState)) {
+        throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sc.getServiceName()+ ", componentName="+ sc.getName()+ ", oldDesiredState="+ oldScState+ ", newDesiredState"+ newState);
+      }
       if (!changedComps.containsKey(newState)) {
         changedComps.put(newState,new ArrayList<ServiceComponent>());
       }
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Handling update to ServiceComponent" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", currentState="+ sc.getDesiredState()+ ", newState="+ newState);
+        LOG.debug("Handling update to ServiceComponent" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", oldDesiredState="+ oldScState+ ", newDesiredState="+ newState);
       }
       changedComps.get(newState).add(sc);
     }
     for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
-      if (newState == sch.getDesiredState()) {
+      State oldSchState=sch.getDesiredState();
+      if (newState == oldSchState) {
         if (LOG.isDebugEnabled()) {
-          LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ sch.getDesiredState()+ ", newState="+ newState);
+          LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", oldDesiredState="+ oldSchState+ ", newDesiredState="+ newState);
         }
         continue;
+      }
+      if (!isValidTransition(oldSchState,newState)) {
+        throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sch.getServiceName()+ ", componentName="+ sch.getServiceComponentName()+ ", hostname="+ sch.getHostName()+ ", oldDesiredState="+ oldSchState+ ", newDesiredState"+ newState);
       }
       if (!changedScHosts.containsKey(sc.getName())) {
         changedScHosts.put(sc.getName(),new HashMap<State,List<ServiceComponentHost>>());
@@ -70,7 +80,7 @@
         changedScHosts.get(sc.getName()).put(newState,new ArrayList<ServiceComponentHost>());
       }
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Handling update to ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ sch.getDesiredState()+ ", newState="+ newState);
+        LOG.debug("Handling update to ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", oldDesiredState="+ oldSchState+ ", newDesiredState="+ newState);
       }
       changedScHosts.get(sc.getName()).get(newState).add(sch);
     }
