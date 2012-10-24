@@ -29,34 +29,33 @@
     serviceNames.get(request.getClusterName()).add(request.getServiceName());
     Cluster cluster=clusters.getCluster(request.getClusterName());
     Service s=cluster.getService(request.getServiceName());
+    State oldState=s.getDesiredState();
+    State newState=null;
+    if (request.getDesiredState() != null) {
+      newState=State.valueOf(request.getDesiredState());
+      if (!newState.isValidDesiredState()) {
+        throw new AmbariException("Invalid desired state");
+      }
+    }
     if (request.getConfigVersions() != null) {
-      Map<String,Config> updated=new HashMap<String,Config>();
+      safeToUpdateConfigsForService(s,oldState,newState);
       for (      Entry<String,String> entry : request.getConfigVersions().entrySet()) {
         Config config=cluster.getDesiredConfig(entry.getKey(),entry.getValue());
-        if (null != config) {
-          updated.put(config.getType(),config);
-        }
-        if (0 != updated.size()) {
-          s.updateDesiredConfigs(updated);
-          s.persist();
+        if (null == config) {
+          throw new AmbariException("Trying to update service with" + " invalid configs" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ s.getName()+ ", invalidConfigType="+ entry.getKey()+ ", invalidConfigTag="+ entry.getValue());
         }
       }
     }
-    if (request.getDesiredState() == null || request.getDesiredState().isEmpty()) {
+    if (newState == null) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Nothing to do for new updateService request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", newDesiredState=null");
       }
       continue;
     }
-    State newState=State.valueOf(request.getDesiredState());
-    if (!newState.isValidDesiredState()) {
-      throw new AmbariException("Invalid desired state");
-    }
     seenNewStates.add(newState);
-    State oldState=s.getDesiredState();
     if (newState != oldState) {
       if (!isValidTransition(oldState,newState)) {
-        throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ s.getName()+ ", oldDesiredState="+ oldState+ ", newDesiredState"+ newState);
+        throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ s.getName()+ ", currentDesiredState="+ oldState+ ", newDesiredState"+ newState);
       }
       if (!changedServices.containsKey(newState)) {
         changedServices.put(newState,new ArrayList<Service>());
@@ -70,7 +69,7 @@
           continue;
         }
         if (!isValidTransition(oldScState,newState)) {
-          throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sc.getServiceName()+ ", componentName="+ sc.getName()+ ", oldDesiredState="+ oldScState+ ", newDesiredState"+ newState);
+          throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sc.getServiceName()+ ", componentName="+ sc.getName()+ ", currentDesiredState="+ oldScState+ ", newDesiredState"+ newState);
         }
         if (!changedComps.containsKey(newState)) {
           changedComps.put(newState,new ArrayList<ServiceComponent>());
@@ -78,13 +77,13 @@
         changedComps.get(newState).add(sc);
       }
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Handling update to ServiceComponent" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", oldDesiredState="+ oldScState+ ", newDesiredState="+ newState);
+        LOG.debug("Handling update to ServiceComponent" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
       }
       for (      ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
         State oldSchState=sch.getDesiredState();
         if (newState == oldSchState) {
           if (LOG.isDebugEnabled()) {
-            LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", oldDesiredState="+ oldSchState+ ", newDesiredState="+ newState);
+            LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentDesiredState="+ oldSchState+ ", newDesiredState="+ newState);
           }
           continue;
         }
@@ -92,7 +91,7 @@
           continue;
         }
         if (!isValidTransition(oldSchState,newState)) {
-          throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sch.getServiceName()+ ", componentName="+ sch.getServiceComponentName()+ ", hostname="+ sch.getHostName()+ ", oldDesiredState="+ oldSchState+ ", newDesiredState"+ newState);
+          throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sch.getServiceName()+ ", componentName="+ sch.getServiceComponentName()+ ", hostname="+ sch.getHostName()+ ", currentDesiredState="+ oldSchState+ ", newDesiredState"+ newState);
         }
         if (!changedScHosts.containsKey(sc.getName())) {
           changedScHosts.put(sc.getName(),new HashMap<State,List<ServiceComponentHost>>());
@@ -101,7 +100,7 @@
           changedScHosts.get(sc.getName()).put(newState,new ArrayList<ServiceComponentHost>());
         }
         if (LOG.isDebugEnabled()) {
-          LOG.debug("Handling update to ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", oldDesiredState="+ oldSchState+ ", newDesiredState="+ newState);
+          LOG.debug("Handling update to ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentDesiredState="+ oldSchState+ ", newDesiredState="+ newState);
         }
         changedScHosts.get(sc.getName()).get(newState).add(sch);
       }
@@ -109,6 +108,21 @@
   }
   if (seenNewStates.size() > 1) {
     throw new AmbariException("Cannot handle different desired state changes" + " for a set of services at the same time");
+  }
+  for (  ServiceRequest request : requests) {
+    Cluster cluster=clusters.getCluster(request.getClusterName());
+    Service s=cluster.getService(request.getServiceName());
+    if (request.getConfigVersions() != null) {
+      Map<String,Config> updated=new HashMap<String,Config>();
+      for (      Entry<String,String> entry : request.getConfigVersions().entrySet()) {
+        Config config=cluster.getDesiredConfig(entry.getKey(),entry.getValue());
+        updated.put(config.getType(),config);
+        if (!updated.isEmpty()) {
+          s.updateDesiredConfigs(updated);
+          s.persist();
+        }
+      }
+    }
   }
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
   return doStageCreation(cluster,changedServices,changedComps,changedScHosts);
