@@ -36,7 +36,17 @@
     ServiceComponent sc=s.getServiceComponent(request.getComponentName());
     ServiceComponentHost sch=sc.getServiceComponentHost(request.getHostname());
     if (request.getConfigVersions() != null) {
-      throw new AmbariException("Unsupported operation - config updates not" + " allowed");
+      Map<String,Config> updated=new HashMap<String,Config>();
+      for (      Entry<String,String> entry : request.getConfigVersions().entrySet()) {
+        Config config=cluster.getDesiredConfig(entry.getKey(),entry.getValue());
+        if (null != config) {
+          updated.put(config.getType(),config);
+        }
+        if (0 != updated.size()) {
+          sch.updateDesiredConfigs(updated);
+          sch.persist();
+        }
+      }
     }
     if (request.getDesiredState() == null || request.getDesiredState().isEmpty()) {
       if (LOG.isDebugEnabled()) {
