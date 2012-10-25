@@ -8,33 +8,36 @@
     for (    State newState : changedScHosts.get(compName).keySet()) {
       for (      ServiceComponentHost scHost : changedScHosts.get(compName).get(newState)) {
         RoleCommand roleCommand;
-        State oldSchState=scHost.getDesiredState();
+        State oldSchState=scHost.getState();
         ServiceComponentHostEvent event;
 switch (newState) {
 case INSTALLED:
-          if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED) {
+          if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED || oldSchState == State.INSTALL_FAILED) {
             roleCommand=RoleCommand.INSTALL;
             event=new ServiceComponentHostInstallEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
           }
- else           if (oldSchState == State.STARTED) {
+ else           if (oldSchState == State.STARTED || oldSchState == State.STOP_FAILED) {
             roleCommand=RoleCommand.STOP;
             event=new ServiceComponentHostStopEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
           }
  else {
-            throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentDesiredState="+ oldSchState+ ", newDesiredState"+ newState);
+            throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
           }
         break;
 case STARTED:
-      if (oldSchState == State.INSTALLED) {
+      if (oldSchState == State.INSTALLED || oldSchState == State.START_FAILED) {
         roleCommand=RoleCommand.START;
         event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
       }
  else {
-        throw new AmbariException("Invalid transition for " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentDesiredState="+ oldSchState+ ", newDesiredState"+ newState);
+        throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
       }
     break;
+case INIT:
+case UNINSTALLED:
+  throw new AmbariException("Uninstall is currently not supported");
 default :
-  throw new AmbariException("Unsupported state change operation");
+throw new AmbariException("Unsupported state change operation");
 }
 if (LOG.isDebugEnabled()) {
 LOG.debug("Create a new host action" + ", requestId=" + requestId + ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", roleCommand="+ roleCommand.name());
