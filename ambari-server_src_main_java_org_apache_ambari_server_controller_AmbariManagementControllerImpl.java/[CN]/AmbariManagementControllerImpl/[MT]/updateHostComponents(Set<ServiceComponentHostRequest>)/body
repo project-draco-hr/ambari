@@ -35,28 +35,28 @@
     Service s=cluster.getService(request.getServiceName());
     ServiceComponent sc=s.getServiceComponent(request.getComponentName());
     ServiceComponentHost sch=sc.getServiceComponentHost(request.getHostname());
+    State oldState=sch.getDesiredState();
+    State newState=null;
+    if (request.getDesiredState() != null) {
+      newState=State.valueOf(request.getDesiredState());
+      if (!newState.isValidDesiredState()) {
+        throw new AmbariException("Invalid desired state");
+      }
+    }
     if (request.getConfigVersions() != null) {
-      Map<String,Config> updated=new HashMap<String,Config>();
+      safeToUpdateConfigsForServiceComponentHost(sch,oldState,newState);
       for (      Entry<String,String> entry : request.getConfigVersions().entrySet()) {
         Config config=cluster.getDesiredConfig(entry.getKey(),entry.getValue());
-        if (null != config) {
-          updated.put(config.getType(),config);
-        }
-        if (0 != updated.size()) {
-          sch.updateDesiredConfigs(updated);
-          sch.persist();
+        if (null == config) {
+          throw new AmbariException("Trying to update servicecomponenthost" + " with invalid configs" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", invalidConfigType="+ entry.getKey()+ ", invalidConfigTag="+ entry.getValue());
         }
       }
     }
-    if (request.getDesiredState() == null || request.getDesiredState().isEmpty()) {
+    if (newState == null) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Nothing to do for new updateServiceComponentHost request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", hostname="+ request.getHostname()+ ", newDesiredState=null");
       }
       continue;
-    }
-    State newState=State.valueOf(request.getDesiredState());
-    if (!newState.isValidDesiredState()) {
-      throw new AmbariException("Invalid desired state");
     }
     if (sc.isClientComponent() && !newState.isValidClientComponentState()) {
       throw new AmbariException("Invalid desired state for a client" + " component");
@@ -85,6 +85,23 @@
   }
   if (seenNewStates.size() > 1) {
     throw new AmbariException("Cannot handle different desired state changes" + " for a set of service components at the same time");
+  }
+  for (  ServiceComponentHostRequest request : requests) {
+    Cluster cluster=clusters.getCluster(request.getClusterName());
+    Service s=cluster.getService(request.getServiceName());
+    ServiceComponent sc=s.getServiceComponent(request.getComponentName());
+    ServiceComponentHost sch=sc.getServiceComponentHost(request.getHostname());
+    if (request.getConfigVersions() != null) {
+      Map<String,Config> updated=new HashMap<String,Config>();
+      for (      Entry<String,String> entry : request.getConfigVersions().entrySet()) {
+        Config config=cluster.getDesiredConfig(entry.getKey(),entry.getValue());
+        updated.put(config.getType(),config);
+        if (!updated.isEmpty()) {
+          sch.updateDesiredConfigs(updated);
+          sch.persist();
+        }
+      }
+    }
   }
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
   return doStageCreation(cluster,null,null,changedScHosts);
