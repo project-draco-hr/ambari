@@ -2,19 +2,31 @@
   if (getPropertyIds().isEmpty()) {
     return true;
   }
-  String componentName=(String)resource.getPropertyValue(componentNamePropertyId);
-  String gangliaClusterName=GANGLIA_CLUSTER_NAMES.get(componentName);
+  String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
+  if (hostProvider.getGangliaHostClusterMap(clusterName) == null || hostProvider.getGangliaCollectorHostName(clusterName) == null) {
+    return true;
+  }
+  String hostName=hostNamePropertyId == null ? null : (String)resource.getPropertyValue(hostNamePropertyId);
+  String componentName;
+  String gangliaClusterName;
+  if (componentNamePropertyId == null) {
+    componentName="*";
+    gangliaClusterName=hostProvider.getGangliaHostClusterMap(clusterName).get(hostName);
+  }
+ else {
+    componentName=(String)resource.getPropertyValue(componentNamePropertyId);
+    gangliaClusterName=GANGLIA_CLUSTER_NAMES.get(componentName);
+  }
   Map<PropertyId,String> metrics=componentMetrics.get(componentName);
   if (metrics == null || gangliaClusterName == null) {
     return true;
   }
-  String hostName=hostNamePropertyId == null ? null : PropertyHelper.fixHostName((String)resource.getPropertyValue(hostNamePropertyId));
   Set<PropertyId> ids=PropertyHelper.getRequestPropertyIds(getPropertyIds(),request,predicate);
   for (  PropertyId propertyId : ids) {
     String metricName=metrics.get(propertyId);
     if (metricName != null) {
       boolean temporal=propertyId.isTemporal();
-      String spec=getSpec(gangliaClusterName,hostName,metricName,temporal ? request.getTemporalInfo(propertyId) : null);
+      String spec=getSpec(clusterName,gangliaClusterName,hostName == null ? null : PropertyHelper.fixHostName(hostName),metricName,temporal ? request.getTemporalInfo(propertyId) : null);
       try {
         List<GangliaMetric> properties=new ObjectMapper().readValue(streamProvider.readFrom(spec),new TypeReference<List<GangliaMetric>>(){
         }
@@ -24,7 +36,6 @@
         }
       }
  catch (      IOException e) {
-        throw new AmbariException("Can't get metric : " + metricName,e);
       }
     }
   }

@@ -1,23 +1,36 @@
 {
   if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getClusterId() != null) {
-    throw new AmbariException("Invalid arguments");
+    throw new IllegalArgumentException("Cluster name should be provided" + " and clusterId should be null");
   }
   if (LOG.isDebugEnabled()) {
     LOG.debug("Received a createCluster request" + ", clusterName=" + request.getClusterName() + ", request="+ request);
   }
+  if (request.getStackVersion() == null || request.getStackVersion().isEmpty()) {
+    throw new IllegalArgumentException("Stack information should be" + " provided when creating a cluster");
+  }
+  StackId stackId=new StackId(request.getStackVersion());
+  StackInfo stackInfo=ambariMetaInfo.getStackInfo(stackId.getStackName(),stackId.getStackVersion());
+  if (stackInfo == null) {
+    throw new StackNotFoundException(stackId.getStackName(),stackId.getStackVersion());
+  }
   boolean foundInvalidHosts=false;
+  String invalidHostsStr="";
   if (request.getHostNames() != null) {
     for (    String hostname : request.getHostNames()) {
       try {
         clusters.getHost(hostname);
       }
  catch (      HostNotFoundException e) {
+        if (foundInvalidHosts) {
+          invalidHostsStr+=",";
+        }
         foundInvalidHosts=true;
+        invalidHostsStr+=hostname;
       }
     }
   }
   if (foundInvalidHosts) {
-    throw new AmbariException("Invalid arguments, invalid hosts found");
+    throw new HostNotFoundException(invalidHostsStr);
   }
   clusters.addCluster(request.getClusterName());
   if (request.getHostNames() != null) {
@@ -25,6 +38,6 @@
   }
   Cluster c=clusters.getCluster(request.getClusterName());
   if (request.getStackVersion() != null) {
-    c.setDesiredStackVersion(new StackVersion(request.getStackVersion()));
+    c.setDesiredStackVersion(new StackId(request.getStackVersion()));
   }
 }

@@ -1,12 +1,17 @@
 def heartbeatWithServer(self):
+    self.DEBUG_HEARTBEAT_RETRIES = 0
+    self.DEBUG_SUCCESSFULL_HEARTBEATS = 0
     retry = False
     id = 0
     while True:
         try:
-            if (retry == False):
+            if self.DEBUG_STOP_HEARTBITTING:
+                return
+            if (not retry):
                 data = json.dumps(self.heartbeat.build(id))
                 pass
-            logger.info(('Sending HeartBeat ' + pprint.pformat(data)))
+            else:
+                self.DEBUG_HEARTBEAT_RETRIES += 1
             req = urllib2.Request(self.heartbeatUrl, data, {'Content-Type': 'application/json', })
             f = security.secured_url_open(req)
             response = f.read()
@@ -20,6 +25,8 @@ def heartbeatWithServer(self):
                 logger.info('No commands sent from the Server.')
                 pass
             retry = False
+            self.DEBUG_SUCCESSFULL_HEARTBEATS += 1
+            self.DEBUG_HEARTBEAT_RETRIES = 0
         except Exception as err:
             retry = True
             if ('code' in err):
@@ -27,7 +34,7 @@ def heartbeatWithServer(self):
             else:
                 logger.error(('Unable to connect to: ' + self.heartbeatUrl), exc_info=True)
         if self.actionQueue.isIdle():
-            time.sleep(3)
+            time.sleep(self.netutil.HEARTBEAT_IDDLE_INTERVAL_SEC)
         else:
-            time.sleep(1)
+            time.sleep(self.netutil.HEARTBEAT_NOT_IDDLE_INTERVAL_SEC)
     pass

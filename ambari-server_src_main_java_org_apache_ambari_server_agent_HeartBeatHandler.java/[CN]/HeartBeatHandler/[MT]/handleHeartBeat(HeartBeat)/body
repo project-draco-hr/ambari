@@ -5,9 +5,7 @@
   LOG.info("Action queue reference = " + actionQueue);
   LOG.info("Heartbeat received from host " + heartbeat.getHostname() + " responseId="+ heartbeat.getResponseId());
   Host hostObject=clusterFsm.getHost(hostname);
-  hostObject.refresh();
   long now=System.currentTimeMillis();
-  hostObject.refresh();
   try {
     if (heartbeat.getNodeStatus().getStatus().equals(HostStatus.Status.HEALTHY)) {
       hostObject.handleEvent(new HostHealthyHeartbeatEvent(hostname,now));
@@ -33,10 +31,10 @@
     if (service == null || "".equals(service)) {
       throw new AmbariException("Invalid command report, service: " + service);
     }
-    Service svc=cl.getService(service);
-    ServiceComponent svcComp=svc.getServiceComponent(report.getRole());
-    ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
     try {
+      Service svc=cl.getService(service);
+      ServiceComponent svcComp=svc.getServiceComponent(report.getRole());
+      ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
       if (report.getStatus().equals("COMPLETED")) {
         scHost.handleEvent(new ServiceComponentHostOpSucceededEvent(scHost.getServiceComponentName(),hostname,now));
       }
@@ -44,7 +42,10 @@
         scHost.handleEvent(new ServiceComponentHostOpFailedEvent(scHost.getServiceComponentName(),hostname,now));
       }
     }
- catch (    InvalidStateTransitionException ex) {
+ catch (    ServiceComponentNotFoundException scnex) {
+      LOG.info("Not a service component, assuming its an action",scnex);
+    }
+catch (    InvalidStateTransitionException ex) {
       LOG.warn("State machine exception",ex);
     }
     LOG.info("Report for " + report.toString() + ", processed successfully");

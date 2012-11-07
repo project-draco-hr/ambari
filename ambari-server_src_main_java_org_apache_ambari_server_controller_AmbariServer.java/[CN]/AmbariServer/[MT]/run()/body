@@ -1,5 +1,6 @@
 {
   performStaticInjection();
+  addInMemoryUsers();
   server=new Server(CLIENT_API_PORT);
   serverForAgent=new Server();
   try {
@@ -7,6 +8,9 @@
     parentSpringAppContext.refresh();
     ConfigurableListableBeanFactory factory=parentSpringAppContext.getBeanFactory();
     factory.registerSingleton("guiceInjector",injector);
+    factory.registerSingleton("passwordEncoder",injector.getInstance(PasswordEncoder.class));
+    factory.registerSingleton("ambariLocalUserService",injector.getInstance(AmbariLocalUserDetailsService.class));
+    factory.registerSingleton("ambariLdapAuthenticationProvider",injector.getInstance(AmbariLdapAuthenticationProvider.class));
     String[] contextLocations={SPRING_CONTEXT_LOCATION};
     ClassPathXmlApplicationContext springAppContext=new ClassPathXmlApplicationContext(contextLocations,parentSpringAppContext);
     setAmbariWebContext(server);
@@ -23,6 +27,9 @@
     rootServlet.setInitOrder(1);
     DelegatingFilterProxy springSecurityFilter=new DelegatingFilterProxy();
     springSecurityFilter.setTargetBeanName("springSecurityFilterChain");
+    if (configs.getApiAuthentication()) {
+      root.addFilter(new FilterHolder(springSecurityFilter),"/api/*",1);
+    }
     SslSocketConnector sslConnectorTwoWay=new SslSocketConnector();
     sslConnectorTwoWay.setPort(CLIENT_TWO_WAY);
     Map<String,String> configsMap=configs.getConfigsMap();
@@ -72,8 +79,14 @@
     server.setStopAtShutdown(true);
     serverForAgent.setStopAtShutdown(true);
     springAppContext.start();
+    LOG.info("********* Initializing Meta Info **********");
+    ambariMetaInfo.init();
     LOG.info("********* Initializing Clusters **********");
     Clusters clusters=injector.getInstance(Clusters.class);
+    StringBuilder clusterDump=new StringBuilder();
+    clusters.debugDump(clusterDump);
+    LOG.info("********* Current Clusters State *********");
+    LOG.info(clusterDump.toString());
     LOG.info("********* Initializing ActionManager **********");
     ActionManager manager=injector.getInstance(ActionManager.class);
     LOG.info("********* Initializing Controller **********");

@@ -9,15 +9,27 @@
   Map<String,Map<String,Set<String>>> componentNames=new HashMap<String,Map<String,Set<String>>>();
   Set<State> seenNewStates=new HashSet<State>();
   for (  ServiceComponentRequest request : requests) {
-    if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getServiceName() == null || request.getServiceName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty()) {
-      throw new AmbariException("Invalid arguments");
+    if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty()) {
+      throw new IllegalArgumentException("Invalid arguments, cluster name" + ", service name and component name should be provided to" + " update components");
+    }
+    Cluster cluster=clusters.getCluster(request.getClusterName());
+    if (request.getServiceName() == null || request.getServiceName().isEmpty()) {
+      StackId stackId=cluster.getDesiredStackVersion();
+      String serviceName=ambariMetaInfo.getComponentToService(stackId.getStackName(),stackId.getStackVersion(),request.getComponentName());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Looking up service name for component" + ", componentName=" + request.getComponentName() + ", serviceName="+ serviceName);
+      }
+      if (serviceName == null || serviceName.isEmpty()) {
+        throw new AmbariException("Could not find service for component" + ", componentName=" + request.getComponentName() + ", clusterName="+ cluster.getClusterName()+ ", stackInfo="+ stackId.getStackId());
+      }
+      request.setServiceName(serviceName);
     }
     if (LOG.isDebugEnabled()) {
       LOG.debug("Received a updateComponent request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", request="+ request);
     }
     clusterNames.add(request.getClusterName());
     if (clusterNames.size() > 1) {
-      throw new AmbariException("Updates to multiple clusters is not" + " supported");
+      throw new IllegalArgumentException("Updates to multiple clusters is not" + " supported");
     }
     if (!componentNames.containsKey(request.getClusterName())) {
       componentNames.put(request.getClusterName(),new HashMap<String,Set<String>>());
@@ -26,10 +38,9 @@
       componentNames.get(request.getClusterName()).put(request.getServiceName(),new HashSet<String>());
     }
     if (componentNames.get(request.getClusterName()).get(request.getServiceName()).contains(request.getComponentName())) {
-      throw new AmbariException("Invalid request contains duplicate" + " service components");
+      throw new IllegalArgumentException("Invalid request contains duplicate" + " service components");
     }
     componentNames.get(request.getClusterName()).get(request.getServiceName()).add(request.getComponentName());
-    Cluster cluster=clusters.getCluster(request.getClusterName());
     Service s=cluster.getService(request.getServiceName());
     ServiceComponent sc=s.getServiceComponent(request.getComponentName());
     State oldState=sc.getDesiredState();
@@ -97,7 +108,7 @@
     }
   }
   if (seenNewStates.size() > 1) {
-    throw new AmbariException("Cannot handle different desired state changes" + " for a set of service components at the same time");
+    throw new IllegalArgumentException("Cannot handle different desired" + " state changes for a set of service components at the same time");
   }
   for (  ServiceComponentRequest request : requests) {
     Cluster cluster=clusters.getCluster(request.getClusterName());

@@ -6,18 +6,25 @@ def writeTasks(outputFile, roles):
     serviceStates = readDict(serviceStatesFile)
     serviceStatesFile.close()
     outputFile.write('node /default/ {\n ')
-    writeStages(outputFile, len(roles))
+    writeStages(outputFile, (len(roles) + 1))
     stageNum = 1
+    outputFile.write((("class {'hdp': stage => " + str(stageNum)) + '}\n'))
+    stageNum = (stageNum + 1)
     for role in roles:
         rolename = role['role']
         command = role['cmd']
         taskParams = role['roleParams']
+        if (rolename == 'ZOOKEEPER_SERVER'):
+            taskParams['myid'] = str(get_mac())
         taskParamsNormalized = normalizeTaskParams(taskParams)
         taskParamsPostfix = ''
         if (len(taskParamsNormalized) > 0):
             taskParamsPostfix = (', ' + taskParamsNormalized)
         className = rolesToClass[rolename]
-        serviceState = serviceStates[command]
-        outputFile.write((((((((("class {'" + className) + "':") + ' stage => ') + str(stageNum)) + ', service_state => ') + serviceState) + taskParamsPostfix) + '}\n'))
+        if (command in serviceStates):
+            serviceState = serviceStates[command]
+            outputFile.write((((((((("class {'" + className) + "':") + ' stage => ') + str(stageNum)) + ', service_state => ') + serviceState) + taskParamsPostfix) + '}\n'))
+        else:
+            outputFile.write((((((("class {'" + className) + "':") + ' stage => ') + str(stageNum)) + taskParamsPostfix) + '}\n'))
         stageNum = (stageNum + 1)
     outputFile.write('}\n')

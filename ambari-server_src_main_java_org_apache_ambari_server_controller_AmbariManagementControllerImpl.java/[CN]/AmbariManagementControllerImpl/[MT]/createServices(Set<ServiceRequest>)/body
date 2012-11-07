@@ -7,7 +7,7 @@
   Set<String> duplicates=new HashSet<String>();
   for (  ServiceRequest request : requests) {
     if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getServiceName() == null || request.getServiceName().isEmpty()) {
-      throw new AmbariException("Invalid arguments" + ", clustername and servicename should be non-null and non-empty");
+      throw new IllegalArgumentException("Cluster name and service name" + " should be provided when creating a service");
     }
     if (LOG.isDebugEnabled()) {
       LOG.debug("Received a createService request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", request="+ request);
@@ -23,7 +23,7 @@
     if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
       State state=State.valueOf(request.getDesiredState());
       if (!state.isValidDesiredState() || state != State.INIT) {
-        throw new AmbariException("Invalid desired state" + " only INIT state allowed during creation" + ", providedDesiredState="+ request.getDesiredState());
+        throw new IllegalArgumentException("Invalid desired state" + " only INIT state allowed during creation" + ", providedDesiredState="+ request.getDesiredState());
       }
     }
     Cluster cluster=clusters.getCluster(request.getClusterName());
@@ -34,11 +34,15 @@
         continue;
       }
     }
- catch (    AmbariException e) {
+ catch (    ServiceNotFoundException e) {
+    }
+    StackId stackId=cluster.getDesiredStackVersion();
+    if (!ambariMetaInfo.isValidService(stackId.getStackName(),stackId.getStackVersion(),request.getServiceName())) {
+      throw new IllegalArgumentException("Unsupported or invalid service" + " in stack" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", stackInfo="+ stackId.getStackId());
     }
   }
   if (serviceNames.size() != 1) {
-    throw new AmbariException("Invalid arguments - updates allowed only on" + " one cluster at a time");
+    throw new IllegalArgumentException("Invalid arguments, updates allowed" + "on only one cluster at a time");
   }
   if (!duplicates.isEmpty()) {
     StringBuilder svcNames=new StringBuilder();
@@ -50,15 +54,12 @@
       first=false;
       svcNames.append(svcName);
     }
-    throw new AmbariException("Invalid request" + " contains duplicates within request or already existing services" + ", duplicateServiceNames="+ svcNames.toString());
+    throw new IllegalArgumentException("Invalid request" + " contains duplicates within request or already existing services" + ", duplicateServiceNames="+ svcNames.toString());
   }
   for (  ServiceRequest request : requests) {
     Cluster cluster=clusters.getCluster(request.getClusterName());
     Map<String,Config> configs=new HashMap<String,Config>();
     State state=State.INIT;
-    if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
-      state=State.valueOf(request.getDesiredState());
-    }
     Service s=serviceFactory.createNew(cluster,request.getServiceName());
     s.setDesiredState(state);
     s.updateDesiredConfigs(configs);

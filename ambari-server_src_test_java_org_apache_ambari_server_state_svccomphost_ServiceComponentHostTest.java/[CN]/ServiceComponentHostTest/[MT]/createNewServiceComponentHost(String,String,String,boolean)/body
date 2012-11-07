@@ -1,8 +1,26 @@
 {
   Cluster c=clusters.getCluster("C1");
-  Service s=serviceFactory.createNew(c,svc);
-  ServiceComponent sc=serviceComponentFactory.createNew(s,svcComponent);
+  Service s=null;
+  try {
+    s=c.getService(svc);
+  }
+ catch (  ServiceNotFoundException e) {
+    Log.debug("Calling service create" + ", serviceName=" + svc);
+    s=serviceFactory.createNew(c,svc);
+    c.addService(s);
+    s.persist();
+  }
+  ServiceComponent sc=null;
+  try {
+    sc=s.getServiceComponent(svcComponent);
+  }
+ catch (  ServiceComponentNotFoundException e) {
+    sc=serviceComponentFactory.createNew(s,svcComponent);
+    s.addServiceComponent(sc);
+    sc.persist();
+  }
   ServiceComponentHost impl=serviceComponentHostFactory.createNew(sc,hostName,isClient);
+  impl.persist();
   Assert.assertEquals(State.INIT,impl.getState());
   Assert.assertEquals(State.INIT,impl.getDesiredState());
   Assert.assertEquals("C1",impl.getClusterName());
@@ -10,7 +28,7 @@
   Assert.assertEquals(s.getName(),impl.getServiceName());
   Assert.assertEquals(sc.getName(),impl.getServiceComponentName());
   Assert.assertEquals(hostName,impl.getHostName());
-  Assert.assertTrue(impl.getDesiredStackVersion().getStackVersion().isEmpty());
-  Assert.assertTrue(impl.getStackVersion().getStackVersion().isEmpty());
+  Assert.assertFalse(impl.getDesiredStackVersion().getStackId().isEmpty());
+  Assert.assertTrue(impl.getStackVersion().getStackId().isEmpty());
   return impl;
 }

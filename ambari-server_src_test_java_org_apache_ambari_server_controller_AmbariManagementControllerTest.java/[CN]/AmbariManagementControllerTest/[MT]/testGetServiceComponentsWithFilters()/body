@@ -3,6 +3,8 @@
   clusters.addCluster("c2");
   Cluster c1=clusters.getCluster("c1");
   Cluster c2=clusters.getCluster("c2");
+  c1.setDesiredStackVersion(new StackId("HDP-0.2"));
+  c2.setDesiredStackVersion(new StackId("HDP-0.2"));
   Service s1=serviceFactory.createNew(c1,"HDFS");
   Service s2=serviceFactory.createNew(c1,"MAPREDUCE");
   Service s3=serviceFactory.createNew(c1,"HBASE");
@@ -23,12 +25,12 @@
   s5.persist();
   ServiceComponent sc1=serviceComponentFactory.createNew(s1,"DATANODE");
   ServiceComponent sc2=serviceComponentFactory.createNew(s1,"NAMENODE");
-  ServiceComponent sc3=serviceComponentFactory.createNew(s3,"REGIONSERVER");
+  ServiceComponent sc3=serviceComponentFactory.createNew(s3,"HBASE_REGIONSERVER");
   ServiceComponent sc4=serviceComponentFactory.createNew(s4,"HIVE_SERVER");
   ServiceComponent sc5=serviceComponentFactory.createNew(s4,"HIVE_CLIENT");
-  ServiceComponent sc6=serviceComponentFactory.createNew(s4,"METASTORE");
-  ServiceComponent sc7=serviceComponentFactory.createNew(s5,"SERVER");
-  ServiceComponent sc8=serviceComponentFactory.createNew(s5,"CLIENT");
+  ServiceComponent sc6=serviceComponentFactory.createNew(s4,"MYSQL_SERVER");
+  ServiceComponent sc7=serviceComponentFactory.createNew(s5,"ZOOKEEPER_SERVER");
+  ServiceComponent sc8=serviceComponentFactory.createNew(s5,"ZOOKEEPER_CLIENT");
   s1.addServiceComponent(sc1);
   s1.addServiceComponent(sc2);
   s3.addServiceComponent(sc3);
@@ -53,26 +55,30 @@
   sc8.persist();
   ServiceComponentRequest r=new ServiceComponentRequest(null,null,null,null,null);
   try {
-    controller.getComponents(r);
+    controller.getComponents(Collections.singleton(r));
     fail("Expected failure for invalid cluster");
   }
  catch (  Exception e) {
   }
   r=new ServiceComponentRequest(c1.getClusterName(),null,null,null,null);
-  Set<ServiceComponentResponse> resps=controller.getComponents(r);
+  Set<ServiceComponentResponse> resps=controller.getComponents(Collections.singleton(r));
   Assert.assertEquals(3,resps.size());
   r=new ServiceComponentRequest(c2.getClusterName(),null,null,null,State.UNINSTALLED.toString());
-  resps=controller.getComponents(r);
+  resps=controller.getComponents(Collections.singleton(r));
   Assert.assertEquals(4,resps.size());
   r=new ServiceComponentRequest(c2.getClusterName(),s5.getName(),null,null,null);
-  resps=controller.getComponents(r);
+  resps=controller.getComponents(Collections.singleton(r));
   Assert.assertEquals(2,resps.size());
   r=new ServiceComponentRequest(c2.getClusterName(),s4.getName(),null,null,State.INIT.toString());
-  resps=controller.getComponents(r);
+  resps=controller.getComponents(Collections.singleton(r));
   Assert.assertEquals(1,resps.size());
   Assert.assertEquals(sc4.getName(),resps.iterator().next().getComponentName());
+  r=new ServiceComponentRequest(c2.getClusterName(),null,sc5.getName(),null,State.INIT.toString());
+  resps=controller.getComponents(Collections.singleton(r));
+  Assert.assertEquals(1,resps.size());
+  Assert.assertEquals(sc5.getName(),resps.iterator().next().getComponentName());
   r=new ServiceComponentRequest(c2.getClusterName(),s4.getName(),sc5.getName(),null,State.INIT.toString());
-  resps=controller.getComponents(r);
+  resps=controller.getComponents(Collections.singleton(r));
   Assert.assertEquals(1,resps.size());
   Assert.assertEquals(sc5.getName(),resps.iterator().next().getComponentName());
   ServiceComponentRequest r1, r2, r3;

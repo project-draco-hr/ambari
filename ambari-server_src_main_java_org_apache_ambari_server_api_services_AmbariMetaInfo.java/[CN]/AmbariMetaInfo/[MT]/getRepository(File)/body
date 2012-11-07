@@ -4,17 +4,37 @@
     DocumentBuilderFactory dbFactory=DocumentBuilderFactory.newInstance();
     DocumentBuilder dBuilder=dbFactory.newDocumentBuilder();
     Document doc=dBuilder.parse(repositoryFile);
-    doc.getDocumentElement().normalize();
-    NodeList propertyNodes=doc.getElementsByTagName(REPOSITORY_XML_MAIN_BLOCK_NAME);
-    for (int index=0; index < propertyNodes.getLength(); index++) {
-      Node node=propertyNodes.item(index);
-      if (node.getNodeType() == Node.ELEMENT_NODE) {
-        Element property=(Element)node;
-        RepositoryInfo repositoryInfo=new RepositoryInfo();
-        repositoryInfo.setUrl(getTagValue(REPOSITORY_XML_PROPERTY_URL,property));
-        repositoryInfo.setOs(getTagValue(REPOSITORY_XML_PROPERTY_OS,property));
-        repositoryInfo.setDescription(getTagValue(REPOSITORY_XML_PROPERTY_DESCRIPTION,property));
-        repositorysInfo.add(repositoryInfo);
+    NodeList osNodes=doc.getElementsByTagName(REPOSITORY_XML_MAIN_BLOCK_NAME);
+    for (int index=0; index < osNodes.getLength(); index++) {
+      Node osNode=osNodes.item(index);
+      if (osNode.getNodeType() == Node.ELEMENT_NODE) {
+        if (!osNode.getNodeName().equals(REPOSITORY_XML_MAIN_BLOCK_NAME)) {
+          continue;
+        }
+        NamedNodeMap attrs=osNode.getAttributes();
+        Node osAttr=attrs.getNamedItem(REPOSITORY_XML_ATTRIBUTE_OS_TYPE);
+        if (osAttr == null) {
+          continue;
+        }
+        String osType=osAttr.getNodeValue();
+        NodeList repoNodes=osNode.getChildNodes();
+        for (int j=0; j < repoNodes.getLength(); j++) {
+          Node repoNode=repoNodes.item(j);
+          if (repoNode.getNodeType() != Node.ELEMENT_NODE) {
+            continue;
+          }
+          Element property=(Element)repoNode;
+          RepositoryInfo repositoryInfo=new RepositoryInfo();
+          repositoryInfo.setOsType(osType);
+          repositoryInfo.setRepoId(getTagValue(REPOSITORY_XML_PROPERTY_REPOID,property));
+          repositoryInfo.setRepoName(getTagValue(REPOSITORY_XML_PROPERTY_REPONAME,property));
+          repositoryInfo.setBaseUrl(getTagValue(REPOSITORY_XML_PROPERTY_BASEURL,property));
+          repositoryInfo.setMirrorsList(getTagValue(REPOSITORY_XML_PROPERTY_MIRRORSLIST,property));
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Adding repo to stack" + ", repoInfo=" + repositoryInfo.toString());
+          }
+          repositorysInfo.add(repositoryInfo);
+        }
       }
     }
   }

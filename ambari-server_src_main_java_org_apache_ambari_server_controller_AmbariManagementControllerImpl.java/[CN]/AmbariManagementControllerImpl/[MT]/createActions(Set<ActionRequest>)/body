@@ -1,0 +1,57 @@
+{
+  String clusterName=null;
+  String logDir="";
+  Stage stage=null;
+  for (  ActionRequest actionRequest : request) {
+    if (actionRequest.getClusterName() == null || actionRequest.getClusterName().isEmpty() || actionRequest.getServiceName() == null || actionRequest.getServiceName().isEmpty() || actionRequest.getActionName() == null || actionRequest.getActionName().isEmpty()) {
+      throw new AmbariException("Invalid action request : " + "cluster=" + actionRequest.getClusterName() + ", service="+ actionRequest.getServiceName()+ ", action="+ actionRequest.getActionName());
+    }
+  }
+  for (  ActionRequest actionRequest : request) {
+    if (clusterName == null) {
+      clusterName=actionRequest.getClusterName();
+      if (clusterName == null || clusterName.isEmpty()) {
+        throw new AmbariException("Empty cluster name in request");
+      }
+      stage=stageFactory.createNew(actionManager.getNextRequestId(),logDir,clusterName);
+      stage.setStageId(0L);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Creating Stage requestId={}, stageId={}, clusterName={}",new Object[]{stage.getRequestId(),stage.getStageId(),stage.getClusterName()});
+      }
+    }
+ else {
+      if (!clusterName.equals(actionRequest.getClusterName())) {
+        throw new AmbariException("Requests for different clusters found");
+      }
+    }
+    String componentName=actionMetadata.getClient(actionRequest.getServiceName());
+    String hostName;
+    if (componentName != null) {
+      Map<String,ServiceComponentHost> components=clusters.getCluster(clusterName).getService(actionRequest.getServiceName()).getServiceComponent(componentName).getServiceComponentHosts();
+      if (components.isEmpty()) {
+        throw new AmbariException("Hosts not found, component=" + componentName + ", service="+ actionRequest.getServiceName()+ ", cluster="+ clusterName);
+      }
+      hostName=components.keySet().iterator().next();
+    }
+ else {
+      Map<String,ServiceComponent> components=clusters.getCluster(clusterName).getService(actionRequest.getServiceName()).getServiceComponents();
+      if (components.isEmpty()) {
+        throw new AmbariException("Components not found, service=" + actionRequest.getServiceName() + ", cluster="+ clusterName);
+      }
+      ServiceComponent serviceComponent=components.values().iterator().next();
+      if (serviceComponent.getServiceComponentHosts().isEmpty()) {
+        throw new AmbariException("Hosts not found, component=" + serviceComponent.getName() + ", service="+ actionRequest.getServiceName()+ ", cluster="+ clusterName);
+      }
+      hostName=serviceComponent.getServiceComponentHosts().keySet().iterator().next();
+    }
+    stage.addHostRoleExecutionCommand(hostName,Role.valueOf(actionRequest.getActionName()),RoleCommand.EXECUTE,new ServiceComponentHostOpInProgressEvent(componentName,hostName,System.currentTimeMillis()),clusterName,actionRequest.getServiceName());
+    stage.getExecutionCommand(hostName,actionRequest.getActionName()).setRoleParams(actionRequest.getParameters());
+  }
+  if (stage != null) {
+    actionManager.sendActions(Arrays.asList(stage));
+    return getRequestStatusResponse(stage.getRequestId());
+  }
+ else {
+    throw new AmbariException("Stage was not created");
+  }
+}
