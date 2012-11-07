@@ -1,6 +1,7 @@
 def runCommand(self, command):
     result = {}
     taskId = 0
+    grep = Grep()
     if command.has_key('taskId'):
         taskId = command['taskId']
     puppetEnv = os.environ
@@ -18,7 +19,7 @@ def runCommand(self, command):
     logger.info(('Running command ' + pprint.pformat(puppetcommand)))
     puppet = subprocess.Popen(puppetcommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=puppetEnv)
     stderr_out = puppet.communicate()
-    error = 'none'
+    error = self.NO_ERROR
     returncode = 0
     if ((puppet.returncode != 0) and (puppet.returncode != 2)):
         returncode = puppet.returncode
@@ -29,6 +30,9 @@ def runCommand(self, command):
     puppetOutput = stderr_out[0]
     logger.info(('Output from puppet :\n' + puppetOutput))
     result['exitcode'] = returncode
-    result['stdout'] = 'Output'
+    if (error == self.NO_ERROR):
+        result['stdout'] = grep.tail(puppetOutput, self.OUTPUT_LAST_LINES)
+    else:
+        result['stdout'] = grep.grep(puppetOutput, 'err', self.ERROR_LAST_LINES_BEFORE, self.ERROR_LAST_LINES_AFTER)
     logger.info(('ExitCode : ' + str(result['exitcode'])))
     return result
