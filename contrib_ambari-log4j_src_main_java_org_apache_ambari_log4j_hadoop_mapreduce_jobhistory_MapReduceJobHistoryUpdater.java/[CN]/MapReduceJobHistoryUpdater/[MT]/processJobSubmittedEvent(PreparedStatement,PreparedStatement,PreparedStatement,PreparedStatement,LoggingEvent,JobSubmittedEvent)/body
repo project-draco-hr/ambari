@@ -1,0 +1,63 @@
+{
+  try {
+    String jobId=historyEvent.getJobId().toString();
+    jobPS.setString(1,jobId);
+    jobPS.setString(2,historyEvent.getJobName());
+    jobPS.setString(3,historyEvent.getUserName());
+    jobPS.setString(4,historyEvent.getJobConfPath());
+    jobPS.setString(5,historyEvent.getJobQueueName());
+    jobPS.setLong(6,historyEvent.getSubmitTime());
+    WorkflowContext workflowContext=buildWorkflowContext(historyEvent);
+    boolean insertWorkflow=false;
+    try {
+      workflowSelectPS.setString(1,workflowContext.getWorkflowId());
+      workflowSelectPS.execute();
+      ResultSet rs=workflowSelectPS.getResultSet();
+      insertWorkflow=!rs.next();
+    }
+ catch (    SQLException sqle) {
+      LOG.warn("workflow select failed with: ",sqle);
+      insertWorkflow=false;
+    }
+    if (insertWorkflow) {
+      WorkflowContext sanitizedWC=new WorkflowContext();
+      sanitizedWC.setWorkflowDag(workflowContext.getWorkflowDag());
+      sanitizedWC.setParentWorkflowContext(workflowContext.getParentWorkflowContext());
+      String sanitizedWCString=null;
+      try {
+        ObjectMapper om=new ObjectMapper();
+        sanitizedWCString=om.writeValueAsString(sanitizedWC);
+      }
+ catch (      IOException e) {
+        e.printStackTrace();
+        sanitizedWCString="";
+      }
+      workflowPS.setString(1,workflowContext.getWorkflowId());
+      workflowPS.setString(2,workflowContext.getWorkflowName());
+      workflowPS.setString(3,sanitizedWCString);
+      workflowPS.setString(4,historyEvent.getUserName());
+      workflowPS.setLong(5,historyEvent.getSubmitTime());
+      workflowPS.setLong(6,historyEvent.getSubmitTime());
+      workflowPS.setLong(7,workflowContext.getWorkflowDag().size());
+      workflowPS.setLong(8,0);
+      workflowPS.executeUpdate();
+      LOG.debug("Successfully inserted workflowId = " + workflowContext.getWorkflowId());
+    }
+ else {
+      workflowUpdateTimePS.setLong(1,historyEvent.getSubmitTime());
+      workflowUpdateTimePS.setString(2,workflowContext.getWorkflowId());
+      workflowUpdateTimePS.executeUpdate();
+      LOG.debug("Successfully updated workflowId = " + workflowContext.getWorkflowId());
+    }
+    jobPS.setString(7,workflowContext.getWorkflowId());
+    jobPS.setString(8,workflowContext.getWorkflowEntityName());
+    jobPS.executeUpdate();
+    LOG.debug("Successfully inserted job = " + jobId + " and workflowId = "+ workflowContext.getWorkflowId());
+  }
+ catch (  SQLException sqle) {
+    LOG.info("Failed to store " + historyEvent.getEventType() + " for job "+ historyEvent.getJobId()+ " into "+ JOB_TABLE,sqle);
+  }
+catch (  Exception e) {
+    LOG.info("Failed to store " + historyEvent.getEventType() + " for job "+ historyEvent.getJobId()+ " into "+ JOB_TABLE,e);
+  }
+}
