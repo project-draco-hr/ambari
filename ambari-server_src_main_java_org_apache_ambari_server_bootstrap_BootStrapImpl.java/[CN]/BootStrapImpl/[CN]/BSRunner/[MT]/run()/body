@@ -1,0 +1,61 @@
+{
+  String hostString=createHostString(sshHostInfo.getHosts());
+  String commands[]=new String[4];
+  BSStat stat=BSStat.RUNNING;
+  String scriptlog="";
+  try {
+    createRunDir();
+    writeSshKeyFile(sshHostInfo.getSshKey());
+    commands[0]=this.bsScript;
+    commands[1]=hostString;
+    commands[2]=this.requestIdDir.toString();
+    commands[3]=this.sshKeyFile.toString();
+    LOG.info("Host= " + hostString + " bs="+ this.bsScript+ " requestDir="+ requestIdDir+ " keyfile="+ this.sshKeyFile);
+    Process process=Runtime.getRuntime().exec(commands);
+    ScheduledExecutorService scheduler=Executors.newScheduledThreadPool(1);
+    BSStatusCollector statusCollector=new BSStatusCollector();
+    ScheduledFuture<?> handle=scheduler.scheduleWithFixedDelay(statusCollector,0,10,TimeUnit.SECONDS);
+    LOG.info("Kicking off the scheduler for polling on logs in " + this.requestIdDir);
+    try {
+      int exitCode=process.waitFor();
+      StringWriter writer_1=new StringWriter();
+      IOUtils.copy(process.getInputStream(),writer_1);
+      String outMesg=writer_1.toString();
+      StringWriter writer_2=new StringWriter();
+      IOUtils.copy(process.getErrorStream(),writer_2);
+      String errMesg=writer_2.toString();
+      scriptlog=outMesg + "\n" + errMesg;
+      if (exitCode != 0) {
+        stat=BSStat.ERROR;
+      }
+ else {
+        stat=BSStat.SUCCESS;
+      }
+    }
+ catch (    InterruptedException e) {
+      throw new IOException(e);
+    }
+ finally {
+      handle.cancel(true);
+      scheduler.schedule(new BSStatusCollector(),0,TimeUnit.SECONDS);
+      scheduler.shutdownNow();
+      try {
+        scheduler.awaitTermination(10,TimeUnit.SECONDS);
+      }
+ catch (      InterruptedException e) {
+        LOG.info("Interruped while waiting for scheduler");
+      }
+      process.destroy();
+    }
+  }
+ catch (  IOException io) {
+    LOG.info("Error executing bootstrap ",io);
+  }
+ finally {
+    BootStrapStatus tmpStatus=getStatus(requestId);
+    tmpStatus.setLog(scriptlog);
+    tmpStatus.setStatus(stat);
+    updateStatus(requestId,tmpStatus);
+    finished();
+  }
+}

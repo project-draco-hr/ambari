@@ -1,0 +1,54 @@
+{
+  StringBuilder columns=new StringBuilder();
+  Set<String> tableSet=new HashSet<String>();
+  for (  PropertyId propertyId : propertyIds) {
+    if (columns.length() > 0) {
+      columns.append(", ");
+    }
+    columns.append(propertyId.getCategory()).append(".").append(propertyId.getName());
+    tableSet.add(propertyId.getCategory());
+  }
+  boolean haveWhereClause=false;
+  StringBuilder whereClause=new StringBuilder();
+  if (predicate != null && propertyIds.containsAll(PredicateHelper.getPropertyIds(predicate)) && predicate instanceof PredicateVisitorAcceptor) {
+    SQLPredicateVisitor visitor=new SQLPredicateVisitor();
+    ((PredicateVisitorAcceptor)predicate).accept(visitor);
+    whereClause.append(visitor.getSQL());
+    haveWhereClause=true;
+  }
+  StringBuilder joinClause=new StringBuilder();
+  if (tableSet.size() > 1) {
+    for (    String table : tableSet) {
+      Map<PropertyId,PropertyId> joinKeys=importedKeys.get(table);
+      if (joinKeys != null) {
+        for (        Map.Entry<PropertyId,PropertyId> entry : joinKeys.entrySet()) {
+          String category1=entry.getKey().getCategory();
+          String category2=entry.getValue().getCategory();
+          if (tableSet.contains(category1) && tableSet.contains(category2)) {
+            if (haveWhereClause) {
+              joinClause.append(" AND ");
+            }
+            joinClause.append(category1).append(".").append(entry.getKey().getName());
+            joinClause.append(" = ");
+            joinClause.append(category2).append(".").append(entry.getValue().getName());
+            tableSet.add(category1);
+            tableSet.add(category2);
+            haveWhereClause=true;
+          }
+        }
+      }
+    }
+  }
+  StringBuilder tables=new StringBuilder();
+  for (  String table : tableSet) {
+    if (tables.length() > 0) {
+      tables.append(", ");
+    }
+    tables.append(table);
+  }
+  String sql="select " + columns + " from "+ tables;
+  if (haveWhereClause) {
+    sql=sql + " where " + whereClause+ joinClause;
+  }
+  return sql;
+}

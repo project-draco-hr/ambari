@@ -1,0 +1,39 @@
+{
+  String clusterName=null;
+  String logDir="";
+  for (  ActionRequest actionRequest : request) {
+    if (actionRequest.getClusterName() == null || actionRequest.getClusterName().isEmpty() || actionRequest.getServiceName() == null || actionRequest.getServiceName().isEmpty() || actionRequest.getActionName() == null || actionRequest.getActionName().isEmpty()) {
+      throw new AmbariException("Invalid action request : " + "cluster=" + actionRequest.getClusterName() + ", service="+ actionRequest.getServiceName()+ ", action="+ actionRequest.getActionName());
+    }
+ else     if (clusterName == null) {
+      clusterName=actionRequest.getClusterName();
+    }
+ else     if (!clusterName.equals(actionRequest.getClusterName())) {
+      throw new AmbariException("Requests for different clusters found");
+    }
+  }
+  Stage stage=stageFactory.createNew(actionManager.getNextRequestId(),logDir,clusterName);
+  stage.setStageId(0);
+  for (  ActionRequest actionRequest : request) {
+    if (actionRequest.getActionName().contains("SERVICE_CHECK")) {
+      addServiceCheckAction(actionRequest,stage);
+    }
+ else     if (actionRequest.getActionName().equals("DECOMMISSION_DATANODE")) {
+      LOG.info("DEBUG : excludeFileTag :" + actionRequest.getParameters().get("excludeFileTag"));
+      addDecommissionDatanodeAction(actionRequest,stage);
+    }
+ else {
+      throw new AmbariException("Unsupported action");
+    }
+  }
+  RoleGraph rg=new RoleGraph(rco);
+  rg.build(stage);
+  List<Stage> stages=rg.getStages();
+  if (stages != null && !stages.isEmpty()) {
+    actionManager.sendActions(stages);
+    return getRequestStatusResponse(stage.getRequestId());
+  }
+ else {
+    throw new AmbariException("Stage was not created");
+  }
+}

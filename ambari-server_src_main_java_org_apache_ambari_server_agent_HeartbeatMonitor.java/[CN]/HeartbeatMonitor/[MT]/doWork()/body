@@ -1,0 +1,29 @@
+{
+  List<Host> allHosts=fsm.getHosts();
+  LOG.info("Number of hosts to monitor: " + allHosts.size());
+  long now=System.currentTimeMillis();
+  for (  Host hostObj : allHosts) {
+    String host=hostObj.getHostName();
+    HostState hostState=hostObj.getState();
+    long lastHeartbeat=0;
+    try {
+      lastHeartbeat=fsm.getHost(host).getLastHeartbeatTime();
+    }
+ catch (    AmbariException e) {
+      LOG.warn("Exception in getting host object; Is it fatal?",e);
+    }
+    LOG.info("host : " + hostObj.getHostName() + ", last heartbeat = "+ lastHeartbeat);
+    if (lastHeartbeat + 5 * threadWakeupInterval < now) {
+      LOG.warn("Hearbeat lost from host " + host);
+      hostObj.handleEvent(new HostHeartbeatLostEvent(host));
+      actionQueue.dequeueAll(host);
+      actionManager.handleLostHost(host);
+    }
+    if (hostState == HostState.WAITING_FOR_HOST_STATUS_UPDATES) {
+      long timeSpentInState=hostObj.getTimeInState();
+      if (timeSpentInState + 5 * threadWakeupInterval < now) {
+        hostObj.setState(HostState.INIT);
+      }
+    }
+  }
+}

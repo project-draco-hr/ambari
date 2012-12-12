@@ -1,0 +1,38 @@
+{
+  super();
+  injector.injectMembers(this);
+  if (isClient) {
+    this.stateMachine=clientStateMachineFactory.make(this);
+  }
+ else {
+    this.stateMachine=daemonStateMachineFactory.make(this);
+  }
+  ReadWriteLock rwLock=new ReentrantReadWriteLock();
+  this.readLock=rwLock.readLock();
+  this.writeLock=rwLock.writeLock();
+  this.serviceComponent=serviceComponent;
+  stateEntity=new HostComponentStateEntity();
+  stateEntity.setClusterId(serviceComponent.getClusterId());
+  stateEntity.setComponentName(serviceComponent.getName());
+  stateEntity.setServiceName(serviceComponent.getServiceName());
+  stateEntity.setHostName(hostName);
+  stateEntity.setCurrentState(stateMachine.getCurrentState());
+  stateEntity.setCurrentStackVersion(gson.toJson(new StackId()));
+  desiredStateEntity=new HostComponentDesiredStateEntity();
+  desiredStateEntity.setClusterId(serviceComponent.getClusterId());
+  desiredStateEntity.setComponentName(serviceComponent.getName());
+  desiredStateEntity.setServiceName(serviceComponent.getServiceName());
+  desiredStateEntity.setHostName(hostName);
+  desiredStateEntity.setDesiredState(State.INIT);
+  desiredStateEntity.setDesiredStackVersion(gson.toJson(serviceComponent.getDesiredStackVersion()));
+  try {
+    this.host=clusters.getHost(hostName);
+  }
+ catch (  AmbariException e) {
+    LOG.error("Host '{}' was not found",hostName);
+    throw new RuntimeException(e);
+  }
+  this.resetLastOpInfo();
+  this.desiredConfigs=new HashMap<String,String>();
+  this.configs=new HashMap<String,Config>();
+}

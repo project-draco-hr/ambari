@@ -1,0 +1,34 @@
+{
+  String hostname=register.getHostname();
+  long now=System.currentTimeMillis();
+  Host hostObject;
+  try {
+    hostObject=clusterFsm.getHost(hostname);
+  }
+ catch (  HostNotFoundException ex) {
+    clusterFsm.addHost(hostname);
+    hostObject=clusterFsm.getHost(hostname);
+  }
+  List<StatusCommand> cmds=new ArrayList<StatusCommand>();
+  for (  Cluster cl : clusterFsm.getClustersForHost(hostname)) {
+    List<ServiceComponentHost> roleList=cl.getServiceComponentHosts(hostname);
+    List<String> roles=new ArrayList<String>();
+    for (    ServiceComponentHost sch : roleList) {
+      roles.add(sch.getServiceComponentName());
+    }
+    StatusCommand statusCmd=new StatusCommand();
+    statusCmd.setRoles(roles);
+    cmds.add(statusCmd);
+  }
+  hostObject.handleEvent(new HostRegistrationRequestEvent(hostname,new AgentVersion("v1"),now,register.getHardwareProfile()));
+  RegistrationResponse response=new RegistrationResponse();
+  if (cmds.isEmpty()) {
+    hostObject.handleEvent(new HostStatusUpdatesReceivedEvent(hostname,now));
+  }
+ else {
+    response.setCommands(cmds);
+  }
+  response.setResponseStatus(RegistrationStatus.OK);
+  response.setResponseId(0);
+  return response;
+}

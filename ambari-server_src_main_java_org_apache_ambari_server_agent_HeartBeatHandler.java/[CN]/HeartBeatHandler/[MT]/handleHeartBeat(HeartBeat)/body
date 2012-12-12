@@ -1,0 +1,88 @@
+{
+  HeartBeatResponse response=new HeartBeatResponse();
+  response.setResponseId(0L);
+  String hostname=heartbeat.getHostname();
+  LOG.info("Action queue reference = " + actionQueue);
+  LOG.info("Heartbeat received from host " + heartbeat.getHostname() + " responseId="+ heartbeat.getResponseId());
+  Host hostObject=clusterFsm.getHost(hostname);
+  long now=System.currentTimeMillis();
+  try {
+    if (heartbeat.getNodeStatus().getStatus().equals(HostStatus.Status.HEALTHY)) {
+      hostObject.handleEvent(new HostHealthyHeartbeatEvent(hostname,now));
+    }
+ else {
+      hostObject.handleEvent(new HostUnhealthyHeartbeatEvent(hostname,now,null));
+    }
+  }
+ catch (  InvalidStateTransitionException ex) {
+    hostObject.setState(HostState.INIT);
+    RegistrationCommand regCmd=new RegistrationCommand();
+    response.setRegistrationCommand(regCmd);
+    return response;
+  }
+  List<CommandReport> reports=heartbeat.getReports();
+  for (  CommandReport report : reports) {
+    String clusterName=report.getClusterName();
+    if ((clusterName == null) || "".equals(clusterName)) {
+      clusterName="cluster1";
+    }
+    Cluster cl=clusterFsm.getCluster(report.getClusterName());
+    String service=report.getServiceName();
+    if (service == null || "".equals(service)) {
+      throw new AmbariException("Invalid command report, service: " + service);
+    }
+    try {
+      Service svc=cl.getService(service);
+      ServiceComponent svcComp=svc.getServiceComponent(report.getRole());
+      ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
+      if (report.getStatus().equals("COMPLETED")) {
+        scHost.handleEvent(new ServiceComponentHostOpSucceededEvent(scHost.getServiceComponentName(),hostname,now));
+      }
+ else       if (report.getStatus().equals("FAILED")) {
+        scHost.handleEvent(new ServiceComponentHostOpFailedEvent(scHost.getServiceComponentName(),hostname,now));
+      }
+    }
+ catch (    ServiceComponentNotFoundException scnex) {
+      LOG.info("Not a service component, assuming its an action",scnex);
+    }
+catch (    InvalidStateTransitionException ex) {
+      LOG.warn("State machine exception",ex);
+    }
+    LOG.info("Report for " + report.toString() + ", processed successfully");
+  }
+  actionManager.processTaskResponse(hostname,reports);
+  Set<Cluster> clusters=clusterFsm.getClustersForHost(hostname);
+  for (  Cluster cl : clusters) {
+    for (    ComponentStatus status : heartbeat.componentStatus) {
+      if (status.getClusterName().equals(cl.getClusterName())) {
+        Service svc=cl.getService(status.getServiceName());
+        ServiceComponent svcComp=svc.getServiceComponent(status.getComponentName());
+        ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
+        State liveState=State.valueOf(State.class,status.getStatus());
+        scHost.setState(liveState);
+      }
+    }
+  }
+  LOG.info("Host state =" + hostObject.getState());
+  if (hostObject.getState().equals(HostState.HEALTHY)) {
+    List<AgentCommand> cmds=actionQueue.dequeueAll(heartbeat.getHostname());
+    if (cmds != null && !cmds.isEmpty()) {
+      LOG.info("Sending commands..");
+      for (      AgentCommand ac : cmds) {
+        try {
+          LOG.info("Command string = " + StageUtils.jaxbToString(ac));
+        }
+ catch (        Exception e) {
+          throw new AmbariException("Could not get jaxb string for command",e);
+        }
+        if (ac.getCommandType().equals(AgentCommandType.EXECUTION_COMMAND)) {
+          response.addExecutionCommand((ExecutionCommand)ac);
+        }
+      }
+    }
+ else {
+      LOG.info("No commands to send");
+    }
+  }
+  return response;
+}

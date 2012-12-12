@@ -1,0 +1,49 @@
+{
+  if (request.getClusterName() == null || request.getClusterName().isEmpty()) {
+    throw new IllegalArgumentException("Invalid arguments, cluster name" + " should be non-null");
+  }
+  final Cluster cluster=clusters.getCluster(request.getClusterName());
+  Set<ServiceComponentResponse> response=new HashSet<ServiceComponentResponse>();
+  if (request.getComponentName() != null) {
+    if (request.getServiceName() == null) {
+      StackId stackId=cluster.getDesiredStackVersion();
+      String serviceName=ambariMetaInfo.getComponentToService(stackId.getStackName(),stackId.getStackVersion(),request.getComponentName());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Looking up service name for component" + ", componentName=" + request.getComponentName() + ", serviceName="+ serviceName);
+      }
+      if (serviceName == null || serviceName.isEmpty()) {
+        throw new AmbariException("Could not find service for component" + ", componentName=" + request.getComponentName() + ", clusterName="+ cluster.getClusterName()+ ", stackInfo="+ stackId.getStackId());
+      }
+      request.setServiceName(serviceName);
+    }
+    Service s=cluster.getService(request.getServiceName());
+    ServiceComponent sc=s.getServiceComponent(request.getComponentName());
+    response.add(sc.convertToResponse());
+    return response;
+  }
+  boolean checkDesiredState=false;
+  State desiredStateToCheck=null;
+  if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
+    desiredStateToCheck=State.valueOf(request.getDesiredState());
+    if (!desiredStateToCheck.isValidDesiredState()) {
+      throw new IllegalArgumentException("Invalid arguments, invalid desired" + " state, desiredState=" + desiredStateToCheck);
+    }
+    checkDesiredState=true;
+  }
+  Set<Service> services=new HashSet<Service>();
+  if (request.getServiceName() != null && !request.getServiceName().isEmpty()) {
+    services.add(cluster.getService(request.getServiceName()));
+  }
+ else {
+    services.addAll(cluster.getServices().values());
+  }
+  for (  Service s : services) {
+    for (    ServiceComponent sc : s.getServiceComponents().values()) {
+      if (checkDesiredState && (desiredStateToCheck != sc.getDesiredState())) {
+        continue;
+      }
+      response.add(sc.convertToResponse());
+    }
+  }
+  return response;
+}

@@ -1,0 +1,50 @@
+{
+  List<Stage> stages=db.getStagesInProgress();
+  if (LOG.isDebugEnabled()) {
+    LOG.info("Scheduler wakes up");
+  }
+  if (stages == null || stages.isEmpty()) {
+    if (LOG.isDebugEnabled()) {
+      LOG.info("No stage in progress..nothing to do");
+    }
+    return;
+  }
+  for (  Stage s : stages) {
+    List<ExecutionCommand> commandsToSchedule=new ArrayList<ExecutionCommand>();
+    Map<String,RoleStats> roleStats=processInProgressStage(s,commandsToSchedule);
+    boolean failed=false;
+    for (    String role : roleStats.keySet()) {
+      RoleStats stats=roleStats.get(role);
+      LOG.info("Stats for role:" + role + ", stats="+ stats);
+      if (stats.isRoleFailed()) {
+        failed=true;
+        break;
+      }
+    }
+    if (failed) {
+      LOG.warn("Operation completely failed, borting request id:" + s.getRequestId());
+      db.abortOperation(s.getRequestId());
+      return;
+    }
+    for (    ExecutionCommand cmd : commandsToSchedule) {
+      try {
+        scheduleHostRole(s,cmd);
+      }
+ catch (      InvalidStateTransitionException e) {
+        LOG.warn("Could not schedule host role " + cmd.toString(),e);
+        db.abortHostRole(cmd.getHostname(),s.getRequestId(),s.getStageId(),cmd.getRole());
+      }
+    }
+    boolean goToNextStage=true;
+    for (    String role : roleStats.keySet()) {
+      RoleStats stats=roleStats.get(role);
+      if (!stats.isSuccessFactorMet()) {
+        goToNextStage=false;
+        break;
+      }
+    }
+    if (!goToNextStage) {
+      return;
+    }
+  }
+}

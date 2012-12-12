@@ -1,0 +1,74 @@
+{
+  if (request.getClusterName() == null || request.getClusterName().isEmpty()) {
+    throw new AmbariException("Invalid arguments, cluster name should not" + " be null");
+  }
+  final Cluster cluster=clusters.getCluster(request.getClusterName());
+  if (request.getComponentName() != null) {
+    if (request.getServiceName() == null || request.getServiceName().isEmpty()) {
+      StackId stackId=cluster.getDesiredStackVersion();
+      String serviceName=ambariMetaInfo.getComponentToService(stackId.getStackName(),stackId.getStackVersion(),request.getComponentName());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Looking up service name for component" + ", componentName=" + request.getComponentName() + ", serviceName="+ serviceName);
+      }
+      if (serviceName == null || serviceName.isEmpty()) {
+        throw new AmbariException("Could not find service for component" + ", componentName=" + request.getComponentName() + ", clusterName="+ cluster.getClusterName()+ ", stackInfo="+ stackId.getStackId());
+      }
+      request.setServiceName(serviceName);
+    }
+  }
+  Set<Service> services=new HashSet<Service>();
+  if (request.getServiceName() != null && !request.getServiceName().isEmpty()) {
+    services.add(cluster.getService(request.getServiceName()));
+  }
+ else {
+    services.addAll(cluster.getServices().values());
+  }
+  Set<ServiceComponentHostResponse> response=new HashSet<ServiceComponentHostResponse>();
+  boolean checkDesiredState=false;
+  State desiredStateToCheck=null;
+  if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
+    desiredStateToCheck=State.valueOf(request.getDesiredState());
+    if (!desiredStateToCheck.isValidDesiredState()) {
+      throw new IllegalArgumentException("Invalid arguments, invalid desired" + " state, desiredState=" + desiredStateToCheck);
+    }
+    checkDesiredState=true;
+  }
+  for (  Service s : services) {
+    Set<ServiceComponent> components=new HashSet<ServiceComponent>();
+    if (request.getComponentName() != null) {
+      components.add(s.getServiceComponent(request.getComponentName()));
+    }
+ else {
+      components.addAll(s.getServiceComponents().values());
+    }
+    for (    ServiceComponent sc : components) {
+      if (request.getComponentName() != null) {
+        if (!sc.getName().equals(request.getComponentName())) {
+          continue;
+        }
+      }
+      if (request.getHostname() != null) {
+        try {
+          ServiceComponentHost sch=sc.getServiceComponentHost(request.getHostname());
+          if (checkDesiredState && (desiredStateToCheck != sch.getDesiredState())) {
+            continue;
+          }
+          ServiceComponentHostResponse r=sch.convertToResponse();
+          response.add(r);
+        }
+ catch (        ServiceComponentHostNotFoundException e) {
+        }
+      }
+ else {
+        for (        ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+          if (checkDesiredState && (desiredStateToCheck != sch.getDesiredState())) {
+            continue;
+          }
+          ServiceComponentHostResponse r=sch.convertToResponse();
+          response.add(r);
+        }
+      }
+    }
+  }
+  return response;
+}

@@ -1,0 +1,56 @@
+{
+  if (LOG.isDebugEnabled()) {
+    LOG.debug("Loading stack information" + ", stackRoot=" + stackRoot.getPath());
+  }
+  if (!stackRoot.isDirectory() && !stackRoot.exists())   throw new IOException("" + Configuration.METADETA_DIR_PATH + " should be a directory with stack.");
+  File[] stacks=stackRoot.listFiles();
+  for (  File stackFolder : stacks) {
+    if (stackFolder.isFile())     continue;
+    File[] concretStacks=stackFolder.listFiles();
+    for (    File stack : concretStacks) {
+      if (stack.isFile())       continue;
+      StackInfo stackInfo=new StackInfo();
+      stackInfo.setName(stackFolder.getName());
+      stackInfo.setVersion(stack.getName());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Adding new stack to known stacks" + ", stackName=" + stackFolder.getName() + ", stackVersion="+ stack.getName());
+      }
+      stacksResult.add(stackInfo);
+      File repositoryFolder=new File(stack.getAbsolutePath() + File.separator + REPOSITORY_FOLDER_NAME+ File.separator+ REPOSITORY_FILE_NAME);
+      if (repositoryFolder.exists()) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Adding repositories to stack" + ", stackName=" + stackFolder.getName() + ", stackVersion="+ stack.getName()+ ", repoFolder="+ repositoryFolder.getPath());
+        }
+        List<RepositoryInfo> repositoryInfoList=getRepository(repositoryFolder);
+        stackInfo.getRepositories().addAll(repositoryInfoList);
+      }
+      File servicesRootFolder=new File(stack.getAbsolutePath() + File.separator + SERVICES_FOLDER_NAME);
+      File[] servicesFolders=servicesRootFolder.listFiles();
+      if (servicesFolders != null) {
+        for (        File serviceFolder : servicesFolders) {
+          ServiceInfo serviceInfo=new ServiceInfo();
+          serviceInfo.setName(serviceFolder.getName());
+          stackInfo.getServices().add(serviceInfo);
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Adding new service to stack" + ", stackName=" + stackFolder.getName() + ", stackVersion="+ stack.getName()+ ", serviceName="+ serviceInfo.getName());
+          }
+          File metainfoFile=new File(serviceFolder.getAbsolutePath() + File.separator + SERVICE_METAINFO_FILE_NAME);
+          if (metainfoFile.exists()) {
+            setMetaInfo(metainfoFile,serviceInfo);
+          }
+          File serviceConfigFolder=new File(serviceFolder.getAbsolutePath() + File.separator + SERVICE_CONFIG_FOLDER_NAME);
+          LOG.info("Listing config files in folder " + serviceConfigFolder);
+          File[] configFiles=serviceConfigFolder.listFiles();
+          if (configFiles != null) {
+            for (            File config : configFiles) {
+              if (config.getName().endsWith(SERVICE_CONFIG_FILE_NAME_POSTFIX)) {
+                LOG.info("Reading Metadata Info from config filename " + config.getAbsolutePath());
+                serviceInfo.getProperties().addAll(getProperties(config));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

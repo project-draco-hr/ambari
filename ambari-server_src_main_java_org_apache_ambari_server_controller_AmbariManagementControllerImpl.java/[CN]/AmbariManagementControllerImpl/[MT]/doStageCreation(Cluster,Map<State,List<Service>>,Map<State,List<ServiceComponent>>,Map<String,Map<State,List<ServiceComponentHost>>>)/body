@@ -1,0 +1,156 @@
+{
+  if ((changedServices == null || changedServices.isEmpty()) && (changedComps == null || changedComps.isEmpty()) && (changedScHosts == null || changedScHosts.isEmpty())) {
+    return null;
+  }
+  Long requestId=null;
+  List<Stage> stages=null;
+  Set<String> smokeTestServices=new HashSet<String>();
+  if (changedServices != null) {
+    for (    Entry<State,List<Service>> entry : changedServices.entrySet()) {
+      if (State.STARTED != entry.getKey()) {
+        continue;
+      }
+      for (      Service s : entry.getValue()) {
+        if (State.INSTALLED == s.getDesiredState()) {
+          smokeTestServices.add(s.getName());
+        }
+      }
+    }
+  }
+  Map<String,Map<String,Integer>> changedComponentCount=new HashMap<String,Map<String,Integer>>();
+  for (  Map<State,List<ServiceComponentHost>> stateScHostMap : changedScHosts.values()) {
+    for (    Entry<State,List<ServiceComponentHost>> entry : stateScHostMap.entrySet()) {
+      if (State.STARTED != entry.getKey()) {
+        continue;
+      }
+      for (      ServiceComponentHost sch : entry.getValue()) {
+        if (State.START_FAILED != sch.getState() && State.INSTALLED != sch.getState()) {
+          continue;
+        }
+        if (!changedComponentCount.containsKey(sch.getServiceName())) {
+          changedComponentCount.put(sch.getServiceName(),new HashMap<String,Integer>());
+        }
+        if (!changedComponentCount.get(sch.getServiceName()).containsKey(sch.getServiceComponentName())) {
+          changedComponentCount.get(sch.getServiceName()).put(sch.getServiceComponentName(),1);
+        }
+ else {
+          Integer i=changedComponentCount.get(sch.getServiceName()).get(sch.getServiceComponentName());
+          changedComponentCount.get(sch.getServiceName()).put(sch.getServiceComponentName(),++i);
+        }
+      }
+    }
+  }
+  for (  Entry<String,Map<String,Integer>> entry : changedComponentCount.entrySet()) {
+    String serviceName=entry.getKey();
+    if (entry.getValue().size() > 1) {
+      smokeTestServices.add(serviceName);
+      continue;
+    }
+    for (    String componentName : changedComponentCount.get(serviceName).keySet()) {
+      ServiceComponent sc=cluster.getService(serviceName).getServiceComponent(componentName);
+      StackId stackId=sc.getDesiredStackVersion();
+      ComponentInfo compInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
+      if (compInfo.isMaster()) {
+        smokeTestServices.add(serviceName);
+      }
+    }
+  }
+  if (!changedScHosts.isEmpty()) {
+    long nowTimestamp=System.currentTimeMillis();
+    requestId=Long.valueOf(actionManager.getNextRequestId());
+    long stageId=0;
+    Stage stage=createNewStage(cluster,requestId.longValue());
+    stage.setStageId(stageId);
+    for (    String compName : changedScHosts.keySet()) {
+      for (      State newState : changedScHosts.get(compName).keySet()) {
+        for (        ServiceComponentHost scHost : changedScHosts.get(compName).get(newState)) {
+          RoleCommand roleCommand;
+          State oldSchState=scHost.getState();
+          ServiceComponentHostEvent event;
+switch (newState) {
+case INSTALLED:
+            if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED || oldSchState == State.INSTALL_FAILED) {
+              roleCommand=RoleCommand.INSTALL;
+              event=new ServiceComponentHostInstallEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+            }
+ else             if (oldSchState == State.STARTED || oldSchState == State.START_FAILED || oldSchState == State.INSTALLED || oldSchState == State.STOP_FAILED) {
+              roleCommand=RoleCommand.STOP;
+              event=new ServiceComponentHostStopEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+            }
+ else {
+              throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+            }
+          break;
+case STARTED:
+        if (oldSchState == State.INSTALLED || oldSchState == State.START_FAILED) {
+          roleCommand=RoleCommand.START;
+          event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+        }
+ else {
+          throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+        }
+      break;
+case INIT:
+case UNINSTALLED:
+    throw new AmbariException("Uninstall not supported");
+default :
+  throw new AmbariException("Unsupported state change operation" + ", newState=" + newState.toString());
+}
+if (LOG.isDebugEnabled()) {
+LOG.debug("Create a new host action" + ", requestId=" + requestId.longValue() + ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", roleCommand="+ roleCommand.name());
+}
+Map<String,Config> configs=scHost.getDesiredConfigs();
+createHostAction(cluster,stage,scHost,configs,roleCommand,nowTimestamp,event);
+}
+}
+}
+for (String serviceName : smokeTestServices) {
+Service s=cluster.getService(serviceName);
+String clientHost=getClientHostForRunningAction(cluster,s);
+String smokeTestRole=actionMetadata.getServiceCheckAction(serviceName);
+if (clientHost == null || smokeTestRole == null) {
+LOG.info("Nothing to do for service check as could not find role or" + " or host to run check on" + ", clusterName=" + cluster.getClusterName() + ", serviceName="+ serviceName+ ", clientHost="+ clientHost+ ", serviceCheckRole="+ smokeTestRole);
+continue;
+}
+stage.addHostRoleExecutionCommand(clientHost,Role.valueOf(smokeTestRole),RoleCommand.EXECUTE,new ServiceComponentHostOpInProgressEvent(null,clientHost,nowTimestamp),cluster.getClusterName(),serviceName);
+}
+RoleGraph rg=new RoleGraph(rco);
+rg.build(stage);
+stages=rg.getStages();
+if (LOG.isDebugEnabled()) {
+LOG.debug("Triggering Action Manager" + ", clusterName=" + cluster.getClusterName() + ", requestId="+ requestId.longValue()+ ", stagesCount="+ stages.size());
+}
+actionManager.sendActions(stages);
+}
+if (changedServices != null) {
+for (Entry<State,List<Service>> entry : changedServices.entrySet()) {
+State newState=entry.getKey();
+for (Service s : entry.getValue()) {
+if (s.isClientOnlyService() && newState == State.STARTED) {
+continue;
+}
+s.setDesiredState(newState);
+}
+}
+}
+if (changedComps != null) {
+for (Entry<State,List<ServiceComponent>> entry : changedComps.entrySet()) {
+State newState=entry.getKey();
+for (ServiceComponent sc : entry.getValue()) {
+sc.setDesiredState(newState);
+}
+}
+}
+for (Map<State,List<ServiceComponentHost>> stateScHostMap : changedScHosts.values()) {
+for (Entry<State,List<ServiceComponentHost>> entry : stateScHostMap.entrySet()) {
+State newState=entry.getKey();
+for (ServiceComponentHost sch : entry.getValue()) {
+sch.setDesiredState(newState);
+}
+}
+}
+if (stages == null || stages.isEmpty() || requestId == null) {
+return null;
+}
+return getRequestStatusResponse(requestId.longValue());
+}

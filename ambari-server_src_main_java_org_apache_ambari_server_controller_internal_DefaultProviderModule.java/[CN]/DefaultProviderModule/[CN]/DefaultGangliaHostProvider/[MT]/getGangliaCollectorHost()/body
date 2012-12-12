@@ -1,0 +1,36 @@
+{
+  ResourceProvider provider=getResourceProvider(Resource.Type.Cluster);
+  Request request=PropertyHelper.getReadRequest(CLUSTER_NAME_PROPERTY_ID);
+  try {
+    Set<Resource> clusters=provider.getResources(request,null);
+    provider=getResourceProvider(Resource.Type.HostComponent);
+    request=PropertyHelper.getReadRequest(HOST_COMPONENT_HOST_NAME_PROPERTY_ID,HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID);
+    gangliaHostClusterMap=new HashMap<String,Map<String,String>>();
+    gangliaCollectorHostName=new HashMap<String,String>();
+    for (    Resource cluster : clusters) {
+      String clusterName=(String)cluster.getPropertyValue(CLUSTER_NAME_PROPERTY_ID);
+      Predicate predicate=new PredicateBuilder().property(HOST_COMPONENT_CLUSTER_NAME_PROPERTY_ID).equals(clusterName).toPredicate();
+      Set<Resource> hostComponents=provider.getResources(request,predicate);
+      Map<String,String> hostClusterMap=gangliaHostClusterMap.get(clusterName);
+      if (hostClusterMap == null) {
+        hostClusterMap=new HashMap<String,String>();
+        gangliaHostClusterMap.put(clusterName,hostClusterMap);
+      }
+      for (      Resource hostComponent : hostComponents) {
+        String componentName=(String)hostComponent.getPropertyValue(HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID);
+        String hostName=(String)hostComponent.getPropertyValue(HOST_COMPONENT_HOST_NAME_PROPERTY_ID);
+        String gangliaCluster=GangliaPropertyProvider.GANGLIA_CLUSTER_NAMES.get(componentName);
+        if (gangliaCluster != null) {
+          if (!hostClusterMap.containsKey(hostName)) {
+            hostClusterMap.put(hostName,gangliaCluster);
+          }
+        }
+        if (componentName.equals(GANGLIA_SERVER) || componentName.equals(GANGLIA_SERVER_OLD)) {
+          gangliaCollectorHostName.put(clusterName,hostProvider.getHostMapping(clusterName).get(hostName));
+        }
+      }
+    }
+  }
+ catch (  AmbariException e) {
+  }
+}

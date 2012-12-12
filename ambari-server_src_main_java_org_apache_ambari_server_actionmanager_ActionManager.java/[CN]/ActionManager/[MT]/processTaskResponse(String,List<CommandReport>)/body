@@ -1,0 +1,31 @@
+{
+  if (reports == null) {
+    return;
+  }
+  for (  CommandReport report : reports) {
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Processing command report : " + report.toString());
+    }
+    String actionId=report.getActionId();
+    long[] requestStageIds=StageUtils.getRequestStage(actionId);
+    long requestId=requestStageIds[0];
+    long stageId=requestStageIds[1];
+    HostRoleCommand command=db.getTask(report.getTaskId());
+    if (command == null) {
+      LOG.warn("The task " + report.getTaskId() + " is invalid");
+      continue;
+    }
+    if (!command.getStatus().equals(HostRoleStatus.IN_PROGRESS) && !command.getStatus().equals(HostRoleStatus.QUEUED)) {
+      LOG.warn("The task " + command.getTaskId() + " is not in progress, ignoring update");
+      continue;
+    }
+    db.updateHostRoleState(hostname,requestId,stageId,report.getRole(),report);
+    List<HostRoleCommand> commands=db.getRequestTasks(requestId);
+    LOG.debug("List of commands " + (commands == null ? 0 : commands.size()));
+    if (commands != null) {
+      for (      HostRoleCommand cmd : commands) {
+        LOG.info("******COMMAND DUMP*****" + cmd);
+      }
+    }
+  }
+}

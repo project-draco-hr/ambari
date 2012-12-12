@@ -1,0 +1,62 @@
+def writeFile(action, result, fileName=''):
+    fileInfo = action['file']
+    pathComp = ''
+    if ('clusterId' in action):
+        pathComp = action['clusterId']
+    if ('role' in action):
+        pathComp = ((pathComp + '-') + action['role'])
+    try:
+        path = os.path.join(AmbariConfig.config.get('agent', 'prefix'), 'clusters', pathComp)
+        user = getpass.getuser()
+        if ('owner' in fileInfo):
+            user = fileInfo['owner']
+        group = os.getgid()
+        if ('group' in fileInfo):
+            group = fileInfo['group']
+        fullPathName = ''
+        if (fileName != ''):
+            fullPathName = os.path.join(path, fileName)
+        else:
+            fullPathName = os.path.join(path, fileInfo['path'])
+        logger.debug(('path in writeFile: %s' % fullPathName))
+        content = fileInfo['data']
+        try:
+            if (isinstance(user, int) != True):
+                user = getpwnam(user)[2]
+            if (isinstance(group, int) != True):
+                group = getgrnam(group)[2]
+        except Exception:
+            logger.warn(('can not find user uid/gid: (%s/%s) for writing %s' % (user, group, fullPathName)))
+        if ('permission' in fileInfo):
+            if (fileInfo['permission'] is not None):
+                permission = fileInfo['permission']
+        else:
+            permission = 488
+        oldMask = os.umask(0)
+        if ('umask' in fileInfo):
+            if (fileInfo['umask'] is not None):
+                umask = int(fileInfo['umask'])
+        else:
+            umask = oldMask
+        os.umask(int(umask))
+        prefix = os.path.dirname(fullPathName)
+        try:
+            os.makedirs(prefix)
+        except OSError as err:
+            if (err.errno == errno.EEXIST):
+                pass
+            else:
+                raise
+        f = open(fullPathName, 'w')
+        f.write(content)
+        f.close()
+        if (os.getuid() == 0):
+            os.chmod(fullPathName, permission)
+            os.chown(fullPathName, user, group)
+        os.umask(oldMask)
+        result['exitCode'] = 0
+    except Exception as err:
+        traceback.print_exc()
+        result['exitCode'] = 1
+        result['error'] = traceback.format_exc()
+    return result

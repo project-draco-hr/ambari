@@ -1,0 +1,50 @@
+{
+  Map<String,RoleStats> roleStats=new TreeMap<String,RoleStats>();
+  long now=System.currentTimeMillis();
+  for (  String host : s.getHosts()) {
+    List<ExecutionCommand> commands=s.getExecutionCommands(host);
+    for (    ExecutionCommand c : commands) {
+      String roleStr=c.getRole().toString();
+      RoleStats stats=roleStats.get(roleStr);
+      if (stats == null) {
+        stats=new RoleStats(s.getHosts().size(),1);
+        roleStats.put(roleStr,stats);
+      }
+      HostRoleStatus status=s.getHostRoleStatus(host,roleStr);
+      LOG.info("Last attempt time =" + s.getLastAttemptTime(host,roleStr) + ", actiontimeout ="+ this.actionTimeout+ ", current time="+ now+ ", status ="+ status+ ", attempt count="+ s.getAttemptCount(host,roleStr));
+      if (timeOutActionNeeded(status,s,host,roleStr,now)) {
+        LOG.info("Host:" + host + ", role:"+ roleStr+ ", actionId:"+ s.getActionId()+ " timed out");
+        if (s.getAttemptCount(host,roleStr) >= maxAttempts) {
+          LOG.warn("Host:" + host + ", role:"+ roleStr+ ", actionId:"+ s.getActionId()+ " expired");
+          db.timeoutHostRole(host,s.getRequestId(),s.getStageId(),c.getRole());
+          status=s.getHostRoleStatus(host,roleStr);
+          ServiceComponentHostOpFailedEvent timeoutEvent=new ServiceComponentHostOpFailedEvent(roleStr,host,now);
+          try {
+            Cluster cluster=fsmObject.getCluster(s.getClusterName());
+            Service svc=cluster.getService(c.getServiceName());
+            ServiceComponent svcComp=svc.getServiceComponent(roleStr);
+            ServiceComponentHost svcCompHost=svcComp.getServiceComponentHost(host);
+            svcCompHost.handleEvent(timeoutEvent);
+          }
+ catch (          ServiceComponentNotFoundException scnex) {
+            LOG.info("Not a service component, assuming its an action",scnex);
+          }
+catch (          InvalidStateTransitionException e) {
+            LOG.info("Transition failed for host: " + host + ", role: "+ roleStr,e);
+          }
+catch (          AmbariException ex) {
+            LOG.info("Invalid live state",ex);
+          }
+        }
+ else {
+          commandsToSchedule.add(c);
+        }
+      }
+ else       if (status.equals(HostRoleStatus.PENDING)) {
+        commandsToSchedule.add(c);
+      }
+      this.updateRoleStats(status,stats);
+    }
+  }
+  return roleStats;
+}
