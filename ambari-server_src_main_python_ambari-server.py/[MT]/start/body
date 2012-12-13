@@ -1,15 +1,31 @@
 def start(args):
+    if os.path.exists(((PID_DIR + os.sep) + PID_NAME)):
+        f = open(((PID_DIR + os.sep) + PID_NAME), 'r')
+        pid = int(f.readline())
+        f.close()
+        try:
+            os.kill(pid, 0)
+            print 'Server is already running.'
+            return
+        except OSError as e:
+            printInfoMsg('Server is not running, continue.')
     conf_dir = get_conf_dir()
     jdk_path = findJDK()
     if (jdk_path is None):
-        print ('No any JDK found, please run "setup" command to install it automatically or install any JDK manually to ' + JDK_INSTALL_DIR)
+        printErrorMsg(('No JDK found, please run "setup" command to install JDK automatically or install any JDK manually to ' + JDK_INSTALL_DIR))
         return (-1)
     retcode = check_postgre_up()
     if (not (retcode == 0)):
-        print 'Error! Unable to start postgre server'
+        printErrorMsg('Unable to start PostgreSQL server. Exiting')
         sys.exit(retcode)
-    command = SERVER_START_CMD.format(jdk_path, conf_dir)
-    server_process = subprocess.Popen(command.split(' '))
+    print 'Checking iptables...'
+    (retcode, out) = check_iptables()
+    if ((not (retcode == 0)) and (out == IP_TBLS_ENABLED)):
+        printErrorMsg('Failed to stop iptables. Exiting')
+        sys.exit(retcode)
+    command = SERVER_START_CMD.format(jdk_path, conf_dir, get_ambari_jars())
+    print ('Running server: ' + command)
+    server_process = subprocess.Popen(['/bin/sh', '-c', command])
     f = open(((PID_DIR + os.sep) + PID_NAME), 'w')
     f.write(str(server_process.pid))
     f.close()

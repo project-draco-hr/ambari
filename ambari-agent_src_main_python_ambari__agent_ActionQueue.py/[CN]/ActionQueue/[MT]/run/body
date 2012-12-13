@@ -3,15 +3,32 @@ def run(self):
     while (not self.stopped()):
         while (not commandQueue.empty()):
             command = commandQueue.get()
-            try:
-                commandCopy = copy.copy(command)
-                result = self.executeCommand(commandCopy)
-            except Exception as err:
-                traceback.print_exc()
-                logger.warn(err)
+            logger.info(('Took an element of Queue: ' + pprint.pformat(command)))
+            if (command['commandType'] == self.EXECUTION_COMMAND):
+                try:
+                    result = self.executeCommand(command)
+                except Exception as err:
+                    traceback.print_exc()
+                    logger.warn(err)
+                    pass
+                for entry in result:
+                    resultQueue.put((ActionQueue.EXECUTION_COMMAND, entry))
                 pass
-            for entry in result:
-                resultQueue.put(entry)
-            pass
+            elif (command['commandType'] == self.STATUS_COMMAND):
+                cluster = command['clusterName']
+                service = command['serviceName']
+                component = command['componentName']
+                try:
+                    livestatus = LiveStatus(cluster, service, component)
+                    result = livestatus.build()
+                    logger.info(((((((('Got live status for component ' + component) + ' of service ') + str(service)) + ' of cluster ') + str(cluster)) + '\n') + pprint.pformat(result)))
+                    if (result is not None):
+                        resultQueue.put((ActionQueue.STATUS_COMMAND, result))
+                except Exception as err:
+                    traceback.print_exc()
+                    logger.warn(err)
+                    pass
+            else:
+                logger.warn(('Unrecognized command ' + pprint.pformat(result)))
         if (not self.stopped()):
-            time.sleep(5)
+            time.sleep(self.IDLE_SLEEP_TIME)

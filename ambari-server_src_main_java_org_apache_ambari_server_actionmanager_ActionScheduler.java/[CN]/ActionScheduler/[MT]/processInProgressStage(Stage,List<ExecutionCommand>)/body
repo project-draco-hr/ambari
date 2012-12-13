@@ -1,18 +1,17 @@
 {
-  Map<String,RoleStats> roleStats=new TreeMap<String,RoleStats>();
+  Map<String,RoleStats> roleStats=initRoleStats(s);
   long now=System.currentTimeMillis();
+  long taskTimeout=actionTimeout;
+  if (taskTimeoutAdjustment) {
+    taskTimeout=actionTimeout + s.getTaskTimeout();
+  }
   for (  String host : s.getHosts()) {
-    List<ExecutionCommand> commands=s.getExecutionCommands(host);
-    for (    ExecutionCommand c : commands) {
+    List<ExecutionCommandWrapper> commandWrappers=s.getExecutionCommands(host);
+    for (    ExecutionCommandWrapper wrapper : commandWrappers) {
+      ExecutionCommand c=wrapper.getExecutionCommand();
       String roleStr=c.getRole().toString();
-      RoleStats stats=roleStats.get(roleStr);
-      if (stats == null) {
-        stats=new RoleStats(s.getHosts().size(),1);
-        roleStats.put(roleStr,stats);
-      }
       HostRoleStatus status=s.getHostRoleStatus(host,roleStr);
-      LOG.info("Last attempt time =" + s.getLastAttemptTime(host,roleStr) + ", actiontimeout ="+ this.actionTimeout+ ", current time="+ now+ ", status ="+ status+ ", attempt count="+ s.getAttemptCount(host,roleStr));
-      if (timeOutActionNeeded(status,s,host,roleStr,now)) {
+      if (timeOutActionNeeded(status,s,host,roleStr,now,taskTimeout)) {
         LOG.info("Host:" + host + ", role:"+ roleStr+ ", actionId:"+ s.getActionId()+ " timed out");
         if (s.getAttemptCount(host,roleStr) >= maxAttempts) {
           LOG.warn("Host:" + host + ", role:"+ roleStr+ ", actionId:"+ s.getActionId()+ " expired");
@@ -33,7 +32,7 @@ catch (          InvalidStateTransitionException e) {
             LOG.info("Transition failed for host: " + host + ", role: "+ roleStr,e);
           }
 catch (          AmbariException ex) {
-            LOG.info("Invalid live state",ex);
+            LOG.warn("Invalid live state",ex);
           }
         }
  else {
@@ -43,7 +42,7 @@ catch (          AmbariException ex) {
  else       if (status.equals(HostRoleStatus.PENDING)) {
         commandsToSchedule.add(c);
       }
-      this.updateRoleStats(status,stats);
+      this.updateRoleStats(status,roleStats.get(roleStr));
     }
   }
   return roleStats;

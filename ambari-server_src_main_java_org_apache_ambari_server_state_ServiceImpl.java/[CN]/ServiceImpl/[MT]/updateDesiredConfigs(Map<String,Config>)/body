@@ -1,23 +1,47 @@
 {
-  for (  Entry<String,Config> entry : configs.entrySet()) {
-    ServiceConfigMappingEntity newEntity=new ServiceConfigMappingEntity();
-    newEntity.setClusterId(serviceEntity.getClusterId());
-    newEntity.setConfigType(entry.getKey());
-    newEntity.setServiceName(getName());
-    newEntity.setVersionTag(entry.getValue().getVersionTag());
-    newEntity.setTimestamp(Long.valueOf(new java.util.Date().getTime()));
-    if (!serviceEntity.getServiceConfigMappings().contains(newEntity)) {
-      newEntity.setServiceConfigEntity(serviceEntity);
-      serviceEntity.getServiceConfigMappings().add(newEntity);
+  Set<String> deletedTypes=new HashSet<String>();
+  for (  String type : this.desiredConfigs.keySet()) {
+    if (!configs.containsKey(type)) {
+      deletedTypes.add(type);
     }
- else {
-      for (      ServiceConfigMappingEntity entity : serviceEntity.getServiceConfigMappings()) {
-        if (entity.equals(newEntity)) {
-          entity.setVersionTag(newEntity.getVersionTag());
-          entity.setTimestamp(newEntity.getTimestamp());
-        }
+  }
+  for (  Entry<String,Config> entry : configs.entrySet()) {
+    boolean contains=false;
+    for (    ServiceConfigMappingEntity serviceConfigMappingEntity : serviceEntity.getServiceConfigMappings()) {
+      if (entry.getKey().equals(serviceConfigMappingEntity.getConfigType())) {
+        contains=true;
+        serviceConfigMappingEntity.setTimestamp(new Date().getTime());
+        serviceConfigMappingEntity.setVersionTag(entry.getValue().getVersionTag());
       }
+    }
+    if (!contains) {
+      ServiceConfigMappingEntity newEntity=new ServiceConfigMappingEntity();
+      newEntity.setClusterId(serviceEntity.getClusterId());
+      newEntity.setServiceName(serviceEntity.getServiceName());
+      newEntity.setConfigType(entry.getKey());
+      newEntity.setVersionTag(entry.getValue().getVersionTag());
+      newEntity.setTimestamp(new Date().getTime());
+      newEntity.setServiceEntity(serviceEntity);
+      serviceEntity.getServiceConfigMappings().add(newEntity);
     }
     this.desiredConfigs.put(entry.getKey(),entry.getValue().getVersionTag());
   }
+  if (!deletedTypes.isEmpty()) {
+    if (persisted) {
+      List<ServiceConfigMappingEntity> deleteEntities=serviceConfigMappingDAO.findByServiceAndType(serviceEntity.getClusterId(),serviceEntity.getServiceName(),deletedTypes);
+      for (      ServiceConfigMappingEntity deleteEntity : deleteEntities) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Deleting desired config from ServiceComponent" + ", clusterId=" + serviceEntity.getClusterId() + ", serviceName="+ serviceEntity.getServiceName()+ ", configType="+ deleteEntity.getConfigType()+ ", configVersionTag="+ deleteEntity.getVersionTag());
+        }
+        serviceEntity.getServiceConfigMappings().remove(deleteEntity);
+        serviceConfigMappingDAO.remove(deleteEntity);
+      }
+    }
+ else {
+      for (      String deletedType : deletedTypes) {
+        desiredConfigs.remove(deletedType);
+      }
+    }
+  }
+  saveIfPersisted();
 }

@@ -1,15 +1,18 @@
 {
+  checkRequestProperties(Resource.Type.Service,request);
   Set<ServiceRequest> requests=new HashSet<ServiceRequest>();
-  for (  Map<PropertyId,Object> propertyMap : getPropertyMaps(request.getProperties().iterator().next(),predicate)) {
-    Map<String,String> configMappings=new HashMap<String,String>();
-    for (    PropertyId id : propertyMap.keySet()) {
-      if (id.getCategory().equals("config")) {
-        configMappings.put(id.getName(),(String)propertyMap.get(id));
-      }
+  RequestStatusResponse response=null;
+  Iterator<Map<String,Object>> iterator=request.getProperties().iterator();
+  if (iterator.hasNext()) {
+    for (    Map<String,Object> propertyMap : getPropertyMaps(iterator.next(),predicate)) {
+      Map<String,String> configMappings=new HashMap<String,String>();
+      ConfigurationResourceProvider.getConfigPropertyValues(propertyMap,configMappings);
+      ServiceRequest svcRequest=getRequest(propertyMap);
+      if (configMappings.size() > 0)       svcRequest.setConfigVersions(configMappings);
+      requests.add(svcRequest);
     }
-    ServiceRequest svcRequest=getRequest(propertyMap);
-    if (configMappings.size() > 0)     svcRequest.setConfigVersions(configMappings);
-    requests.add(svcRequest);
+    response=getManagementController().updateServices(requests);
   }
-  return getRequestStatus(getManagementController().updateServices(requests));
+  notifyUpdate(Resource.Type.Service,request,predicate);
+  return getRequestStatus(response);
 }

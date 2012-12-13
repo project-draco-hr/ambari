@@ -4,9 +4,21 @@
   if (!hostClusterMap.containsKey(hostname)) {
     throw new HostNotFoundException(hostname);
   }
-  host.addToCluster(cluster);
+  for (  Cluster c : hostClusterMap.get(hostname)) {
+    if (c.getClusterName().equals(clusterName)) {
+      return;
+    }
+  }
+  if (!isOsSupportedByClusterStack(cluster,host)) {
+    String message="Trying to map host to cluster where stack does not" + " support host's os type" + ", clusterName=" + clusterName + ", clusterStackId="+ cluster.getDesiredStackVersion().getStackId()+ ", hostname="+ hostname+ ", hostOsType="+ host.getOsType();
+    LOG.warn(message);
+    throw new AmbariException(message);
+  }
+  mapHostClusterEntities(hostname,cluster.getClusterId());
   hostClusterMap.get(hostname).add(cluster);
   clusterHostMap.get(clusterName).add(host);
+  cluster.refresh();
+  host.refresh();
   if (LOG.isDebugEnabled()) {
     LOG.debug("Mapping a host to a cluster" + ", clusterName=" + clusterName + ", clusterId="+ cluster.getClusterId()+ ", hostname="+ hostname);
   }

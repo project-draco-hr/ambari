@@ -1,0 +1,119 @@
+{
+  String hostString=createHostString(sshHostInfo.getHosts());
+  String commands[]=new String[6];
+  String shellCommand[]=new String[3];
+  BSStat stat=BSStat.RUNNING;
+  String scriptlog="";
+  try {
+    createRunDir();
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Using ssh key=\"" + sshHostInfo.getSshKey() + "\"");
+    }
+    writeSshKeyFile(sshHostInfo.getSshKey());
+    shellCommand[0]="sh";
+    shellCommand[1]="-c";
+    commands[0]=this.bsScript;
+    commands[1]=hostString;
+    commands[2]=this.requestIdDir.toString();
+    commands[3]=this.sshKeyFile.toString();
+    commands[4]=this.agentSetupScript.toString();
+    commands[5]=this.ambariHostname;
+    LOG.info("Host= " + hostString + " bs="+ this.bsScript+ " requestDir="+ requestIdDir+ " keyfile="+ this.sshKeyFile+ " server="+ this.ambariHostname);
+    String[] env=new String[]{"AMBARI_PASSPHRASE=" + agentSetupPassword};
+    if (this.verbose)     env=new String[]{env[0]," BS_VERBOSE=\"-vvv\" "};
+    StringBuilder commandString=new StringBuilder();
+    for (    String comm : commands) {
+      commandString.append(" " + comm);
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug(commandString);
+    }
+    String bootStrapOutputFile=requestIdDir + File.separator + "bootstrap.out";
+    String bootStrapErrorFile=requestIdDir + File.separator + "bootstrap.err";
+    commandString.append(" 1> " + bootStrapOutputFile + " 2>"+ bootStrapErrorFile);
+    shellCommand[2]=commandString.toString();
+    Process process=Runtime.getRuntime().exec(shellCommand,env);
+    ScheduledExecutorService scheduler=Executors.newScheduledThreadPool(1);
+    BSStatusCollector statusCollector=new BSStatusCollector();
+    ScheduledFuture<?> handle=scheduler.scheduleWithFixedDelay(statusCollector,0,10,TimeUnit.SECONDS);
+    LOG.info("Kicking off the scheduler for polling on logs in " + this.requestIdDir);
+    try {
+      LOG.info("Bootstrap output, log=" + bootStrapErrorFile + " "+ bootStrapOutputFile);
+      int exitCode=process.waitFor();
+      String outMesg="";
+      String errMesg="";
+      try {
+        outMesg=FileUtils.readFileToString(new File(bootStrapOutputFile));
+        errMesg=FileUtils.readFileToString(new File(bootStrapErrorFile));
+      }
+ catch (      IOException io) {
+        LOG.info("Error in reading files ",io);
+      }
+      scriptlog=outMesg + "\n\n" + errMesg;
+      LOG.info("Script log Mesg " + scriptlog);
+      if (exitCode != 0) {
+        stat=BSStat.ERROR;
+      }
+ else {
+        stat=BSStat.SUCCESS;
+      }
+      scheduler.schedule(new BSStatusCollector(),0,TimeUnit.SECONDS);
+      long startTime=System.currentTimeMillis();
+      while (true) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Waiting for hosts status to be updated");
+        }
+        boolean pendingHosts=false;
+        BootStrapStatus tmpStatus=bsImpl.getStatus(requestId);
+        for (        BSHostStatus status : tmpStatus.getHostsStatus()) {
+          if (status.getStatus().equals("RUNNING")) {
+            pendingHosts=true;
+          }
+        }
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Whether hosts status yet to be updated, pending=" + pendingHosts);
+        }
+        if (!pendingHosts) {
+          break;
+        }
+        try {
+          Thread.sleep(1000);
+        }
+ catch (        InterruptedException e) {
+        }
+        long now=System.currentTimeMillis();
+        if (now >= (startTime + 15000)) {
+          LOG.warn("Gave up waiting for hosts status to be updated");
+          break;
+        }
+      }
+    }
+ catch (    InterruptedException e) {
+      throw new IOException(e);
+    }
+ finally {
+      handle.cancel(true);
+      scheduler.schedule(new BSStatusCollector(),0,TimeUnit.SECONDS);
+      scheduler.shutdownNow();
+      try {
+        scheduler.awaitTermination(10,TimeUnit.SECONDS);
+      }
+ catch (      InterruptedException e) {
+        LOG.info("Interruped while waiting for scheduler");
+      }
+      process.destroy();
+    }
+  }
+ catch (  IOException io) {
+    LOG.info("Error executing bootstrap " + io.getMessage());
+    stat=BSStat.ERROR;
+  }
+ finally {
+    BootStrapStatus tmpStatus=bsImpl.getStatus(requestId);
+    tmpStatus.setLog(scriptlog);
+    tmpStatus.setStatus(stat);
+    bsImpl.updateStatus(requestId,tmpStatus);
+    bsImpl.reset();
+    finished();
+  }
+}

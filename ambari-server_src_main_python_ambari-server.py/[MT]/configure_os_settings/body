@@ -1,0 +1,35 @@
+def configure_os_settings():
+    conf_file = search_file(AMBARI_PROPERTIES_FILE, get_conf_dir())
+    if (conf_file is None):
+        printErrorMsg(('File %s not found in search path $%s: %s' % (AMBARI_PROPERTIES_FILE, AMBARI_CONF_VAR, get_conf_dir())))
+        return (-1)
+    printInfoMsg(('Loading properties from ' + conf_file))
+    properties = None
+    try:
+        properties = Properties()
+        properties.load(open(conf_file))
+    except Exception as e:
+        printErrorMsg(('Could not read "%s": %s' % (conf_file, e)))
+        return (-1)
+    try:
+        conf_os_type = properties[OS_TYPE_PROPERTY]
+        if (conf_os_type != ''):
+            printInfoMsg('os_type already setting in properties file')
+            return 0
+    except KeyError as e:
+        printErrorMsg('os_type is not set in properties file')
+    os_system = platform.system()
+    if (os_system != 'Linux'):
+        printErrorMsg('Non-Linux systems are not supported')
+        return (-1)
+    os_info = platform.linux_distribution(None, None, None, ['SuSE', 'redhat'], 0)
+    os_name = os_info[0].lower()
+    if (os_name == 'suse'):
+        os_name = 'sles'
+    os_version = os_info[1].split('.', 1)[0]
+    master_os_type = (os_name + os_version)
+    with open(conf_file, 'a') as ambariConf:
+        ambariConf.write(((OS_TYPE_PROPERTY + '=') + master_os_type))
+        ambariConf.write('\n')
+        ambariConf.closed
+    return 0

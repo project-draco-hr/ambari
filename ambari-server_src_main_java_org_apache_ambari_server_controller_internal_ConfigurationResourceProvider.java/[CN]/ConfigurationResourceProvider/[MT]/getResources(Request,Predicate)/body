@@ -1,20 +1,38 @@
 {
-  ConfigurationRequest configRequest=getRequest(getProperties(predicate));
-  Set<ConfigurationResponse> responses=getManagementController().getConfigurations(Collections.singleton(configRequest));
-  Set<Resource> resources=new HashSet<Resource>();
-  for (  ConfigurationResponse response : responses) {
-    Resource resource=new ResourceImpl(Resource.Type.Configuration);
-    resource.setProperty(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID,response.getClusterName());
-    resource.setProperty(CONFIGURATION_CONFIG_TYPE_PROPERTY_ID,response.getType());
-    resource.setProperty(CONFIGURATION_CONFIG_TAG_PROPERTY_ID,response.getVersionTag());
-    if (null != response.getConfigs() && response.getConfigs().size() > 0) {
-      Map<String,String> configs=response.getConfigs();
-      for (      Map.Entry<String,String> entry : configs.entrySet()) {
-        PropertyId id=PropertyHelper.getPropertyId(entry.getKey(),"properties");
-        resource.setProperty(id,entry.getValue());
-      }
+  Map<String,Object> map=getProperties(predicate);
+  if (map.containsKey(CONFIG_HOST_NAME) && map.containsKey(CONFIG_COMPONENT_NAME)) {
+    ServiceComponentHostRequest hostComponentRequest=new ServiceComponentHostRequest((String)map.get(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID),null,(String)map.get(CONFIG_COMPONENT_NAME),(String)map.get(CONFIG_HOST_NAME),null,null);
+    Map<String,String> mappints=getManagementController().getHostComponentDesiredConfigMapping(hostComponentRequest);
+    Set<Resource> resources=new HashSet<Resource>();
+    for (    Entry<String,String> entry : mappints.entrySet()) {
+      Resource resource=new ResourceImpl(Resource.Type.Configuration);
+      resource.setProperty(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID,map.get(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID));
+      resource.setProperty(CONFIG_COMPONENT_NAME,map.get(CONFIG_COMPONENT_NAME));
+      resource.setProperty(CONFIG_HOST_NAME,map.get(CONFIG_HOST_NAME));
+      resource.setProperty(CONFIGURATION_CONFIG_TYPE_PROPERTY_ID,entry.getKey());
+      resource.setProperty(CONFIGURATION_CONFIG_TAG_PROPERTY_ID,entry.getValue());
+      resources.add(resource);
     }
-    resources.add(resource);
+    return resources;
   }
-  return resources;
+ else {
+    ConfigurationRequest configRequest=getRequest(map);
+    Set<ConfigurationResponse> responses=getManagementController().getConfigurations(Collections.singleton(configRequest));
+    Set<Resource> resources=new HashSet<Resource>();
+    for (    ConfigurationResponse response : responses) {
+      Resource resource=new ResourceImpl(Resource.Type.Configuration);
+      resource.setProperty(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID,response.getClusterName());
+      resource.setProperty(CONFIGURATION_CONFIG_TYPE_PROPERTY_ID,response.getType());
+      resource.setProperty(CONFIGURATION_CONFIG_TAG_PROPERTY_ID,response.getVersionTag());
+      if (null != response.getConfigs() && response.getConfigs().size() > 0) {
+        Map<String,String> configs=response.getConfigs();
+        for (        Entry<String,String> entry : configs.entrySet()) {
+          String id=PropertyHelper.getPropertyId("properties",entry.getKey());
+          resource.setProperty(id,entry.getValue());
+        }
+      }
+      resources.add(resource);
+    }
+    return resources;
+  }
 }

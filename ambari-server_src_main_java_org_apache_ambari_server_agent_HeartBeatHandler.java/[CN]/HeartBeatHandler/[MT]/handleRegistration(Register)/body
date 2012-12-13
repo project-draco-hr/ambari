@@ -1,6 +1,11 @@
 {
   String hostname=register.getHostname();
   long now=System.currentTimeMillis();
+  String agentOsType=getOsType(register.getHardwareProfile().getOS(),register.getHardwareProfile().getOSRelease());
+  if (!ambariMetaInfo.areOsTypesCompatible(config.getServerOsType().toLowerCase(),agentOsType)) {
+    LOG.warn("Received registration request from host with non matching" + " os type" + ", hostname=" + hostname + ", serverOsType="+ config.getServerOsType()+ ", agentOstype="+ agentOsType);
+    throw new AmbariException("Cannot register host as it does not match" + " server's os type" + ", hostname=" + hostname + ", serverOsType="+ config.getServerOsType()+ ", agentOstype="+ agentOsType);
+  }
   Host hostObject;
   try {
     hostObject=clusterFsm.getHost(hostname);
@@ -9,26 +14,17 @@
     clusterFsm.addHost(hostname);
     hostObject=clusterFsm.getHost(hostname);
   }
-  List<StatusCommand> cmds=new ArrayList<StatusCommand>();
-  for (  Cluster cl : clusterFsm.getClustersForHost(hostname)) {
-    List<ServiceComponentHost> roleList=cl.getServiceComponentHosts(hostname);
-    List<String> roles=new ArrayList<String>();
-    for (    ServiceComponentHost sch : roleList) {
-      roles.add(sch.getServiceComponentName());
-    }
-    StatusCommand statusCmd=new StatusCommand();
-    statusCmd.setRoles(roles);
-    cmds.add(statusCmd);
-  }
-  hostObject.handleEvent(new HostRegistrationRequestEvent(hostname,new AgentVersion("v1"),now,register.getHardwareProfile()));
+  hostObject.setState(HostState.INIT);
+  List<StatusCommand> cmds=heartbeatMonitor.generateStatusCommands(hostname);
+  hostObject.handleEvent(new HostRegistrationRequestEvent(hostname,null != register.getPublicHostname() ? register.getPublicHostname() : hostname,new AgentVersion("v1"),now,register.getHardwareProfile()));
   RegistrationResponse response=new RegistrationResponse();
   if (cmds.isEmpty()) {
     hostObject.handleEvent(new HostStatusUpdatesReceivedEvent(hostname,now));
   }
- else {
-    response.setCommands(cmds);
-  }
+  response.setStatusCommands(cmds);
   response.setResponseStatus(RegistrationStatus.OK);
-  response.setResponseId(0);
+  Long requestId=0L;
+  hostResponseIds.put(hostname,requestId);
+  response.setResponseId(requestId);
   return response;
 }

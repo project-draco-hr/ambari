@@ -1,24 +1,12 @@
 def build(self, id='-1'):
     global clusterId, clusterDefinitionRevision, firstContact
-    serverStatus = ServerStatus()
     timestamp = int((time.time() * 1000))
     queueResult = self.actionQueue.result()
-    installedRoleStates = serverStatus.build()
-    pidLookupPath = AmbariConfig.config.get('services', 'pidLookupPath')
-    serviceToPidMapFile = AmbariConfig.config.get('services', 'serviceToPidMapFile')
-    statusCheck = StatusCheck(pidLookupPath, serviceToPidMapFile)
-    servicesStatusesDict = {}
-    componentStatus = []
-    for component in COMPONENTS:
-        serviceStatus = statusCheck.getStatus(component['componentName'])
-        if (serviceStatus == None):
-            logger.warn(('There is no service to pid mapping for ' + component['componentName']))
-        status = (LIVE_STATUS if serviceStatus else DEAD_STATUS)
-        componentStatus.append({'componentName': component['componentName'], 'msg': '', 'status': status, 'serviceName': component['serviceName'], 'clusterName': '', })
     nodeStatus = {'status': 'HEALTHY', 'cause': 'NONE', }
-    heartbeat = {'responseId': int(id), 'timestamp': timestamp, 'hostname': socket.gethostname(), 'componentStatus': componentStatus, 'nodeStatus': nodeStatus, }
+    heartbeat = {'responseId': int(id), 'timestamp': timestamp, 'hostname': socket.getfqdn(), 'nodeStatus': nodeStatus, }
     if (len(queueResult) != 0):
-        heartbeat['reports'] = queueResult
+        heartbeat['reports'] = queueResult['reports']
+        heartbeat['componentStatus'] = queueResult['componentStatus']
         pass
-    logger.info(('Status for node heartbeat: ' + pformat(nodeStatus)))
+    logger.info(('Heartbeat dump: ' + pformat(heartbeat)))
     return heartbeat

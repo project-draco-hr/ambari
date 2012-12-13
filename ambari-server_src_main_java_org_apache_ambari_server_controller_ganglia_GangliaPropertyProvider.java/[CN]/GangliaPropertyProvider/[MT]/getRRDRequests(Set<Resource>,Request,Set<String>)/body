@@ -1,0 +1,31 @@
+{
+  Map<String,Map<TemporalInfo,RRDRequest>> requestMap=new HashMap<String,Map<TemporalInfo,RRDRequest>>();
+  for (  Resource resource : resources) {
+    String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
+    Map<TemporalInfo,RRDRequest> requests=requestMap.get(clusterName);
+    if (requests == null) {
+      requests=new HashMap<TemporalInfo,RRDRequest>();
+      requestMap.put(clusterName,requests);
+    }
+    ResourceKey key=new ResourceKey(getHostName(resource),getGangliaClusterName(resource,clusterName));
+    Map<String,PropertyInfo> metrics=componentPropertyInfoMap.get(getComponentName(resource));
+    if (metrics != null) {
+      for (      String propertyId : ids) {
+        PropertyInfo propertyInfo=metrics.get(propertyId);
+        if (propertyInfo != null) {
+          TemporalInfo temporalInfo=request.getTemporalInfo(propertyId);
+          if ((temporalInfo == null && propertyInfo.isPointInTime()) || (temporalInfo != null && propertyInfo.isTemporal())) {
+            RRDRequest rrdRequest=requests.get(temporalInfo);
+            if (rrdRequest == null) {
+              rrdRequest=new RRDRequest(clusterName,temporalInfo);
+              requests.put(temporalInfo,rrdRequest);
+            }
+            rrdRequest.putResource(key,resource);
+            rrdRequest.putPropertyId(propertyInfo.getPropertyId(),propertyId);
+          }
+        }
+      }
+    }
+  }
+  return requestMap;
+}

@@ -2,37 +2,63 @@ def heartbeatWithServer(self):
     self.DEBUG_HEARTBEAT_RETRIES = 0
     self.DEBUG_SUCCESSFULL_HEARTBEATS = 0
     retry = False
+    certVerifFailed = False
     id = 0
-    while True:
+    while (not self.DEBUG_STOP_HEARTBITTING):
         try:
-            if self.DEBUG_STOP_HEARTBITTING:
-                return
             if (not retry):
-                data = json.dumps(self.heartbeat.build(id))
+                data = json.dumps(self.heartbeat.build(self.responseId))
                 pass
             else:
                 self.DEBUG_HEARTBEAT_RETRIES += 1
-            req = urllib2.Request(self.heartbeatUrl, data, {'Content-Type': 'application/json', })
-            f = security.secured_url_open(req)
-            response = f.read()
-            f.close()
+            response = self.sendRequest(self.heartbeatUrl, data)
             response = json.loads(response)
-            id = int(response['responseId'])
+            logger.info(('Got server response: ' + pprint.pformat(response)))
+            serverId = int(response['responseId'])
+            if ('registrationCommand' in response.keys()):
+                if (response['registrationCommand'] is not None):
+                    logger.info('RegistrationCommand received - repeat agent registration')
+                    self.repeatRegistration = True
+                    return
+            if (serverId != (self.responseId + 1)):
+                logger.error('Error in responseId sequence - restarting')
+                self.restartAgent()
+            else:
+                self.responseId = serverId
             if ('executionCommands' in response.keys()):
                 self.addToQueue(response['executionCommands'])
                 pass
+            if ('statusCommands' in response.keys()):
+                self.addToQueue(response['statusCommands'])
+                pass
+            if ('true' == response['restartAgent']):
+                logger.error('Got restartAgent command')
+                self.restartAgent()
             else:
                 logger.info('No commands sent from the Server.')
                 pass
+            if retry:
+                print 'Reconnected to the server'
+                logger.info('Reconnected to the server')
             retry = False
+            certVerifFailed = False
             self.DEBUG_SUCCESSFULL_HEARTBEATS += 1
             self.DEBUG_HEARTBEAT_RETRIES = 0
         except Exception as err:
-            retry = True
+            delay = randint(0, self.range)
+            time.sleep(delay)
             if ('code' in err):
                 logger.error(err.code)
             else:
-                logger.error(('Unable to connect to: ' + self.heartbeatUrl), exc_info=True)
+                logger.error(((('Unable to connect to: ' + self.heartbeatUrl) + ' due to ') + str(err)))
+                logger.debug(('Details: ' + str(err)), exc_info=True)
+                if (not retry):
+                    print 'Connection to the server was lost. Reconnecting...'
+                if (('certificate verify failed' in str(err)) and (not certVerifFailed)):
+                    print 'Server certificate verify failed. Did you regenerate server certificate?'
+                    certVerifFailed = True
+            self.cachedconnect = None
+            retry = True
         if self.actionQueue.isIdle():
             time.sleep(self.netutil.HEARTBEAT_IDDLE_INTERVAL_SEC)
         else:

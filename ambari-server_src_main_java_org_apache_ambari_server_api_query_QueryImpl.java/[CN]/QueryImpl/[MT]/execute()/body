@@ -1,22 +1,27 @@
 {
   Result result=createResult();
-  if (m_resourceDefinition.getId() == null) {
-    Schema schema=getClusterController().getSchema(m_resourceDefinition.getType());
-    addProperty(schema.getKeyPropertyId(m_resourceDefinition.getType()));
+  Resource.Type resourceType=m_resource.getResourceDefinition().getType();
+  if (m_resource.getIds().get(resourceType) == null) {
+    addCollectionProperties(resourceType);
     result.getResultTree().setProperty("isCollection","true");
   }
   if (m_mapQueryProperties.isEmpty() && m_mapSubResources.isEmpty()) {
-    m_mapSubResources.putAll(m_resourceDefinition.getSubResources());
+    m_mapSubResources.putAll(m_resource.getSubResources());
   }
-  Predicate predicate=createPredicate(m_resourceDefinition);
-  Iterable<Resource> iterResource=getClusterController().getResources(m_resourceDefinition.getType(),createRequest(),predicate);
+  Predicate predicate=createPredicate(m_resource);
+  Iterable<Resource> iterResource=null;
+  try {
+    iterResource=getClusterController().getResources(resourceType,createRequest(),predicate);
+  }
+ catch (  UnsupportedPropertyException e) {
+  }
   TreeNode<Resource> tree=result.getResultTree();
   int count=1;
   for (  Resource resource : iterResource) {
     TreeNode<Resource> node=tree.addChild(resource,resource.getType() + ":" + count++);
-    for (    Map.Entry<String,ResourceDefinition> entry : m_mapSubResources.entrySet()) {
+    for (    Map.Entry<String,ResourceInstance> entry : m_mapSubResources.entrySet()) {
       String subResCategory=entry.getKey();
-      ResourceDefinition r=entry.getValue();
+      ResourceInstance r=entry.getValue();
       setParentIdsOnSubResource(resource,r);
       TreeNode<Resource> childResult=r.getQuery().execute().getResultTree();
       childResult.setName(subResCategory);

@@ -3,7 +3,9 @@ def download_jdk():
     if (conf_file is None):
         print ('File %s not found in search path $%s: %s' % (AMBARI_PROPERTIES_FILE, AMBARI_CONF_VAR, get_conf_dir()))
         return (-1)
-    print ('Loading properties from ' + conf_file)
+    printInfoMsg(('Loading properties from ' + conf_file))
+    if get_JAVA_HOME():
+        return 0
     properties = None
     try:
         properties = Properties()
@@ -18,32 +20,46 @@ def download_jdk():
         print ((('Property ' + str(e)) + ' is not defined at ') + conf_file)
         return (-1)
     dest_file = ((resources_dir + os.sep) + JDK_LOCAL_FILENAME)
-    print ((('Trying to download JDK from ' + jdk_url) + ' to ') + dest_file)
-    try:
-        src_size = int(urllib.urlopen(jdk_url).info()['Content-Length'])
-        print (('JDK distribution size is ' + str(src_size)) + ' bytes')
-        file_exists = os.path.isfile(dest_file)
-        file_size = (-1)
-        if file_exists:
-            file_size = os.stat(dest_file).st_size
-        if (file_exists and (file_size == src_size)):
-            print 'File already exists'
-        else:
-            urllib.urlretrieve(jdk_url, dest_file)
-            print ('Successfully downloaded JDK distribution to ' + dest_file)
-    except Exception as e:
-        print ('Failed to download JDK: ' + str(e))
-        return (-1)
-    downloaded_size = os.stat(dest_file).st_size
-    if ((downloaded_size != src_size) or (downloaded_size < JDK_MIN_FILESIZE)):
-        print (('Size of downloaded JDK distribution file is ' + str(downloaded_size)) + ' bytes, it is probably damaged or incomplete')
+    if (not os.path.exists(dest_file)):
+        print ((('Downloading JDK from ' + jdk_url) + ' to ') + dest_file)
+        try:
+            size_command = JDK_DOWNLOAD_SIZE_CMD.format(jdk_url)
+            (retcode, out, err) = run_os_command(size_command)
+            if (out.find('Content-Length') == (-1)):
+                print "Request headr doesn't contain Content-Length"
+                return (-1)
+            start_with = int(((out.find('Content-Length') + len('Content-Length')) + 2))
+            end_with = out.find('\r\n', start_with)
+            src_size = int(out[start_with:end_with])
+            print (('JDK distribution size is ' + str(src_size)) + ' bytes')
+            file_exists = os.path.isfile(dest_file)
+            file_size = (-1)
+            if file_exists:
+                file_size = os.stat(dest_file).st_size
+            if (file_exists and (file_size == src_size)):
+                printInfoMsg('File already exists')
+            else:
+                download_command = JDK_DOWNLOAD_CMD.format(dest_file, jdk_url)
+                (retcode, outdata, errdata) = run_os_command(download_command)
+                print ('Successfully downloaded JDK distribution to ' + dest_file)
+        except Exception as e:
+            printErrorMsg(('Failed to download JDK: ' + str(e)))
+            return (-1)
+        downloaded_size = os.stat(dest_file).st_size
+        if ((downloaded_size != src_size) or (downloaded_size < JDK_MIN_FILESIZE)):
+            printErrorMsg((('Size of downloaded JDK distribution file is ' + str(downloaded_size)) + ' bytes, it is probably   damaged or incomplete'))
+            return (-1)
+    else:
+        print ('JDK already exists using ' + dest_file)
+    ok = getYNInput('To install the Oracle JDK you must accept the license terms found at http://www.oracle.com/technetwork/java/javase/downloads/jdk-6u21-license-159167.txt. Not accepting will cancel the Ambari Server setup.\nDo you accept the Oracle Binary Code License Agreement [y/n] (y)? ', True)
+    if (ok == False):
         return (-1)
     print 'Installing JDK to {0}'.format(JDK_INSTALL_DIR)
     (retcode, out, err) = run_os_command(CREATE_JDK_DIR_CMD)
     savedPath = os.getcwd()
     os.chdir(JDK_INSTALL_DIR)
     (retcode, out, err) = run_os_command(MAKE_FILE_EXECUTABLE_CMD.format(dest_file))
-    (retcode, out, err) = run_os_command(dest_file)
+    (retcode, out, err) = run_os_command((dest_file + ' -noregister'))
     os.chdir(savedPath)
     jdk_version = re.search('Creating (jdk.*)/jre', out).group(1)
     print 'Successfully installed JDK to {0}/{1}'.format(JDK_INSTALL_DIR, jdk_version)

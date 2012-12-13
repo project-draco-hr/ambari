@@ -1,27 +1,37 @@
 def setup(args):
-    print 'About to check Postgre'
+    print 'Checking SELinux...'
+    retcode = check_selinux()
+    if (not (retcode == 0)):
+        printErrorMsg('Failed to disable SELinux. Exiting.')
+        sys.exit(retcode)
+    print 'Checking iptables...'
+    (retcode, out) = check_iptables()
+    if ((not (retcode == 0)) and (out == IP_TBLS_ENABLED)):
+        printErrorMsg('Failed to stop iptables. Exiting.')
+        sys.exit(retcode)
+    print 'Checking PostgreSQL...'
     retcode = check_postgre_up()
     if (not (retcode == 0)):
-        print 'Error! Unable to start postgre server'
+        printErrorMsg('Unable to start PostgreSQL server. Exiting')
         sys.exit(retcode)
-    print 'About to setup database'
+    print 'Configuring database...'
     retcode = setup_db(args)
     if (not (retcode == 0)):
-        print 'Error! Running database init script was failed'
+        printErrorMsg('Running database init script was failed. Exiting.')
         sys.exit(retcode)
-    print 'About to check SELinux down'
-    retcode = check_se_down()
+    print 'Configuring PostgreSQL...'
+    retcode = configure_postgres()
     if (not (retcode == 0)):
-        print 'Error! SELinux is enabled, unable to proceed'
+        printErrorMsg('Unable to configure PostgreSQL server. Exiting')
         sys.exit(retcode)
-    print 'About to check iptables down'
-    (retcode, out) = ip_tables_down()
-    if ((not (retcode == 0)) and (out == IP_TBLS_ENABLED)):
-        print 'Error! Failed to stop iptables'
-        sys.exit(retcode)
-    print 'About to download JDK and install it'
+    print 'Checking JDK...'
     retcode = download_jdk()
     if (not (retcode == 0)):
-        print 'Error! Downloading or installing JDK failed'
+        printErrorMsg('Downloading or installing JDK failed. Exiting.')
         sys.exit(retcode)
-    print 'Setup was finished sucessfully'
+    print 'Completing setup...'
+    retcode = configure_os_settings()
+    if (not (retcode == 0)):
+        printErrorMsg('Configure of OS settings in ambari.properties failed. Exiting.')
+        sys.exit(retcode)
+    print "Ambari Server 'setup' finished successfully"

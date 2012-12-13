@@ -1,23 +1,35 @@
 {
-  Set<PropertyId> requestedIds=PropertyHelper.getRequestPropertyIds(getPropertyIds(),request,predicate);
-  HostRequest hostRequest=getRequest(getProperties(predicate));
-  Set<HostResponse> responses=getManagementController().getHosts(Collections.singleton(hostRequest));
+  Set<HostRequest> requests=new HashSet<HostRequest>();
+  if (predicate == null) {
+    requests.add(getRequest(null));
+  }
+ else {
+    for (    Map<String,Object> propertyMap : getPropertyMaps(null,predicate)) {
+      requests.add(getRequest(propertyMap));
+    }
+  }
+  Set<String> requestedIds=PropertyHelper.getRequestPropertyIds(getPropertyIds(),request,predicate);
+  Set<HostResponse> responses=getManagementController().getHosts(requests);
   Set<Resource> resources=new HashSet<Resource>();
   for (  HostResponse response : responses) {
     Resource resource=new ResourceImpl(Resource.Type.Host);
-    if (null != hostRequest.getClusterNames()) {
-      for (      String clusterName : hostRequest.getClusterNames()) {
-        if (response.getClusterNames().contains(clusterName)) {
-          setResourceProperty(resource,HOST_CLUSTER_NAME_PROPERTY_ID,clusterName,requestedIds);
-        }
-      }
+    if (response.getClusterNames() != null && !response.getClusterNames().isEmpty()) {
+      setResourceProperty(resource,HOST_CLUSTER_NAME_PROPERTY_ID,response.getClusterNames().iterator().next(),requestedIds);
     }
     setResourceProperty(resource,HOST_NAME_PROPERTY_ID,response.getHostname(),requestedIds);
+    setResourceProperty(resource,HOST_PUBLIC_NAME_PROPERTY_ID,response.getPublicHostName(),requestedIds);
     setResourceProperty(resource,HOST_IP_PROPERTY_ID,response.getIpv4(),requestedIds);
-    setResourceProperty(resource,HOST_TOTAL_MEM_PROPERTY_ID,Long.valueOf(response.getTotalMemBytes()),requestedIds);
-    setResourceProperty(resource,HOST_CPU_COUNT_PROPERTY_ID,Long.valueOf(response.getCpuCount()),requestedIds);
+    setResourceProperty(resource,HOST_TOTAL_MEM_PROPERTY_ID,response.getTotalMemBytes(),requestedIds);
+    setResourceProperty(resource,HOST_CPU_COUNT_PROPERTY_ID,(long)response.getCpuCount(),requestedIds);
     setResourceProperty(resource,HOST_OS_ARCH_PROPERTY_ID,response.getOsArch(),requestedIds);
     setResourceProperty(resource,HOST_OS_TYPE_PROPERTY_ID,response.getOsType(),requestedIds);
+    setResourceProperty(resource,HOST_RACK_INFO_PROPERTY_ID,response.getRackInfo(),requestedIds);
+    setResourceProperty(resource,HOST_LAST_HEARTBEAT_TIME_PROPERTY_ID,response.getLastHeartbeatTime(),requestedIds);
+    setResourceProperty(resource,HOST_LAST_REGISTRATION_TIME_PROPERTY_ID,response.getLastRegistrationTime(),requestedIds);
+    setResourceProperty(resource,HOST_HOST_STATUS_PROPERTY_ID,response.getHealthStatus().getHealthStatus().toString(),requestedIds);
+    setResourceProperty(resource,HOST_HOST_HEALTH_REPORT_PROPERTY_ID,response.getHealthStatus().getHealthReport(),requestedIds);
+    setResourceProperty(resource,HOST_DISK_INFO_PROPERTY_ID,response.getDisksInfo(),requestedIds);
+    setResourceProperty(resource,HOST_STATE_PROPERTY_ID,response.getHostState(),requestedIds);
     resources.add(resource);
   }
   return resources;

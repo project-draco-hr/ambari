@@ -12,8 +12,25 @@
     status.setHostName(host);
     done=new File(requestIdDir,host + doneFileFilter);
     log=new File(requestIdDir,host + logFileFilter);
-    if (!done.exists())     status.setStatus("RUNNING");
- else     status.setStatus("DONE");
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Polling bootstrap status for host" + ", requestDir=" + requestIdDir + ", host="+ host+ ", doneFileExists="+ done.exists()+ ", logFileExists="+ log.exists());
+    }
+    if (!done.exists()) {
+      status.setStatus("RUNNING");
+    }
+ else {
+      status.setStatus("FAILED");
+      try {
+        String statusCode=FileUtils.readFileToString(done).trim();
+        if (statusCode.equals("0")) {
+          status.setStatus("DONE");
+        }
+        updateStatus(status,statusCode);
+      }
+ catch (      IOException e) {
+        LOG.info("Error reading done file " + done);
+      }
+    }
     if (!log.exists()) {
       status.setLog("");
     }

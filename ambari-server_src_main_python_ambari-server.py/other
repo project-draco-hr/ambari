@@ -5,33 +5,59 @@ import os
 import signal
 import subprocess
 import re
-import urllib
 import string
 import glob
+import platform
+import xml.etree.ElementTree as ET
+import shutil
+import stat
+import fileinput
+VERBOSE = False
+SILENT = False
+SERVER_START_DEBUG = False
 SETUP_ACTION = 'setup'
 START_ACTION = 'start'
 STOP_ACTION = 'stop'
-SETUP_DB_CMD = 'sudo -u postgres psql -f {1} -d {0}'
-GET_SE_LINUX_ST_CMD = 'sestatus'
+RESET_ACTION = 'reset'
+GET_SE_LINUX_ST_CMD = '/usr/sbin/sestatus'
+SE_SETENFORCE_CMD = 'setenforce 0'
 SE_STATUS_DISABLED = 'disabled'
 SE_STATUS_ENABLED = 'enabled'
-IP_TBLS_ST_CMD = 'service iptables status'
-IP_TBLS_STOP_CMD = 'service iptables stop'
+SE_MODE_ENFORCING = 'enforcing'
+SE_MODE_PERMISSIVE = 'permissive'
+IP_TBLS_ST_CMD = '/sbin/service iptables status'
+IP_TBLS_STOP_CMD = '/sbin/service iptables stop'
 IP_TBLS_ENABLED = 'Firewall is running'
-IP_TBLS_DISABLED = 'Firewall is not running'
+IP_TBLS_DISABLED = 'Firewall is stopped.\n'
 IP_TBLS_SRVC_NT_FND = 'iptables: unrecognized service'
-SERVER_START_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '..') + os.sep) + 'lib') + os.sep) + 'ambari-server') + os.sep) + '* org.apache.ambari.server.controller.AmbariServer')
+SERVER_START_CMD = ((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -server -XX:NewRatio=2 -XX:+UseConcMarkSweepGC -Xms512m -Xmx2048m -cp {1}') + os.pathsep) + '{2}') + '/* org.apache.ambari.server.controller.AmbariServer >/var/log/ambari-server/ambari-server.out 2>&1')
+SERVER_START_CMD_DEBUG = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -server -XX:NewRatio=2 -XX:+UseConcMarkSweepGC -Xms512m -Xmx2048m -Xdebug -Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=n -cp {1}') + os.pathsep) + '..') + os.sep) + 'lib') + os.sep) + 'ambari-server') + os.sep) + '* org.apache.ambari.server.controller.AmbariServer')
 AMBARI_CONF_VAR = 'AMBARI_CONF_DIR'
-PG_ST_CMD = 'service postgresql status'
-PG_START_CMD = 'service postgresql start'
-PG_STATUS_RUNNING = 'running'
+AMBARI_SERVER_LIB = 'AMBARI_SERVER_LIB'
+JAVA_HOME = 'JAVA_HOME'
 PID_DIR = '/var/run/ambari-server'
 PID_NAME = 'ambari-server.pid'
 AMBARI_PROPERTIES_FILE = 'ambari.properties'
-JDK_LOCAL_FILENAME = 'jdk-distr.bin'
+SETUP_DB_CMD = 'sudo -u postgres psql -f {0} -v username="{1}" -v password=\'{2}\''
+PG_ST_CMD = '/sbin/service postgresql status'
+PG_START_CMD = '/sbin/service postgresql start'
+PG_RESTART_CMD = '/sbin/service postgresql restart'
+PG_STATUS_RUNNING = 'running'
+PG_HBA_DIR = '/var/lib/pgsql/data/'
+PG_HBA_CONF_FILE = (PG_HBA_DIR + 'pg_hba.conf')
+PG_HBA_CONF_FILE_BACKUP = (PG_HBA_DIR + 'pg_hba_bak.conf.old')
+POSTGRESQL_CONF_FILE = (PG_HBA_DIR + 'postgresql.conf')
+PG_HBA_RELOAD_CMD = 'sudo -u postgres pg_ctl -D {0} reload'
+JDBC_USER_NAME_PROPERTY = 'server.jdbc.user.name'
+JDBC_PASSWORD_FILE_PROPERTY = 'server.jdbc.user.passwd'
+JDBC_PASSWORD_FILENAME = 'password.dat'
+JDK_LOCAL_FILENAME = 'jdk-6u31-linux-x64.bin'
 JDK_MIN_FILESIZE = 5000
 JDK_INSTALL_DIR = '/usr/jdk64'
-CREATE_JDK_DIR_CMD = ('mkdir -p ' + JDK_INSTALL_DIR)
+CREATE_JDK_DIR_CMD = ('/bin/mkdir -p ' + JDK_INSTALL_DIR)
 MAKE_FILE_EXECUTABLE_CMD = 'chmod a+x {0}'
+OS_TYPE_PROPERTY = 'server.os_type'
+JDK_DOWNLOAD_CMD = 'curl --create-dirs -o {0} {1}'
+JDK_DOWNLOAD_SIZE_CMD = 'curl -I {0}'
 if (__name__ == '__main__'):
     main()

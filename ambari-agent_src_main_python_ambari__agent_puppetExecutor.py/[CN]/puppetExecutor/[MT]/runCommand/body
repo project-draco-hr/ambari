@@ -1,58 +1,19 @@
-def runCommand(self, command):
+def runCommand(self, command, tmpoutfile, tmperrfile):
     result = {}
     taskId = 0
-    grep = Grep()
     if command.has_key('taskId'):
         taskId = command['taskId']
     puppetEnv = os.environ
     modulesdir = (self.puppetModule + '/modules')
-    repoInstaller = RepoInstaller(command, self.tmpDir, modulesdir, taskId)
-    puppetFiles = repoInstaller.installRepos()
+    puppetFiles = self.deployRepos(command, self.tmpDir, modulesdir, taskId)
     siteppFileName = os.path.join(self.tmpDir, (('site-' + str(taskId)) + '.pp'))
     puppetFiles.append(siteppFileName)
-    generateManifest(command, siteppFileName, modulesdir)
+    generateManifest(command, siteppFileName, modulesdir, self.config)
     for puppetFile in puppetFiles:
-        puppetcommand = self.puppetCommand(puppetFile)
-        ' Run the command and make sure the output gets propagated'
-        rubyLib = ''
-        if os.environ.has_key('RUBYLIB'):
-            rubyLib = os.environ['RUBYLIB']
-            logger.info(('Ruby Lib env from Env ' + rubyLib))
-        rubyLib = ((((rubyLib + ':') + self.facterLib()) + ':') + self.puppetLib())
-        puppetEnv['RUBYLIB'] = rubyLib
-        logger.info(('Setting RUBYLIB as: ' + rubyLib))
-        logger.info(('Running command ' + pprint.pformat(puppetcommand)))
-        puppet = subprocess.Popen(puppetcommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=puppetEnv)
-        stderr_out = puppet.communicate()
-        error = 'none'
-        returncode = 0
-        if ((puppet.returncode != 0) and (puppet.returncode != 2)):
-            returncode = puppet.returncode
-            error = stderr_out[1]
-            logging.error(('Error running puppet: \n' + stderr_out[1]))
-            pass
-        if result.has_key('stderr'):
-            result['stderr'] = ((result['stderr'] + os.linesep) + error)
-        else:
-            result['stderr'] = error
-        puppetOutput = stderr_out[0]
-        logger.info(('Output from puppet :\n' + puppetOutput))
-        if result.has_key('exitcode'):
-            result['exitcode'] = max(returncode, result['exitcode'])
-        else:
-            result['exitcode'] = returncode
-        if result.has_key('stdout'):
-            result['stdout'] = ((result['stdout'] + os.linesep) + puppetOutput)
-        else:
-            result['stdout'] = puppetOutput
-    if (error == self.NO_ERROR):
-        if result.has_key('stdout'):
-            result['stdout'] = ((result['stdout'] + os.linesep) + str(grep.tail(puppetOutput, self.OUTPUT_LAST_LINES)))
-        else:
-            result['stdout'] = grep.tail(puppetOutput, self.OUTPUT_LAST_LINES)
-    elif result.has_key('stdout'):
-        result['stdout'] = ((result['stdout'] + os.linesep) + str(grep.grep(puppetOutput, 'err', self.ERROR_LAST_LINES_BEFORE, self.ERROR_LAST_LINES_AFTER)))
-    else:
-        result['stdout'] = str(grep.grep(puppetOutput, 'err', self.ERROR_LAST_LINES_BEFORE, self.ERROR_LAST_LINES_AFTER))
+        self.runPuppetFile(puppetFile, result, puppetEnv, tmpoutfile, tmperrfile)
+        if (not self.isSuccessfull(result['exitcode'])):
+            break
+    if self.isSuccessfull(result['exitcode']):
+        self.reposInstalled = True
     logger.info(('ExitCode : ' + str(result['exitcode'])))
     return result

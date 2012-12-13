@@ -1,19 +1,24 @@
 {
-  UserRequest userRequest=getRequest(getProperties(predicate));
-  Set<UserResponse> responses=getManagementController().getUsers(Collections.singleton(userRequest));
+  Set<UserRequest> requests=new HashSet<UserRequest>();
+  if (predicate == null) {
+    requests.add(getRequest(null));
+  }
+ else {
+    for (    Map<String,Object> propertyMap : getPropertyMaps(null,predicate)) {
+      requests.add(getRequest(propertyMap));
+    }
+  }
+  Set<String> requestedIds=PropertyHelper.getRequestPropertyIds(getPropertyIds(),request,predicate);
+  Set<UserResponse> responses=getManagementController().getUsers(requests);
   Set<Resource> resources=new HashSet<Resource>();
+  if (LOG.isDebugEnabled()) {
+    LOG.debug("Found user responses matching get user request" + ", userRequestSize=" + requests.size() + ", userResponseSize="+ responses.size());
+  }
   for (  UserResponse userResponse : responses) {
     ResourceImpl resource=new ResourceImpl(Resource.Type.User);
-    resource.setProperty(USER_USERNAME_PROPERTY_ID,userResponse.getUsername());
-    if (userResponse.getRoles().size() > 0) {
-      int i=0;
-      StringBuilder sb=new StringBuilder();
-      for (      String role : userResponse.getRoles()) {
-        if ((i++) != 0)         sb.append(',');
-        sb.append(role);
-      }
-      resource.setProperty(USER_ROLES_PROPERTY_ID,sb.toString());
-    }
+    setResourceProperty(resource,USER_USERNAME_PROPERTY_ID,userResponse.getUsername(),requestedIds);
+    setResourceProperty(resource,USER_ROLES_PROPERTY_ID,userResponse.getRoles(),requestedIds);
+    setResourceProperty(resource,USER_LDAP_USER_PROPERTY_ID,userResponse.isLdapUser(),requestedIds);
     resources.add(resource);
   }
   return resources;

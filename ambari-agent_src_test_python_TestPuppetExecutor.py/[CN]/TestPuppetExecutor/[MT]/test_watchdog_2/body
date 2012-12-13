@@ -1,0 +1,18 @@
+def test_watchdog_2(self):
+    '\n    Tries to catch false positive watchdog invocations\n    '
+    subproc_mock = self.Subprocess_mockup()
+    executor_mock = self.PuppetExecutor_mock('/home/centos/ambari_repo_info/ambari-agent/src/main/puppet/', '/usr/', '/root/workspace/puppet-install/facter-1.6.10/', '/tmp', AmbariConfig().getConfig(), subproc_mock)
+    (_, tmpoutfile) = tempfile.mkstemp()
+    (_, tmperrfile) = tempfile.mkstemp()
+    result = {}
+    puppetEnv = {'RUBYLIB': '', }
+    executor_mock.PUPPET_TIMEOUT_SECONDS = 5
+    subproc_mock.returncode = 0
+    thread = Thread(target=executor_mock.runPuppetFile, args=('fake_puppetFile', result, puppetEnv, tmpoutfile, tmperrfile))
+    thread.start()
+    time.sleep(0.1)
+    subproc_mock.should_finish_event.set()
+    subproc_mock.finished_event.wait()
+    print subproc_mock.was_terminated
+    self.assertEquals(subproc_mock.was_terminated, False, 'Subprocess should not be terminated before timeout')
+    self.assertEquals(subproc_mock.returncode, 0, 'Subprocess should not be terminated before timeout')

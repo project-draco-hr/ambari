@@ -1,25 +1,51 @@
 {
-  for (  Entry<String,Config> entry : configs.entrySet()) {
-    ComponentConfigMappingEntity newEntity=new ComponentConfigMappingEntity();
-    newEntity.setClusterId(desiredStateEntity.getClusterId());
-    newEntity.setServiceName(desiredStateEntity.getServiceName());
-    newEntity.setComponentName(desiredStateEntity.getComponentName());
-    newEntity.setConfigType(entry.getKey());
-    newEntity.setVersionTag(entry.getValue().getVersionTag());
-    newEntity.setTimestamp(Long.valueOf(new java.util.Date().getTime()));
-    if (!desiredStateEntity.getComponentConfigMappingEntities().contains(newEntity)) {
-      newEntity.setServiceComponentDesiredStateEntity(desiredStateEntity);
-      desiredStateEntity.getComponentConfigMappingEntities().add(newEntity);
+  Set<String> deletedTypes=new HashSet<String>();
+  for (  String type : this.desiredConfigs.keySet()) {
+    if (!configs.containsKey(type)) {
+      deletedTypes.add(type);
     }
- else {
-      for (      ComponentConfigMappingEntity entity : desiredStateEntity.getComponentConfigMappingEntities()) {
-        if (entity.equals(newEntity)) {
-          entity.setVersionTag(newEntity.getVersionTag());
-          entity.setTimestamp(newEntity.getTimestamp());
+  }
+  for (  Entry<String,Config> entry : configs.entrySet()) {
+    boolean contains=false;
+    for (    ComponentConfigMappingEntity componentConfigMappingEntity : desiredStateEntity.getComponentConfigMappingEntities()) {
+      if (entry.getKey().equals(componentConfigMappingEntity.getConfigType())) {
+        contains=true;
+        componentConfigMappingEntity.setTimestamp(new Date().getTime());
+        componentConfigMappingEntity.setVersionTag(entry.getValue().getVersionTag());
+        if (persisted) {
+          componentConfigMappingDAO.merge(componentConfigMappingEntity);
         }
       }
     }
+    if (!contains) {
+      ComponentConfigMappingEntity newEntity=new ComponentConfigMappingEntity();
+      newEntity.setClusterId(desiredStateEntity.getClusterId());
+      newEntity.setServiceName(desiredStateEntity.getServiceName());
+      newEntity.setComponentName(desiredStateEntity.getComponentName());
+      newEntity.setConfigType(entry.getKey());
+      newEntity.setVersionTag(entry.getValue().getVersionTag());
+      newEntity.setTimestamp(new Date().getTime());
+      newEntity.setServiceComponentDesiredStateEntity(desiredStateEntity);
+      desiredStateEntity.getComponentConfigMappingEntities().add(newEntity);
+    }
     this.desiredConfigs.put(entry.getKey(),entry.getValue().getVersionTag());
+  }
+  if (!deletedTypes.isEmpty()) {
+    if (persisted) {
+      List<ComponentConfigMappingEntity> deleteEntities=componentConfigMappingDAO.findByComponentAndType(desiredStateEntity.getClusterId(),desiredStateEntity.getServiceName(),desiredStateEntity.getComponentName(),deletedTypes);
+      for (      ComponentConfigMappingEntity deleteEntity : deleteEntities) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Deleting desired config from ServiceComponent" + ", clusterId=" + desiredStateEntity.getClusterId() + ", serviceName="+ desiredStateEntity.getServiceName()+ ", componentName="+ desiredStateEntity.getComponentName()+ ", configType="+ deleteEntity.getConfigType()+ ", configVersionTag="+ deleteEntity.getVersionTag());
+        }
+        desiredStateEntity.getComponentConfigMappingEntities().remove(deleteEntity);
+        componentConfigMappingDAO.remove(deleteEntity);
+      }
+    }
+ else {
+      for (      String deletedType : deletedTypes) {
+        desiredConfigs.remove(deletedType);
+      }
+    }
   }
   saveIfPersisted();
 }
