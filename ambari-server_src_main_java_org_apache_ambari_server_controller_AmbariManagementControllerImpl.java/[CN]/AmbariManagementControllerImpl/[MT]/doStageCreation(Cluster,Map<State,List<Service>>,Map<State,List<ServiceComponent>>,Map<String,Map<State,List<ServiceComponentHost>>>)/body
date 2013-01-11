@@ -70,7 +70,7 @@
           ServiceComponentHostEvent event;
 switch (newState) {
 case INSTALLED:
-            if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED || oldSchState == State.INSTALL_FAILED) {
+            if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED || oldSchState == State.INSTALLING || oldSchState == State.INSTALL_FAILED) {
               roleCommand=RoleCommand.INSTALL;
               event=new ServiceComponentHostInstallEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp,scHost.getDesiredStackVersion().getStackId());
             }
@@ -83,23 +83,32 @@ case INSTALLED:
             }
           break;
 case STARTED:
-        if (oldSchState == State.INSTALLED || oldSchState == State.START_FAILED) {
-          roleCommand=RoleCommand.START;
-          event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp,scHost.getDesiredConfigVersionsRecursive());
-        }
- else {
-          throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
-        }
-      break;
-case UNINSTALLED:
-    if (oldSchState == State.INSTALLED || oldSchState == State.UNINSTALL_FAILED) {
-      roleCommand=RoleCommand.UNINSTALL;
+        StackId stackId=scHost.getDesiredStackVersion();
+      ComponentInfo compInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),scHost.getServiceName(),scHost.getServiceComponentName());
+    if (oldSchState == State.INSTALLED || oldSchState == State.START_FAILED || oldSchState == State.STARTING) {
+      roleCommand=RoleCommand.START;
       event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp,scHost.getDesiredConfigVersionsRecursive());
     }
  else {
-      throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+      String error="Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState;
+      if (compInfo.isMaster()) {
+        throw new AmbariException(error);
+      }
+ else {
+        LOG.info("Ignoring: " + error);
+        continue;
+      }
     }
   break;
+case UNINSTALLED:
+if (oldSchState == State.INSTALLED || oldSchState == State.UNINSTALL_FAILED) {
+  roleCommand=RoleCommand.UNINSTALL;
+  event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp,scHost.getDesiredConfigVersionsRecursive());
+}
+ else {
+  throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+}
+break;
 case INIT:
 throw new AmbariException("Unsupported transition to INIT for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
 default :
@@ -143,6 +152,7 @@ configurations.put(entry.getValue().getType(),entry.getValue().getProperties());
 }
 }
 stage.getExecutionCommandWrapper(clientHost,smokeTestRole).getExecutionCommand().setConfigurations(configurations);
+stage.getExecutionCommandWrapper(clientHost,smokeTestRole).getExecutionCommand().setClusterHostInfo(StageUtils.getClusterHostInfo(cluster));
 }
 RoleGraph rg=new RoleGraph(rco);
 rg.build(stage);

@@ -1,16 +1,18 @@
 {
-  checkRequestProperties(Resource.Type.HostComponent,request);
-  Set<ServiceComponentHostRequest> requests=new HashSet<ServiceComponentHostRequest>();
-  for (  Map<String,Object> propertyMap : getPropertyMaps(request.getProperties().iterator().next(),predicate)) {
-    ServiceComponentHostRequest hostCompRequest=getRequest(propertyMap);
-    Map<String,String> configMap=new HashMap<String,String>();
-    ConfigurationResourceProvider.getConfigPropertyValues(propertyMap,configMap);
-    if (0 != configMap.size()) {
-      hostCompRequest.setConfigVersions(configMap);
+  final Set<ServiceComponentHostRequest> requests=new HashSet<ServiceComponentHostRequest>();
+  RequestStatusResponse response=null;
+  Iterator<Map<String,Object>> iterator=request.getProperties().iterator();
+  if (iterator.hasNext()) {
+    for (    Map<String,Object> propertyMap : getPropertyMaps(request.getProperties().iterator().next(),predicate)) {
+      requests.add(getRequest(propertyMap));
     }
-    requests.add(hostCompRequest);
+    response=modifyResources(new Command<RequestStatusResponse>(){
+      @Override public RequestStatusResponse invoke() throws AmbariException {
+        return getManagementController().updateHostComponents(requests);
+      }
+    }
+);
+    notifyUpdate(Resource.Type.HostComponent,request,predicate);
   }
-  RequestStatusResponse response=getManagementController().updateHostComponents(requests);
-  notifyUpdate(Resource.Type.HostComponent,request,predicate);
   return getRequestStatus(response);
 }

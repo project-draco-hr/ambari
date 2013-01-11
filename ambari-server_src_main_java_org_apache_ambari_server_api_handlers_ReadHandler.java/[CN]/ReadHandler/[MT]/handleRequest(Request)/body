@@ -1,14 +1,43 @@
 {
   Query query=request.getResource().getQuery();
-  for (  Map.Entry<String,TemporalInfo> entry : request.getFields().entrySet()) {
-    String propertyId=entry.getKey();
-    query.addProperty(PropertyHelper.getPropertyCategory(propertyId),PropertyHelper.getPropertyName(propertyId),entry.getValue());
+  try {
+    addFieldsToQuery(request,query);
+  }
+ catch (  IllegalArgumentException e) {
+    return new ResultImpl(new ResultStatus(ResultStatus.STATUS.BAD_REQUEST,e.getMessage()));
   }
   query.setUserPredicate(request.getQueryPredicate());
+  Result result;
   try {
-    return query.execute();
+    result=query.execute();
+    result.setResultStatus(new ResultStatus(ResultStatus.STATUS.OK));
   }
- catch (  AmbariException e) {
-    throw new RuntimeException("An exception occurred processing the request: " + e,e);
+ catch (  SystemException e) {
+    result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.SERVER_ERROR,e));
   }
+catch (  NoSuchParentResourceException e) {
+    result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.NOT_FOUND,e.getMessage()));
+  }
+catch (  UnsupportedPropertyException e) {
+    result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.BAD_REQUEST,e.getMessage()));
+  }
+catch (  NoSuchResourceException e) {
+    if (request.getQueryPredicate() == null) {
+      result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.NOT_FOUND,e.getMessage()));
+    }
+ else {
+      result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.OK,e));
+      result.getResultTree().setProperty("isCollection","true");
+    }
+  }
+catch (  IllegalArgumentException e) {
+    result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.BAD_REQUEST,"Invalid Request: " + e.getMessage()));
+  }
+catch (  RuntimeException e) {
+    if (LOG.isErrorEnabled()) {
+      LOG.error("Caught a runtime exception executing a query",e);
+    }
+    throw e;
+  }
+  return result;
 }

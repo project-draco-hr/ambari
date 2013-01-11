@@ -1,0 +1,40 @@
+{
+  Injector injector=createStrictMock(Injector.class);
+  Capture<AmbariManagementController> controllerCapture=new Capture<AmbariManagementController>();
+  Clusters clusters=createNiceMock(Clusters.class);
+  StackId stack=createNiceMock(StackId.class);
+  AmbariMetaInfo metaInfo=createStrictMock(AmbariMetaInfo.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  Host host=createNiceMock(Host.class);
+  Service service=createNiceMock(Service.class);
+  ServiceComponent component=createNiceMock(ServiceComponent.class);
+  ServiceComponentHostRequest request1=new ServiceComponentHostRequest("cluster1",null,"component1","host1",Collections.<String,String>emptyMap(),null);
+  Set<ServiceComponentHostRequest> setRequests=new HashSet<ServiceComponentHostRequest>();
+  setRequests.add(request1);
+  injector.injectMembers(capture(controllerCapture));
+  expect(injector.getInstance(Gson.class)).andReturn(null);
+  expect(clusters.getCluster("cluster1")).andReturn(cluster);
+  expect(clusters.getClustersForHost("host1")).andReturn(Collections.singleton(cluster));
+  expect(cluster.getDesiredStackVersion()).andReturn(stack);
+  expect(stack.getStackName()).andReturn("stackName");
+  expect(stack.getStackVersion()).andReturn("stackVersion");
+  expect(metaInfo.getComponentToService("stackName","stackVersion","component1")).andReturn("service1");
+  expect(cluster.getService("service1")).andReturn(service);
+  expect(service.getServiceComponent("component1")).andReturn(component);
+  expect(component.getName()).andReturn("component1").anyTimes();
+  expect(component.getServiceComponentHost("host1")).andThrow(new ServiceComponentHostNotFoundException("cluster1","service1","component1","host1"));
+  replay(injector,clusters,cluster,host,stack,metaInfo,service,component);
+  AmbariManagementController controller=new AmbariManagementControllerImpl(null,clusters,injector);
+  Class<?> c=controller.getClass();
+  Field f=c.getDeclaredField("ambariMetaInfo");
+  f.setAccessible(true);
+  f.set(controller,metaInfo);
+  try {
+    controller.getHostComponents(setRequests);
+    fail("expected ServiceComponentHostNotFoundException");
+  }
+ catch (  ServiceComponentHostNotFoundException e) {
+  }
+  assertSame(controller,controllerCapture.getValue());
+  verify(injector,clusters,cluster,host,stack,metaInfo,service,component);
+}

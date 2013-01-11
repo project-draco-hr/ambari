@@ -1,17 +1,33 @@
 {
   if (request.getClusterName() == null || request.getClusterName().isEmpty()) {
-    throw new AmbariException("Invalid arguments, cluster name should not" + " be null");
+    throw new IllegalArgumentException("Invalid arguments, cluster name should not be null");
   }
-  final Cluster cluster=clusters.getCluster(request.getClusterName());
+  final Cluster cluster;
+  try {
+    cluster=clusters.getCluster(request.getClusterName());
+  }
+ catch (  ClusterNotFoundException e) {
+    throw new ParentObjectNotFoundException("Parent Cluster resource doesn't exist",e);
+  }
+  if (request.getHostname() != null) {
+    try {
+      if (!clusters.getClustersForHost(request.getHostname()).contains(cluster)) {
+        throw new ParentObjectNotFoundException("Parent Host resource doesn't exist",new HostNotFoundException(request.getClusterName(),request.getHostname()));
+      }
+    }
+ catch (    HostNotFoundException e) {
+      throw new ParentObjectNotFoundException("Parent Host resource doesn't exist",new HostNotFoundException(request.getClusterName(),request.getHostname()));
+    }
+  }
   if (request.getComponentName() != null) {
     if (request.getServiceName() == null || request.getServiceName().isEmpty()) {
       StackId stackId=cluster.getDesiredStackVersion();
       String serviceName=ambariMetaInfo.getComponentToService(stackId.getStackName(),stackId.getStackVersion(),request.getComponentName());
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Looking up service name for component" + ", componentName=" + request.getComponentName() + ", serviceName="+ serviceName);
+        LOG.debug("Looking up service name for component" + ", componentName=" + request.getComponentName() + ", serviceName="+ serviceName+ ", stackInfo="+ stackId.getStackId());
       }
       if (serviceName == null || serviceName.isEmpty()) {
-        throw new AmbariException("Could not find service for component" + ", componentName=" + request.getComponentName() + ", clusterName="+ cluster.getClusterName()+ ", stackInfo="+ stackId.getStackId());
+        throw new ServiceComponentHostNotFoundException(cluster.getClusterName(),null,request.getComponentName(),request.getHostname());
       }
       request.setServiceName(serviceName);
     }
@@ -57,6 +73,11 @@
           response.add(r);
         }
  catch (        ServiceComponentHostNotFoundException e) {
+          if (request.getServiceName() != null && request.getComponentName() != null) {
+            throw new ServiceComponentHostNotFoundException(cluster.getClusterName(),request.getServiceName(),request.getComponentName(),request.getHostname());
+          }
+ else {
+          }
         }
       }
  else {

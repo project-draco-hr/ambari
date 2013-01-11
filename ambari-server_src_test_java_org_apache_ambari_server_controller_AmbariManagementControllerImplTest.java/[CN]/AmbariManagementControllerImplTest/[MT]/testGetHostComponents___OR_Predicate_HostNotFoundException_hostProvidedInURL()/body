@@ -1,0 +1,33 @@
+{
+  Injector injector=createStrictMock(Injector.class);
+  Capture<AmbariManagementController> controllerCapture=new Capture<AmbariManagementController>();
+  Clusters clusters=createNiceMock(Clusters.class);
+  StackId stack=createNiceMock(StackId.class);
+  AmbariMetaInfo metaInfo=createNiceMock(AmbariMetaInfo.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  ServiceComponentHostRequest request1=new ServiceComponentHostRequest("cluster1",null,"component1","host1",Collections.<String,String>emptyMap(),null);
+  ServiceComponentHostRequest request2=new ServiceComponentHostRequest("cluster1",null,"component2","host1",Collections.<String,String>emptyMap(),null);
+  ServiceComponentHostRequest request3=new ServiceComponentHostRequest("cluster1",null,"component3","host1",Collections.<String,String>emptyMap(),null);
+  Set<ServiceComponentHostRequest> setRequests=new HashSet<ServiceComponentHostRequest>();
+  setRequests.add(request1);
+  setRequests.add(request2);
+  setRequests.add(request3);
+  injector.injectMembers(capture(controllerCapture));
+  expect(injector.getInstance(Gson.class)).andReturn(null);
+  expect(clusters.getCluster("cluster1")).andReturn(cluster);
+  expect(clusters.getClustersForHost("host1")).andThrow(new HostNotFoundException("host1"));
+  replay(injector,clusters,cluster,stack,metaInfo);
+  AmbariManagementController controller=new AmbariManagementControllerImpl(null,clusters,injector);
+  Class<?> c=controller.getClass();
+  Field f=c.getDeclaredField("ambariMetaInfo");
+  f.setAccessible(true);
+  f.set(controller,metaInfo);
+  try {
+    controller.getHostComponents(setRequests);
+    fail("expected exception");
+  }
+ catch (  AmbariException e) {
+  }
+  assertSame(controller,controllerCapture.getValue());
+  verify(injector,clusters,cluster,stack,metaInfo);
+}

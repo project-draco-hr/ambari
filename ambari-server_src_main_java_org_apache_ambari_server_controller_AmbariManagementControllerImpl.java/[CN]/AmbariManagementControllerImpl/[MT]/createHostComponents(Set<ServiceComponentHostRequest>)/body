@@ -9,7 +9,13 @@
     if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty() || request.getHostname() == null || request.getHostname().isEmpty()) {
       throw new IllegalArgumentException("Invalid arguments," + " clustername, componentname and hostname should not be null" + " when trying to create a hostcomponent");
     }
-    Cluster cluster=clusters.getCluster(request.getClusterName());
+    Cluster cluster;
+    try {
+      cluster=clusters.getCluster(request.getClusterName());
+    }
+ catch (    ClusterNotFoundException e) {
+      throw new ParentObjectNotFoundException("Attempted to add a host_component to a cluster which doesn't exist: ",e);
+    }
     if (request.getServiceName() == null || request.getServiceName().isEmpty()) {
       StackId stackId=cluster.getDesiredStackVersion();
       String serviceName=ambariMetaInfo.getComponentToService(stackId.getStackName(),stackId.getStackVersion(),request.getComponentName());
@@ -34,7 +40,7 @@
       hostComponentNames.get(request.getClusterName()).get(request.getServiceName()).put(request.getComponentName(),new HashSet<String>());
     }
     if (hostComponentNames.get(request.getClusterName()).get(request.getServiceName()).get(request.getComponentName()).contains(request.getHostname())) {
-      duplicates.add(request.getServiceName() + "-" + request.getComponentName()+ "-"+ request.getHostname());
+      duplicates.add("[clusterName=" + request.getClusterName() + ", hostName="+ request.getHostname()+ ", componentName="+ request.getComponentName()+ ']');
       continue;
     }
     hostComponentNames.get(request.getClusterName()).get(request.getServiceName()).get(request.getComponentName()).add(request.getHostname());
@@ -44,9 +50,21 @@
         throw new IllegalArgumentException("Invalid desired state" + " only INIT state allowed during creation" + ", providedDesiredState="+ request.getDesiredState());
       }
     }
-    Service s=cluster.getService(request.getServiceName());
+    Service s;
+    try {
+      s=cluster.getService(request.getServiceName());
+    }
+ catch (    ServiceNotFoundException e) {
+      throw new IllegalArgumentException("The service[" + request.getServiceName() + "] associated with the component["+ request.getComponentName()+ "] doesn't exist for the cluster["+ request.getClusterName()+ "]");
+    }
     ServiceComponent sc=s.getServiceComponent(request.getComponentName());
-    Host host=clusters.getHost(request.getHostname());
+    Host host;
+    try {
+      host=clusters.getHost(request.getHostname());
+    }
+ catch (    HostNotFoundException e) {
+      throw new ParentObjectNotFoundException("Attempted to add a host_component to a host that doesn't exist: ",e);
+    }
     Set<Cluster> mappedClusters=clusters.getClustersForHost(request.getHostname());
     boolean validCluster=false;
     if (LOG.isDebugEnabled()) {
@@ -62,12 +80,12 @@
       }
     }
     if (!validCluster) {
-      throw new AmbariException("Invalid request as host does not belong to" + " given cluster" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", hostname="+ request.getHostname());
+      throw new ParentObjectNotFoundException("Attempted to add a host_component to a host that doesn't exist: " + "clusterName=" + request.getClusterName() + ", hostName="+ request.getHostname());
     }
     try {
       ServiceComponentHost sch=sc.getServiceComponentHost(request.getHostname());
       if (sch != null) {
-        duplicates.add(request.getServiceName() + "-" + request.getComponentName()+ "-"+ request.getHostname());
+        duplicates.add("[clusterName=" + request.getClusterName() + ", hostName="+ request.getHostname()+ ", componentName="+ request.getComponentName()+ ']');
         continue;
       }
     }
@@ -87,7 +105,14 @@
       first=false;
       names.append(hName);
     }
-    throw new IllegalArgumentException("Invalid request" + " contains duplicates within request or" + " already existing host components"+ ", duplicateServiceComponentHostNames="+ names.toString());
+    String msg;
+    if (duplicates.size() == 1) {
+      msg="Attempted to create a host_component which already exists: ";
+    }
+ else {
+      msg="Attempted to create host_component's which already exist: ";
+    }
+    throw new DuplicateResourceException(msg + names.toString());
   }
   for (  ServiceComponentHostRequest request : requests) {
     Cluster cluster=clusters.getCluster(request.getClusterName());
@@ -100,9 +125,6 @@
     if (request.getDesiredState() != null && !request.getDesiredState().isEmpty()) {
       State state=State.valueOf(request.getDesiredState());
       sch.setDesiredState(state);
-    }
- else {
-      sch.setDesiredState(sc.getDesiredState());
     }
     sch.setDesiredStackVersion(sc.getDesiredStackVersion());
     Map<String,Config> configs=new HashMap<String,Config>();

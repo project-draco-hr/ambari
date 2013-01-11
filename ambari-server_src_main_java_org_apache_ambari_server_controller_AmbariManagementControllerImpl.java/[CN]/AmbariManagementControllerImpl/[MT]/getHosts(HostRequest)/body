@@ -1,21 +1,43 @@
 {
+  List<Host> hosts;
   Set<HostResponse> response=new HashSet<HostResponse>();
-  List<Host> hosts=null;
-  if (request.getHostname() != null) {
-    Host h=clusters.getHost(request.getHostname());
-    hosts=new ArrayList<Host>();
-    hosts.add(h);
+  Cluster cluster=null;
+  String clusterName=request.getClusterName();
+  String hostName=request.getHostname();
+  if (clusterName != null) {
+    try {
+      cluster=clusters.getCluster(clusterName);
+    }
+ catch (    ObjectNotFoundException e) {
+      throw new ParentObjectNotFoundException("Parent Cluster resource doesn't exist",e);
+    }
   }
- else {
+  if (hostName == null) {
     hosts=clusters.getHosts();
   }
+ else {
+    hosts=new ArrayList<Host>();
+    hosts.add(clusters.getHost(request.getHostname()));
+  }
   for (  Host h : hosts) {
-    HostResponse r=h.convertToResponse();
-    Set<Cluster> cs=clusters.getClustersForHost(h.getHostName());
-    for (    Cluster c : cs) {
-      r.getClusterNames().add(c.getClusterName());
+    if (clusterName != null) {
+      if (clusters.getClustersForHost(h.getHostName()).contains(cluster)) {
+        HostResponse r=h.convertToResponse();
+        r.setClusterName(clusterName);
+        response.add(r);
+      }
+ else       if (hostName != null) {
+        throw new HostNotFoundException(hostName);
+      }
     }
-    response.add(r);
+ else {
+      HostResponse r=h.convertToResponse();
+      Set<Cluster> clustersForHost=clusters.getClustersForHost(h.getHostName());
+      if (clustersForHost != null && clustersForHost.size() != 0) {
+        r.setClusterName(clustersForHost.iterator().next().getClusterName());
+      }
+      response.add(r);
+    }
   }
   return response;
 }

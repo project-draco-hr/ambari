@@ -9,7 +9,13 @@
     if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty()) {
       throw new IllegalArgumentException("Invalid arguments" + ", clustername and componentname should be" + " non-null and non-empty when trying to create a"+ " component");
     }
-    Cluster cluster=clusters.getCluster(request.getClusterName());
+    Cluster cluster;
+    try {
+      cluster=clusters.getCluster(request.getClusterName());
+    }
+ catch (    ClusterNotFoundException e) {
+      throw new ParentObjectNotFoundException("Attempted to add a component to a cluster which doesn't exist:",e);
+    }
     if (request.getServiceName() == null || request.getServiceName().isEmpty()) {
       StackId stackId=cluster.getDesiredStackVersion();
       String serviceName=ambariMetaInfo.getComponentToService(stackId.getStackName(),stackId.getStackVersion(),request.getComponentName());
@@ -31,7 +37,7 @@
       componentNames.get(request.getClusterName()).put(request.getServiceName(),new HashSet<String>());
     }
     if (componentNames.get(request.getClusterName()).get(request.getServiceName()).contains(request.getComponentName())) {
-      duplicates.add(request.getServiceName() + "-" + request.getComponentName());
+      duplicates.add("[clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ "]");
       continue;
     }
     componentNames.get(request.getClusterName()).get(request.getServiceName()).add(request.getComponentName());
@@ -41,11 +47,17 @@
         throw new IllegalArgumentException("Invalid desired state" + " only INIT state allowed during creation" + ", providedDesiredState="+ request.getDesiredState());
       }
     }
-    Service s=cluster.getService(request.getServiceName());
+    Service s;
+    try {
+      s=cluster.getService(request.getServiceName());
+    }
+ catch (    ServiceNotFoundException e) {
+      throw new ParentObjectNotFoundException("Attempted to add a component to a service which doesn't exist:",e);
+    }
     try {
       ServiceComponent sc=s.getServiceComponent(request.getComponentName());
       if (sc != null) {
-        duplicates.add(request.getServiceName() + "-" + request.getComponentName());
+        duplicates.add("[clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ "]");
         continue;
       }
     }
@@ -69,7 +81,14 @@
       first=false;
       names.append(cName);
     }
-    throw new IllegalArgumentException("Invalid request" + " contains duplicates within request or" + " already existing service components"+ ", duplicateServiceComponentsNames="+ names.toString());
+    String msg;
+    if (duplicates.size() == 1) {
+      msg="Attempted to create a component which already exists: ";
+    }
+ else {
+      msg="Attempted to create components which already exist: ";
+    }
+    throw new DuplicateResourceException(msg + names.toString());
   }
   for (  ServiceComponentRequest request : requests) {
     Cluster cluster=clusters.getCluster(request.getClusterName());
