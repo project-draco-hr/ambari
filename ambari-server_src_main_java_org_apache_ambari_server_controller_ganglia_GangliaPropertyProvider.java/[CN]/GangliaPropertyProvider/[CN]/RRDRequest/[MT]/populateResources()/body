@@ -1,20 +1,44 @@
 {
   String spec=getSpec(clusterName,clusterSet,hostSet,metrics.keySet(),temporalInfo);
-  Collection<Resource> populatedResources=new HashSet<Resource>();
+  BufferedReader reader=null;
   try {
-    List<GangliaMetric> gangliaMetrics=new ObjectMapper().readValue(getStreamProvider().readFrom(spec),new TypeReference<List<GangliaMetric>>(){
-    }
-);
-    if (gangliaMetrics != null) {
-      for (      GangliaMetric gangliaMetric : gangliaMetrics) {
-        ResourceKey key=new ResourceKey(gangliaMetric.getHost_name(),gangliaMetric.getCluster_name());
-        Set<Resource> resourceSet=resources.get(key);
-        if (resourceSet != null) {
-          for (          Resource resource : resourceSet) {
-            populateResource(resource,gangliaMetric);
-          }
+    reader=new BufferedReader(new InputStreamReader(getStreamProvider().readFrom(spec)));
+    int startTime=convertToNumber(reader.readLine()).intValue();
+    String dsName=reader.readLine();
+    while (!dsName.equals("[AMBARI_END]")) {
+      GangliaMetric metric=new GangliaMetric();
+      List<GangliaMetric.TemporalMetric> listTemporalMetrics=new ArrayList<GangliaMetric.TemporalMetric>();
+      metric.setDs_name(dsName);
+      metric.setCluster_name(reader.readLine());
+      metric.setHost_name(reader.readLine());
+      metric.setMetric_name(reader.readLine());
+      int time=convertToNumber(reader.readLine()).intValue();
+      int step=convertToNumber(reader.readLine()).intValue();
+      String val=reader.readLine();
+      while (!val.equals("[AMBARI_DP_END]")) {
+        listTemporalMetrics.add(new GangliaMetric.TemporalMetric(convertToNumber(val),time));
+        time+=step;
+        val=reader.readLine();
+      }
+      Number[][] datapointsArray=new Number[listTemporalMetrics.size()][2];
+      for (int i=0; i < listTemporalMetrics.size(); ++i) {
+        GangliaMetric.TemporalMetric m=listTemporalMetrics.get(i);
+        datapointsArray[i][0]=m.getValue();
+        datapointsArray[i][1]=m.getTime();
+      }
+      metric.setDatapoints(datapointsArray);
+      ResourceKey key=new ResourceKey(metric.getHost_name(),metric.getCluster_name());
+      Set<Resource> resourceSet=resources.get(key);
+      if (resourceSet != null) {
+        for (        Resource resource : resourceSet) {
+          populateResource(resource,metric);
         }
       }
+      dsName=reader.readLine();
+    }
+    int endTime=convertToNumber(reader.readLine()).intValue();
+    if (LOG.isInfoEnabled()) {
+      LOG.info("Ganglia resource population time: " + (endTime - startTime));
     }
   }
  catch (  IOException e) {
@@ -22,5 +46,17 @@
       LOG.error("Caught exception getting Ganglia metrics : spec=" + spec,e);
     }
   }
-  return populatedResources;
+ finally {
+    if (reader != null) {
+      try {
+        reader.close();
+      }
+ catch (      IOException e) {
+        if (LOG.isWarnEnabled()) {
+          LOG.warn("Unable to close http input steam : spec=" + spec,e);
+        }
+      }
+    }
+  }
+  return Collections.emptySet();
 }

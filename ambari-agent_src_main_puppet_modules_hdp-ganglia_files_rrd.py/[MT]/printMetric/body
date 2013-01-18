@@ -1,4 +1,4 @@
-def printMetric(clusterName, hostName, metricName, file, cf, start, end, resolution):
+def printMetric(clusterName, hostName, metricName, file, cf, start, end, resolution, pointInTime):
     if clusterName.endswith('rrds'):
         clusterName = ''
     args = [file, cf]
@@ -9,21 +9,33 @@ def printMetric(clusterName, hostName, metricName, file, cf, start, end, resolut
     if (resolution is not None):
         args.extend(['-r', resolution])
     rrdMetric = rrdtool.fetch(args)
-    time = rrdMetric[0][0]
-    step = rrdMetric[0][2]
-    sys.stdout.write((((((((('  {\n    "ds_name":"' + rrdMetric[1][0]) + '",\n    "cluster_name":"') + clusterName) + '",\n    "host_name":"') + hostName) + '",\n    "metric_name":"') + metricName) + '",\n'))
-    firstDP = True
-    sys.stdout.write('    "datapoints":[\n')
-    for tuple in rrdMetric[2]:
-        if (tuple[0] is not None):
-            if (not firstDP):
-                sys.stdout.write(',\n')
-            firstDP = False
-            sys.stdout.write('      [')
-            sys.stdout.write(str(tuple[0]))
-            sys.stdout.write(',')
-            sys.stdout.write(str(time))
-            sys.stdout.write(']')
-        time = (time + step)
-    sys.stdout.write('\n    ]\n  }')
+    sys.stdout.write(rrdMetric[1][0])
+    sys.stdout.write('\n')
+    sys.stdout.write(clusterName)
+    sys.stdout.write('\n')
+    sys.stdout.write(hostName)
+    sys.stdout.write('\n')
+    sys.stdout.write(metricName)
+    sys.stdout.write('\n')
+    sys.stdout.write(str(rrdMetric[0][0]))
+    sys.stdout.write('\n')
+    sys.stdout.write(str(rrdMetric[0][2]))
+    sys.stdout.write('\n')
+    if (not pointInTime):
+        for tuple in rrdMetric[2]:
+            if (tuple[0] is not None):
+                sys.stdout.write(str(tuple[0]))
+                sys.stdout.write('\n')
+    else:
+        value = None
+        idx = (-1)
+        tuple = rrdMetric[2]
+        tupleLastIdx = (len(tuple) * (-1))
+        while ((value is None) and (idx >= tupleLastIdx)):
+            value = tuple[idx][0]
+            idx -= 1
+        if (value is not None):
+            sys.stdout.write(str(value))
+            sys.stdout.write('\n')
+    sys.stdout.write('[AMBARI_DP_END]\n')
     return

@@ -3,10 +3,11 @@ import cgi
 import os
 import rrdtool
 import sys
-sys.stdout.write('Content-type: application/json\n\n')
+import time
+sys.stdout.write('Content-type: text/plain\n\n')
+sys.stdout.write(str(time.mktime(time.gmtime())))
+sys.stdout.write('\n')
 queryString = dict(cgi.parse_qsl(os.environ['QUERY_STRING']))
-sys.stdout.write('[\n')
-firstMetric = True
 if ('m' in queryString):
     metricParts = queryString['m'].split(',')
 else:
@@ -38,6 +39,10 @@ if ('cf' in queryString):
     cf = queryString['cf']
 else:
     cf = 'AVERAGE'
+if ('pt' in queryString):
+    pointInTime = True
+else:
+    pointInTime = False
 for cluster in clusterParts:
     for (path, dirs, files) in os.walk((rrdPath + cluster)):
         pathParts = path.split('/')
@@ -45,9 +50,8 @@ for cluster in clusterParts:
             for file in files:
                 for metric in metricParts:
                     if file.endswith((metric + '.rrd')):
-                        if (not firstMetric):
-                            sys.stdout.write(',\n')
-                        printMetric(pathParts[(-2)], pathParts[(-1)], file[:(-4)], os.path.join(path, file), cf, start, end, resolution)
-                        firstMetric = False
-sys.stdout.write('\n]\n')
+                        printMetric(pathParts[(-2)], pathParts[(-1)], file[:(-4)], os.path.join(path, file), cf, start, end, resolution, pointInTime)
+sys.stdout.write('[AMBARI_END]\n')
+sys.stdout.write(str(time.mktime(time.gmtime())))
+sys.stdout.write('\n')
 sys.stdout.flush
