@@ -1,0 +1,34 @@
+@patch('os.kill')
+@patch('os.path.exists')
+@patch('__builtin__.open')
+@patch('subprocess.Popen')
+@patch.object(ambari_server, 'print_info_msg')
+@patch.object(ambari_server, 'get_conf_dir')
+@patch.object(ambari_server, 'find_jdk')
+@patch.object(ambari_server, 'print_error_msg')
+@patch.object(ambari_server, 'check_postgre_up')
+@patch.object(ambari_server, 'check_iptables')
+def test_start(self, check_iptables_mock, check_postgre_up_mock, print_error_msg_mock, find_jdk_mock, get_conf_dir_mock, print_info_msg_mock, popenMock, openMock, pexistsMock, killMock):
+    out = StringIO.StringIO()
+    sys.stdout = out
+    args = MagicMock()
+    f = MagicMock()
+    f.readline.return_value = 42
+    openMock.return_value = f
+    pexistsMock.return_value = True
+    rcode = ambari_server.start(args)
+    self.assertTrue(killMock.called)
+    self.assertEqual(None, rcode)
+    pexistsMock.return_value = False
+    find_jdk_mock.return_value = None
+    rcode = ambari_server.start(args)
+    self.assertEqual((-1), rcode)
+    find_jdk_mock.return_value = 'somewhere'
+    check_postgre_up_mock.return_value = 0
+    check_iptables_mock.return_value = (0, None)
+    p = MagicMock()
+    popenMock.return_value = p
+    rcode = ambari_server.start(args)
+    self.assertEqual(None, rcode)
+    self.assertTrue(f.write.called)
+    sys.stdout = sys.__stdout__

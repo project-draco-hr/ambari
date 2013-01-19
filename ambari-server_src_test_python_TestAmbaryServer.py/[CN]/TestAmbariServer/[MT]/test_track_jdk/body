@@ -1,0 +1,20 @@
+@patch('urllib2.urlopen')
+@patch('__builtin__.open')
+@patch.object(ambari_server, 'dlprogress')
+def test_track_jdk(self, dlprogress_mock, openMock, urlopenMock):
+    u = MagicMock()
+    u.info.return_value = {'Content-Length': '24576', }
+    chunks = [None, 'second', 'first']
+
+    def side_effect(*args, **kwargs):
+        return chunks.pop()
+    u.read.side_effect = side_effect
+    urlopenMock.return_value = u
+    f = MagicMock()
+    openMock.return_value = f
+    ambari_server.track_jdk('base', 'url', 'local')
+    self.assertEqual(0, len(chunks))
+    self.assertTrue(f.write.called)
+    self.assertTrue(f.flush.called)
+    self.assertTrue(f.close.called)
+    self.assertEqual(2, len(dlprogress_mock.call_args_list))
