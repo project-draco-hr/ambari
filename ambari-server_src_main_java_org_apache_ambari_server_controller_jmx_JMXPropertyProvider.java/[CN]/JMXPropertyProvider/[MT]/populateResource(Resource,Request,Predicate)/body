@@ -1,5 +1,5 @@
 {
-  Set<String> ids=PropertyHelper.getRequestPropertyIds(propertyIds,request,predicate);
+  Set<String> ids=getRequestPropertyIds(request,predicate);
   if (ids.isEmpty()) {
     return true;
   }
@@ -13,8 +13,7 @@
  else {
     hostName=(String)resource.getPropertyValue(hostNamePropertyId);
   }
-  Map<String,PropertyInfo> metrics=componentMetrics.get(componentName);
-  if (metrics == null || hostName == null || port == null) {
+  if (getComponentMetrics().get(componentName) == null || hostName == null || port == null) {
     return true;
   }
   String spec=getSpec(hostName + ":" + port);
@@ -30,44 +29,48 @@
       }
     }
     for (    String propertyId : ids) {
-      PropertyInfo propertyInfo=metrics.get(propertyId);
-      if (propertyInfo != null && propertyInfo.isPointInTime()) {
-        String property=propertyInfo.getPropertyId();
-        String category="";
-        List<String> keyList=new LinkedList<String>();
-        int keyStartIndex=property.indexOf('[',0);
-        int firstKeyIndex=keyStartIndex > -1 ? keyStartIndex : property.length();
-        while (keyStartIndex > -1) {
-          int keyEndIndex=property.indexOf(']',keyStartIndex);
-          if (keyEndIndex > -1 & keyEndIndex > keyStartIndex) {
-            keyList.add(property.substring(keyStartIndex + 1,keyEndIndex));
-            keyStartIndex=property.indexOf('[',keyEndIndex);
-          }
+      Map<String,PropertyInfo> propertyInfoMap=getPropertyInfoMap(componentName,propertyId);
+      for (      Map.Entry<String,PropertyInfo> entry : propertyInfoMap.entrySet()) {
+        PropertyInfo propertyInfo=entry.getValue();
+        propertyId=entry.getKey();
+        if (propertyInfo.isPointInTime()) {
+          String property=propertyInfo.getPropertyId();
+          String category="";
+          List<String> keyList=new LinkedList<String>();
+          int keyStartIndex=property.indexOf('[',0);
+          int firstKeyIndex=keyStartIndex > -1 ? keyStartIndex : property.length();
+          while (keyStartIndex > -1) {
+            int keyEndIndex=property.indexOf(']',keyStartIndex);
+            if (keyEndIndex > -1 & keyEndIndex > keyStartIndex) {
+              keyList.add(property.substring(keyStartIndex + 1,keyEndIndex));
+              keyStartIndex=property.indexOf('[',keyEndIndex);
+            }
  else {
-            keyStartIndex=-1;
-          }
-        }
-        int dotIndex=property.lastIndexOf('.',firstKeyIndex - 1);
-        if (dotIndex != -1) {
-          category=property.substring(0,dotIndex);
-          property=property.substring(dotIndex + 1,firstKeyIndex);
-        }
-        Map<String,Object> properties=categories.get(category);
-        if (properties != null && properties.containsKey(property)) {
-          Object value=properties.get(property);
-          if (keyList.size() > 0 && value instanceof Map) {
-            Map map=(Map)value;
-            for (            String key : keyList) {
-              value=map.get(key);
-              if (value instanceof Map) {
-                map=(Map)value;
-              }
- else {
-                break;
-              }
+              keyStartIndex=-1;
             }
           }
-          resource.setProperty(propertyId,value);
+          int dotIndex=property.lastIndexOf('.',firstKeyIndex - 1);
+          if (dotIndex != -1) {
+            category=property.substring(0,dotIndex);
+            property=property.substring(dotIndex + 1,firstKeyIndex);
+          }
+          Map<String,Object> properties=categories.get(category);
+          if (properties != null && properties.containsKey(property)) {
+            Object value=properties.get(property);
+            if (keyList.size() > 0 && value instanceof Map) {
+              Map map=(Map)value;
+              for (              String key : keyList) {
+                value=map.get(key);
+                if (value instanceof Map) {
+                  map=(Map)value;
+                }
+ else {
+                  break;
+                }
+              }
+            }
+            resource.setProperty(propertyId,value);
+          }
         }
       }
     }
