@@ -1,13 +1,20 @@
 {
-  Cluster cluster=getCluster(clusterName);
-  if (!cluster.canBeRemoved()) {
-    throw new AmbariException("Could not delete cluster" + ", clusterName=" + clusterName);
+  loadClustersAndHosts();
+  w.lock();
+  try {
+    Cluster cluster=getCluster(clusterName);
+    if (!cluster.canBeRemoved()) {
+      throw new AmbariException("Could not delete cluster" + ", clusterName=" + clusterName);
+    }
+    LOG.info("Deleting cluster " + cluster.getClusterName());
+    cluster.delete();
+    for (    Set<Cluster> clusterSet : hostClusterMap.values()) {
+      clusterSet.remove(cluster);
+    }
+    clusterHostMap.remove(cluster.getClusterName());
+    clusters.remove(clusterName);
   }
-  LOG.info("Deleting cluster " + cluster.getClusterName());
-  cluster.delete();
-  for (  Set<Cluster> clusterSet : hostClusterMap.values()) {
-    clusterSet.remove(cluster);
+  finally {
+    w.unlock();
   }
-  clusterHostMap.remove(cluster.getClusterName());
-  clusters.remove(clusterName);
 }
