@@ -3,20 +3,24 @@
   if (ids.isEmpty()) {
     return true;
   }
-  String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
   String componentName=(String)resource.getPropertyValue(componentNamePropertyId);
-  String port=jmxHostProvider.getPort(clusterName,componentName);
-  String hostName;
-  if (hostNamePropertyId == null) {
-    hostName=jmxHostProvider.getHostName(clusterName,componentName);
-  }
- else {
-    hostName=(String)resource.getPropertyValue(hostNamePropertyId);
-  }
-  if (getComponentMetrics().get(componentName) == null || hostName == null || port == null) {
+  if (getComponentMetrics().get(componentName) == null) {
     return true;
   }
-  String spec=getSpec(hostName + ":" + port);
+  String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
+  String port=getPort(clusterName,componentName);
+  if (port == null) {
+    String error="Unable to get JMX metrics.  No port value for " + componentName;
+    logError(error,null);
+    throw new SystemException(error,null);
+  }
+  String hostName=getHost(resource,clusterName,componentName);
+  if (hostName == null) {
+    String error="Unable to get JMX metrics.  No host name for " + componentName;
+    logError(error,null);
+    throw new SystemException(error,null);
+  }
+  String spec=getSpec(hostName,port);
   InputStream in=null;
   try {
     in=streamProvider.readFrom(spec);
@@ -76,9 +80,7 @@
     }
   }
  catch (  IOException e) {
-    if (LOG.isErrorEnabled()) {
-      LOG.error("Caught exception getting JMX metrics : spec=" + spec,e);
-    }
+    logError(spec,e);
   }
  finally {
     if (in != null) {
@@ -86,9 +88,7 @@
         in.close();
       }
  catch (      IOException e) {
-        if (LOG.isWarnEnabled()) {
-          LOG.warn("Unable to close http input steam : spec=" + spec,e);
-        }
+        logError("Unable to close http input steam : spec=" + spec,e);
       }
     }
   }
