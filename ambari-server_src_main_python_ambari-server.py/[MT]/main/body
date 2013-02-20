@@ -1,9 +1,10 @@
 def main():
-    parser = optparse.OptionParser(usage='usage: %prog [options] action')
+    parser = optparse.OptionParser(usage='usage: %prog [options] action [stack_id]')
     parser.add_option('-d', '--postgredbname', default='ambari', help='Database name in postgresql')
     parser.add_option('-f', '--init-script-file', default='/var/lib/ambari-server/resources/Ambari-DDL-Postgres-CREATE.sql', help='File with setup script')
     parser.add_option('-r', '--drop-script-file', default='/var/lib/ambari-server/resources/Ambari-DDL-Postgres-DROP.sql', help='File with drop script')
     parser.add_option('-u', '--upgrade-script-file', default='/var/lib/ambari-server/resources/upgrade/ddl/Ambari-DDL-Postgres-UPGRADE-1.2.1.sql', help='File with upgrade script')
+    parser.add_option('-t', '--upgrade-stack-script-file', default='/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-Postgres-UPGRADE_STACK.sql', help='File with stack upgrade script')
     parser.add_option('-j', '--java-home', default=None, help='Use specified java_home.  Must be valid on all hosts')
     parser.add_option('-v', '--verbose', action='store_true', dest='verbose', default=False, help='Print verbose status messages')
     parser.add_option('-s', '--silent', action='store_true', dest='silent', default=False, help='Silently accepts default prompt values')
@@ -12,10 +13,17 @@ def main():
     VERBOSE = options.verbose
     global SILENT
     SILENT = options.silent
-    if (not (len(args) == 1)):
+    if (len(args) == 0):
         print parser.print_help()
-        parser.error('Invalid number of arguments')
+        parser.error('No action entered')
     action = args[0]
+    if (action == UPGRADE_STACK_ACTION):
+        args_number_required = 2
+    else:
+        args_number_required = 1
+    if (len(args) < args_number_required):
+        print parser.print_help()
+        parser.error(((('Invalid number of arguments. Entered: ' + str(len(args))) + ', required: ') + str(args_number_required)))
     if (action == SETUP_ACTION):
         setup(options)
     elif (action == START_ACTION):
@@ -26,5 +34,8 @@ def main():
         reset(options)
     elif (action == UPGRADE_ACTION):
         upgrade(options)
+    elif (action == UPGRADE_STACK_ACTION):
+        stack_id = args[1]
+        upgrade_stack(options, stack_id)
     else:
         parser.error('Invalid action')
