@@ -8,6 +8,7 @@ def download_jdk(args):
         return 0
     if (args.java_home and os.path.exists(args.java_home)):
         print_warning_msg((('JAVA_HOME ' + args.java_home) + ' must be valid on ALL hosts'))
+        print_warning_msg('Please make sure the JCE Unlimited Strength Jurisdiction Policy Files 6, are dwonloaded on all hosts')
         write_property(JAVA_HOME_PROPERTY, args.java_home)
         return 0
     properties = None
@@ -55,10 +56,10 @@ def download_jdk(args):
     else:
         print ('JDK already exists using ' + dest_file)
     try:
-        out = install_jdk(dest_file)
+        (out, ok) = install_jdk(dest_file)
         jdk_version = re.search('Creating (jdk.*)/jre', out).group(1)
     except Exception as e:
-        print ('Installation of JDK was failed: %s\n' % e.message)
+        print ('Installation of JDK has failed: %s\n' % e.message)
         file_exists = os.path.isfile(dest_file)
         if file_exists:
             ok = get_YN_input((('JDK found at ' + dest_file) + '. Would you like to re-download the JDK [y/n] (y)? '), True)
@@ -69,7 +70,7 @@ def download_jdk(args):
                 track_jdk(JDK_LOCAL_FILENAME, jdk_url, dest_file)
                 print ('Successfully re-downloaded JDK distribution to ' + dest_file)
                 try:
-                    out = install_jdk(dest_file)
+                    (out, ok) = install_jdk(dest_file)
                     jdk_version = re.search('Creating (jdk.*)/jre', out).group(1)
                 except Exception as e:
                     print ('Installation of JDK was failed: %s\n' % e.message)
@@ -80,4 +81,7 @@ def download_jdk(args):
             return (-1)
     print 'Successfully installed JDK to {0}/{1}'.format(JDK_INSTALL_DIR, jdk_version)
     write_property(JAVA_HOME_PROPERTY, '{0}/{1}'.format(JDK_INSTALL_DIR, jdk_version))
+    jce_download = download_jce_policy(properties, ok)
+    if (jce_download == (-1)):
+        print 'JCE Policy files are required for secure HDP setup. Please ensure  all hosts have the JCE unlimited strength policy 6, files.'
     return 0
