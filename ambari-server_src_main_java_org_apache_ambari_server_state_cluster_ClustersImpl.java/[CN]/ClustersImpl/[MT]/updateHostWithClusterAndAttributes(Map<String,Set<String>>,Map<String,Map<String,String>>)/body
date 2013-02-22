@@ -1,0 +1,46 @@
+{
+  loadClustersAndHosts();
+  w.lock();
+  try {
+    if (hostClusters != null) {
+      Map<String,Host> hostMap=getHostsMap(hostClusters.keySet());
+      Set<String> clusterNames=new HashSet<String>();
+      for (      Set<String> cSet : hostClusters.values()) {
+        clusterNames.addAll(cSet);
+      }
+      Map<String,Cluster> clusterMap=getClustersMap(clusterNames);
+      for (      String hostname : hostClusters.keySet()) {
+        Host host=hostMap.get(hostname);
+        Map<String,String> attributes=hostAttributes.get(hostname);
+        if (attributes != null && !attributes.isEmpty()) {
+          host.setHostAttributes(attributes);
+        }
+        Set<String> hostClusterNames=hostClusters.get(hostname);
+        for (        String clusterName : hostClusterNames) {
+          if (clusterName != null && !clusterName.isEmpty()) {
+            Cluster cluster=clusterMap.get(clusterName);
+            for (            Cluster c : hostClusterMap.get(hostname)) {
+              if (c.getClusterName().equals(clusterName)) {
+                throw new DuplicateResourceException("Attempted to create a host which already exists: clusterName=" + clusterName + ", hostName="+ hostname);
+              }
+            }
+            if (!isOsSupportedByClusterStack(cluster,host)) {
+              String message="Trying to map host to cluster where stack does not" + " support host's os type" + ", clusterName=" + clusterName + ", clusterStackId="+ cluster.getDesiredStackVersion().getStackId()+ ", hostname="+ hostname+ ", hostOsType="+ host.getOsType();
+              LOG.warn(message);
+              throw new AmbariException(message);
+            }
+            mapHostClusterEntities(hostname,cluster.getClusterId());
+            hostClusterMap.get(hostname).add(cluster);
+            clusterHostMap.get(clusterName).add(host);
+            if (LOG.isDebugEnabled()) {
+              LOG.debug("Mapping a host to a cluster" + ", clusterName=" + clusterName + ", clusterId="+ cluster.getClusterId()+ ", hostname="+ hostname);
+            }
+          }
+        }
+      }
+    }
+  }
+  finally {
+    w.unlock();
+  }
+}
