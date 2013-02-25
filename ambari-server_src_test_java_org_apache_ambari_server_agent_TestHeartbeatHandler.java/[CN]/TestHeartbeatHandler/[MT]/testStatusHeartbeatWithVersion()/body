@@ -1,0 +1,50 @@
+{
+  ActionManager am=new ActionManager(0,0,null,null,new ActionDBInMemoryImpl(),new HostsMap((String)null));
+  Cluster cluster=getDummyCluster();
+  @SuppressWarnings("serial") Set<String> hostNames=new HashSet<String>(){
+{
+      add(DummyHostname1);
+    }
+  }
+;
+  clusters.mapHostsToCluster(hostNames,DummyCluster);
+  Service hdfs=cluster.addService(HDFS);
+  hdfs.persist();
+  hdfs.addServiceComponent(DATANODE).persist();
+  hdfs.getServiceComponent(DATANODE).addServiceComponentHost(DummyHostname1).persist();
+  hdfs.addServiceComponent(NAMENODE).persist();
+  hdfs.getServiceComponent(NAMENODE).addServiceComponentHost(DummyHostname1).persist();
+  hdfs.addServiceComponent(HDFS_CLIENT).persist();
+  hdfs.getServiceComponent(HDFS_CLIENT).addServiceComponentHost(DummyHostname1).persist();
+  ServiceComponentHost serviceComponentHost1=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1);
+  ServiceComponentHost serviceComponentHost2=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(NAMENODE).getServiceComponentHost(DummyHostname1);
+  ServiceComponentHost serviceComponentHost3=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(HDFS_CLIENT).getServiceComponentHost(DummyHostname1);
+  StackId stack130=new StackId("HDP-1.3.0");
+  StackId stack122=new StackId("HDP-1.2.2");
+  serviceComponentHost1.setState(State.INSTALLED);
+  serviceComponentHost2.setState(State.STARTED);
+  serviceComponentHost3.setState(State.STARTED);
+  serviceComponentHost1.setStackVersion(stack130);
+  serviceComponentHost2.setStackVersion(stack122);
+  serviceComponentHost3.setStackVersion(stack122);
+  HeartBeat hb=new HeartBeat();
+  hb.setTimestamp(System.currentTimeMillis());
+  hb.setResponseId(0);
+  hb.setHostname(DummyHostname1);
+  hb.setNodeStatus(new HostStatus(Status.HEALTHY,DummyHostStatus));
+  hb.setReports(new ArrayList<CommandReport>());
+  ArrayList<ComponentStatus> componentStatuses=new ArrayList<ComponentStatus>();
+  ComponentStatus componentStatus1=createComponentStatus(DummyCluster,HDFS,DummyHostStatus,State.STARTED,DATANODE,"HDP-1.3.0");
+  ComponentStatus componentStatus2=createComponentStatus(DummyCluster,HDFS,DummyHostStatus,State.STARTED,NAMENODE,"");
+  ComponentStatus componentStatus3=createComponentStatus(DummyCluster,HDFS,DummyHostStatus,State.INSTALLED,HDFS_CLIENT,"HDP-1.3.0");
+  componentStatuses.add(componentStatus1);
+  componentStatuses.add(componentStatus2);
+  componentStatuses.add(componentStatus3);
+  hb.setComponentStatus(componentStatuses);
+  ActionQueue aq=new ActionQueue();
+  HeartBeatHandler handler=getHeartBeatHandler(am,aq);
+  handler.handleHeartBeat(hb);
+  assertEquals("Matching value " + serviceComponentHost1.getStackVersion(),stack130,serviceComponentHost1.getStackVersion());
+  assertEquals("Matching value " + serviceComponentHost2.getStackVersion(),stack122,serviceComponentHost2.getStackVersion());
+  assertEquals("Matching value " + serviceComponentHost3.getStackVersion(),stack130,serviceComponentHost3.getStackVersion());
+}
