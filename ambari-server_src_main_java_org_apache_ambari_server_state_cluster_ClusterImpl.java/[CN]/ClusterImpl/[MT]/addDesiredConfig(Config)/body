@@ -1,14 +1,18 @@
 {
-  readWriteLock.writeLock().lock();
-  try {
-    if (config.getType() == null || config.getType().isEmpty() || config.getVersionTag() == null || config.getVersionTag().isEmpty()) {
-    }
-    if (!configs.containsKey(config.getType())) {
-      configs.put(config.getType(),new HashMap<String,Config>());
-    }
-    configs.get(config.getType()).put(config.getVersionTag(),config);
+  Config currentDesired=getDesiredConfigByType(config.getType());
+  if (null != currentDesired && currentDesired.getVersionTag().equals(config.getVersionTag())) {
+    return;
   }
-  finally {
-    readWriteLock.writeLock().unlock();
+  for (  ClusterConfigMappingEntity e : clusterEntity.getConfigMappingEntities()) {
+    if (e.isSelected() > 0 && e.getType().equals(config.getType()))     e.setSelected(0);
   }
+  ClusterConfigMappingEntity entity=new ClusterConfigMappingEntity();
+  entity.setClusterEntity(clusterEntity);
+  entity.setClusterId(clusterEntity.getClusterId());
+  entity.setCreateTimestamp(Long.valueOf(new java.util.Date().getTime()));
+  entity.setSelected(1);
+  entity.setType(config.getType());
+  entity.setVersion(config.getVersionTag());
+  clusterEntity.getConfigMappingEntities().add(entity);
+  clusterDAO.merge(clusterEntity);
 }
