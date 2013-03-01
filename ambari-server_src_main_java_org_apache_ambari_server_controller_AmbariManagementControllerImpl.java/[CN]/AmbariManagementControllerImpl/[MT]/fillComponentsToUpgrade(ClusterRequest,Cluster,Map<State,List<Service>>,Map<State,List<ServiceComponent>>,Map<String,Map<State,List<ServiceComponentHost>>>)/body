@@ -1,0 +1,37 @@
+{
+  for (  Service service : cluster.getServices().values()) {
+    State oldState=service.getDesiredState();
+    State newState=State.INSTALLED;
+    if (!isValidDesiredStateTransition(oldState,newState)) {
+      throw new AmbariException("Invalid transition for" + " service" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ service.getName()+ ", currentDesiredState="+ oldState+ ", newDesiredState="+ newState);
+    }
+    changedServices.put(newState,new ArrayList<Service>());
+    changedServices.get(newState).add(service);
+    for (    ServiceComponent sc : service.getServiceComponents().values()) {
+      State oldScState=sc.getDesiredState();
+      if (newState != oldScState) {
+        if (!isValidDesiredStateTransition(oldScState,newState)) {
+          throw new AmbariException("Invalid transition for" + " servicecomponent" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sc.getServiceName()+ ", componentName="+ sc.getName()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
+        }
+        changedComps.put(newState,new ArrayList<ServiceComponent>());
+        changedComps.get(newState).add(sc);
+      }
+      LOG.info("Handling upgrade to ServiceComponent" + ", clusterName=" + request.getClusterName() + ", serviceName="+ service.getName()+ ", componentName="+ sc.getName()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
+      for (      ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+        State currSchState=sch.getState();
+        if (sch.getStackVersion().equals(sch.getDesiredStackVersion()) && newState == currSchState) {
+          LOG.info("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ service.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ currSchState+ ", newDesiredState="+ newState+ ", currentDesiredState="+ sch.getStackVersion()+ ", newDesiredVersion="+ sch.getDesiredStackVersion());
+          continue;
+        }
+        sch.setState(State.UPGRADING);
+        sch.setDesiredState(newState);
+        if (!changedScHosts.containsKey(sc.getName())) {
+          changedScHosts.put(sc.getName(),new HashMap<State,List<ServiceComponentHost>>());
+        }
+        changedScHosts.get(sc.getName()).put(newState,new ArrayList<ServiceComponentHost>());
+        changedScHosts.get(sc.getName()).get(newState).add(sch);
+        LOG.info("Handling update to ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ service.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ currSchState+ ", newDesiredState="+ newState);
+      }
+    }
+  }
+}

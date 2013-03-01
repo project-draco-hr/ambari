@@ -5,21 +5,88 @@
   if (LOG.isDebugEnabled()) {
     LOG.debug("Received a updateCluster request" + ", clusterName=" + request.getClusterName() + ", request="+ request);
   }
-  final Cluster c=clusters.getCluster(request.getClusterName());
-  if (null != request.getHostNames()) {
-    clusters.mapHostsToCluster(request.getHostNames(),request.getClusterName());
-  }
-  if (!request.getStackVersion().equals(c.getDesiredStackVersion().getStackId())) {
-    throw new IllegalArgumentException("Update of desired stack version" + " not supported");
-  }
+  final Cluster cluster=clusters.getCluster(request.getClusterName());
   if (null != request.getDesiredConfig()) {
     ConfigurationRequest cr=request.getDesiredConfig();
     if (null != cr.getProperties() && cr.getProperties().size() > 0) {
-      cr.setClusterName(c.getClusterName());
+      cr.setClusterName(cluster.getClusterName());
       createConfiguration(cr);
     }
-    Config baseConfig=c.getConfig(cr.getType(),cr.getVersionTag());
-    if (null != baseConfig)     c.addDesiredConfig(baseConfig);
+    Config baseConfig=cluster.getConfig(cr.getType(),cr.getVersionTag());
+    if (null != baseConfig) {
+      cluster.addDesiredConfig(baseConfig);
+    }
+  }
+  StackId currentVersion=cluster.getCurrentStackVersion();
+  StackId desiredVersion=cluster.getDesiredStackVersion();
+  String requestedVersionString=request.getStackVersion();
+  StackId requestedVersion=null;
+  if (currentVersion == null) {
+    cluster.setCurrentStackVersion(desiredVersion);
+    currentVersion=cluster.getCurrentStackVersion();
+  }
+  boolean requiresHostListUpdate=request.getHostNames() != null && !request.getHostNames().isEmpty();
+  boolean requiresVersionUpdate=requestedVersionString != null && !requestedVersionString.isEmpty();
+  if (requiresVersionUpdate) {
+    requestedVersion=new StackId(requestedVersionString);
+    if (!requestedVersion.getStackName().equals(currentVersion.getStackName())) {
+      throw new AmbariException("Upgrade not possible between different stacks.");
+    }
+    requiresVersionUpdate=!currentVersion.equals(requestedVersion);
+  }
+  if (requiresVersionUpdate && requiresHostListUpdate) {
+    throw new IllegalArgumentException("Invalid arguments, " + "cluster version cannot be upgraded" + " along with host list modifications");
+  }
+  if (requiresHostListUpdate) {
+    clusters.mapHostsToCluster(request.getHostNames(),request.getClusterName());
+  }
+  if (requiresVersionUpdate) {
+    boolean retry=false;
+    if (0 == currentVersion.compareTo(desiredVersion)) {
+      if (1 != requestedVersion.compareTo(currentVersion)) {
+        throw new AmbariException("Target version : " + requestedVersion + " must be greater than current version : "+ currentVersion);
+      }
+ else {
+        StackInfo stackInfo=ambariMetaInfo.getStackInfo(requestedVersion.getStackName(),requestedVersion.getStackVersion());
+        if (stackInfo == null) {
+          throw new AmbariException("Target version : " + requestedVersion + " is not a recognized version");
+        }
+      }
+    }
+ else {
+      retry=true;
+      if (0 != requestedVersion.compareTo(desiredVersion)) {
+        throw new AmbariException("Upgrade in progress to target version : " + desiredVersion + ". Illegal request to upgrade to : "+ requestedVersion);
+      }
+    }
+    boolean activeComponentExists=checkIfActiveComponentsExist(cluster);
+    if (activeComponentExists) {
+      throw new AmbariException("Upgrade needs all services to be stopped.");
+    }
+    cluster.refresh();
+    if (requestedVersion.equals(cluster.getCurrentStackVersion())) {
+      return null;
+    }
+    if (!retry) {
+      cluster.setDesiredStackVersion(requestedVersion);
+      for (      Service service : cluster.getServices().values()) {
+        service.setDesiredStackVersion(requestedVersion);
+        for (        ServiceComponent component : service.getServiceComponents().values()) {
+          component.setDesiredStackVersion(requestedVersion);
+          for (          ServiceComponentHost componentHost : component.getServiceComponentHosts().values()) {
+            componentHost.setDesiredStackVersion(requestedVersion);
+          }
+        }
+      }
+    }
+    Map<State,List<Service>> changedServices=new HashMap<State,List<Service>>();
+    Map<State,List<ServiceComponent>> changedComps=new HashMap<State,List<ServiceComponent>>();
+    Map<String,Map<State,List<ServiceComponentHost>>> changedScHosts=new HashMap<String,Map<State,List<ServiceComponentHost>>>();
+    fillComponentsToUpgrade(request,cluster,changedServices,changedComps,changedScHosts);
+    Map<String,String> requestParameters=new HashMap<String,String>();
+    requestParameters.put(Configuration.UPGRADE_TO_STACK,gson.toJson(requestedVersion));
+    requestParameters.put(Configuration.UPGRADE_FROM_STACK,gson.toJson(currentVersion));
+    return doStageCreation(cluster,changedServices,changedComps,changedScHosts,requestParameters);
   }
   return null;
 }
