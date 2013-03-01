@@ -1,0 +1,16 @@
+@patch('os.listdir')
+@patch('os.path.isdir')
+def test_execute_dir_ignore_badly_named(self, isdir_method, listdir_method):
+    pythonExecutor = MagicMock()
+    puppetExecutor = MagicMock()
+    command = {'debug': 'command', }
+    isdir_method.return_value = True
+    files = ['00-first.py', 'badly-named.pp', '10-second.pp', '20-wrong.cpp']
+    listdir_method.return_value = files
+    pythonExecutor.run_file.side_effect = [{'exitcode': 0, 'stdout': 'stdout - python.py', 'stderr': 'stderr - python.py', }]
+    puppetExecutor.just_run_one_file.side_effect = [{'exitcode': 0, 'stdout': 'stdout - puppet.pp', 'stderr': 'stderr - puppet.pp', }]
+    executor = UpgradeExecutor.UpgradeExecutor(pythonExecutor, puppetExecutor, AmbariConfig.AmbariConfig().getConfig())
+    result = executor.execute_dir(command, 'basedir', 'dir', 'tmpout', 'tmperr')
+    self.assertEquals(result['exitcode'], 0)
+    self.assertEquals(result['stdout'], '\nstdout - python.py\nstdout - puppet.pp\nUnrecognized file type, skipping: basedir/dir/20-wrong.cpp')
+    self.assertEquals(result['stderr'], '\nstderr - python.py\nstderr - puppet.pp\nNone')
