@@ -1,0 +1,46 @@
+{
+  Set<Cluster> clusters=clusterFsm.getClustersForHost(hostname);
+  for (  Cluster cl : clusters) {
+    for (    ComponentStatus status : heartbeat.componentStatus) {
+      if (status.getClusterName().equals(cl.getClusterName())) {
+        try {
+          Service svc=cl.getService(status.getServiceName());
+          String componentName=status.getComponentName();
+          if (svc.getServiceComponents().containsKey(componentName)) {
+            ServiceComponent svcComp=svc.getServiceComponent(componentName);
+            ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
+            State prevState=scHost.getState();
+            State liveState=State.valueOf(State.class,status.getStatus());
+            if (prevState.equals(State.INSTALLED) || prevState.equals(State.START_FAILED) || prevState.equals(State.STARTED)|| prevState.equals(State.STOP_FAILED)) {
+              scHost.setState(liveState);
+              if (!prevState.equals(liveState)) {
+                LOG.info("State of service component " + componentName + " of service "+ status.getServiceName()+ " of cluster "+ status.getClusterName()+ " has changed from "+ prevState+ " to "+ liveState+ " at host "+ hostname);
+              }
+            }
+            if (null != status.getStackVersion() && !status.getStackVersion().isEmpty()) {
+              scHost.setStackVersion(new StackId(status.getStackVersion()));
+            }
+          }
+ else {
+          }
+        }
+ catch (        ServiceNotFoundException e) {
+          LOG.warn("Received a live status update for a non-initialized" + " service" + ", clusterName=" + status.getClusterName() + ", serviceName="+ status.getServiceName());
+          continue;
+        }
+catch (        ServiceComponentNotFoundException e) {
+          LOG.warn("Received a live status update for a non-initialized" + " servicecomponent" + ", clusterName=" + status.getClusterName() + ", serviceName="+ status.getServiceName()+ ", componentName="+ status.getComponentName());
+          continue;
+        }
+catch (        ServiceComponentHostNotFoundException e) {
+          LOG.warn("Received a live status update for a non-initialized" + " service" + ", clusterName=" + status.getClusterName() + ", serviceName="+ status.getServiceName()+ ", componentName="+ status.getComponentName()+ ", hostname="+ hostname);
+          continue;
+        }
+catch (        RuntimeException e) {
+          LOG.warn("Received a live status with invalid payload" + " service" + ", clusterName=" + status.getClusterName() + ", serviceName="+ status.getServiceName()+ ", componentName="+ status.getComponentName()+ ", hostname="+ hostname+ ", error="+ e.getMessage());
+          continue;
+        }
+      }
+    }
+  }
+}

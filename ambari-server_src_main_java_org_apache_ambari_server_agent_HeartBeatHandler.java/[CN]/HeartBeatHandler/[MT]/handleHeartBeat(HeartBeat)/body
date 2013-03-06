@@ -4,11 +4,7 @@
   HeartBeatResponse response;
   if (currentResponseId == null) {
     LOG.error("CurrentResponseId unknown - send register command");
-    response=new HeartBeatResponse();
-    RegistrationCommand regCmd=new RegistrationCommand();
-    response.setResponseId(0);
-    response.setRegistrationCommand(regCmd);
-    return response;
+    return createRegisterCommand();
   }
   if (LOG.isDebugEnabled()) {
     LOG.debug("Received heartbeat from host" + ", hostname=" + hostname + ", currentResponseId="+ currentResponseId+ ", receivedResponseId="+ heartbeat.getResponseId());
@@ -19,21 +15,14 @@
   }
  else   if (heartbeat.getResponseId() != currentResponseId) {
     LOG.error("Error in responseId sequence - sending agent restart command");
-    response=new HeartBeatResponse();
-    response.setRestartAgent(true);
-    response.setResponseId(currentResponseId);
-    return response;
+    return createRestartCommand(currentResponseId);
   }
   response=new HeartBeatResponse();
   response.setResponseId(++currentResponseId);
   Host hostObject=clusterFsm.getHost(hostname);
   if (hostObject.getState().equals(HostState.HEARTBEAT_LOST)) {
     LOG.warn("Host is in HEARTBEAT_LOST state - sending register command");
-    response=new HeartBeatResponse();
-    RegistrationCommand regCmd=new RegistrationCommand();
-    response.setResponseId(0);
-    response.setRegistrationCommand(regCmd);
-    return response;
+    return createRegisterCommand();
   }
   hostResponseIds.put(hostname,currentResponseId);
   hostResponses.put(hostname,response);
@@ -58,120 +47,12 @@
  catch (  InvalidStateTransitionException ex) {
     LOG.warn("Asking agent to reregister due to " + ex.getMessage(),ex);
     hostObject.setState(HostState.INIT);
-    RegistrationCommand regCmd=new RegistrationCommand();
-    response.setRegistrationCommand(regCmd);
-    return response;
+    return createRegisterCommand();
   }
-  List<CommandReport> reports=heartbeat.getReports();
-  for (  CommandReport report : reports) {
-    String clusterName=report.getClusterName();
-    if ((clusterName == null) || "".equals(clusterName)) {
-      clusterName="cluster1";
-    }
-    Cluster cl=clusterFsm.getCluster(report.getClusterName());
-    String service=report.getServiceName();
-    if (service == null || "".equals(service)) {
-      throw new AmbariException("Invalid command report, service: " + service);
-    }
-    if (actionMetadata.getActions(service.toLowerCase()).contains(report.getRole())) {
-      LOG.info(report.getRole() + " is an action - skip component lookup");
-    }
- else {
-      try {
-        Service svc=cl.getService(service);
-        ServiceComponent svcComp=svc.getServiceComponent(report.getRole());
-        ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
-        if (report.getStatus().equals("COMPLETED")) {
-          scHost.handleEvent(new ServiceComponentHostOpSucceededEvent(scHost.getServiceComponentName(),hostname,now));
-        }
- else         if (report.getStatus().equals("FAILED")) {
-          scHost.handleEvent(new ServiceComponentHostOpFailedEvent(scHost.getServiceComponentName(),hostname,now));
-        }
- else         if (report.getStatus().equals("IN_PROGRESS")) {
-          scHost.handleEvent(new ServiceComponentHostOpInProgressEvent(scHost.getServiceComponentName(),hostname,now));
-        }
-      }
- catch (      ServiceComponentNotFoundException scnex) {
-        LOG.info("Service component not found ",scnex);
-      }
-catch (      InvalidStateTransitionException ex) {
-        LOG.warn("State machine exception",ex);
-      }
-    }
-  }
-  actionManager.processTaskResponse(hostname,reports);
-  Set<Cluster> clusters=clusterFsm.getClustersForHost(hostname);
-  for (  Cluster cl : clusters) {
-    for (    ComponentStatus status : heartbeat.componentStatus) {
-      if (status.getClusterName().equals(cl.getClusterName())) {
-        try {
-          Service svc=cl.getService(status.getServiceName());
-          String componentName=status.getComponentName();
-          if (svc.getServiceComponents().containsKey(componentName)) {
-            ServiceComponent svcComp=svc.getServiceComponent(componentName);
-            ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
-            State prevState=scHost.getState();
-            State liveState=State.valueOf(State.class,status.getStatus());
-            if (prevState.equals(State.INSTALLED) || prevState.equals(State.START_FAILED) || prevState.equals(State.STARTED)|| prevState.equals(State.STOP_FAILED)) {
-              scHost.setState(liveState);
-              if (!prevState.equals(liveState)) {
-                LOG.info("State of service component " + componentName + " of service "+ status.getServiceName()+ " of cluster "+ status.getClusterName()+ " has changed from "+ prevState+ " to "+ liveState+ " at host "+ hostname);
-              }
-            }
-            if (null != status.getStackVersion() && !status.getStackVersion().isEmpty()) {
-              scHost.setStackVersion(new StackId(status.getStackVersion()));
-            }
-          }
- else {
-          }
-        }
- catch (        ServiceNotFoundException e) {
-          LOG.warn("Received a live status update for a non-initialized" + " service" + ", clusterName=" + status.getClusterName() + ", serviceName="+ status.getServiceName());
-          continue;
-        }
-catch (        ServiceComponentNotFoundException e) {
-          LOG.warn("Received a live status update for a non-initialized" + " servicecomponent" + ", clusterName=" + status.getClusterName() + ", serviceName="+ status.getServiceName()+ ", componentName="+ status.getComponentName());
-          continue;
-        }
-catch (        ServiceComponentHostNotFoundException e) {
-          LOG.warn("Received a live status update for a non-initialized" + " service" + ", clusterName=" + status.getClusterName() + ", serviceName="+ status.getServiceName()+ ", componentName="+ status.getComponentName()+ ", hostname="+ hostname);
-          continue;
-        }
-catch (        RuntimeException e) {
-          LOG.warn("Received a live status with invalid payload" + " service" + ", clusterName=" + status.getClusterName() + ", serviceName="+ status.getServiceName()+ ", componentName="+ status.getComponentName()+ ", hostname="+ hostname+ ", error="+ e.getMessage());
-          continue;
-        }
-      }
-    }
-  }
+  processCommandReports(heartbeat,hostname,clusterFsm,now);
+  processStatusReports(heartbeat,hostname,clusterFsm);
   if (hostObject.getState().equals(HostState.HEALTHY)) {
-    List<AgentCommand> cmds=actionQueue.dequeueAll(heartbeat.getHostname());
-    if (cmds != null && !cmds.isEmpty()) {
-      for (      AgentCommand ac : cmds) {
-        try {
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Sending command string = " + StageUtils.jaxbToString(ac));
-          }
-        }
- catch (        Exception e) {
-          throw new AmbariException("Could not get jaxb string for command",e);
-        }
-switch (ac.getCommandType()) {
-case EXECUTION_COMMAND:
-{
-            response.addExecutionCommand((ExecutionCommand)ac);
-            break;
-          }
-case STATUS_COMMAND:
-{
-          response.addStatusCommand((StatusCommand)ac);
-          break;
-        }
-default :
-      LOG.error("There is no action for agent command =" + ac.getCommandType().name());
+    sendCommands(hostname,response);
   }
-}
-}
-}
-return response;
+  return response;
 }

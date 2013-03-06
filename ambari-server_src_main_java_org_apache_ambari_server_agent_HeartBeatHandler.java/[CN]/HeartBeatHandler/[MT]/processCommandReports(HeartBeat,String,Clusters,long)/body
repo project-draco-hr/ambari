@@ -1,0 +1,40 @@
+{
+  List<CommandReport> reports=heartbeat.getReports();
+  for (  CommandReport report : reports) {
+    Cluster cl=clusterFsm.getCluster(report.getClusterName());
+    String service=report.getServiceName();
+    if (service == null || "".equals(service)) {
+      throw new AmbariException("Invalid command report, service: " + service);
+    }
+    if (actionMetadata.getActions(service.toLowerCase()).contains(report.getRole())) {
+      LOG.info(report.getRole() + " is an action - skip component lookup");
+    }
+ else {
+      try {
+        Service svc=cl.getService(service);
+        ServiceComponent svcComp=svc.getServiceComponent(report.getRole());
+        ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
+        String schName=scHost.getServiceComponentName();
+        if (report.getStatus().equals("COMPLETED")) {
+          if (scHost.getState().equals(State.UPGRADING)) {
+            scHost.setStackVersion(scHost.getDesiredStackVersion());
+          }
+          scHost.handleEvent(new ServiceComponentHostOpSucceededEvent(schName,hostname,now));
+        }
+ else         if (report.getStatus().equals("FAILED")) {
+          scHost.handleEvent(new ServiceComponentHostOpFailedEvent(schName,hostname,now));
+        }
+ else         if (report.getStatus().equals("IN_PROGRESS")) {
+          scHost.handleEvent(new ServiceComponentHostOpInProgressEvent(schName,hostname,now));
+        }
+      }
+ catch (      ServiceComponentNotFoundException scnex) {
+        LOG.warn("Service component not found ",scnex);
+      }
+catch (      InvalidStateTransitionException ex) {
+        LOG.warn("State machine exception",ex);
+      }
+    }
+  }
+  actionManager.processTaskResponse(hostname,reports);
+}
