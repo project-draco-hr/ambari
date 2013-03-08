@@ -4,9 +4,22 @@ def upgrade(args):
     if (not (retcode == 0)):
         printErrorMsg('PostgreSQL server not running. Exiting')
         sys.exit(retcode)
+    file = args.upgrade_script_file
     print 'Upgrading database...'
-    retcode = upgrade_db(args)
+    retcode = execute_db_script(args, file)
     if (not (retcode == 0)):
         printErrorMsg('Database upgrade script has failed. Exiting.')
         sys.exit(retcode)
+    print 'Checking database integrity...'
+    check_file = ((file[:(-3)] + 'Check') + file[(-4):])
+    retcode = check_db_consistency(args, check_file)
+    if (not (retcode == 0)):
+        print 'Found inconsistency. Trying to fix...'
+        fix_file = ((file[:(-3)] + 'Fix') + file[(-4):])
+        retcode = execute_db_script(args, fix_file)
+        if (not (retcode == 0)):
+            printErrorMsg('Database cannot be fixed. Exiting.')
+            sys.exit(retcode)
+    else:
+        print 'Database is consistent.'
     print "Ambari Server 'upgrade' finished successfully"
