@@ -1,0 +1,36 @@
+{
+  m_body=s;
+  RequestBody body=new RequestBody();
+  if (s != null && s.length() != 0) {
+    s=ensureArrayFormat(s);
+    ObjectMapper mapper=new ObjectMapper();
+    try {
+      JsonNode root=mapper.readTree(s);
+      Iterator<JsonNode> iter=root.getElements();
+      while (iter.hasNext()) {
+        Map<String,Object> mapProperties=new HashMap<String,Object>();
+        NamedPropertySet propertySet=new NamedPropertySet("",mapProperties);
+        JsonNode node=iter.next();
+        processNode(node,"",propertySet,body);
+        String query=(String)mapProperties.remove(QUERY_FIELD_PATH);
+        if (query != null) {
+          body.setQueryString(query);
+        }
+        if (propertySet.getProperties().size() != 0) {
+          body.addPropertySet(propertySet);
+        }
+      }
+      if (body.getPropertySets().size() != 0) {
+        body.setBody(m_body);
+      }
+    }
+ catch (    IOException e) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Caught exception parsing msg body.");
+        LOG.debug("Message Body: " + s,e);
+      }
+      throw new BodyParseException(e);
+    }
+  }
+  return body;
+}

@@ -1,9 +1,12 @@
 {
-  Request request=getRequestFactory().createRequest(headers,body,uriInfo,requestType,resource);
-  LOG.info("Handling API Request: '" + request.getURI() + "'");
-  Result result=getRequestHandler(request.getRequestType()).handleRequest(request);
-  if (!result.getStatus().isErrorState()) {
-    request.getResultPostProcessor().process(result);
+  Result result;
+  try {
+    RequestBody requestBody=getBodyParser().parse(body);
+    Request request=getRequestFactory().createRequest(headers,requestBody,uriInfo,requestType,resource);
+    result=request.process();
   }
-  return Response.status(result.getStatus().getStatusCode()).entity(request.getResultSerializer().serialize(result)).build();
+ catch (  BodyParseException e) {
+    result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.BAD_REQUEST,e.getMessage()));
+  }
+  return Response.status(result.getStatus().getStatusCode()).entity(getResultSerializer().serialize(result)).build();
 }
