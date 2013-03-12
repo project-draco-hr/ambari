@@ -1,48 +1,28 @@
 {
-  Map<String,Object> map=PredicateHelper.getProperties(predicate);
-  if (map.containsKey(CONFIG_HOST_NAME) && map.containsKey(CONFIG_COMPONENT_NAME)) {
-    final ServiceComponentHostRequest hostComponentRequest=new ServiceComponentHostRequest((String)map.get(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID),null,(String)map.get(CONFIG_COMPONENT_NAME),(String)map.get(CONFIG_HOST_NAME),null,null);
-    Map<String,String> mappints=getResources(new Command<Map<String,String>>(){
-      @Override public Map<String,String> invoke() throws AmbariException {
-        return getManagementController().getHostComponentDesiredConfigMapping(hostComponentRequest);
-      }
-    }
-);
-    Set<Resource> resources=new HashSet<Resource>();
-    for (    Entry<String,String> entry : mappints.entrySet()) {
-      Resource resource=new ResourceImpl(Resource.Type.Configuration);
-      resource.setProperty(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID,map.get(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID));
-      resource.setProperty(CONFIG_COMPONENT_NAME,map.get(CONFIG_COMPONENT_NAME));
-      resource.setProperty(CONFIG_HOST_NAME,map.get(CONFIG_HOST_NAME));
-      resource.setProperty(CONFIGURATION_CONFIG_TYPE_PROPERTY_ID,entry.getKey());
-      resource.setProperty(CONFIGURATION_CONFIG_TAG_PROPERTY_ID,entry.getValue());
-      resources.add(resource);
-    }
-    return resources;
+  final Set<ConfigurationRequest> requests=new HashSet<ConfigurationRequest>();
+  for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+    requests.add(getRequest(propertyMap));
   }
- else {
-    final ConfigurationRequest configRequest=getRequest(map);
-    Set<ConfigurationResponse> responses=getResources(new Command<Set<ConfigurationResponse>>(){
-      @Override public Set<ConfigurationResponse> invoke() throws AmbariException {
-        return getManagementController().getConfigurations(Collections.singleton(configRequest));
-      }
+  Set<ConfigurationResponse> responses=getResources(new Command<Set<ConfigurationResponse>>(){
+    @Override public Set<ConfigurationResponse> invoke() throws AmbariException {
+      return getManagementController().getConfigurations(requests);
     }
-);
-    Set<Resource> resources=new HashSet<Resource>();
-    for (    ConfigurationResponse response : responses) {
-      Resource resource=new ResourceImpl(Resource.Type.Configuration);
-      resource.setProperty(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID,response.getClusterName());
-      resource.setProperty(CONFIGURATION_CONFIG_TYPE_PROPERTY_ID,response.getType());
-      resource.setProperty(CONFIGURATION_CONFIG_TAG_PROPERTY_ID,response.getVersionTag());
-      if (null != response.getConfigs() && response.getConfigs().size() > 0) {
-        Map<String,String> configs=response.getConfigs();
-        for (        Entry<String,String> entry : configs.entrySet()) {
-          String id=PropertyHelper.getPropertyId("properties",entry.getKey());
-          resource.setProperty(id,entry.getValue());
-        }
-      }
-      resources.add(resource);
-    }
-    return resources;
   }
+);
+  Set<Resource> resources=new HashSet<Resource>();
+  for (  ConfigurationResponse response : responses) {
+    Resource resource=new ResourceImpl(Resource.Type.Configuration);
+    resource.setProperty(CONFIGURATION_CLUSTER_NAME_PROPERTY_ID,response.getClusterName());
+    resource.setProperty(CONFIGURATION_CONFIG_TYPE_PROPERTY_ID,response.getType());
+    resource.setProperty(CONFIGURATION_CONFIG_TAG_PROPERTY_ID,response.getVersionTag());
+    if (null != response.getConfigs() && response.getConfigs().size() > 0) {
+      Map<String,String> configs=response.getConfigs();
+      for (      Entry<String,String> entry : configs.entrySet()) {
+        String id=PropertyHelper.getPropertyId("properties",entry.getKey());
+        resource.setProperty(id,entry.getValue());
+      }
+    }
+    resources.add(resource);
+  }
+  return resources;
 }
