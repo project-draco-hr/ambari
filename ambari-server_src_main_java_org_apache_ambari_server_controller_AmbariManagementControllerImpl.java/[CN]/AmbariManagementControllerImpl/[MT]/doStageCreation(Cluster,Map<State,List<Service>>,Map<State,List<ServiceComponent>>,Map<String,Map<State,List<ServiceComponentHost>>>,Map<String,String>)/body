@@ -122,20 +122,24 @@ if (LOG.isDebugEnabled()) {
 LOG.debug("Create a new host action" + ", requestId=" + requestId.longValue() + ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", roleCommand="+ roleCommand.name());
 }
 Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
+for (Entry<String,DesiredConfig> entry : cluster.getDesiredConfigs().entrySet()) {
+String type=entry.getKey();
+String tag=entry.getValue().getVersion();
+Config config=cluster.getConfig(type,tag);
+if (null == config) continue;
+Map<String,String> props=new HashMap<String,String>(config.getProperties());
 Service service=cluster.getService(scHost.getServiceName());
-Map<String,Config> configs=service.getDesiredConfigs();
-for (Config svcConfig : configs.values()) {
-Config clusterConfig=cluster.getDesiredConfigByType(svcConfig.getType());
-if (null == clusterConfig) clusterConfig=cluster.getConfig(svcConfig.getType(),svcConfig.getVersionTag());
-Map<String,String> props=new HashMap<String,String>(clusterConfig.getProperties());
+Config svcConfig=service.getDesiredConfigs().get(type);
+if (null != svcConfig && !svcConfig.getVersionTag().equals(tag)) {
 props.putAll(svcConfig.getProperties());
+}
 Host host=clusters.getHost(scHost.getHostName());
-DesiredConfig dc=host.getDesiredConfigs(scHost.getClusterId()).get(svcConfig.getType());
+DesiredConfig dc=host.getDesiredConfigs(scHost.getClusterId()).get(type);
 if (null != dc) {
 Config hostConfig=cluster.getConfig(svcConfig.getType(),dc.getVersion());
 props.putAll(hostConfig.getProperties());
 }
-configurations.put(svcConfig.getType(),props);
+configurations.put(type,props);
 }
 if ((!scHost.getHostName().equals(jobtrackerHost)) && configurations.get("global") != null) {
 if (LOG.isDebugEnabled()) {
