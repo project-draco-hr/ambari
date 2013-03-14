@@ -6,9 +6,7 @@
   Map<String,Map<String,Map<String,Set<String>>>> hostComponentNames=new HashMap<String,Map<String,Map<String,Set<String>>>>();
   Set<String> duplicates=new HashSet<String>();
   for (  ServiceComponentHostRequest request : requests) {
-    if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty() || request.getHostname() == null || request.getHostname().isEmpty()) {
-      throw new IllegalArgumentException("Invalid arguments," + " clustername, componentname and hostname should not be null" + " when trying to create a hostcomponent");
-    }
+    validateServiceComponentHostRequest(request);
     Cluster cluster;
     try {
       cluster=clusters.getCluster(request.getClusterName());
@@ -16,16 +14,8 @@
  catch (    ClusterNotFoundException e) {
       throw new ParentObjectNotFoundException("Attempted to add a host_component to a cluster which doesn't exist: ",e);
     }
-    if (request.getServiceName() == null || request.getServiceName().isEmpty()) {
-      StackId stackId=cluster.getDesiredStackVersion();
-      String serviceName=ambariMetaInfo.getComponentToService(stackId.getStackName(),stackId.getStackVersion(),request.getComponentName());
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Looking up service name for component" + ", componentName=" + request.getComponentName() + ", serviceName="+ serviceName);
-      }
-      if (serviceName == null || serviceName.isEmpty()) {
-        throw new AmbariException("Could not find service for component" + ", componentName=" + request.getComponentName() + ", clusterName="+ cluster.getClusterName()+ ", stackInfo="+ stackId.getStackId());
-      }
-      request.setServiceName(serviceName);
+    if (StringUtils.isEmpty(request.getServiceName())) {
+      request.setServiceName(findServiceName(cluster,request.getComponentName()));
     }
     if (LOG.isDebugEnabled()) {
       LOG.debug("Received a createHostComponent request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", hostname="+ request.getHostname()+ ", request="+ request);

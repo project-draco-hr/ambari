@@ -1,3 +1,32 @@
 {
-  throw new AmbariException("Delete host components not supported");
+  Map<ServiceComponent,Set<ServiceComponentHost>> safeToRemoveSCHs=new HashMap<ServiceComponent,Set<ServiceComponentHost>>();
+  for (  ServiceComponentHostRequest request : requests) {
+    validateServiceComponentHostRequest(request);
+    Cluster cluster=clusters.getCluster(request.getClusterName());
+    if (StringUtils.isEmpty(request.getServiceName())) {
+      request.setServiceName(findServiceName(cluster,request.getComponentName()));
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Received a createHostComponent DELETE request request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", hostname="+ request.getHostname()+ ", request="+ request);
+    }
+    Service service=cluster.getService(request.getServiceName());
+    ServiceComponent component=service.getServiceComponent(request.getComponentName());
+    ServiceComponentHost componentHost=component.getServiceComponentHost(request.getHostname());
+    if (!componentHost.canBeRemoved()) {
+      throw new AmbariException("Host Component cannot be removed" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", hostname="+ request.getHostname()+ ", request="+ request);
+    }
+    if (component.isClientComponent() || componentHost.getState() != State.MAINTENANCE) {
+      throw new AmbariException("Only master component in MAINTENANCE state can be removed");
+    }
+    if (!safeToRemoveSCHs.containsKey(component)) {
+      safeToRemoveSCHs.put(component,new HashSet<ServiceComponentHost>());
+    }
+    safeToRemoveSCHs.get(component).add(componentHost);
+  }
+  for (  Entry<ServiceComponent,Set<ServiceComponentHost>> entry : safeToRemoveSCHs.entrySet()) {
+    for (    ServiceComponentHost componentHost : entry.getValue()) {
+      entry.getKey().deleteServiceComponentHosts(componentHost.getHostName());
+    }
+  }
+  return null;
 }
