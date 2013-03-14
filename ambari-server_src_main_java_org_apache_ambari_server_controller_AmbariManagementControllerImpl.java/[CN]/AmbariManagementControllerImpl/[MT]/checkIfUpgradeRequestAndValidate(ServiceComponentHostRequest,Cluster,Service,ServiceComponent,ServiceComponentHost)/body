@@ -1,0 +1,42 @@
+{
+  boolean isUpgradeRequest=false;
+  String requestedStackIdString=request.getDesiredStackId();
+  StackId requestedStackId;
+  if (requestedStackIdString == null) {
+    return isUpgradeRequest;
+  }
+  try {
+    requestedStackId=new StackId(request.getDesiredStackId());
+  }
+ catch (  RuntimeException re) {
+    throw getHostComponentUpgradeException(request,cluster,s,sc,sch,"Invalid desired stack id");
+  }
+  StackId clusterStackId=cluster.getCurrentStackVersion();
+  StackId currentSchStackId=sch.getStackVersion();
+  if (clusterStackId == null || clusterStackId.getStackName().equals("")) {
+    if (requestedStackId.compareTo(currentSchStackId) != 0) {
+      throw getHostComponentUpgradeException(request,cluster,s,sc,sch,"Cluster has not been upgraded yet, component host cannot be upgraded");
+    }
+  }
+ else {
+    if (clusterStackId.getStackName().compareTo(requestedStackId.getStackName()) != 0) {
+      throw getHostComponentUpgradeException(request,cluster,s,sc,sch,"Deployed stack name and requested stack names do not match");
+    }
+    if (clusterStackId.compareTo(requestedStackId) != 0) {
+      throw getHostComponentUpgradeException(request,cluster,s,sc,sch,"Component host can only be upgraded to the same version as the cluster");
+    }
+ else     if (requestedStackId.compareTo(currentSchStackId) > 0) {
+      isUpgradeRequest=true;
+      if (sch.getState() != State.INSTALLED && sch.getState() != State.UPGRADING && sch.getState() != State.UPGRADE_FAILED) {
+        throw getHostComponentUpgradeException(request,cluster,s,sc,sch,"Component host is in an invalid state for upgrade");
+      }
+      if (request.getConfigVersions() != null) {
+        throw getHostComponentUpgradeException(request,cluster,s,sc,sch,"Upgrade cannot be accompanied with config modification");
+      }
+      if (!request.getDesiredState().equals(State.INSTALLED.toString())) {
+        throw getHostComponentUpgradeException(request,cluster,s,sc,sch,"The desired state for an upgrade request must be " + State.INSTALLED);
+      }
+    }
+  }
+  return isUpgradeRequest;
+}

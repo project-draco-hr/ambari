@@ -73,6 +73,21 @@
       throw new IllegalArgumentException("Invalid desired state for a client" + " component");
     }
     seenNewStates.add(newState);
+    boolean upgradeRequest=checkIfUpgradeRequestAndValidate(request,cluster,s,sc,sch);
+    if (!processingUpgradeRequest && upgradeRequest) {
+      processingUpgradeRequest=true;
+      if (numberOfRequestsProcessed > 1) {
+        throw new AmbariException("An upgrade request cannot be combined with " + "other non-upgrade requests.");
+      }
+      fromStackVersion=sch.getStackVersion();
+    }
+    if (processingUpgradeRequest) {
+      if (!upgradeRequest) {
+        throw new AmbariException("An upgrade request cannot be combined with " + "other non-upgrade requests.");
+      }
+      sch.setState(State.UPGRADING);
+      sch.setDesiredStackVersion(cluster.getCurrentStackVersion());
+    }
     State oldSchState=sch.getState();
     if (newState == oldSchState) {
       sch.setDesiredState(newState);
@@ -116,7 +131,13 @@
     }
   }
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
-  List<Stage> stages=doStageCreation(cluster,null,null,changedScHosts,null);
+  Map<String,String> requestParameters=null;
+  if (processingUpgradeRequest) {
+    requestParameters=new HashMap<String,String>();
+    requestParameters.put(Configuration.UPGRADE_TO_STACK,gson.toJson(cluster.getCurrentStackVersion()));
+    requestParameters.put(Configuration.UPGRADE_FROM_STACK,gson.toJson(fromStackVersion));
+  }
+  List<Stage> stages=doStageCreation(cluster,null,null,changedScHosts,requestParameters);
   persistStages(stages);
   updateServiceStates(null,null,changedScHosts);
   if (stages == null || stages.isEmpty()) {
