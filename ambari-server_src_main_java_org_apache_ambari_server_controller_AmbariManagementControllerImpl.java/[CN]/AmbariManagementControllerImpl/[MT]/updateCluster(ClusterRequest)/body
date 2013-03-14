@@ -69,6 +69,7 @@
     }
     cluster.refresh();
     if (requestedVersion.equals(cluster.getCurrentStackVersion())) {
+      LOG.info("Update cluster request version matches the current" + ", version=" + request);
       return null;
     }
     if (!retry) {
@@ -90,7 +91,14 @@
     Map<String,String> requestParameters=new HashMap<String,String>();
     requestParameters.put(Configuration.UPGRADE_TO_STACK,gson.toJson(requestedVersion));
     requestParameters.put(Configuration.UPGRADE_FROM_STACK,gson.toJson(currentVersion));
-    return doStageCreation(cluster,changedServices,changedComps,changedScHosts,requestParameters);
+    List<Stage> stages=doStageCreation(cluster,changedServices,changedComps,changedScHosts,requestParameters);
+    if (stages == null || stages.isEmpty()) {
+      return null;
+    }
+    addFinalizeUpgradeAction(cluster,stages);
+    persistStages(stages);
+    updateServiceStates(changedServices,changedComps,changedScHosts);
+    return getRequestStatusResponse(stages.get(0).getRequestId());
   }
   return null;
 }

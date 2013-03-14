@@ -1,0 +1,41 @@
+{
+  ActionQueue aq=new ActionQueue();
+  Clusters fsm=mock(Clusters.class);
+  Cluster oneClusterMock=mock(Cluster.class);
+  Service serviceObj=mock(Service.class);
+  ServiceComponent scomp=mock(ServiceComponent.class);
+  ServiceComponentHost sch=mock(ServiceComponentHost.class);
+  when(fsm.getCluster(anyString())).thenReturn(oneClusterMock);
+  when(oneClusterMock.getService(anyString())).thenReturn(serviceObj);
+  when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
+  when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
+  when(serviceObj.getCluster()).thenReturn(oneClusterMock);
+  ActionDBAccessor db=new ActionDBInMemoryImpl();
+  String hostname="ahost.ambari.apache.org";
+  List<Stage> stages=new ArrayList<Stage>();
+  Map<String,String> payload=new HashMap<String,String>();
+  payload.put(ServerAction.PayloadName.CLUSTER_NAME,"cluster1");
+  payload.put(ServerAction.PayloadName.CURRENT_STACK_VERSION,"HDP-0.2");
+  Stage s=getStageWithServerAction(1,977,hostname,payload);
+  stages.add(s);
+  db.persistActions(stages);
+  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),new ServerActionManagerImpl(fsm));
+  scheduler.start();
+  while (!stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION").equals(HostRoleStatus.COMPLETED)) {
+    Thread.sleep(100);
+  }
+  scheduler.stop();
+  assertEquals(stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION"),HostRoleStatus.COMPLETED);
+  stages=new ArrayList<Stage>();
+  payload.remove(ServerAction.PayloadName.CLUSTER_NAME);
+  s=getStageWithServerAction(1,23,hostname,payload);
+  stages.add(s);
+  db.persistActions(stages);
+  scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),new ServerActionManagerImpl(fsm));
+  scheduler.start();
+  while (!stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION").equals(HostRoleStatus.FAILED)) {
+    Thread.sleep(100);
+  }
+  scheduler.stop();
+  assertEquals(stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION"),HostRoleStatus.FAILED);
+}
