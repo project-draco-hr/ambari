@@ -1,0 +1,41 @@
+def run_simulation():
+    Controller.logger = MagicMock()
+    sendRequest_method = MagicMock()
+    tmpfile = tempfile.gettempdir()
+    config = AmbariConfig().getConfig()
+    config.set('agent', 'prefix', tmpfile)
+    scriptsDir = os.path.join(os.getcwd(), os.pardir, os.pardir, os.pardir, 'main', 'upgrade_stack')
+    config.set('stack', 'upgradeScriptsDir', scriptsDir)
+    controller = Controller.Controller(config)
+    controller.sendRequest = sendRequest_method
+    controller.netutil.HEARTBEAT_IDDLE_INTERVAL_SEC = 0.1
+    controller.netutil.HEARTBEAT_NOT_IDDLE_INTERVAL_SEC = 0.1
+    controller.range = 1
+    for responce in responces:
+        queue.put(responce)
+
+    def send_stub(url, data):
+        logger.info(('Controller sends data to %s :' % url))
+        logger.info(pprint.pformat(data))
+        if (not queue.empty()):
+            responce = queue.get()
+        else:
+            responce = responces[(-1)]
+            logger.info('There is no predefined responce available, sleeping for 30 sec')
+            time.sleep(30)
+        responce = json.loads(responce)
+        responseId.inc()
+        responce['responseId'] = responseId.val()
+        responce = json.dumps(responce)
+        logger.info(('Returning data to Controller:' + responce))
+        return responce
+    sendRequest_method.side_effect = send_stub
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s %(filename)s:%(lineno)d -         %(message)s')
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+    logger.info('Starting')
+    controller.start()
+    controller.actionQueue.IDLE_SLEEP_TIME = 0.1
+    controller.run()

@@ -28,11 +28,15 @@
   boolean requiresHostListUpdate=request.getHostNames() != null && !request.getHostNames().isEmpty();
   boolean requiresVersionUpdate=requestedVersionString != null && !requestedVersionString.isEmpty();
   if (requiresVersionUpdate) {
+    LOG.info("Received a cluster update request" + ", clusterName=" + request.getClusterName() + ", request="+ request);
     requestedVersion=new StackId(requestedVersionString);
     if (!requestedVersion.getStackName().equals(currentVersion.getStackName())) {
       throw new AmbariException("Upgrade not possible between different stacks.");
     }
     requiresVersionUpdate=!currentVersion.equals(requestedVersion);
+    if (!requiresVersionUpdate) {
+      LOG.info("The cluster is already at " + currentVersion);
+    }
   }
   if (requiresVersionUpdate && requiresHostListUpdate) {
     throw new IllegalArgumentException("Invalid arguments, " + "cluster version cannot be upgraded" + " along with host list modifications");
@@ -41,6 +45,7 @@
     clusters.mapHostsToCluster(request.getHostNames(),request.getClusterName());
   }
   if (requiresVersionUpdate) {
+    LOG.info("Upgrade cluster request received for stack " + requestedVersion);
     boolean retry=false;
     if (0 == currentVersion.compareTo(desiredVersion)) {
       if (1 != requestedVersion.compareTo(currentVersion)) {
@@ -58,6 +63,7 @@
     }
  else {
       retry=true;
+      LOG.info("Received upgrade request is a retry.");
       if (0 != requestedVersion.compareTo(desiredVersion)) {
         throw new AmbariException("Upgrade in progress to target version : " + desiredVersion + ". Illegal request to upgrade to : "+ requestedVersion);
       }
@@ -86,10 +92,12 @@
     Map<State,List<Service>> changedServices=new HashMap<State,List<Service>>();
     Map<State,List<ServiceComponent>> changedComps=new HashMap<State,List<ServiceComponent>>();
     Map<String,Map<State,List<ServiceComponentHost>>> changedScHosts=new HashMap<String,Map<State,List<ServiceComponentHost>>>();
+    LOG.info("Identifying components to upgrade.");
     fillComponentsToUpgrade(request,cluster,changedServices,changedComps,changedScHosts);
     Map<String,String> requestParameters=new HashMap<String,String>();
     requestParameters.put(Configuration.UPGRADE_TO_STACK,gson.toJson(requestedVersion));
     requestParameters.put(Configuration.UPGRADE_FROM_STACK,gson.toJson(currentVersion));
+    LOG.info("Creating stages for upgrade.");
     List<Stage> stages=doStageCreation(cluster,changedServices,changedComps,changedScHosts,requestParameters);
     if (stages == null || stages.isEmpty()) {
       return null;
@@ -97,7 +105,9 @@
     addFinalizeUpgradeAction(cluster,stages);
     persistStages(stages);
     updateServiceStates(changedServices,changedComps,changedScHosts);
-    return getRequestStatusResponse(stages.get(0).getRequestId());
+    long requestId=stages.get(0).getRequestId();
+    LOG.info(stages.size() + " stages created for upgrade and the request id is " + requestId);
+    return getRequestStatusResponse(requestId);
   }
   return null;
 }
