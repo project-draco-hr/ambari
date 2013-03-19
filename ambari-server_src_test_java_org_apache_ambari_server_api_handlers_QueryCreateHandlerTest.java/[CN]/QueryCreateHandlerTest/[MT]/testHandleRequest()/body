@@ -1,5 +1,6 @@
 {
   Request request=createNiceMock(Request.class);
+  RequestBody body=createNiceMock(RequestBody.class);
   ResourceInstance resourceInstance=createNiceMock(ResourceInstance.class);
   ResourceDefinition resourceDefinition=createNiceMock(ResourceDefinition.class);
   ResourceInstanceFactory resourceInstanceFactory=createNiceMock(ResourceInstanceFactory.class);
@@ -22,6 +23,7 @@
   Resource statusResource2=createNiceMock(Resource.class);
   RequestHandler readHandler=createStrictMock(RequestHandler.class);
   ResultStatus resultStatus=createNiceMock(ResultStatus.class);
+  Capture<RequestBody> bodyCapture=new Capture<RequestBody>();
   Map<Resource.Type,String> mapIds=new HashMap<Resource.Type,String>();
   Set<NamedPropertySet> setRequestProps=new HashSet<NamedPropertySet>();
   setRequestProps.add(new NamedPropertySet("components",Collections.<String,Object>singletonMap(PropertyHelper.getPropertyId("ServiceComponentInfo","component_name"),"SECONDARY_NAMENODE")));
@@ -56,7 +58,8 @@
   expect(resultStatus.isErrorState()).andReturn(false);
   expect(result.getResultTree()).andReturn(resultTree);
   expect(request.getResource()).andReturn(resourceInstance).anyTimes();
-  expect(request.getHttpBodyProperties()).andReturn(setRequestProps).anyTimes();
+  expect(request.getBody()).andReturn(body).anyTimes();
+  expect(body.getNamedPropertySets()).andReturn(setRequestProps).anyTimes();
   expect(resourceInstance.getResourceDefinition()).andReturn(resourceDefinition).anyTimes();
   expect(resourceInstance.getIds()).andReturn(mapIds).anyTimes();
   expect(resourceInstance.getSubResources()).andReturn(mapSubResources).anyTimes();
@@ -71,12 +74,12 @@
   expect(resource1.getPropertyValue(resourceKeyProperty)).andReturn("id1").anyTimes();
   expect(resource2.getPropertyValue(resourceKeyProperty)).andReturn("id2").anyTimes();
   expect(resourceInstanceFactory.createResource(Resource.Type.Component,mapIds)).andReturn(createResource).anyTimes();
-  expect(pm.create(createResource,setCreateProps)).andReturn(status);
+  expect(pm.create(same(createResource),capture(bodyCapture))).andReturn(status);
   expect(status.getStatus()).andReturn(RequestStatus.Status.Complete).anyTimes();
   expect(status.getAssociatedResources()).andReturn(setStatusResources).anyTimes();
   expect(statusResource1.getType()).andReturn(Resource.Type.Component).anyTimes();
   expect(statusResource2.getType()).andReturn(Resource.Type.Component).anyTimes();
-  replay(request,resourceInstance,resourceDefinition,query,predicate,result,subResource,subResourceDefinition,controller,serviceSchema,componentSchema,resource1,resource2,pm,resourceInstanceFactory,createResource,status,statusResource1,statusResource2,readHandler,resultStatus);
+  replay(request,body,resourceInstance,resourceDefinition,query,predicate,result,subResource,subResourceDefinition,controller,serviceSchema,componentSchema,resource1,resource2,pm,resourceInstanceFactory,createResource,status,statusResource1,statusResource2,readHandler,resultStatus);
   Result testResult=new TestQueryCreateHandler(resourceInstanceFactory,controller,pm,readHandler).handleRequest(request);
   Collection<TreeNode<Resource>> children=testResult.getResultTree().getChild("resources").getChildren();
   assertEquals(2,children.size());
@@ -94,5 +97,8 @@
   assertTrue(containsStatusResource1);
   assertTrue(containsStatusResource2);
   assertEquals(ResultStatus.STATUS.CREATED,testResult.getStatus().getStatus());
-  verify(request,resourceInstance,resourceDefinition,query,predicate,result,subResource,subResourceDefinition,controller,serviceSchema,componentSchema,resource1,resource2,pm,resourceInstanceFactory,createResource,status,statusResource1,statusResource2,readHandler,resultStatus);
+  RequestBody createBody=bodyCapture.getValue();
+  assertEquals(4,createBody.getPropertySets().size());
+  assertEquals(setCreateProps,createBody.getPropertySets());
+  verify(request,body,resourceInstance,resourceDefinition,query,predicate,result,subResource,subResourceDefinition,controller,serviceSchema,componentSchema,resource1,resource2,pm,resourceInstanceFactory,createResource,status,statusResource1,statusResource2,readHandler,resultStatus);
 }
