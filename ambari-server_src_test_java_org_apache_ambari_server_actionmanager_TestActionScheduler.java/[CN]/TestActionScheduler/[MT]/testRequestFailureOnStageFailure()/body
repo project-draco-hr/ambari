@@ -1,0 +1,28 @@
+{
+  ActionQueue aq=new ActionQueue();
+  Clusters fsm=mock(Clusters.class);
+  Cluster oneClusterMock=mock(Cluster.class);
+  Service serviceObj=mock(Service.class);
+  ServiceComponent scomp=mock(ServiceComponent.class);
+  ServiceComponentHost sch=mock(ServiceComponentHost.class);
+  when(fsm.getCluster(anyString())).thenReturn(oneClusterMock);
+  when(oneClusterMock.getService(anyString())).thenReturn(serviceObj);
+  when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
+  when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
+  when(serviceObj.getCluster()).thenReturn(oneClusterMock);
+  ActionDBAccessor db=new ActionDBInMemoryImpl();
+  String hostname="ahost.ambari.apache.org";
+  List<Stage> stages=new ArrayList<Stage>();
+  stages.add(getStageWithSingleTask(hostname,"cluster1",Role.NAMENODE,RoleCommand.UPGRADE,Service.Type.HDFS,1,1,1));
+  stages.add(getStageWithSingleTask(hostname,"cluster1",Role.DATANODE,RoleCommand.UPGRADE,Service.Type.HDFS,2,2,1));
+  db.persistActions(stages);
+  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),new ServerActionManagerImpl(fsm));
+  ActionManager am=new ActionManager(2,2,aq,fsm,db,new HostsMap((String)null),new ServerActionManagerImpl(fsm));
+  scheduler.doWork();
+  List<CommandReport> reports=new ArrayList<CommandReport>();
+  reports.add(getCommandReport(HostRoleStatus.FAILED,Role.NAMENODE,Service.Type.HDFS,"1-1",1));
+  am.processTaskResponse(hostname,reports);
+  scheduler.doWork();
+  Assert.assertEquals(HostRoleStatus.FAILED,stages.get(0).getHostRoleStatus(hostname,"NAMENODE"));
+  Assert.assertEquals(HostRoleStatus.ABORTED,stages.get(1).getHostRoleStatus(hostname,"DATANODE"));
+}
