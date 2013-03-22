@@ -47,7 +47,7 @@
   amc.createConfiguration(configurationRequest);
   serviceRequests.clear();
   serviceRequests.add(new ServiceRequest("c1","HDFS",gson.<Map<String,String>>fromJson("{\"core-site\": \"version1\", \"hdfs-site\": \"version1\", \"global\" : \"version1\" }",confType),null));
-  amc.updateServices(serviceRequests,mapRequestProps);
+  amc.updateServices(serviceRequests,mapRequestProps,true);
   Set<ServiceComponentRequest> serviceComponentRequests=new HashSet<ServiceComponentRequest>();
   serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","NAMENODE",null,null));
   serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","SECONDARY_NAMENODE",null,null));
@@ -68,7 +68,7 @@
   amc.createHostComponents(componentHostRequests);
   serviceRequests.clear();
   serviceRequests.add(new ServiceRequest("c1","HDFS",null,"INSTALLED"));
-  amc.updateServices(serviceRequests,mapRequestProps);
+  amc.updateServices(serviceRequests,mapRequestProps,true);
   Cluster cluster=clusters.getCluster("c1");
   Map<String,ServiceComponentHost> namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
   assertEquals(1,namenodes.size());
@@ -93,22 +93,22 @@
   }
   componentHostRequests.clear();
   componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1",null,"MAINTENANCE"));
-  amc.updateHostComponents(componentHostRequests,mapRequestProps);
+  amc.updateHostComponents(componentHostRequests,mapRequestProps,true);
   assertEquals(State.MAINTENANCE,componentHost.getState());
   componentHostRequests.clear();
   componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1",null,"INSTALLED"));
-  amc.updateHostComponents(componentHostRequests,mapRequestProps);
+  amc.updateHostComponents(componentHostRequests,mapRequestProps,true);
   assertEquals(State.INSTALLED,componentHost.getState());
   componentHostRequests.clear();
   componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1",null,"MAINTENANCE"));
-  amc.updateHostComponents(componentHostRequests,mapRequestProps);
+  amc.updateHostComponents(componentHostRequests,mapRequestProps,true);
   assertEquals(State.MAINTENANCE,componentHost.getState());
   componentHostRequests.clear();
   componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host2",null,null));
   amc.createHostComponents(componentHostRequests);
   componentHostRequests.clear();
   componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host2",null,"INSTALLED"));
-  amc.updateHostComponents(componentHostRequests,mapRequestProps);
+  amc.updateHostComponents(componentHostRequests,mapRequestProps,true);
   namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
   assertEquals(2,namenodes.size());
   componentHost=namenodes.get("host2");
@@ -116,7 +116,7 @@
   componentHost.handleEvent(new ServiceComponentHostOpSucceededEvent(componentHost.getServiceComponentName(),componentHost.getHostName(),System.currentTimeMillis()));
   serviceRequests.clear();
   serviceRequests.add(new ServiceRequest("c1","HDFS",null,"STARTED"));
-  RequestStatusResponse response=amc.updateServices(serviceRequests,mapRequestProps);
+  RequestStatusResponse response=amc.updateServices(serviceRequests,mapRequestProps,true);
   for (  ShortTaskStatus shortTaskStatus : response.getTasks()) {
     assertFalse("host1".equals(shortTaskStatus.getHostName()) && "NAMENODE".equals(shortTaskStatus.getRole()));
   }
@@ -125,4 +125,34 @@
   amc.deleteHostComponents(componentHostRequests);
   namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
   assertEquals(1,namenodes.size());
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest("c1","HDFS",null,"INSTALLED"));
+  response=amc.updateServices(serviceRequests,mapRequestProps,false);
+  boolean runSmokeTest=false;
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest("c1","HDFS",null,"STARTED"));
+  response=amc.updateServices(serviceRequests,mapRequestProps,runSmokeTest);
+  List<ShortTaskStatus> taskStatuses=response.getTasks();
+  boolean smokeTestRequired=false;
+  for (  ShortTaskStatus shortTaskStatus : taskStatuses) {
+    if (shortTaskStatus.getRole().equals(Role.HDFS_SERVICE_CHECK.toString())) {
+      smokeTestRequired=true;
+    }
+  }
+  assertFalse(smokeTestRequired);
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest("c1","HDFS",null,"INSTALLED"));
+  response=amc.updateServices(serviceRequests,mapRequestProps,false);
+  runSmokeTest=true;
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest("c1","HDFS",null,"STARTED"));
+  response=amc.updateServices(serviceRequests,mapRequestProps,runSmokeTest);
+  taskStatuses=response.getTasks();
+  smokeTestRequired=false;
+  for (  ShortTaskStatus shortTaskStatus : taskStatuses) {
+    if (shortTaskStatus.getRole().equals(Role.HDFS_SERVICE_CHECK.toString())) {
+      smokeTestRequired=true;
+    }
+  }
+  assertTrue(smokeTestRequired);
 }
