@@ -5,9 +5,20 @@
     throw new AmbariException("Authentication required. Please sign in.");
   }
   UserEntity currentUserEntity=userDAO.findLocalUserByName(currentUserName);
+  boolean isLdapAdmin=false;
+  if (currentUserEntity == null) {
+    currentUserEntity=userDAO.findLdapUserByName(currentUserName);
+    try {
+      ldapAuthenticationProvider.authenticate(new UsernamePasswordAuthenticationToken(currentUserName,currentUserPassword));
+      isLdapAdmin=true;
+    }
+ catch (    BadCredentialsException ex) {
+      throw new AmbariException("Incorrect password provided for LDAP user " + currentUserName);
+    }
+  }
   UserEntity userEntity=userDAO.findLocalUserByName(userName);
   if ((userEntity != null) && (currentUserEntity != null)) {
-    if (passwordEncoder.matches(currentUserPassword,currentUserEntity.getUserPassword())) {
+    if (isLdapAdmin || passwordEncoder.matches(currentUserPassword,currentUserEntity.getUserPassword())) {
       userEntity.setUserPassword(passwordEncoder.encode(newPassword));
       userDAO.merge(userEntity);
     }
