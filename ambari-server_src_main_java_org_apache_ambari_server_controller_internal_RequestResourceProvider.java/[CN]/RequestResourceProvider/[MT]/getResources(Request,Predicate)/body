@@ -1,24 +1,29 @@
 {
-  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
-  Map<String,Object> predicateProperties=PredicateHelper.getProperties(predicate);
-  final RequestStatusRequest requestStatusRequest=getRequest(predicateProperties);
-  String clusterName=(String)predicateProperties.get(REQUEST_CLUSTER_NAME_PROPERTY_ID);
-  Set<RequestStatusResponse> responses=getResources(new Command<Set<RequestStatusResponse>>(){
-    @Override public Set<RequestStatusResponse> invoke() throws AmbariException {
-      return getManagementController().getRequestStatus(requestStatusRequest);
-    }
-  }
-);
   Set<Resource> resources=new HashSet<Resource>();
-  for (  RequestStatusResponse response : responses) {
-    Resource resource=new ResourceImpl(Resource.Type.Request);
-    setResourceProperty(resource,REQUEST_CLUSTER_NAME_PROPERTY_ID,clusterName,requestedIds);
-    setResourceProperty(resource,REQUEST_ID_PROPERTY_ID,response.getRequestId(),requestedIds);
-    setResourceProperty(resource,REQUEST_CONTEXT_ID,response.getRequestContext(),requestedIds);
-    if (requestStatusRequest.getRequestStatus() != null) {
-      setResourceProperty(resource,REQUEST_STATUS_PROPERTY_ID,requestStatusRequest.getRequestStatus(),requestedIds);
+  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  Map<String,Set<RequestStatusRequest>> requestStatusRequestSetMap=getRequests(getPropertyMaps(predicate));
+  for (  Map.Entry<String,Set<RequestStatusRequest>> entry : requestStatusRequestSetMap.entrySet()) {
+    String clusterName=entry.getKey();
+    Set<RequestStatusRequest> requestStatusRequestSet=entry.getValue();
+    for (    RequestStatusRequest requestStatusRequest : requestStatusRequestSet) {
+      final RequestStatusRequest finalRequest=requestStatusRequest;
+      Set<RequestStatusResponse> responses=getResources(new Command<Set<RequestStatusResponse>>(){
+        @Override public Set<RequestStatusResponse> invoke() throws AmbariException {
+          return getManagementController().getRequestStatus(finalRequest);
+        }
+      }
+);
+      for (      RequestStatusResponse response : responses) {
+        Resource resource=new ResourceImpl(Resource.Type.Request);
+        setResourceProperty(resource,REQUEST_CLUSTER_NAME_PROPERTY_ID,clusterName,requestedIds);
+        setResourceProperty(resource,REQUEST_ID_PROPERTY_ID,response.getRequestId(),requestedIds);
+        setResourceProperty(resource,REQUEST_CONTEXT_ID,response.getRequestContext(),requestedIds);
+        if (requestStatusRequest.getRequestStatus() != null) {
+          setResourceProperty(resource,REQUEST_STATUS_PROPERTY_ID,requestStatusRequest.getRequestStatus(),requestedIds);
+        }
+        resources.add(resource);
+      }
     }
-    resources.add(resource);
   }
   return resources;
 }
