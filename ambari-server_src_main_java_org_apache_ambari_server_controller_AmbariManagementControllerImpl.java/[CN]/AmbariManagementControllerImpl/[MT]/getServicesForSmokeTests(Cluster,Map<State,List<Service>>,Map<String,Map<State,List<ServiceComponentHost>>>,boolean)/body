@@ -1,0 +1,54 @@
+{
+  Set<String> smokeTestServices=new HashSet<String>();
+  if (changedServices != null) {
+    for (    Entry<State,List<Service>> entry : changedServices.entrySet()) {
+      if (State.STARTED != entry.getKey()) {
+        continue;
+      }
+      for (      Service s : entry.getValue()) {
+        if (runSmokeTest && (State.INSTALLED == s.getDesiredState())) {
+          smokeTestServices.add(s.getName());
+        }
+      }
+    }
+  }
+  Map<String,Map<String,Integer>> changedComponentCount=new HashMap<String,Map<String,Integer>>();
+  for (  Map<State,List<ServiceComponentHost>> stateScHostMap : changedScHosts.values()) {
+    for (    Entry<State,List<ServiceComponentHost>> entry : stateScHostMap.entrySet()) {
+      if (State.STARTED != entry.getKey()) {
+        continue;
+      }
+      for (      ServiceComponentHost sch : entry.getValue()) {
+        if (State.START_FAILED != sch.getState() && State.INSTALLED != sch.getState()) {
+          continue;
+        }
+        if (!changedComponentCount.containsKey(sch.getServiceName())) {
+          changedComponentCount.put(sch.getServiceName(),new HashMap<String,Integer>());
+        }
+        if (!changedComponentCount.get(sch.getServiceName()).containsKey(sch.getServiceComponentName())) {
+          changedComponentCount.get(sch.getServiceName()).put(sch.getServiceComponentName(),1);
+        }
+ else {
+          Integer i=changedComponentCount.get(sch.getServiceName()).get(sch.getServiceComponentName());
+          changedComponentCount.get(sch.getServiceName()).put(sch.getServiceComponentName(),++i);
+        }
+      }
+    }
+  }
+  for (  Entry<String,Map<String,Integer>> entry : changedComponentCount.entrySet()) {
+    String serviceName=entry.getKey();
+    if (runSmokeTest && (entry.getValue().size() > 1)) {
+      smokeTestServices.add(serviceName);
+      continue;
+    }
+    for (    String componentName : changedComponentCount.get(serviceName).keySet()) {
+      ServiceComponent sc=cluster.getService(serviceName).getServiceComponent(componentName);
+      StackId stackId=sc.getDesiredStackVersion();
+      ComponentInfo compInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
+      if (runSmokeTest && compInfo.isMaster()) {
+        smokeTestServices.add(serviceName);
+      }
+    }
+  }
+  return smokeTestServices;
+}
