@@ -11,8 +11,8 @@
     }
  else {
       try {
-        if (null != report.getConfigTags() && !report.getConfigTags().isEmpty()) {
-          cl.updateActualConfigs(hostname,report.getConfigTags());
+        if (null != report.getConfigurationTags() && !report.getConfigurationTags().isEmpty()) {
+          cl.updateActualConfigs(hostname,report.getConfigurationTags());
         }
         Service svc=cl.getService(service);
         ServiceComponent svcComp=svc.getServiceComponent(report.getRole());
@@ -23,10 +23,19 @@
           if (scHost.getState().equals(State.UPGRADING)) {
             scHost.setStackVersion(scHost.getDesiredStackVersion());
           }
- else           if (scHost.getState().equals(State.STARTING) && null != report.getConfigTags()) {
-            scHost.updateActualConfigs(report.getConfigTags());
+ else           if (report.getRoleCommand().equals(RoleCommand.START.toString()) && null != report.getConfigurationTags()) {
+            LOG.info("Updating applied config on service " + scHost.getServiceName() + ", component "+ scHost.getServiceComponentName()+ ", host "+ scHost.getHostName());
+            scHost.updateActualConfigs(report.getConfigurationTags());
           }
-          scHost.handleEvent(new ServiceComponentHostOpSucceededEvent(schName,hostname,now));
+          if (RoleCommand.START.toString().equals(report.getRoleCommand())) {
+            scHost.handleEvent(new ServiceComponentHostStartedEvent(schName,hostname,now));
+          }
+ else           if (RoleCommand.STOP.toString().equals(report.getRoleCommand())) {
+            scHost.handleEvent(new ServiceComponentHostStoppedEvent(schName,hostname,now));
+          }
+ else {
+            scHost.handleEvent(new ServiceComponentHostOpSucceededEvent(schName,hostname,now));
+          }
         }
  else         if (report.getStatus().equals("FAILED")) {
           scHost.handleEvent(new ServiceComponentHostOpFailedEvent(schName,hostname,now));
