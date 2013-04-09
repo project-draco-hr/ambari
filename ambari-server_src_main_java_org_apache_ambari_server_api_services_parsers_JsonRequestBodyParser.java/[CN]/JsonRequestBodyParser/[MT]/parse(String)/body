@@ -1,33 +1,52 @@
 {
-  RequestBody body=new RequestBody();
-  body.setBody(s);
-  if (s != null && s.length() != 0) {
-    s=ensureArrayFormat(s);
+  Set<RequestBody> requestBodySet=new HashSet<RequestBody>();
+  RequestBody rootBody=new RequestBody();
+  rootBody.setBody(body);
+  if (body != null && body.length() != 0) {
     ObjectMapper mapper=new ObjectMapper();
     try {
-      JsonNode root=mapper.readTree(s);
-      Iterator<JsonNode> iter=root.getElements();
-      while (iter.hasNext()) {
+      JsonNode root=mapper.readTree(ensureArrayFormat(body));
+      Iterator<JsonNode> iterator=root.getElements();
+      while (iterator.hasNext()) {
+        JsonNode node=iterator.next();
         Map<String,Object> mapProperties=new HashMap<String,Object>();
+        Map<String,String> requestInfoProps=new HashMap<String,String>();
         NamedPropertySet propertySet=new NamedPropertySet("",mapProperties);
-        JsonNode node=iter.next();
-        processNode(node,"",propertySet,body);
-        String query=body.getRequestInfoProperties().get(QUERY_FIELD_NAME);
-        if (query != null) {
-          body.setQueryString(query);
+        processNode(node,"",propertySet,requestInfoProps);
+        if (!requestInfoProps.isEmpty()) {
+          RequestBody requestBody=new RequestBody();
+          requestBody.setBody(body);
+          for (          Map.Entry<String,String> entry : requestInfoProps.entrySet()) {
+            String key=entry.getKey();
+            String value=entry.getValue();
+            requestBody.addRequestInfoProperty(key,value);
+            if (key.equals(QUERY_FIELD_NAME)) {
+              requestBody.setQueryString(value);
+            }
+          }
+          if (!propertySet.getProperties().isEmpty()) {
+            requestBody.addPropertySet(propertySet);
+          }
+          requestBodySet.add(requestBody);
         }
-        if (propertySet.getProperties().size() != 0) {
-          body.addPropertySet(propertySet);
+ else {
+          if (!propertySet.getProperties().isEmpty()) {
+            rootBody.addPropertySet(propertySet);
+          }
+          requestBodySet.add(rootBody);
         }
       }
     }
  catch (    IOException e) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Caught exception parsing msg body.");
-        LOG.debug("Message Body: " + s,e);
+        LOG.debug("Message Body: " + body,e);
       }
       throw new BodyParseException(e);
     }
   }
-  return body;
+  if (requestBodySet.isEmpty()) {
+    requestBodySet.add(rootBody);
+  }
+  return requestBodySet;
 }
