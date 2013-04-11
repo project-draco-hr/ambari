@@ -1,0 +1,67 @@
+{
+  ActionQueue aq=new ActionQueue();
+  Clusters fsm=mock(Clusters.class);
+  Cluster oneClusterMock=mock(Cluster.class);
+  Service serviceObj=mock(Service.class);
+  ServiceComponent scomp=mock(ServiceComponent.class);
+  ServiceComponentHost sch=mock(ServiceComponentHost.class);
+  when(fsm.getCluster(anyString())).thenReturn(oneClusterMock);
+  when(oneClusterMock.getService(anyString())).thenReturn(serviceObj);
+  when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
+  when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
+  when(serviceObj.getCluster()).thenReturn(oneClusterMock);
+  ActionDBAccessor db=new ActionDBInMemoryImpl();
+  List<Stage> stages=new ArrayList<Stage>();
+  long now=System.currentTimeMillis();
+  Stage stage=new Stage(1,"/tmp","cluster1","testRequestFailureBasedOnSuccessFactor");
+  stage.setStageId(1);
+  addHostRoleExecutionCommand(now,stage,Role.SQOOP,Service.Type.SQOOP,RoleCommand.INSTALL,"host1","cluster1");
+  addHostRoleExecutionCommand(now,stage,Role.OOZIE_CLIENT,Service.Type.OOZIE,RoleCommand.INSTALL,"host1","cluster1");
+  addHostRoleExecutionCommand(now,stage,Role.MAPREDUCE_CLIENT,Service.Type.MAPREDUCE,RoleCommand.INSTALL,"host1","cluster1");
+  addHostRoleExecutionCommand(now,stage,Role.HBASE_CLIENT,Service.Type.HBASE,RoleCommand.INSTALL,"host1","cluster1");
+  addHostRoleExecutionCommand(now,stage,Role.GANGLIA_MONITOR,Service.Type.GANGLIA,RoleCommand.INSTALL,"host1","cluster1");
+  addHostRoleExecutionCommand(now,stage,Role.HBASE_CLIENT,Service.Type.HBASE,RoleCommand.INSTALL,"host2","cluster1");
+  addHostRoleExecutionCommand(now,stage,Role.GANGLIA_MONITOR,Service.Type.GANGLIA,RoleCommand.INSTALL,"host2","cluster1");
+  stages.add(stage);
+  HostRoleStatus[] statusesAtIterOne={HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.FAILED,HostRoleStatus.FAILED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED};
+  for (int index=0; index < stage.getOrderedHostRoleCommands().size(); index++) {
+    stage.getOrderedHostRoleCommands().get(index).setTaskId(index + 1);
+    stage.getOrderedHostRoleCommands().get(index).setStatus(statusesAtIterOne[index]);
+  }
+  stage.setLastAttemptTime("host1",Role.SQOOP.toString(),now);
+  stage.setLastAttemptTime("host1",Role.MAPREDUCE_CLIENT.toString(),now);
+  stage.setLastAttemptTime("host1",Role.OOZIE_CLIENT.toString(),now);
+  stage.setLastAttemptTime("host1",Role.GANGLIA_MONITOR.toString(),now);
+  stage.setLastAttemptTime("host1",Role.HBASE_CLIENT.toString(),now);
+  stage.setLastAttemptTime("host2",Role.GANGLIA_MONITOR.toString(),now);
+  stage.setLastAttemptTime("host2",Role.HBASE_CLIENT.toString(),now);
+  db.persistActions(stages);
+  ActionScheduler scheduler=new ActionScheduler(100,10000,db,aq,fsm,3,new HostsMap((String)null),new ServerActionManagerImpl(fsm));
+  ActionManager am=new ActionManager(2,10000,aq,fsm,db,new HostsMap((String)null),new ServerActionManagerImpl(fsm));
+  scheduler.doWork();
+  HostRoleStatus[] expectedStatusesAtIterOne={HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.FAILED,HostRoleStatus.FAILED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED};
+  for (int index=0; index < stage.getOrderedHostRoleCommands().size(); index++) {
+    log.info(stage.getOrderedHostRoleCommands().get(index).toString());
+    Assert.assertEquals(expectedStatusesAtIterOne[index],stage.getOrderedHostRoleCommands().get(index).getStatus());
+  }
+  HostRoleStatus[] statusesAtIterTwo={HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.FAILED,HostRoleStatus.FAILED,HostRoleStatus.QUEUED,HostRoleStatus.COMPLETED};
+  for (int index=0; index < stage.getOrderedHostRoleCommands().size(); index++) {
+    stage.getOrderedHostRoleCommands().get(index).setStatus(statusesAtIterTwo[index]);
+  }
+  scheduler.doWork();
+  HostRoleStatus[] expectedStatusesAtIterTwo={HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.FAILED,HostRoleStatus.FAILED,HostRoleStatus.QUEUED,HostRoleStatus.COMPLETED};
+  for (int index=0; index < stage.getOrderedHostRoleCommands().size(); index++) {
+    log.info(stage.getOrderedHostRoleCommands().get(index).toString());
+    Assert.assertEquals(expectedStatusesAtIterTwo[index],stage.getOrderedHostRoleCommands().get(index).getStatus());
+  }
+  HostRoleStatus[] statusesAtIterThree={HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.QUEUED,HostRoleStatus.FAILED,HostRoleStatus.FAILED,HostRoleStatus.FAILED,HostRoleStatus.COMPLETED};
+  for (int index=0; index < stage.getOrderedHostRoleCommands().size(); index++) {
+    stage.getOrderedHostRoleCommands().get(index).setStatus(statusesAtIterThree[index]);
+  }
+  scheduler.doWork();
+  HostRoleStatus[] expectedStatusesAtIterThree={HostRoleStatus.ABORTED,HostRoleStatus.ABORTED,HostRoleStatus.ABORTED,HostRoleStatus.ABORTED,HostRoleStatus.FAILED,HostRoleStatus.FAILED,HostRoleStatus.FAILED,HostRoleStatus.COMPLETED};
+  for (int index=0; index < stage.getOrderedHostRoleCommands().size(); index++) {
+    log.info(stage.getOrderedHostRoleCommands().get(index).toString());
+    Assert.assertEquals(expectedStatusesAtIterThree[index],stage.getOrderedHostRoleCommands().get(index).getStatus());
+  }
+}
