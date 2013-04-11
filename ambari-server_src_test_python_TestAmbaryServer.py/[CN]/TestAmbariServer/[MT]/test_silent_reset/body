@@ -1,20 +1,19 @@
-@patch.object(ambari_server, 'get_YN_input')
 @patch.object(ambari_server, 'setup_db')
 @patch.object(ambari_server, 'print_info_msg')
 @patch.object(ambari_server, 'run_os_command')
 @patch.object(ambari_server, 'configure_postgres_username_password')
-def test_reset(self, configure_postgres_username_password_mock, run_os_command_mock, print_info_msg_mock, setup_db_mock, get_YN_inputMock):
+def test_silent_reset(self, configure_postgres_username_password_mock, run_os_command_mock, print_info_msg_mock, setup_db_mock):
     out = StringIO.StringIO()
     sys.stdout = out
     args = MagicMock()
-    get_YN_inputMock.return_value = False
-    rcode = ambari_server.reset(args)
-    self.assertEqual((-1), rcode)
-    get_YN_inputMock.return_value = True
-    run_os_command_mock.return_value = (1, None, None)
-    rcode = ambari_server.reset(args)
-    self.assertEqual(1, rcode)
+    ambari_server.SILENT = True
+    self.assertTrue(ambari_server.SILENT)
     run_os_command_mock.return_value = (0, None, None)
+
+    def signal_handler(signum, frame):
+        self.fail('Timed out!')
+    signal.signal(signal.SIGALRM, signal_handler)
+    signal.alarm(5)
     rcode = ambari_server.reset(args)
     self.assertEqual(None, rcode)
     self.assertTrue(setup_db_mock.called)
