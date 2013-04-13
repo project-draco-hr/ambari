@@ -1,17 +1,44 @@
 {
   while (true) {
+    if (rescanSchedulerTask != null) {
+      rescanSchedulerTask.cancel();
+      scheduleTimer.purge();
+    }
     activeAwakeRequest=false;
-    if (componentHostSet != null) {
-      Iterator<ServiceComponentHost> iter=componentHostSet.iterator();
-      while (iter.hasNext()) {
-        ServiceComponentHost componentHost=iter.next();
-        boolean active=scan(componentHost.getHostName());
-        componentHost.setHAState((active) ? "active" : "passive");
+    if (componentHostMap != null) {
+      for (      Map.Entry<ServiceComponentHost,Boolean> entry : componentHostMap.entrySet()) {
+        entry.setValue(scan(entry.getKey().getHostName()));
         if (schedulerThread.isInterrupted()) {
+          scanTimeoutMsc=defaultScanTimeoutMsc;
           return;
         }
         if (activeAwakeRequest) {
+          scanTimeoutMsc=defaultScanTimeoutMsc;
+          attempts=0;
           break;
+        }
+      }
+      attempts++;
+      countAttempts=attempts;
+      LOG.info("Attempt to scan of HBASE_MASTER port : " + attempts);
+      if (validateScanResults(componentHostMap)) {
+        setScanResults(componentHostMap);
+        scanTimeoutMsc=defaultScanTimeoutMsc;
+        attempts=0;
+      }
+ else {
+        if (attempts <= maxAttempts) {
+          scanTimeoutMsc+=defaultScanTimeoutMsc;
+          testScanTimeoutMsc=scanTimeoutMsc;
+          LOG.info("Increase timeout for scan HBASE_MASTER port to : " + scanTimeoutMsc);
+          activeAwakeRequest=true;
+        }
+ else {
+          LOG.info("No valid data about HBASE_MASTER, ports will rescanned after " + rescanTimeoutMsc / 1000 + " seconds");
+          scanTimeoutMsc=defaultScanTimeoutMsc;
+          attempts=0;
+          rescanSchedulerTask=new RescanSchedulerTask(currentCluster);
+          scheduleTimer.schedule(rescanSchedulerTask,rescanTimeoutMsc);
         }
       }
     }
