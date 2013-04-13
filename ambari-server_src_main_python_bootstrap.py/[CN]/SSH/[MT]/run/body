@@ -1,17 +1,16 @@
 def run(self):
-    sshcommand = ['ssh', '-o', 'ConnectTimeOut=60', '-o', 'StrictHostKeyChecking=no', '-o', 'BatchMode=yes', '-tt', '-i', self.sshKeyFile, ('root@' + self.host), self.command]
+    sshcommand = ['ssh', '-o', 'ConnectTimeOut=60', '-o', 'StrictHostKeyChecking=no', '-o', 'BatchMode=yes', '-tt', '-i', self.sshKeyFile, ((self.user + '@') + self.host), self.command]
     logging.info(('Running ssh command ' + ' '.join(sshcommand)))
     sshstat = subprocess.Popen(sshcommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     log = sshstat.communicate()
     self.ret['exitstatus'] = sshstat.returncode
-    self.ret['log'] = ((('STDOUT\n' + log[0]) + '\nSTDERR\n') + log[1])
+    errorMsg = log[1]
+    if (self.errorMessage and (sshstat.returncode != 0)):
+        errorMsg = ((self.errorMessage + '\n') + errorMsg)
+    self.ret['log'] = ((('STDOUT\n' + log[0]) + '\nSTDERR\n') + errorMsg)
     logFilePath = os.path.join(self.bootdir, (self.host + '.log'))
-    logFile = open(logFilePath, 'a+')
-    logFile.write(self.ret['log'])
-    logFile.close
+    self.writeLogToFile(logFilePath)
     doneFilePath = os.path.join(self.bootdir, (self.host + '.done'))
-    doneFile = open(doneFilePath, 'w+')
-    doneFile.write(str(sshstat.returncode))
-    doneFile.close()
+    self.writeDoneToFile(doneFilePath, str(sshstat.returncode))
     logging.info(((('Setup agent done for host ' + self.host) + ', exitcode=') + str(sshstat.returncode)))
     pass

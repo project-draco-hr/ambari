@@ -1,6 +1,10 @@
 {
   String hostString=createHostString(sshHostInfo.getHosts());
-  String commands[]=new String[6];
+  String user=sshHostInfo.getUser();
+  if (user == null || user.isEmpty()) {
+    user=DEFAULT_USER;
+  }
+  String commands[]=new String[8];
   String shellCommand[]=new String[3];
   BSStat stat=BSStat.RUNNING;
   String scriptlog="";
@@ -9,16 +13,27 @@
     if (LOG.isDebugEnabled()) {
       LOG.debug("Using ssh key=\"" + sshHostInfo.getSshKey() + "\"");
     }
+    String password=sshHostInfo.getPassword();
+    if (password != null && !password.isEmpty()) {
+      this.passwordFile=new File(this.requestIdDir,"host_pass");
+      String lineSeparator=System.getProperty("line.separator");
+      password=password + lineSeparator;
+      writePasswordFile(password);
+    }
     writeSshKeyFile(sshHostInfo.getSshKey());
     shellCommand[0]="sh";
     shellCommand[1]="-c";
     commands[0]=this.bsScript;
     commands[1]=hostString;
     commands[2]=this.requestIdDir.toString();
-    commands[3]=this.sshKeyFile.toString();
-    commands[4]=this.agentSetupScript.toString();
-    commands[5]=this.ambariHostname;
-    LOG.info("Host= " + hostString + " bs="+ this.bsScript+ " requestDir="+ requestIdDir+ " keyfile="+ this.sshKeyFile+ " server="+ this.ambariHostname);
+    commands[3]=user;
+    commands[4]=this.sshKeyFile.toString();
+    commands[5]=this.agentSetupScript.toString();
+    commands[6]=this.ambariHostname;
+    if (this.passwordFile != null) {
+      commands[7]=this.passwordFile.toString();
+    }
+    LOG.info("Host= " + hostString + " bs="+ this.bsScript+ " requestDir="+ requestIdDir+ " user="+ user+ " keyfile="+ this.sshKeyFile+ " passwordFile "+ this.passwordFile+ " server="+ this.ambariHostname);
     String[] env=new String[]{"AMBARI_PASSPHRASE=" + agentSetupPassword};
     if (this.verbose)     env=new String[]{env[0]," BS_VERBOSE=\"-vvv\" "};
     StringBuilder commandString=new StringBuilder();
@@ -118,7 +133,15 @@
       FileUtils.forceDelete(sshKeyFile);
     }
  catch (    IOException io) {
-      LOG.info(io.getMessage());
+      LOG.warn(io.getMessage());
+    }
+    if (passwordFile != null) {
+      try {
+        FileUtils.forceDelete(passwordFile);
+      }
+ catch (      IOException io) {
+        LOG.warn(io.getMessage());
+      }
     }
     finished();
   }
