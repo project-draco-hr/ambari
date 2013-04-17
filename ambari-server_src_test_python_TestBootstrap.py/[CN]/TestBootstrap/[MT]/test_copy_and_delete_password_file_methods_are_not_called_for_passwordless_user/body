@@ -1,25 +1,28 @@
-def test_copy_and_delete_password_file_methods_are_not_called_for_passwordless_user(self):
-    Popen.communicate = (lambda self: ('', ''))
-    SCP.writeLogToFile = (lambda self, logFilePath: None)
-    SSH.writeLogToFile = (lambda self, logFilePath: None)
-    SSH.writeDoneToFile = (lambda self, doneFilePath, returncode: None)
-    BootStrap.createDoneFiles = (lambda self: None)
-
-    def side_effect(self):
-        self.copyPasswordFile_called = True
-        self.hostlist_to_remove_password_file = ['hostname']
-        return 0
-    BootStrap.copyPasswordFile = side_effect
-    deletePasswordFile = MagicMock()
-    deletePasswordFile.return_value = 0
-    BootStrap.deletePasswordFile = deletePasswordFile
-    changePasswordFileModeOnHost = MagicMock()
-    changePasswordFileModeOnHost.return_value = 0
-    BootStrap.changePasswordFileModeOnHost = changePasswordFileModeOnHost
+@patch.object(SCP, 'writeLogToFile')
+@patch.object(SSH, 'writeLogToFile')
+@patch.object(SSH, 'writeDoneToFile')
+@patch.object(Popen, 'communicate')
+@patch.object(BootStrap, 'createDoneFiles')
+@patch.object(BootStrap, 'deletePasswordFile')
+@patch.object(BootStrap, 'changePasswordFileModeOnHost')
+def test_copy_and_delete_password_file_methods_are_not_called_for_passwordless_user(self, changePasswordFileModeOnHost_method, deletePasswordFile_method, createDoneFiles_method, communicate_method, SSH_writeDoneToFile_method, SSH_writeLogToFile_method, SCP_writeLogToFile_method):
+    SCP_writeLogToFile_method.return_value = None
+    SSH_writeLogToFile_method.return_value = None
+    SSH_writeDoneToFile_method.return_value = None
+    communicate_method.return_value = ('', '')
+    createDoneFiles_method.return_value = None
+    deletePasswordFile_method.return_value = 0
+    changePasswordFileModeOnHost_method.return_value = 0
     os.environ[AMBARI_PASSPHRASE_VAR_NAME] = ''
-    bootstrap = BootStrap(['hostname'], 'user', 'sshKeyFile', 'scriptDir', 'bootdir', 'setupAgentFile', 'ambariServer', 'centos6')
+    bootstrap = BootStrap(['hostname'], 'user', 'sshKeyFile', 'scriptDir', 'bootdir', 'setupAgentFile', 'ambariServer', 'centos6', None)
     bootstrap.copyPasswordFile_called = False
+
+    def side_effect():
+        bootstrap.copyPasswordFile_called = True
+        bootstrap.hostlist_to_remove_password_file = ['hostname']
+        return 0
+    bootstrap.copyPasswordFile = side_effect
     ret = bootstrap.run()
     self.assertFalse(bootstrap.copyPasswordFile_called)
-    self.assertFalse(deletePasswordFile.called)
-    self.assertFalse(changePasswordFileModeOnHost.called)
+    self.assertFalse(deletePasswordFile_method.called)
+    self.assertFalse(changePasswordFileModeOnHost_method.called)
