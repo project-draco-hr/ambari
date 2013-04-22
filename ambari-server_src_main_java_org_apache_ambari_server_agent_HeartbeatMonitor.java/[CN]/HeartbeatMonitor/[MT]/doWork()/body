@@ -15,6 +15,15 @@
     if (lastHeartbeat + 5 * threadWakeupInterval < now) {
       LOG.warn("Hearbeat lost from host " + host);
       hostObj.handleEvent(new HostHeartbeatLostEvent(host));
+      for (      Cluster cluster : fsm.getClustersForHost(hostObj.getHostName())) {
+        for (        ServiceComponentHost sch : cluster.getServiceComponentHosts(hostObj.getHostName())) {
+          Service s=cluster.getService(sch.getServiceName());
+          ServiceComponent sc=s.getServiceComponent(sch.getServiceComponentName());
+          if (!sc.isClientComponent()) {
+            sch.setState(State.UNKNOWN);
+          }
+        }
+      }
       if (hostState != hostObj.getState() && scanner != null)       scanner.updateHBaseMaster(hostObj);
       actionQueue.dequeueAll(host);
       actionManager.handleLostHost(host);
