@@ -13,24 +13,18 @@
   String hostname="ahost.ambari.apache.org";
   Host host=mock(Host.class);
   when(fsm.getHost(anyString())).thenReturn(host);
-  when(host.getState()).thenReturn(HostState.HEALTHY);
+  when(host.getState()).thenReturn(HostState.HEARTBEAT_LOST);
   when(host.getHostName()).thenReturn(hostname);
-  ActionDBAccessor db=mock(ActionDBAccessorImpl.class);
+  ActionDBAccessor db=new ActionDBInMemoryImpl();
   List<Stage> stages=new ArrayList<Stage>();
   Stage s=StageUtils.getATestStage(1,977,hostname);
   stages.add(s);
-  when(db.getStagesInProgress()).thenReturn(stages);
-  ActionScheduler scheduler=new ActionScheduler(100,100,db,aq,fsm,10000,new HostsMap((String)null),null);
+  db.persistActions(stages);
+  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),null);
   scheduler.setTaskTimeoutAdjustment(false);
   scheduler.start();
-  List<AgentCommand> ac=waitForQueueSize(hostname,aq,1);
-  assertTrue(ac.get(0) instanceof ExecutionCommand);
-  assertEquals("1-977",((ExecutionCommand)(ac.get(0))).getCommandId());
-  ac=waitForQueueSize(hostname,aq,1);
-  assertTrue(ac.get(0) instanceof ExecutionCommand);
-  assertEquals("1-977",((ExecutionCommand)(ac.get(0))).getCommandId());
-  s.setHostRoleStatus(hostname,"NAMENODE",HostRoleStatus.COMPLETED);
-  ac=aq.dequeueAll(hostname);
-  ac=waitForQueueSize(hostname,aq,0);
-  scheduler.stop();
+  while (!stages.get(0).getHostRoleStatus(hostname,"NAMENODE").equals(HostRoleStatus.TIMEDOUT)) {
+    Thread.sleep(100L);
+  }
+  assertEquals(stages.get(0).getHostRoleStatus(hostname,"NAMENODE"),HostRoleStatus.TIMEDOUT);
 }

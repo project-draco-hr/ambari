@@ -7,11 +7,13 @@
   }
   for (  String host : s.getHosts()) {
     List<ExecutionCommandWrapper> commandWrappers=s.getExecutionCommands(host);
+    Cluster cluster=fsmObject.getCluster(s.getClusterName());
+    Host hostObj=fsmObject.getHost(host);
     for (    ExecutionCommandWrapper wrapper : commandWrappers) {
       ExecutionCommand c=wrapper.getExecutionCommand();
       String roleStr=c.getRole().toString();
       HostRoleStatus status=s.getHostRoleStatus(host,roleStr);
-      if (timeOutActionNeeded(status,s,host,roleStr,now,taskTimeout)) {
+      if (timeOutActionNeeded(status,s,hostObj,roleStr,now,taskTimeout)) {
         LOG.info("Host:" + host + ", role:"+ roleStr+ ", actionId:"+ s.getActionId()+ " timed out");
         if (s.getAttemptCount(host,roleStr) >= maxAttempts) {
           LOG.warn("Host:" + host + ", role:"+ roleStr+ ", actionId:"+ s.getActionId()+ " expired");
@@ -19,7 +21,6 @@
           status=s.getHostRoleStatus(host,roleStr);
           ServiceComponentHostOpFailedEvent timeoutEvent=new ServiceComponentHostOpFailedEvent(roleStr,host,now);
           try {
-            Cluster cluster=fsmObject.getCluster(s.getClusterName());
             Service svc=cluster.getService(c.getServiceName());
             ServiceComponent svcComp=svc.getServiceComponent(roleStr);
             ServiceComponentHost svcCompHost=svcComp.getServiceComponentHost(host);
@@ -34,6 +35,7 @@ catch (          InvalidStateTransitionException e) {
 catch (          AmbariException ex) {
             LOG.warn("Invalid live state",ex);
           }
+          actionQueue.dequeue(host,c.getCommandId());
         }
  else {
           commandsToSchedule.add(c);
