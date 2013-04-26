@@ -1,16 +1,34 @@
 {
   List<StatusCommand> cmds=new ArrayList<StatusCommand>();
   for (  Cluster cl : fsm.getClustersForHost(hostname)) {
-    List<ServiceComponentHost> roleList=cl.getServiceComponentHosts(hostname);
-    for (    ServiceComponentHost sch : roleList) {
+    for (    ServiceComponentHost sch : cl.getServiceComponentHosts(hostname)) {
       String serviceName=sch.getServiceName();
       if (LOG.isDebugEnabled()) {
         LOG.debug("Live status will include status of service " + serviceName + " of cluster "+ cl.getClusterName());
       }
-      Map<String,Config> configs=sch.getDesiredConfigs();
       Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
-      for (      Config config : configs.values()) {
-        if (config.getType().equals("global"))         configurations.put(config.getType(),config.getProperties());
+      Config clusterConfig=cl.getDesiredConfigByType("global");
+      if (null != clusterConfig) {
+        Map<String,String> props=new HashMap<String,String>(clusterConfig.getProperties());
+        Service service=cl.getService(sch.getServiceName());
+        Config svcConfig=service.getDesiredConfigs().get("global");
+        if (null != svcConfig && !svcConfig.getVersionTag().equals(clusterConfig.getVersionTag())) {
+          props.putAll(svcConfig.getProperties());
+        }
+        Host host=fsm.getHost(hostname);
+        DesiredConfig dc=host.getDesiredConfigs(cl.getClusterId()).get("global");
+        if (null != dc) {
+          Config hostConfig=cl.getConfig("global",dc.getVersion());
+          if (null != hostConfig) {
+            props.putAll(hostConfig.getProperties());
+          }
+        }
+        configurations.put("global",props);
+      }
+      if (configurations.isEmpty()) {
+        Service service=cl.getService(sch.getServiceName());
+        Config config=service.getDesiredConfigs().get("global");
+        if (null != config)         configurations.put("global",new HashMap<String,String>(config.getProperties()));
       }
       StatusCommand statusCmd=new StatusCommand();
       statusCmd.setClusterName(cl.getClusterName());
