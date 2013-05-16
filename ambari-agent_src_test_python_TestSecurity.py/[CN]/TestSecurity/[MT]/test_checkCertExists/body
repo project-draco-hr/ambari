@@ -1,0 +1,34 @@
+@patch('os.path.exists')
+@patch.object(security.CertificateManager, 'loadSrvrCrt')
+@patch.object(security.CertificateManager, 'getAgentKeyName')
+@patch.object(security.CertificateManager, 'genAgentCrtReq')
+@patch.object(security.CertificateManager, 'getAgentCrtName')
+@patch.object(security.CertificateManager, 'reqSignCrt')
+def test_checkCertExists(self, reqSignCrt_mock, getAgentCrtName_mock, genAgentCrtReq_mock, getAgentKeyName_mock, loadSrvrCrt_mock, exists_mock):
+    self.config.set('security', 'keysdir', '/dummy-keysdir')
+    getAgentKeyName_mock.return_value = 'dummy AgentKeyName'
+    getAgentCrtName_mock.return_value = 'dummy AgentCrtName'
+    man = CertificateManager(self.config)
+    exists_mock.side_effect = [True, True, True]
+    man.checkCertExists()
+    self.assertFalse(loadSrvrCrt_mock.called)
+    self.assertFalse(genAgentCrtReq_mock.called)
+    self.assertFalse(reqSignCrt_mock.called)
+    exists_mock.side_effect = [False, True, True]
+    man.checkCertExists()
+    self.assertTrue(loadSrvrCrt_mock.called)
+    self.assertFalse(genAgentCrtReq_mock.called)
+    self.assertFalse(reqSignCrt_mock.called)
+    loadSrvrCrt_mock.reset_mock()
+    exists_mock.side_effect = [True, False, True]
+    man.checkCertExists()
+    self.assertFalse(loadSrvrCrt_mock.called)
+    self.assertTrue(genAgentCrtReq_mock.called)
+    self.assertFalse(reqSignCrt_mock.called)
+    genAgentCrtReq_mock.reset_mock()
+    exists_mock.side_effect = [True, True, False]
+    man.checkCertExists()
+    self.assertFalse(loadSrvrCrt_mock.called)
+    self.assertFalse(genAgentCrtReq_mock.called)
+    self.assertTrue(reqSignCrt_mock.called)
+    reqSignCrt_mock.reset_mock()

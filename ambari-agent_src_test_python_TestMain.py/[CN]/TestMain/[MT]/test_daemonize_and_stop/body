@@ -1,0 +1,25 @@
+@patch('time.sleep')
+@patch('os.kill')
+@patch('os._exit')
+@patch('os.path.exists')
+def test_daemonize_and_stop(self, exists_mock, _exit_mock, kill_mock, sleep_mock):
+    oldpid = ProcessHelper.pidfile
+    pid = str(os.getpid())
+    (_, tmpoutfile) = tempfile.mkstemp()
+    ProcessHelper.pidfile = tmpoutfile
+    main.daemonize()
+    saved = open(ProcessHelper.pidfile, 'r').read()
+    self.assertEqual(pid, saved)
+    exists_mock.return_value = False
+    main.stop_agent()
+    kill_mock.assert_called_with(int(pid), signal.SIGTERM)
+    _exit_mock.assert_called_with(0)
+    kill_mock.reset_mock()
+    _exit_mock.reset_mock()
+    exists_mock.return_value = True
+    main.stop_agent()
+    kill_mock.assert_any_call(int(pid), signal.SIGTERM)
+    kill_mock.assert_any_call(int(pid), signal.SIGKILL)
+    _exit_mock.assert_called_with(1)
+    ProcessHelper.pidfile = oldpid
+    os.remove(tmpoutfile)
