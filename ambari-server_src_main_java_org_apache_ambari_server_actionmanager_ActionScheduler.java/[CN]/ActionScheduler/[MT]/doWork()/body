@@ -1,76 +1,82 @@
 {
-  List<Stage> stages=db.getStagesInProgress();
-  if (LOG.isDebugEnabled()) {
-    LOG.debug("Scheduler wakes up");
-  }
-  if (stages == null || stages.isEmpty()) {
+  try {
+    unitOfWork.begin();
+    List<Stage> stages=db.getStagesInProgress();
     if (LOG.isDebugEnabled()) {
-      LOG.debug("No stage in progress..nothing to do");
+      LOG.debug("Scheduler wakes up");
     }
-    return;
-  }
-  for (  Stage s : stages) {
-    List<ExecutionCommand> commandsToSchedule=new ArrayList<ExecutionCommand>();
-    Map<String,RoleStats> roleStats=processInProgressStage(s,commandsToSchedule);
-    boolean failed=false;
-    for (    String role : roleStats.keySet()) {
-      RoleStats stats=roleStats.get(role);
+    if (stages == null || stages.isEmpty()) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Stats for role:" + role + ", stats="+ stats);
+        LOG.debug("No stage in progress..nothing to do");
       }
-      if (stats.isRoleFailed()) {
-        failed=true;
-        break;
-      }
-    }
-    if (!failed) {
-      failed=hasPreviousStageFailed(s);
-    }
-    if (failed) {
-      LOG.warn("Operation completely failed, aborting request id:" + s.getRequestId());
-      db.abortOperation(s.getRequestId());
       return;
     }
-    for (    ExecutionCommand cmd : commandsToSchedule) {
-      if (cmd.getRole() == Role.AMBARI_SERVER_ACTION) {
-        try {
-          long now=System.currentTimeMillis();
-          String hostName=cmd.getHostname();
-          String roleName=cmd.getRole().toString();
-          s.setStartTime(hostName,roleName,now);
-          s.setLastAttemptTime(hostName,roleName,now);
-          s.incrementAttemptCount(hostName,roleName);
-          s.setHostRoleStatus(hostName,roleName,HostRoleStatus.QUEUED);
-          db.hostRoleScheduled(s,hostName,roleName);
-          String actionName=cmd.getRoleParams().get(ServerAction.ACTION_NAME);
-          this.serverActionManager.executeAction(actionName,cmd.getCommandParams());
-          reportServerActionSuccess(s,cmd);
+    for (    Stage s : stages) {
+      List<ExecutionCommand> commandsToSchedule=new ArrayList<ExecutionCommand>();
+      Map<String,RoleStats> roleStats=processInProgressStage(s,commandsToSchedule);
+      boolean failed=false;
+      for (      String role : roleStats.keySet()) {
+        RoleStats stats=roleStats.get(role);
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Stats for role:" + role + ", stats="+ stats);
         }
- catch (        AmbariException e) {
-          LOG.warn("Could not execute server action " + cmd.toString(),e);
-          reportServerActionFailure(s,cmd,e.getMessage());
+        if (stats.isRoleFailed()) {
+          failed=true;
+          break;
         }
       }
+      if (!failed) {
+        failed=hasPreviousStageFailed(s);
+      }
+      if (failed) {
+        LOG.warn("Operation completely failed, aborting request id:" + s.getRequestId());
+        db.abortOperation(s.getRequestId());
+        return;
+      }
+      for (      ExecutionCommand cmd : commandsToSchedule) {
+        if (cmd.getRole() == Role.AMBARI_SERVER_ACTION) {
+          try {
+            long now=System.currentTimeMillis();
+            String hostName=cmd.getHostname();
+            String roleName=cmd.getRole().toString();
+            s.setStartTime(hostName,roleName,now);
+            s.setLastAttemptTime(hostName,roleName,now);
+            s.incrementAttemptCount(hostName,roleName);
+            s.setHostRoleStatus(hostName,roleName,HostRoleStatus.QUEUED);
+            db.hostRoleScheduled(s,hostName,roleName);
+            String actionName=cmd.getRoleParams().get(ServerAction.ACTION_NAME);
+            this.serverActionManager.executeAction(actionName,cmd.getCommandParams());
+            reportServerActionSuccess(s,cmd);
+          }
+ catch (          AmbariException e) {
+            LOG.warn("Could not execute server action " + cmd.toString(),e);
+            reportServerActionFailure(s,cmd,e.getMessage());
+          }
+        }
  else {
-        try {
-          scheduleHostRole(s,cmd);
-        }
- catch (        InvalidStateTransitionException e) {
-          LOG.warn("Could not schedule host role " + cmd.toString(),e);
-          db.abortHostRole(cmd.getHostname(),s.getRequestId(),s.getStageId(),cmd.getRole());
+          try {
+            scheduleHostRole(s,cmd);
+          }
+ catch (          InvalidStateTransitionException e) {
+            LOG.warn("Could not schedule host role " + cmd.toString(),e);
+            db.abortHostRole(cmd.getHostname(),s.getRequestId(),s.getStageId(),cmd.getRole());
+          }
         }
       }
-    }
-    boolean goToNextStage=true;
-    for (    String role : roleStats.keySet()) {
-      RoleStats stats=roleStats.get(role);
-      if (!stats.isSuccessFactorMet()) {
-        goToNextStage=false;
-        break;
+      boolean goToNextStage=true;
+      for (      String role : roleStats.keySet()) {
+        RoleStats stats=roleStats.get(role);
+        if (!stats.isSuccessFactorMet()) {
+          goToNextStage=false;
+          break;
+        }
+      }
+      if (!goToNextStage) {
+        return;
       }
     }
-    if (!goToNextStage) {
-      return;
-    }
+  }
+  finally {
+    unitOfWork.end();
   }
 }
