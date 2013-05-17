@@ -1,102 +1,91 @@
 {
   Set<String> ids=getRequestPropertyIds(request,predicate);
   if (ids.isEmpty()) {
-    return true;
+    return resource;
   }
   if (statePropertyId != null) {
     String state=(String)resource.getPropertyValue(statePropertyId);
     if (state != null && !healthyStates.contains(state)) {
-      return true;
+      return resource;
     }
   }
   String componentName=(String)resource.getPropertyValue(componentNamePropertyId);
   if (getComponentMetrics().get(componentName) == null) {
-    return true;
+    return resource;
   }
   String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
   String port=getPort(clusterName,componentName);
   if (port == null) {
-    String error="Unable to get JMX metrics.  No port value for " + componentName;
-    logError(error,null);
-    throw new SystemException(error,null);
+    throw new SystemException("Unable to get JMX metrics.  No port value for " + componentName,null);
   }
   String hostName=getHost(resource,clusterName,componentName);
   if (hostName == null) {
-    String error="Unable to get JMX metrics.  No host name for " + componentName;
-    logError(error,null);
-    throw new SystemException(error,null);
+    throw new SystemException("Unable to get JMX metrics.  No host name for " + componentName,null);
   }
-  String spec=getSpec(hostName,port);
-  InputStream in=null;
   try {
-    in=streamProvider.readFrom(spec);
-    JMXMetricHolder metricHolder=objectReader.readValue(in);
-    Map<String,Map<String,Object>> categories=new HashMap<String,Map<String,Object>>();
-    for (    Map<String,Object> bean : metricHolder.getBeans()) {
-      String category=getCategory(bean);
-      if (category != null) {
-        categories.put(category,bean);
+    InputStream in=streamProvider.readFrom(getSpec(hostName,port));
+    try {
+      JMXMetricHolder metricHolder=objectReader.readValue(in);
+      Map<String,Map<String,Object>> categories=new HashMap<String,Map<String,Object>>();
+      for (      Map<String,Object> bean : metricHolder.getBeans()) {
+        String category=getCategory(bean);
+        if (category != null) {
+          categories.put(category,bean);
+        }
       }
-    }
-    for (    String propertyId : ids) {
-      Map<String,PropertyInfo> propertyInfoMap=getPropertyInfoMap(componentName,propertyId);
-      for (      Map.Entry<String,PropertyInfo> entry : propertyInfoMap.entrySet()) {
-        PropertyInfo propertyInfo=entry.getValue();
-        propertyId=entry.getKey();
-        if (propertyInfo.isPointInTime()) {
-          String property=propertyInfo.getPropertyId();
-          String category="";
-          List<String> keyList=new LinkedList<String>();
-          int keyStartIndex=property.indexOf('[',0);
-          int firstKeyIndex=keyStartIndex > -1 ? keyStartIndex : property.length();
-          while (keyStartIndex > -1) {
-            int keyEndIndex=property.indexOf(']',keyStartIndex);
-            if (keyEndIndex > -1 & keyEndIndex > keyStartIndex) {
-              keyList.add(property.substring(keyStartIndex + 1,keyEndIndex));
-              keyStartIndex=property.indexOf('[',keyEndIndex);
-            }
+      for (      String propertyId : ids) {
+        Map<String,PropertyInfo> propertyInfoMap=getPropertyInfoMap(componentName,propertyId);
+        for (        Map.Entry<String,PropertyInfo> entry : propertyInfoMap.entrySet()) {
+          PropertyInfo propertyInfo=entry.getValue();
+          propertyId=entry.getKey();
+          if (propertyInfo.isPointInTime()) {
+            String property=propertyInfo.getPropertyId();
+            String category="";
+            List<String> keyList=new LinkedList<String>();
+            int keyStartIndex=property.indexOf('[',0);
+            int firstKeyIndex=keyStartIndex > -1 ? keyStartIndex : property.length();
+            while (keyStartIndex > -1) {
+              int keyEndIndex=property.indexOf(']',keyStartIndex);
+              if (keyEndIndex > -1 & keyEndIndex > keyStartIndex) {
+                keyList.add(property.substring(keyStartIndex + 1,keyEndIndex));
+                keyStartIndex=property.indexOf('[',keyEndIndex);
+              }
  else {
-              keyStartIndex=-1;
-            }
-          }
-          int dotIndex=property.lastIndexOf('.',firstKeyIndex - 1);
-          if (dotIndex != -1) {
-            category=property.substring(0,dotIndex);
-            property=property.substring(dotIndex + 1,firstKeyIndex);
-          }
-          Map<String,Object> properties=categories.get(category);
-          if (properties != null && properties.containsKey(property)) {
-            Object value=properties.get(property);
-            if (keyList.size() > 0 && value instanceof Map) {
-              Map map=(Map)value;
-              for (              String key : keyList) {
-                value=map.get(key);
-                if (value instanceof Map) {
-                  map=(Map)value;
-                }
- else {
-                  break;
-                }
+                keyStartIndex=-1;
               }
             }
-            resource.setProperty(propertyId,value);
+            int dotIndex=property.lastIndexOf('.',firstKeyIndex - 1);
+            if (dotIndex != -1) {
+              category=property.substring(0,dotIndex);
+              property=property.substring(dotIndex + 1,firstKeyIndex);
+            }
+            Map<String,Object> properties=categories.get(category);
+            if (properties != null && properties.containsKey(property)) {
+              Object value=properties.get(property);
+              if (keyList.size() > 0 && value instanceof Map) {
+                Map map=(Map)value;
+                for (                String key : keyList) {
+                  value=map.get(key);
+                  if (value instanceof Map) {
+                    map=(Map)value;
+                  }
+ else {
+                    break;
+                  }
+                }
+              }
+              resource.setProperty(propertyId,value);
+            }
           }
         }
       }
     }
-  }
- catch (  IOException e) {
-    logError(spec,e);
-  }
- finally {
-    if (in != null) {
-      try {
-        in.close();
-      }
- catch (      IOException e) {
-        logError("Unable to close http input steam : spec=" + spec,e);
-      }
+  finally {
+      in.close();
     }
   }
-  return true;
+ catch (  IOException e) {
+    logException(e);
+  }
+  return resource;
 }

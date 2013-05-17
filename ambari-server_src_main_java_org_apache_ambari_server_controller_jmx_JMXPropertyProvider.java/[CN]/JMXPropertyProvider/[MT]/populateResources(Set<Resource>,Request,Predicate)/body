@@ -1,9 +1,29 @@
 {
-  Set<Resource> keepers=new HashSet<Resource>();
+  CompletionService<Resource> completionService=new ExecutorCompletionService<Resource>(EXECUTOR_SERVICE);
   for (  Resource resource : resources) {
-    if (populateResource(resource,request,predicate)) {
-      keepers.add(resource);
+    completionService.submit(getPopulateResourceCallable(resource,request,predicate));
+  }
+  Set<Resource> keepers=new HashSet<Resource>();
+  try {
+    for (int i=0; i < resources.size(); ++i) {
+      Future<Resource> resourceFuture=completionService.poll(populateTimeout,TimeUnit.MILLISECONDS);
+      if (resourceFuture == null) {
+        LOG.error(TIMED_OUT_MSG);
+        break;
+      }
+ else {
+        Resource resource=resourceFuture.get();
+        if (resource != null) {
+          keepers.add(resource);
+        }
+      }
     }
+  }
+ catch (  InterruptedException e) {
+    logException(e);
+  }
+catch (  ExecutionException e) {
+    rethrowSystemException(e.getCause());
   }
   return keepers;
 }
