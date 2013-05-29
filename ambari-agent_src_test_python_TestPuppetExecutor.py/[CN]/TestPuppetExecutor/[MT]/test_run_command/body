@@ -1,0 +1,25 @@
+@patch.object(PuppetExecutor, 'runPuppetFile')
+def test_run_command(self, runPuppetFileMock):
+    tmpdir = AmbariConfig().getConfig().get('stack', 'installprefix')
+    puppetInstance = PuppetExecutor('/tmp', '/x', '/y', tmpdir, AmbariConfig().getConfig())
+    jsonFile = open('../../main/python/ambari_agent/test.json', 'r')
+    jsonStr = jsonFile.read()
+    parsedJson = json.loads(jsonStr)
+    parsedJson['taskId'] = 1
+
+    def side_effect1(puppetFile, result, puppetEnv, tmpoutfile, tmperrfile):
+        result['exitcode'] = 0
+    runPuppetFileMock.side_effect = side_effect1
+    puppetInstance.reposInstalled = False
+    res = puppetInstance.runCommand(parsedJson, (tmpdir + '/out.txt'), (tmpdir + '/err.txt'))
+    self.assertEquals(res['exitcode'], 0)
+    self.assertTrue(puppetInstance.reposInstalled)
+
+    def side_effect2(puppetFile, result, puppetEnv, tmpoutfile, tmperrfile):
+        result['exitcode'] = 999
+    runPuppetFileMock.side_effect = side_effect2
+    puppetInstance.reposInstalled = False
+    res = puppetInstance.runCommand(parsedJson, (tmpdir + '/out.txt'), (tmpdir + '/err.txt'))
+    self.assertEquals(res['exitcode'], 999)
+    self.assertFalse(puppetInstance.reposInstalled)
+    os.unlink(((((tmpdir + os.sep) + 'site-') + str(parsedJson['taskId'])) + '.pp'))

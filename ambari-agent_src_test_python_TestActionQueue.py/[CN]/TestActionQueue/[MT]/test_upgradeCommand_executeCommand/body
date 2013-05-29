@@ -1,8 +1,31 @@
 @patch.object(UpgradeExecutor, 'perform_stack_upgrade')
-def test_upgradeCommand_executeCommand(self, perform_stack_upgrade_method):
+@patch.object(PuppetExecutor, 'runCommand')
+@patch.object(ActualConfigHandler, 'findRunDir')
+def test_upgradeCommand_executeCommand(self, action_conf_handler_findRunDir_method, puppet_executor_run_command_method, perform_stack_upgrade_method):
     queue = ActionQueue(config=MagicMock())
     command = {'commandId': 17, 'role': 'role', 'taskId': 'taskId', 'clusterName': 'clusterName', 'serviceName': 'serviceName', 'roleCommand': 'UPGRADE', 'hostname': 'localhost.localdomain', 'hostLevelParams': 'hostLevelParams', 'clusterHostInfo': 'clusterHostInfo', 'configurations': 'configurations', 'commandType': 'EXECUTION_COMMAND', 'configurations': {'global': {}, }, 'roleParams': {}, 'commandParams': {'source_stack_version': 'HDP-1.2.1', 'target_stack_version': 'HDP-1.3.0', }, }
-    perform_stack_upgrade_method.return_value = {'exitcode': 0, 'stdout': 'abc', 'stderr': 'def', }
+    upgrade_method_return_value = {'exitcode': 0, 'stdout': 'abc', 'stderr': 'def', }
+    perform_stack_upgrade_method.return_value = upgrade_method_return_value
     result = queue.executeCommand(command)
     expected_result = [{'actionId': 17, 'clusterName': 'clusterName', 'exitCode': 0, 'role': 'role', 'serviceName': 'serviceName', 'status': 'COMPLETED', 'stderr': 'def', 'stdout': 'abc', 'taskId': 'taskId', 'roleCommand': 'UPGRADE', }]
+    self.assertEquals(result, expected_result)
+    puppet_executor_run_command_method.return_value = {'exitcode': 0, 'stdout': 'abc', 'stderr': 'def', }
+    command['roleCommand'] = 'START'
+    action_conf_handler_findRunDir_method.return_value = AmbariConfig().getConfig().get('stack', 'installprefix')
+    expected_result[0]['configurationTags'] = None
+    expected_result[0]['roleCommand'] = 'START'
+    result = queue.executeCommand(command)
+    self.assertEquals(result, expected_result)
+    command['roleCommand'] = 'UPGRADE'
+    upgrade_method_return_value['exitcode'] = 1
+    upgrade_method_return_value['stdout'] = ''
+    upgrade_method_return_value['stderr'] = ''
+    perform_stack_upgrade_method.return_value = upgrade_method_return_value
+    result = queue.executeCommand(command)
+    expected_result[0]['roleCommand'] = 'UPGRADE'
+    del expected_result[0]['configurationTags']
+    expected_result[0]['exitCode'] = 1
+    expected_result[0]['stderr'] = 'None'
+    expected_result[0]['stdout'] = 'None'
+    expected_result[0]['status'] = 'FAILED'
     self.assertEquals(result, expected_result)
