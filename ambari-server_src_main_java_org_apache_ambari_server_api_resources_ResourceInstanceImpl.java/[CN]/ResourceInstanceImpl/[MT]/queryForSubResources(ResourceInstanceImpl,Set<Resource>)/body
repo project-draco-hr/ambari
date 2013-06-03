@@ -1,0 +1,40 @@
+{
+  Map<Resource.Type,QueryResult> subResourceMap=new HashMap<Resource.Type,QueryResult>();
+  Map<String,Predicate> predicateMap=new HashMap<String,Predicate>();
+  for (  Resource resource : resources) {
+    for (    Map.Entry<String,ResourceInstanceImpl> entry : resourceInstance.m_mapQuerySubResources.entrySet()) {
+      String subResCategory=entry.getKey();
+      ResourceInstanceImpl r=entry.getValue();
+      Predicate predicate=predicateMap.get(subResCategory);
+      setParentIdsOnSubResource(resource,r);
+      if (predicate == null) {
+        predicate=r.getQuery().getPredicate();
+      }
+ else {
+        predicate=new OrPredicate(predicate,r.getQuery().getPredicate());
+      }
+      predicateMap.put(subResCategory,predicate);
+    }
+  }
+  for (  Map.Entry<String,ResourceInstanceImpl> entry : resourceInstance.m_mapQuerySubResources.entrySet()) {
+    String subResCategory=entry.getKey();
+    ResourceInstanceImpl subResource=entry.getValue();
+    Predicate predicate=predicateMap.get(subResCategory);
+    Request request=subResource.createRequest();
+    Resource.Type resourceType=subResource.getResourceDefinition().getType();
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Executing resource query: " + request + " where "+ predicate);
+    }
+    Map<String,ResourceInstanceImpl> mapSubResources=subResource.m_mapQuerySubResources;
+    if (subResource.m_setQueryProperties.isEmpty() && mapSubResources.isEmpty()) {
+      mapSubResources.putAll(subResource.ensureSubResources());
+    }
+    Iterable<Resource> iterResource=getClusterController().getResources(resourceType,request,predicate);
+    Set<Resource> subResources=new HashSet<Resource>();
+    for (    Resource resource : iterResource) {
+      subResources.add(resource);
+    }
+    subResourceMap.put(resourceType,new QueryResult(subResources,queryForSubResources(subResource,subResources),subResource));
+  }
+  return subResourceMap;
+}
