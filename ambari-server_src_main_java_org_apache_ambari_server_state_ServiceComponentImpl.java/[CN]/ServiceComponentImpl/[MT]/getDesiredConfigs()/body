@@ -1,22 +1,28 @@
 {
-  readWriteLock.readLock().lock();
+  clusterGlobalLock.readLock().lock();
   try {
-    Map<String,Config> map=new HashMap<String,Config>();
-    for (    Entry<String,String> entry : desiredConfigs.entrySet()) {
-      Config config=service.getCluster().getConfig(entry.getKey(),entry.getValue());
-      if (null != config) {
-        map.put(entry.getKey(),config);
+    readWriteLock.readLock().lock();
+    try {
+      Map<String,Config> map=new HashMap<String,Config>();
+      for (      Entry<String,String> entry : desiredConfigs.entrySet()) {
+        Config config=service.getCluster().getConfig(entry.getKey(),entry.getValue());
+        if (null != config) {
+          map.put(entry.getKey(),config);
+        }
       }
-    }
-    Map<String,Config> svcConfigs=service.getDesiredConfigs();
-    for (    Entry<String,Config> entry : svcConfigs.entrySet()) {
-      if (!map.containsKey(entry.getKey())) {
-        map.put(entry.getKey(),entry.getValue());
+      Map<String,Config> svcConfigs=service.getDesiredConfigs();
+      for (      Entry<String,Config> entry : svcConfigs.entrySet()) {
+        if (!map.containsKey(entry.getKey())) {
+          map.put(entry.getKey(),entry.getValue());
+        }
       }
+      return Collections.unmodifiableMap(map);
     }
-    return Collections.unmodifiableMap(map);
+  finally {
+      readWriteLock.readLock().unlock();
+    }
   }
   finally {
-    readWriteLock.readLock().unlock();
+    clusterGlobalLock.readLock().unlock();
   }
 }

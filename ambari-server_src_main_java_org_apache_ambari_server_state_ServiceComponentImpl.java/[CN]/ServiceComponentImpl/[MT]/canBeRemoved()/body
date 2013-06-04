@@ -1,18 +1,24 @@
 {
-  readWriteLock.readLock().lock();
+  clusterGlobalLock.readLock().lock();
   try {
-    if (!getDesiredState().isRemovableState()) {
-      return false;
-    }
-    for (    ServiceComponentHost sch : hostComponents.values()) {
-      if (!sch.canBeRemoved()) {
-        LOG.warn("Found non removable hostcomponent when trying to" + " delete service component" + ", clusterName=" + getClusterName() + ", serviceName="+ getServiceName()+ ", componentName="+ getName()+ ", hostname="+ sch.getHostName());
+    readWriteLock.readLock().lock();
+    try {
+      if (!getDesiredState().isRemovableState()) {
         return false;
       }
+      for (      ServiceComponentHost sch : hostComponents.values()) {
+        if (!sch.canBeRemoved()) {
+          LOG.warn("Found non removable hostcomponent when trying to" + " delete service component" + ", clusterName=" + getClusterName() + ", serviceName="+ getServiceName()+ ", componentName="+ getName()+ ", hostname="+ sch.getHostName());
+          return false;
+        }
+      }
+      return true;
     }
-    return true;
+  finally {
+      readWriteLock.readLock().unlock();
+    }
   }
   finally {
-    readWriteLock.readLock().unlock();
+    clusterGlobalLock.readLock().unlock();
   }
 }

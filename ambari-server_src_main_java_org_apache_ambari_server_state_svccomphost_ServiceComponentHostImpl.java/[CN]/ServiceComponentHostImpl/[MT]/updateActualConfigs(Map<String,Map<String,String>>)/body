@@ -1,24 +1,30 @@
 {
-  writeLock.lock();
+  clusterGlobalLock.readLock().lock();
   try {
-    actualConfigs=new HashMap<String,DesiredConfig>();
-    String hostName=getHostName();
-    for (    Entry<String,Map<String,String>> entry : configTags.entrySet()) {
-      String type=entry.getKey();
-      Map<String,String> values=entry.getValue();
-      String tag=values.get("tag");
-      String hostTag=values.get("host_override_tag");
-      DesiredConfig dc=new DesiredConfig();
-      dc.setVersion(tag);
-      actualConfigs.put(type,dc);
-      if (null != hostTag && null != hostName) {
-        List<HostOverride> list=new ArrayList<HostOverride>();
-        list.add(new HostOverride(hostName,hostTag));
-        dc.setHostOverrides(list);
+    writeLock.lock();
+    try {
+      actualConfigs=new HashMap<String,DesiredConfig>();
+      String hostName=getHostName();
+      for (      Entry<String,Map<String,String>> entry : configTags.entrySet()) {
+        String type=entry.getKey();
+        Map<String,String> values=entry.getValue();
+        String tag=values.get("tag");
+        String hostTag=values.get("host_override_tag");
+        DesiredConfig dc=new DesiredConfig();
+        dc.setVersion(tag);
+        actualConfigs.put(type,dc);
+        if (null != hostTag && null != hostName) {
+          List<HostOverride> list=new ArrayList<HostOverride>();
+          list.add(new HostOverride(hostName,hostTag));
+          dc.setHostOverrides(list);
+        }
       }
+    }
+  finally {
+      writeLock.unlock();
     }
   }
   finally {
-    writeLock.unlock();
+    clusterGlobalLock.readLock().unlock();
   }
 }

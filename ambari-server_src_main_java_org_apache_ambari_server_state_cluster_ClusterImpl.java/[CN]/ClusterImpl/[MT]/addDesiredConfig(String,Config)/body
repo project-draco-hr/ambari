@@ -1,24 +1,36 @@
 {
   if (null == user)   throw new NullPointerException("User must be specified.");
-  Config currentDesired=getDesiredConfigByType(config.getType());
-  if (null != currentDesired && currentDesired.getVersionTag().equals(config.getVersionTag())) {
-    return false;
-  }
-  Collection<ClusterConfigMappingEntity> entities=clusterEntity.getConfigMappingEntities();
-  for (  ClusterConfigMappingEntity e : entities) {
-    if (e.isSelected() > 0 && e.getType().equals(config.getType())) {
-      e.setSelected(0);
+  clusterGlobalLock.readLock().lock();
+  try {
+    readWriteLock.writeLock().lock();
+    try {
+      Config currentDesired=getDesiredConfigByType(config.getType());
+      if (null != currentDesired && currentDesired.getVersionTag().equals(config.getVersionTag())) {
+        return false;
+      }
+      Collection<ClusterConfigMappingEntity> entities=clusterEntity.getConfigMappingEntities();
+      for (      ClusterConfigMappingEntity e : entities) {
+        if (e.isSelected() > 0 && e.getType().equals(config.getType())) {
+          e.setSelected(0);
+        }
+      }
+      ClusterConfigMappingEntity entity=new ClusterConfigMappingEntity();
+      entity.setClusterEntity(clusterEntity);
+      entity.setClusterId(clusterEntity.getClusterId());
+      entity.setCreateTimestamp(Long.valueOf(System.currentTimeMillis()));
+      entity.setSelected(1);
+      entity.setUser(user);
+      entity.setType(config.getType());
+      entity.setVersion(config.getVersionTag());
+      entities.add(entity);
+      clusterDAO.merge(clusterEntity);
+      return true;
+    }
+  finally {
+      readWriteLock.writeLock().unlock();
     }
   }
-  ClusterConfigMappingEntity entity=new ClusterConfigMappingEntity();
-  entity.setClusterEntity(clusterEntity);
-  entity.setClusterId(clusterEntity.getClusterId());
-  entity.setCreateTimestamp(Long.valueOf(System.currentTimeMillis()));
-  entity.setSelected(1);
-  entity.setUser(user);
-  entity.setType(config.getType());
-  entity.setVersion(config.getVersionTag());
-  entities.add(entity);
-  clusterDAO.merge(clusterEntity);
-  return true;
+  finally {
+    clusterGlobalLock.readLock().unlock();
+  }
 }

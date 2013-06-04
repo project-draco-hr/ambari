@@ -3,20 +3,26 @@
     LOG.debug("Handling ServiceComponentHostEvent event," + " eventType=" + event.getType().name() + ", event="+ event.toString());
   }
   State oldState=getState();
+  clusterGlobalLock.readLock().lock();
   try {
-    writeLock.lock();
     try {
-      stateMachine.doTransition(event.getType(),event);
-      stateEntity.setCurrentState(stateMachine.getCurrentState());
-      saveIfPersisted();
+      writeLock.lock();
+      try {
+        stateMachine.doTransition(event.getType(),event);
+        stateEntity.setCurrentState(stateMachine.getCurrentState());
+        saveIfPersisted();
+      }
+ catch (      InvalidStateTransitionException e) {
+        LOG.error("Can't handle ServiceComponentHostEvent event at" + " current state" + ", serviceComponentName=" + this.getServiceComponentName() + ", hostName="+ this.getHostName()+ ", currentState="+ oldState+ ", eventType="+ event.getType()+ ", event="+ event);
+        throw e;
+      }
     }
- catch (    InvalidStateTransitionException e) {
-      LOG.error("Can't handle ServiceComponentHostEvent event at" + " current state" + ", serviceComponentName=" + this.getServiceComponentName() + ", hostName="+ this.getHostName()+ ", currentState="+ oldState+ ", eventType="+ event.getType()+ ", event="+ event);
-      throw e;
+  finally {
+      writeLock.unlock();
     }
   }
   finally {
-    writeLock.unlock();
+    clusterGlobalLock.readLock().unlock();
   }
   if (!oldState.equals(getState())) {
     if (LOG.isDebugEnabled()) {

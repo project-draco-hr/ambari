@@ -1,18 +1,24 @@
 {
   loadServices();
-  writeLock.lock();
+  clusterGlobalLock.writeLock().lock();
   try {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Adding a new Service" + ", clusterName=" + getClusterName() + ", clusterId="+ getClusterId()+ ", serviceName="+ serviceName);
+    writeLock.lock();
+    try {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Adding a new Service" + ", clusterName=" + getClusterName() + ", clusterId="+ getClusterId()+ ", serviceName="+ serviceName);
+      }
+      if (services.containsKey(serviceName)) {
+        throw new AmbariException("Service already exists" + ", clusterName=" + getClusterName() + ", clusterId="+ getClusterId()+ ", serviceName="+ serviceName);
+      }
+      Service s=serviceFactory.createNew(this,serviceName);
+      this.services.put(s.getName(),s);
+      return s;
     }
-    if (services.containsKey(serviceName)) {
-      throw new AmbariException("Service already exists" + ", clusterName=" + getClusterName() + ", clusterId="+ getClusterId()+ ", serviceName="+ serviceName);
+  finally {
+      writeLock.unlock();
     }
-    Service s=serviceFactory.createNew(this,serviceName);
-    this.services.put(s.getName(),s);
-    return s;
   }
   finally {
-    writeLock.unlock();
+    clusterGlobalLock.writeLock().unlock();
   }
 }

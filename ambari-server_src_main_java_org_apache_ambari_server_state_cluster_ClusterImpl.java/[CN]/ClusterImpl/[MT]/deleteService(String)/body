@@ -1,16 +1,22 @@
 {
   loadServices();
-  readWriteLock.writeLock().lock();
+  clusterGlobalLock.writeLock().lock();
   try {
-    Service service=getService(serviceName);
-    LOG.info("Deleting service for cluster" + ", clusterName=" + getClusterName() + ", serviceName="+ service.getName());
-    if (!service.canBeRemoved()) {
-      throw new AmbariException("Could not delete service from cluster" + ", clusterName=" + getClusterName() + ", serviceName="+ service.getName());
+    readWriteLock.writeLock().lock();
+    try {
+      Service service=getService(serviceName);
+      LOG.info("Deleting service for cluster" + ", clusterName=" + getClusterName() + ", serviceName="+ service.getName());
+      if (!service.canBeRemoved()) {
+        throw new AmbariException("Could not delete service from cluster" + ", clusterName=" + getClusterName() + ", serviceName="+ service.getName());
+      }
+      service.delete();
+      services.remove(serviceName);
     }
-    service.delete();
-    services.remove(serviceName);
+  finally {
+      readWriteLock.writeLock().unlock();
+    }
   }
   finally {
-    readWriteLock.writeLock().unlock();
+    clusterGlobalLock.writeLock().unlock();
   }
 }

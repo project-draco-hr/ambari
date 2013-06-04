@@ -1,34 +1,40 @@
 {
-  readWriteLock.writeLock().lock();
+  clusterGlobalLock.readLock().lock();
   try {
-    for (    Entry<String,Config> entry : configs.entrySet()) {
-      boolean contains=false;
-      for (      ComponentConfigMappingEntity componentConfigMappingEntity : desiredStateEntity.getComponentConfigMappingEntities()) {
-        if (entry.getKey().equals(componentConfigMappingEntity.getConfigType())) {
-          contains=true;
-          componentConfigMappingEntity.setTimestamp(new Date().getTime());
-          componentConfigMappingEntity.setVersionTag(entry.getValue().getVersionTag());
-          if (persisted) {
-            componentConfigMappingDAO.merge(componentConfigMappingEntity);
+    readWriteLock.writeLock().lock();
+    try {
+      for (      Entry<String,Config> entry : configs.entrySet()) {
+        boolean contains=false;
+        for (        ComponentConfigMappingEntity componentConfigMappingEntity : desiredStateEntity.getComponentConfigMappingEntities()) {
+          if (entry.getKey().equals(componentConfigMappingEntity.getConfigType())) {
+            contains=true;
+            componentConfigMappingEntity.setTimestamp(new Date().getTime());
+            componentConfigMappingEntity.setVersionTag(entry.getValue().getVersionTag());
+            if (persisted) {
+              componentConfigMappingDAO.merge(componentConfigMappingEntity);
+            }
           }
         }
+        if (!contains) {
+          ComponentConfigMappingEntity newEntity=new ComponentConfigMappingEntity();
+          newEntity.setClusterId(desiredStateEntity.getClusterId());
+          newEntity.setServiceName(desiredStateEntity.getServiceName());
+          newEntity.setComponentName(desiredStateEntity.getComponentName());
+          newEntity.setConfigType(entry.getKey());
+          newEntity.setVersionTag(entry.getValue().getVersionTag());
+          newEntity.setTimestamp(new Date().getTime());
+          newEntity.setServiceComponentDesiredStateEntity(desiredStateEntity);
+          desiredStateEntity.getComponentConfigMappingEntities().add(newEntity);
+        }
+        this.desiredConfigs.put(entry.getKey(),entry.getValue().getVersionTag());
       }
-      if (!contains) {
-        ComponentConfigMappingEntity newEntity=new ComponentConfigMappingEntity();
-        newEntity.setClusterId(desiredStateEntity.getClusterId());
-        newEntity.setServiceName(desiredStateEntity.getServiceName());
-        newEntity.setComponentName(desiredStateEntity.getComponentName());
-        newEntity.setConfigType(entry.getKey());
-        newEntity.setVersionTag(entry.getValue().getVersionTag());
-        newEntity.setTimestamp(new Date().getTime());
-        newEntity.setServiceComponentDesiredStateEntity(desiredStateEntity);
-        desiredStateEntity.getComponentConfigMappingEntities().add(newEntity);
-      }
-      this.desiredConfigs.put(entry.getKey(),entry.getValue().getVersionTag());
+      saveIfPersisted();
     }
-    saveIfPersisted();
+  finally {
+      readWriteLock.writeLock().unlock();
+    }
   }
   finally {
-    readWriteLock.writeLock().unlock();
+    clusterGlobalLock.readLock().unlock();
   }
 }
