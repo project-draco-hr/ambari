@@ -12,17 +12,31 @@ def reset(args):
         print "Ambari Server 'reset' cancelled"
         return (-1)
     print 'Reseting the Server database...'
-    configure_postgres_username_password(args)
-    dbname = args.postgredbname
-    filename = args.drop_script_file
-    username = args.postgres_username
-    password = args.postgres_password
-    command = SETUP_DB_CMD[:]
-    command[(-1)] = command[(-1)].format(filename, username, password)
-    (retcode, outdata, errdata) = run_os_command(command)
-    if (not (retcode == 0)):
-        print errdata
-        return retcode
-    print_info_msg('About to run database setup')
-    setup_db(args)
+    parse_properties(args)
+    if (args.persistence_type == 'remote'):
+        if (get_db_cli_tool(args) != (-1)):
+            (retcode, out, err) = execute_remote_script(args, DATABASE_DROP_SCRIPTS[DATABASE_INDEX])
+            if (not (retcode == 0)):
+                print err
+                return retcode
+            (retcode, out, err) = execute_remote_script(args, DATABASE_INIT_SCRIPTS[DATABASE_INDEX])
+            if (not (retcode == 0)):
+                print err
+                return retcode
+        else:
+            print_error_msg((DATABASE_CLI_TOOLS[DATABASE_INDEX] + ' not found. Unable to perform automatic reset.'))
+            return (-1)
+    else:
+        dbname = args.database_name
+        filename = args.drop_script_file
+        username = args.database_username
+        password = args.database_password
+        command = SETUP_DB_CMD[:]
+        command[(-1)] = command[(-1)].format(filename, username, password)
+        (retcode, outdata, errdata) = run_os_command(command)
+        if (not (retcode == 0)):
+            print errdata
+            return retcode
+        print_info_msg('About to run database setup')
+        setup_db(args)
     print "Ambari Server 'reset' complete"

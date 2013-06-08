@@ -9,7 +9,11 @@ def setup(args):
     if ((not (retcode == 0)) and (out == IP_TBLS_ENABLED)):
         print_error_msg('Failed to stop iptables. Exiting.')
         sys.exit(retcode)
-    if (not REMOTE_DATABASE):
+    print 'Configuring database...'
+    prompt_db_properties(args)
+    if is_local_database(args):
+        print 'Default properties detected. Using built-in database.'
+        store_local_properties(args)
         print 'Checking PostgreSQL...'
         retcode = check_postgre_up()
         if (not (retcode == 0)):
@@ -26,7 +30,12 @@ def setup(args):
             print_error_msg('Unable to configure PostgreSQL server. Exiting')
             sys.exit(retcode)
     else:
-        print 'Configuring remote database connection properties'
+        retcode = store_remote_properties(args)
+        if (retcode != 0):
+            print_error_msg('Unable to save config file')
+            sys.exit(retcode)
+        print_warning_msg('Before starting server JDBC driver for {0} should be placed to {1}.'.format(args.database, JAVA_SHARE_PATH))
+        print 'Configuring remote database connection properties...'
         retcode = setup_remote_db(args)
         if (not (retcode == 0)):
             print_error_msg('Error while configuring connection properties. Exiting')
@@ -41,4 +50,9 @@ def setup(args):
     if (not (retcode == 0)):
         print_error_msg('Configure of OS settings in ambari.properties failed. Exiting.')
         sys.exit(retcode)
-    print "Ambari Server 'setup' finished successfully"
+    if args.warnings:
+        print "Ambari Server 'setup' finished with warnings:"
+        for warning in args.warnings:
+            print warning
+    else:
+        print "Ambari Server 'setup' finished successfully"

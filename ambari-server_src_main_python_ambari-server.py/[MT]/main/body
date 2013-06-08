@@ -1,6 +1,5 @@
 def main():
     parser = optparse.OptionParser(usage='usage: %prog [options] action [stack_id]')
-    parser.add_option('-d', '--postgredbname', default='ambari', help='Database name in postgresql')
     parser.add_option('-f', '--init-script-file', default='/var/lib/ambari-server/resources/Ambari-DDL-Postgres-CREATE.sql', help='File with setup script')
     parser.add_option('-r', '--drop-script-file', default='/var/lib/ambari-server/resources/Ambari-DDL-Postgres-DROP.sql', help='File with drop script')
     parser.add_option('-u', '--upgrade-script-file', default='/var/lib/ambari-server/resources/upgrade/ddl/Ambari-DDL-Postgres-UPGRADE-1.3.0.sql', help='File with upgrade script')
@@ -8,17 +7,47 @@ def main():
     parser.add_option('-j', '--java-home', default=None, help='Use specified java_home.  Must be valid on all hosts')
     parser.add_option('-v', '--verbose', action='store_true', dest='verbose', default=False, help='Print verbose status messages')
     parser.add_option('-s', '--silent', action='store_true', dest='silent', default=False, help='Silently accepts default prompt values')
-    parser.add_option('-b', '--remote-database', action='store_true', dest='remote_database', default=False, help='Set up remote database instead of local')
     parser.add_option('-g', '--debug', action='store_true', dest='debug', default=False, help='Start ambari-server in debug mode')
+    parser.add_option('--database', default=None, help='Database to use postgres|oracle|mysql', dest='database')
+    parser.add_option('--databasehost', default=None, help='Hostname of database server', dest='database_host')
+    parser.add_option('--databaseport', default=None, help='Database port', dest='database_port')
+    parser.add_option('--databasename', default=None, help='Database/Schema/Service name', dest='database_name')
+    parser.add_option('--databaseusername', default=None, help='Database user login', dest='database_username')
+    parser.add_option('--databasepassword', default=None, help='Database user password', dest='database_password')
     (options, args) = parser.parse_args()
     global VERBOSE
     VERBOSE = options.verbose
     global SILENT
     SILENT = options.silent
-    global REMOTE_DATABASE
-    REMOTE_DATABASE = options.remote_database
     global SERVER_DEBUG_MODE
     SERVER_DEBUG_MODE = options.debug
+    global DATABASE_INDEX
+    global PROMPT_DATABASE_OPTIONS
+    options.warnings = []
+    if ((options.database is None) and (options.database_host is None) and (options.database_port is None) and (options.database_name is None) and (options.database_username is None) and (options.database_password is None)):
+        PROMPT_DATABASE_OPTIONS = True
+    elif (not ((options.database is not None) and (options.database_host is not None) and (options.database_port is not None) and (options.database_name is not None) and (options.database_username is not None) and (options.database_password is not None))):
+        parser.error('All database options should be set.')
+        pass
+    if ((options.database is not None) and (options.database not in DATABASE_NAMES)):
+        print 'Incorrect database'
+        parser.print_help()
+        exit((-1))
+    elif (options.database is not None):
+        options.database = options.database.lower()
+        DATABASE_INDEX = DATABASE_NAMES.index(options.database)
+    if (options.database_port is not None):
+        correct = False
+        try:
+            port = int(options.database_port)
+            if (65536 > port > 0):
+                correct = True
+        except ValueError:
+            pass
+        if (not correct):
+            print ('Incorrect database port ' + options.database_port)
+            parser.print_help()
+            exit((-1))
     if (len(args) == 0):
         print parser.print_help()
         parser.error('No action entered')
