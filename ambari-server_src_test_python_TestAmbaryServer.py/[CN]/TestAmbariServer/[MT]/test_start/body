@@ -8,7 +8,8 @@
 @patch.object(ambari_server, 'print_error_msg')
 @patch.object(ambari_server, 'check_postgre_up')
 @patch.object(ambari_server, 'check_iptables')
-def test_start(self, check_iptables_mock, check_postgre_up_mock, print_error_msg_mock, find_jdk_mock, get_conf_dir_mock, print_info_msg_mock, popenMock, openMock, pexistsMock, killMock):
+@patch.object(ambari_server, 'parse_properties_file')
+def test_start(self, parse_properties_file_mock, check_iptables_mock, check_postgre_up_mock, print_error_msg_mock, find_jdk_mock, get_conf_dir_mock, print_info_msg_mock, popenMock, openMock, pexistsMock, killMock):
     out = StringIO.StringIO()
     sys.stdout = out
     args = MagicMock()
@@ -24,11 +25,17 @@ def test_start(self, check_iptables_mock, check_postgre_up_mock, print_error_msg
     rcode = ambari_server.start(args)
     self.assertEqual((-1), rcode)
     find_jdk_mock.return_value = 'somewhere'
+    args.persistence_type = 'remote'
     check_postgre_up_mock.return_value = 0
     check_iptables_mock.return_value = (0, None)
     p = MagicMock()
     popenMock.return_value = p
     rcode = ambari_server.start(args)
     self.assertEqual(None, rcode)
+    self.assertFalse(check_postgre_up_mock.called)
     self.assertTrue(f.write.called)
+    args.persistence_type = 'local'
+    rcode = ambari_server.start(args)
+    self.assertEqual(None, rcode)
+    self.assertTrue(check_postgre_up_mock.called)
     sys.stdout = sys.__stdout__
