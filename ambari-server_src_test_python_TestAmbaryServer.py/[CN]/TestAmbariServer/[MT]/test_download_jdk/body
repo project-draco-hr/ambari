@@ -1,27 +1,24 @@
 @patch('os.stat')
 @patch('os.path.isfile')
 @patch('os.path.exists')
-@patch('__builtin__.open')
 @patch.object(ambari_server, 'track_jdk')
 @patch.object(ambari_server, 'get_YN_input')
 @patch.object(ambari_server, 'run_os_command')
-@patch.object(ambari_server, 'Properties')
 @patch.object(ambari_server, 'write_property')
 @patch.object(ambari_server, 'print_info_msg')
 @patch.object(ambari_server, 'get_JAVA_HOME')
-@patch.object(ambari_server, 'get_conf_dir')
-@patch.object(ambari_server, 'search_file')
-def test_download_jdk(self, search_file_mock, get_conf_dir_mock, get_JAVA_HOME_mock, print_info_msg_mock, write_property_mock, Properties_mock, run_os_command_mock, get_YN_input_mock, track_jdk_mock, openMock, path_existsMock, path_isfileMock, statMock):
+@patch.object(ambari_server, 'get_ambari_properties')
+def test_download_jdk(self, get_ambari_properties_mock, get_JAVA_HOME_mock, print_info_msg_mock, write_property_mock, run_os_command_mock, get_YN_input_mock, track_jdk_mock, path_existsMock, path_isfileMock, statMock):
     out = StringIO.StringIO()
     sys.stdout = out
     args = MagicMock()
     args.java_home = 'somewhere'
-    search_file_mock.return_value = None
+    path_existsMock.return_value = False
+    get_JAVA_HOME_mock.return_value = False
+    get_ambari_properties_mock.return_value = (-1)
     rcode = ambari_server.download_jdk(args)
     self.assertEqual((-1), rcode)
-    self.assertTrue(search_file_mock.called)
-    self.assertTrue(get_conf_dir_mock.called)
-    search_file_mock.return_value = 'something'
+    self.assertTrue(get_ambari_properties_mock.called)
     get_JAVA_HOME_mock.return_value = True
     path_existsMock.return_value = True
     rcode = ambari_server.download_jdk(args)
@@ -30,13 +27,9 @@ def test_download_jdk(self, search_file_mock, get_conf_dir_mock, get_JAVA_HOME_m
     rcode = ambari_server.download_jdk(args)
     self.assertEqual(0, rcode)
     self.assertTrue(write_property_mock.called)
-    p = MagicMock()
-    Properties_mock.return_value = p
-    openMock.side_effect = Exception('test exception')
     path_existsMock.return_value = False
-    rcode = ambari_server.download_jdk(args)
-    self.assertEqual((-1), rcode)
-    openMock.side_effect = None
+    p = MagicMock()
+    get_ambari_properties_mock.return_value = p
     p.__getitem__.side_effect = KeyError('test exception')
     rcode = ambari_server.download_jdk(args)
     self.assertEqual((-1), rcode)
