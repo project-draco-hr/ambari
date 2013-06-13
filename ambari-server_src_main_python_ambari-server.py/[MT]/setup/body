@@ -1,24 +1,32 @@
 def setup(args):
+    if (not is_root()):
+        err = 'Ambari-server setup should be run with root-level privileges'
+        raise FatalException(4, err)
     print 'Checking SELinux...'
     retcode = check_selinux()
     if (not (retcode == 0)):
-        print_error_msg('Failed to disable SELinux. Exiting.')
-        sys.exit(retcode)
+        err = 'Failed to disable SELinux. Exiting.'
+        raise FatalException(retcode, err)
+    retcode = check_ambari_user()
+    if (not (retcode == 0)):
+        err = 'Failed to create user. Exiting.'
+        raise FatalException(retcode, err)
     print 'Checking iptables...'
     (retcode, out) = check_iptables()
     if ((not (retcode == 0)) and (out == IP_TBLS_ENABLED)):
-        print_error_msg('Failed to stop iptables. Exiting.')
-        sys.exit(retcode)
+        err = 'Failed to stop iptables. Exiting.'
+        raise FatalException(retcode, err)
     print 'Checking JDK...'
-    retcode = download_jdk(args)
-    if (not (retcode == 0)):
-        print_error_msg('Downloading or installing JDK failed. Exiting.')
-        sys.exit(retcode)
+    try:
+        download_jdk(args)
+    except FatalException as e:
+        err = 'Downloading or installing JDK failed: {0}. Exiting.'.format(e)
+        raise FatalException(e.code, err)
     print 'Completing setup...'
     retcode = configure_os_settings()
     if (not (retcode == 0)):
-        print_error_msg('Configure of OS settings in ambari.properties failed. Exiting.')
-        sys.exit(retcode)
+        err = 'Configure of OS settings in ambari.properties failed. Exiting.'
+        raise FatalException(retcode, err)
     print 'Configuring database...'
     prompt_db_properties(args)
     if is_local_database(args):
@@ -27,31 +35,33 @@ def setup(args):
         print 'Checking PostgreSQL...'
         retcode = check_postgre_up()
         if (not (retcode == 0)):
-            print_error_msg('Unable to start PostgreSQL server. Exiting')
-            sys.exit(retcode)
+            err = 'Unable to start PostgreSQL server. Exiting'
+            raise FatalException(retcode, err)
         print 'Configuring database...'
         retcode = setup_db(args)
         if (not (retcode == 0)):
-            print_error_msg('Running database init script was failed. Exiting.')
-            sys.exit(retcode)
+            err = 'Running database init script was failed. Exiting.'
+            raise FatalException(retcode, err)
         print 'Configuring PostgreSQL...'
         retcode = configure_postgres()
         if (not (retcode == 0)):
-            print_error_msg('Unable to configure PostgreSQL server. Exiting')
-            sys.exit(retcode)
+            err = 'Unable to configure PostgreSQL server. Exiting'
+            raise FatalException(retcode, err)
     else:
         retcode = store_remote_properties(args)
         if (retcode != 0):
-            print_error_msg('Unable to save config file')
-            sys.exit(retcode)
+            err = 'Unable to save config file'
+            raise FatalException(retcode, err)
         check_jdbc_drivers(args)
         print 'Configuring remote database connection properties...'
         retcode = setup_remote_db(args)
         if (retcode == (-1)):
-            sys.exit(retcode)
+            err = 'The cli was not found'
+            raise FatalException(retcode, err)
         if (not (retcode == 0)):
-            print_error_msg('Error while configuring connection properties. Exiting')
-            sys.exit(retcode)
+            err = 'Error while configuring connection properties. Exiting'
+            raise FatalException(retcode, err)
+        check_jdbc_drivers(args)
     if args.warnings:
         print "Ambari Server 'setup' finished with warnings:"
         for warning in args.warnings:

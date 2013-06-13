@@ -1,13 +1,14 @@
 @patch.object(ambari_server, 'get_conf_dir')
-def test_update_ambari_properties(self, get_conf_dir_mock):
-    properties = ['server.jdbc.user.name=ambari-server\n', 'server.jdbc.user.passwd=/etc/ambari-server/conf/password.dat\n', 'java.home=/usr/jdk64/jdk1.6.0_31\n', 'server.os_type=redhat6\n']
+@patch('os.rename')
+def test_update_ambari_properties(self, rename_mock, get_conf_dir_mock):
+    properties = ['server.jdbc.user.name=ambari-server\n', 'server.jdbc.user.passwd=/etc/ambari-server/conf/password.dat\n', 'java.home=/usr/jdk64/jdk1.6.0_31\n', 'server.os_type=redhat6\n', 'ambari.user=ambari\n']
     NEW_PROPERTY = 'some_new_property=some_value\n'
     CHANGED_VALUE_PROPERTY = 'server.os_type=should_not_overwrite_value\n'
     get_conf_dir_mock.return_value = ''
-    tf1 = tempfile.NamedTemporaryFile()
-    tf2 = tempfile.NamedTemporaryFile()
-    ambari_server.AMBARI_PROPERTIES_RPMSAVE_FILE = tf1.name
-    ambari_server.AMBARI_PROPERTIES_FILE = tf2.name
+    (tf1, fn1) = tempfile.mkstemp()
+    (tf2, fn2) = tempfile.mkstemp()
+    ambari_server.AMBARI_PROPERTIES_RPMSAVE_FILE = fn1
+    ambari_server.AMBARI_PROPERTIES_FILE = fn2
     with open(ambari_server.AMBARI_PROPERTIES_FILE, 'w') as f:
         f.write(NEW_PROPERTY)
         f.write(CHANGED_VALUE_PROPERTY)
@@ -24,4 +25,8 @@ def test_update_ambari_properties(self, get_conf_dir_mock):
         self.fail()
     if (CHANGED_VALUE_PROPERTY in ambari_properties_content):
         self.fail()
-    pass
+    self.assertTrue(rename_mock.called)
+    os.unlink(fn1)
+    result = ambari_server.update_ambari_properties()
+    self.assertEquals(result, 0)
+    os.unlink(fn2)

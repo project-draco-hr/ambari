@@ -1,16 +1,16 @@
 def reset(args):
-    okToRun = False
+    if (not is_root()):
+        err = 'Ambari-server reset should be run with root-level privileges'
+        raise FatalException(4, err)
     choice = get_YN_input('**** WARNING **** You are about to reset and clear the Ambari Server database. This will remove all cluster host and configuration information from the database. You will be required to re-configure the Ambari server and re-run the cluster wizard. \nAre you SURE you want to perform the reset [yes/no]? ', True)
     okToRun = choice
     if (not okToRun):
-        print "Ambari Server 'reset' cancelled"
-        return (-1)
-    okToRun = False
-    choice = get_YN_input('Confirm server reset [yes/no]? ', True)
-    okToRun = choice
+        err = "Ambari Server 'reset' cancelled"
+        raise FatalException(1, err)
+    okToRun = get_YN_input('Confirm server reset [yes/no]? ', True)
     if (not okToRun):
-        print "Ambari Server 'reset' cancelled"
-        return (-1)
+        err = "Ambari Server 'reset' cancelled"
+        raise FatalException(1, err)
     print 'Resetting the Server database...'
     parse_properties_file(args)
     if (args.persistence_type == 'remote'):
@@ -22,17 +22,15 @@ def reset(args):
             if (not (retcode == 0)):
                 if (retcode == (-1)):
                     print_warning_msg((((((((((('Cannot find ' + client_desc) + ' client in the path to reset the Ambari Server schema. To reset Ambari Server schema ') + 'you must run the following DDL against the database to drop the schema:') + os.linesep) + client_usage_cmd_drop) + os.linesep) + ', then you must run the following DDL against the database to create the schema ') + os.linesep) + client_usage_cmd_init) + os.linesep))
-                print err
-                return retcode
+                raise FatalException(retcode, err)
             (retcode, out, err) = execute_remote_script(args, DATABASE_INIT_SCRIPTS[DATABASE_INDEX])
             if (not (retcode == 0)):
                 if (retcode == (-1)):
                     print_warning_msg((((((((((('Cannot find ' + client_desc) + ' client in the path to reset the Ambari Server schema. To reset Ambari Server schema ') + 'you must run the following DDL against the database to drop the schema:') + os.linesep) + client_usage_cmd_drop) + os.linesep) + ', then you must run the following DDL against the database to create the schema ') + os.linesep) + client_usage_cmd_init) + os.linesep))
-                print err
-                return retcode
+                raise FatalException(retcode, err)
         else:
-            print_warning_msg((((((((((('Cannot find ' + client_desc) + ' client in the path to reset the Ambari Server schema. To reset Ambari Server schema ') + 'you must run the following DDL against the database to drop the schema:') + os.linesep) + client_usage_cmd_drop) + os.linesep) + ', then you must run the following DDL against the database to create the schema ') + os.linesep) + client_usage_cmd_init) + os.linesep))
-            return (-1)
+            err = (((((((((('Cannot find ' + client_desc) + ' client in the path to reset the Ambari Server schema. To reset Ambari Server schema ') + 'you must run the following DDL against the database to drop the schema:') + os.linesep) + client_usage_cmd_drop) + os.linesep) + ', then you must run the following DDL against the database to create the schema ') + os.linesep) + client_usage_cmd_init) + os.linesep)
+            raise FatalException((-1), err)
     else:
         dbname = args.database_name
         filename = args.drop_script_file
@@ -42,8 +40,7 @@ def reset(args):
         command[(-1)] = command[(-1)].format(filename, username, password)
         (retcode, outdata, errdata) = run_os_command(command)
         if (not (retcode == 0)):
-            print errdata
-            return retcode
+            raise FatalException(1, errdata)
         print_info_msg('About to run database setup')
         setup_db(args)
     print "Ambari Server 'reset' complete"

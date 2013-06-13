@@ -6,29 +6,49 @@ def start(args):
         f.close()
         try:
             os.kill(pid, 0)
-            print 'Server is already running.'
-            return
+            err = 'Server is already running.'
+            raise FatalException(1, err)
         except OSError as e:
-            print_info_msg('Server is not running, continue.')
+            print_info_msg('Server is not running...')
+    current_user = getpass.getuser()
+    ambari_user = read_ambari_user()
+    if (ambari_user is None):
+        err = 'Can not detect a system user for Ambari. Please run "setup" command to create such user '
+        raise FatalException(1, err)
+    if ((current_user != ambari_user) and (not is_root())):
+        err = 'Can not start ambari-server as user {0}. Please either run "start" command as root or as user {1}'.format(current_user, ambari_user)
+        raise FatalException(1, err)
     conf_dir = get_conf_dir()
     jdk_path = find_jdk()
     if (jdk_path is None):
-        print_error_msg(('No JDK found, please run the "setup" command to install a JDK automatically or install any JDK manually to ' + JDK_INSTALL_DIR))
-        return (-1)
-    if (args.persistence_type == 'local'):
-        retcode = check_postgre_up()
-        if (not (retcode == 0)):
-            print_error_msg('Unable to start PostgreSQL server. Exiting')
-            sys.exit(retcode)
-    print 'Checking iptables...'
-    (retcode, out) = check_iptables()
-    if ((not (retcode == 0)) and (out == IP_TBLS_ENABLED)):
-        print_error_msg('Failed to stop iptables. Exiting')
-        sys.exit(retcode)
+        err = ('No JDK found, please run the "setup" command to install a JDK automatically or install any JDK manually to ' + JDK_INSTALL_DIR)
+        raise FatalException(1, err)
+    if is_root():
+        print 'Have root privileges.'
+        if (args.persistence_type == 'local'):
+            retcode = check_postgre_up()
+            if (not (retcode == 0)):
+                err = 'Unable to start PostgreSQL server. Exiting'
+                raise FatalException(retcode, err)
+        print 'Checking iptables...'
+        (retcode, out) = check_iptables()
+        if ((not (retcode == 0)) and (out == IP_TBLS_ENABLED)):
+            err = 'Failed to stop iptables. Exiting'
+            raise FatalException(retcode, err)
+    else:
+        print 'Can not check iptables status when starting without root privileges.'
+        print "Please don't forget to disable or adjust iptables if needed"
+        if (args.persistence_type == 'local'):
+            print 'Can not check PostgreSQL server status when starting without root privileges.'
+            print "Please don't forget to start PostgreSQL server."
+    pidfile = ((PID_DIR + os.sep) + PID_NAME)
     command_base = (SERVER_START_CMD_DEBUG if (SERVER_DEBUG_MODE or SERVER_START_DEBUG) else SERVER_START_CMD)
-    command = command_base.format(jdk_path, conf_dir, get_ambari_classpath())
-    print ('Running server: ' + command)
-    server_process = subprocess.Popen(['/bin/sh', '-c', command])
-    f = open(((PID_DIR + os.sep) + PID_NAME), 'w')
-    f.write(str(server_process.pid))
-    f.close()
+    command = command_base.format(jdk_path, conf_dir, get_ambari_classpath(), pidfile)
+    if (is_root() and (ambari_user != 'root')):
+        os.chdir('/')
+        param_list = ['/bin/su', ambari_user, '-s', '/bin/sh', '-c', command]
+    else:
+        param_list = ['/bin/sh', '-c', command]
+    print ('Running server: ' + str(param_list))
+    server_process = subprocess.Popen(param_list)
+    print 'done.'

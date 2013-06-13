@@ -1,9 +1,12 @@
 def upgrade(args):
+    if (not is_root()):
+        err = 'Ambari-server upgrade should be run with root-level privileges'
+        raise FatalException(4, err)
     print (('Updating properties in ' + AMBARI_PROPERTIES_FILE) + ' ...')
     retcode = update_ambari_properties()
     if (not (retcode == 0)):
-        print_error_msg((AMBARI_PROPERTIES_FILE + " file can't be updated. Exiting"))
-        sys.exit(retcode)
+        err = (AMBARI_PROPERTIES_FILE + " file can't be updated. Exiting")
+        raise FatalException(retcode, err)
     parse_properties_file(args)
     if (args.persistence_type == 'remote'):
         pass
@@ -11,14 +14,14 @@ def upgrade(args):
         print 'Checking PostgreSQL...'
         retcode = check_postgre_up()
         if (not (retcode == 0)):
-            print_error_msg('PostgreSQL server not running. Exiting')
-            sys.exit(retcode)
+            err = 'PostgreSQL server not running. Exiting'
+            raise FatalException(retcode, err)
         file = args.upgrade_script_file
         print 'Upgrading database...'
         retcode = execute_db_script(args, file)
         if (not (retcode == 0)):
-            print_error_msg('Database upgrade script has failed. Exiting.')
-            sys.exit(retcode)
+            err = 'Database upgrade script has failed. Exiting.'
+            raise FatalException(retcode, err)
         print 'Checking database integrity...'
         check_file = ((file[:(-3)] + 'Check') + file[(-4):])
         retcode = check_db_consistency(args, check_file)
@@ -27,8 +30,14 @@ def upgrade(args):
             fix_file = ((file[:(-3)] + 'Fix') + file[(-4):])
             retcode = execute_db_script(args, fix_file)
             if (not (retcode == 0)):
-                print_error_msg('Database cannot be fixed. Exiting.')
-                sys.exit(retcode)
+                err = 'Database cannot be fixed. Exiting.'
+                raise FatalException(retcode, err)
         else:
             print 'Database is consistent.'
+    user = read_ambari_user()
+    if (user is None):
+        warn = 'Can not determine custom ambari user. Please run "ambari-server setup" before starting server'
+        print_warning_msg(warn)
+    else:
+        adjust_directory_permissions(user)
     print "Ambari Server 'upgrade' finished successfully"

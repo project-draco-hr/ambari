@@ -1,0 +1,32 @@
+@patch.object(ambari_server, 'adjust_directory_permissions')
+@patch.object(ambari_server, 'print_warning_msg')
+@patch.object(ambari_server, 'read_ambari_user')
+@patch.object(ambari_server, 'check_db_consistency')
+@patch.object(ambari_server, 'execute_db_script')
+@patch.object(ambari_server, 'check_postgre_up')
+@patch.object(ambari_server, 'update_ambari_properties')
+@patch.object(ambari_server, 'parse_properties_file')
+@patch.object(ambari_server, 'is_root')
+def test_upgrade(self, is_root_mock, parse_properties_file_mock, update_ambari_properties_mock, check_postgre_up_mock, execute_db_script_mock, check_db_consistency_mock, read_ambari_user_mock, print_warning_msg_mock, adjust_directory_permissions_mock):
+    args = MagicMock()
+    args.upgrade_script_file = '/var/lib/ambari-server/resources/upgrade/ddl/Ambari-DDL-Postgres-UPGRADE-1.3.0.sql'
+    update_ambari_properties_mock.return_value = 0
+    check_postgre_up_mock.return_value = 0
+    execute_db_script_mock.return_value = 0
+    check_db_consistency_mock.return_value = 0
+    is_root_mock.return_value = False
+    try:
+        ambari_server.upgrade(args)
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertTrue(('root-level' in fe.reason))
+        pass
+    is_root_mock.return_value = True
+    read_ambari_user_mock.return_value = None
+    ambari_server.upgrade(args)
+    self.assertTrue(print_warning_msg_mock.called)
+    warning_args = print_warning_msg_mock.call_args[0][0]
+    self.assertTrue(('custom ambari user' in warning_args))
+    read_ambari_user_mock.return_value = 'ambari-custom-user'
+    ambari_server.upgrade(args)
+    self.assertTrue(adjust_directory_permissions_mock.called)

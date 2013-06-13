@@ -4,14 +4,17 @@
 @patch.object(ambari_server, 'get_YN_input')
 @patch.object(ambari_server, 'setup_db')
 @patch.object(ambari_server, 'run_os_command')
-def test_reset_remote_db_wo_client(self, run_os_command_mock, setup_db_mock, get_YN_inputMock, print_error_msg_mock, get_db_cli_tool_mock, parse_properties_file_mock):
-    out = StringIO.StringIO()
-    sys.stdout = out
+@patch.object(ambari_server, 'is_root')
+def test_reset_remote_db_wo_client(self, is_root_mock, run_os_command_mock, setup_db_mock, get_YN_inputMock, print_error_msg_mock, get_db_cli_tool_mock, parse_properties_file_mock):
     args = MagicMock()
     get_YN_inputMock.return_value = True
     run_os_command_mock.return_value = (0, None, None)
     args.persistence_type = 'remote'
     get_db_cli_tool_mock.return_value = None
-    rcode = ambari_server.reset(args)
-    self.assertEqual((-1), rcode)
-    sys.stdout = sys.__stdout__
+    is_root_mock.return_value = True
+    try:
+        ambari_server.reset(args)
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertTrue(("Client wasn't found" in fe.reason))
+        pass

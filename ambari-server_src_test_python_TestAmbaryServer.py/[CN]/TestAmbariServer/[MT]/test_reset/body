@@ -4,21 +4,33 @@
 @patch.object(ambari_server, 'run_os_command')
 @patch.object(ambari_server, 'configure_database_username_password')
 @patch.object(ambari_server, 'parse_properties_file')
-def test_reset(self, parse_properties_file_mock, configure_database_username_password_mock, run_os_command_mock, print_info_msg_mock, setup_db_mock, get_YN_inputMock):
-    out = StringIO.StringIO()
-    sys.stdout = out
+@patch.object(ambari_server, 'is_root')
+def test_reset(self, is_root_mock, parse_properties_file_mock, configure_database_username_password_mock, run_os_command_mock, print_info_msg_mock, setup_db_mock, get_YN_inputMock):
     parse_properties_file_mock.return_value = 0
     args = MagicMock()
     args.persistence_type = 'local'
     get_YN_inputMock.return_value = False
-    rcode = ambari_server.reset(args)
-    self.assertEqual((-1), rcode)
+    is_root_mock.return_value = False
+    try:
+        ambari_server.reset(args)
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertTrue(('root-level' in fe.reason))
+        pass
+    is_root_mock.return_value = True
+    try:
+        ambari_server.reset(args)
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertFalse(('root-level' in fe.reason))
+        pass
     get_YN_inputMock.return_value = True
     run_os_command_mock.return_value = (1, None, None)
-    rcode = ambari_server.reset(args)
-    self.assertEqual(1, rcode)
+    try:
+        ambari_server.reset(args)
+        self.fail('Should throw exception')
+    except FatalException:
+        pass
     run_os_command_mock.return_value = (0, None, None)
-    rcode = ambari_server.reset(args)
-    self.assertEqual(None, rcode)
+    ambari_server.reset(args)
     self.assertTrue(setup_db_mock.called)
-    sys.stdout = sys.__stdout__

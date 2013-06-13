@@ -9,16 +9,17 @@
 @patch.object(ambari_server, 'get_JAVA_HOME')
 @patch.object(ambari_server, 'get_ambari_properties')
 def test_download_jdk(self, get_ambari_properties_mock, get_JAVA_HOME_mock, print_info_msg_mock, write_property_mock, run_os_command_mock, get_YN_input_mock, track_jdk_mock, path_existsMock, path_isfileMock, statMock):
-    out = StringIO.StringIO()
-    sys.stdout = out
     args = MagicMock()
     args.java_home = 'somewhere'
     path_existsMock.return_value = False
     get_JAVA_HOME_mock.return_value = False
     get_ambari_properties_mock.return_value = (-1)
-    rcode = ambari_server.download_jdk(args)
-    self.assertEqual((-1), rcode)
-    self.assertTrue(get_ambari_properties_mock.called)
+    try:
+        ambari_server.download_jdk(args)
+        self.fail('Should throw exception because of not found ambari.properties')
+    except FatalException:
+        self.assertTrue(get_ambari_properties_mock.called)
+        pass
     get_JAVA_HOME_mock.return_value = True
     path_existsMock.return_value = True
     rcode = ambari_server.download_jdk(args)
@@ -31,14 +32,20 @@ def test_download_jdk(self, get_ambari_properties_mock, get_JAVA_HOME_mock, prin
     p = MagicMock()
     get_ambari_properties_mock.return_value = p
     p.__getitem__.side_effect = KeyError('test exception')
-    rcode = ambari_server.download_jdk(args)
-    self.assertEqual((-1), rcode)
+    try:
+        ambari_server.download_jdk(args)
+        self.fail('Should throw exception')
+    except FatalException:
+        pass
     p.__getitem__.return_value = 'somewhere'
     p.__getitem__.side_effect = None
     path_existsMock.return_value = False
     run_os_command_mock.return_value = (0, 'Wrong out', None)
-    rcode = ambari_server.download_jdk(args)
-    self.assertEqual((-1), rcode)
+    try:
+        ambari_server.download_jdk(args)
+        self.fail('Should throw exception')
+    except FatalException:
+        pass
     ambari_server.JDK_INSTALL_DIR = os.getcwd()
     get_YN_input_mock.return_value = True
     run_os_command_mock.return_value = (0, 'Creating jdk-1.2/jreContent-Length: 32000\r\n', None)
@@ -47,4 +54,3 @@ def test_download_jdk(self, get_ambari_properties_mock, get_JAVA_HOME_mock, prin
     statMock.return_value = statResult
     rcode = ambari_server.download_jdk(args)
     self.assertEqual(0, rcode)
-    sys.stdout = sys.__stdout__

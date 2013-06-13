@@ -1,5 +1,6 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
 import optparse
+from pprint import pprint
 import shlex
 import sys
 import os
@@ -40,6 +41,15 @@ IP_TBLS_DISABLED = 'Firewall is stopped.\n'
 IP_TBLS_SRVC_NT_FND = 'iptables: unrecognized service'
 ambari_provider_module_option = ''
 ambari_provider_module = os.environ.get('AMBARI_PROVIDER_MODULE')
+NR_USER_PROPERTY = 'ambari.user'
+NR_USER_COMMENT = 'Ambari user'
+NR_GET_OWNER_CMD = 'stat -c "%U" {0}'
+NR_USERADD_CMD = 'useradd -M -g {0} --comment "{1}" --shell /sbin/nologin -d /var/lib/ambari-server/keys/ {0}'
+NR_SET_USER_COMMENT_CMD = 'usermod -c "{0}" {1}'
+NR_GROUPADD_CMD = 'groupadd {0}'
+NR_ADD_USER_TO_GROUP = 'usermod -G {0} {0}'
+NR_CHMOD_CMD = 'chmod {0} {1}'
+NR_CHOWN_CMD = 'chown {0}:{1} {2}'
 STACK_NAME_VER_SEP = '-'
 JAVA_SHARE_PATH = '/usr/share/java'
 BOLD_ON = '\x1b[1m'
@@ -47,8 +57,8 @@ BOLD_OFF = '\x1b[0m'
 PRESS_ENTER_MSG = 'Press <enter> to continue.'
 if (ambari_provider_module is not None):
     ambari_provider_module_option = (('-Dprovider.module.class=' + ambari_provider_module) + ' ')
-SERVER_START_CMD = ((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -server -XX:NewRatio=3 -XX:+UseConcMarkSweepGC ') + '-XX:-UseGCOverheadLimit -XX:CMSInitiatingOccupancyFraction=60 ') + ambari_provider_module_option) + os.getenv('AMBARI_JVM_ARGS', '-Xms512m -Xmx2048m')) + ' -cp {1}') + os.pathsep) + '{2}') + ' org.apache.ambari.server.controller.AmbariServer >/var/log/ambari-server/ambari-server.out 2>&1')
-SERVER_START_CMD_DEBUG = (((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -server -XX:NewRatio=2 -XX:+UseConcMarkSweepGC ') + ambari_provider_module_option) + os.getenv('AMBARI_JVM_ARGS', '-Xms512m -Xmx2048m')) + ' -Xdebug -Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=n -cp {1}') + os.pathsep) + '{2}') + ' org.apache.ambari.server.controller.AmbariServer')
+SERVER_START_CMD = ((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -server -XX:NewRatio=3 -XX:+UseConcMarkSweepGC ') + '-XX:-UseGCOverheadLimit -XX:CMSInitiatingOccupancyFraction=60 ') + ambari_provider_module_option) + os.getenv('AMBARI_JVM_ARGS', '-Xms512m -Xmx2048m')) + ' -cp {1}') + os.pathsep) + '{2}') + ' org.apache.ambari.server.controller.AmbariServer >/var/log/ambari-server/ambari-server.out 2>&1 & echo $! > {3}')
+SERVER_START_CMD_DEBUG = (((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -server -XX:NewRatio=2 -XX:+UseConcMarkSweepGC ') + ambari_provider_module_option) + os.getenv('AMBARI_JVM_ARGS', '-Xms512m -Xmx2048m')) + ' -Xdebug -Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=n -cp {1}') + os.pathsep) + '{2}') + ' org.apache.ambari.server.controller.AmbariServer & echo $! > {3}')
 AMBARI_CONF_VAR = 'AMBARI_CONF_DIR'
 AMBARI_SERVER_LIB = 'AMBARI_SERVER_LIB'
 JAVA_HOME = 'JAVA_HOME'
@@ -56,7 +66,7 @@ PID_DIR = '/var/run/ambari-server'
 PID_NAME = 'ambari-server.pid'
 AMBARI_PROPERTIES_FILE = 'ambari.properties'
 AMBARI_PROPERTIES_RPMSAVE_FILE = 'ambari.properties.rpmsave'
-RESOURCES_DIR_KEY = 'resources.dir'
+RESOURCES_DIR_PROPERTY = 'resources.dir'
 SETUP_DB_CMD = ['su', '-', 'postgres', '--command=psql -f {0} -v username=\'"{1}"\' -v password="\'{2}\'"']
 UPGRADE_STACK_CMD = ['su', 'postgres', '--command=psql -f {0} -v stack_name="\'{1}\'"  -v stack_version="\'{2}\'"']
 PG_ST_CMD = '/sbin/service postgresql status'
@@ -118,6 +128,8 @@ JDK_INSTALL_DIR = '/usr/jdk64'
 CREATE_JDK_DIR_CMD = ('/bin/mkdir -p ' + JDK_INSTALL_DIR)
 MAKE_FILE_EXECUTABLE_CMD = 'chmod a+x {0}'
 JAVA_HOME_PROPERTY = 'java.home'
+JDK_URL_PROPERTY = 'jdk.url'
+JCE_URL_PROPERTY = 'jce_policy.url'
 OS_TYPE_PROPERTY = 'server.os_type'
 JDK_DOWNLOAD_CMD = 'curl --create-dirs -o {0} {1}'
 JDK_DOWNLOAD_SIZE_CMD = 'curl -I {0}'
@@ -125,5 +137,7 @@ JCE_POLICY_FILENAME = 'jce_policy-6.zip'
 JCE_DOWNLOAD_CMD = 'curl -o {0} {1}'
 JCE_MIN_FILESIZE = 5000
 ASF_LICENSE_HEADER = '\n# Copyright 2011 The Apache Software Foundation\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# "License"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an "AS IS" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n'
+NR_CONF_DIR = get_conf_dir()
+NR_ADJUST_OWNERSHIP_LIST = [('/etc/ambari-server/conf', '755', '{0}', '{0}'), ('/etc/ambari-server/conf/ambari.properties', '644', '{0}', '{0}'), ('/etc/ambari-server/conf/log4j.properties', '644', 'root', 'root'), ('/var/lib/ambari-server/keys', '700', '{0}', '{0}'), ('/var/lib/ambari-server/keys/db', '700', '{0}', '{0}'), ('/var/lib/ambari-server/keys/db/index.txt', '700', '{0}', '{0}'), ('/var/lib/ambari-server/keys/db/serial', '700', '{0}', '{0}'), ('/var/lib/ambari-server/keys/db/newcerts', '700', '{0}', '{0}'), ('/var/run/ambari-server', '755', '{0}', '{0}'), ('/var/run/ambari-server/bootstrap', '755', '{0}', '{0}'), ('/var/log/ambari-server', '755', '{0}', '{0}'), ('/var/lib/ambari-server/ambari-env.sh', '770', '{0}', 'root')]
 if (__name__ == '__main__'):
     main()

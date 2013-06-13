@@ -4,14 +4,25 @@
 @patch.object(ambari_server, 'setup_db')
 @patch.object(ambari_server, 'check_postgre_up')
 @patch.object(ambari_server, 'check_iptables')
+@patch.object(ambari_server, 'check_ambari_user')
+@patch.object(ambari_server, 'check_jdbc_drivers')
 @patch.object(ambari_server, 'check_selinux')
 @patch.object(ambari_server, 'setup_remote_db')
 @patch.object(ambari_server, 'store_remote_properties')
-def test_setup(self, store_remote_properties_mock, setup_remote_db_mock, check_selinux_mock, check_iptables_mock, check_postgre_up_mock, setup_db_mock, configure_postgres_mock, download_jdk_mock, configure_os_settings_mock):
-    out = StringIO.StringIO()
-    sys.stdout = out
+@patch.object(ambari_server, 'is_root')
+def test_setup(self, is_root_mock, store_remote_properties_mock, setup_remote_db_mock, check_selinux_mock, check_jdbc_drivers_mock, check_ambari_user_mock, check_iptables_mock, check_postgre_up_mock, setup_db_mock, configure_postgres_mock, download_jdk_mock, configure_os_settings_mock):
     args = MagicMock()
+    is_root_mock.return_value = False
+    try:
+        ambari_server.setup(args)
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertTrue(('root-level' in fe.reason))
+        pass
+    is_root_mock.return_value = True
     check_selinux_mock.return_value = 0
+    check_ambari_user_mock.return_value = 0
+    check_jdbc_drivers_mock.return_value = 0
     check_iptables_mock.return_value = (0, 'other')
     check_postgre_up_mock.return_value = 0
     setup_db_mock.return_value = 0
@@ -22,4 +33,4 @@ def test_setup(self, store_remote_properties_mock, setup_remote_db_mock, check_s
     store_remote_properties_mock.return_value = 0
     result = ambari_server.setup(args)
     self.assertEqual(None, result)
-    sys.stdout = sys.__stdout__
+    self.assertTrue(check_ambari_user_mock.called)
