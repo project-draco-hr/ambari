@@ -41,6 +41,32 @@ def start(args):
         if (args.persistence_type == 'local'):
             print 'Can not check PostgreSQL server status when starting without root privileges.'
             print "Please don't forget to start PostgreSQL server."
+    properties = get_ambari_properties()
+    persist = get_master_key_ispersisted(properties)
+    environ = os.environ.copy()
+    if ((persist is not None) and (not persist)):
+        prompt = False
+        masterKey = environ[SECURITY_KEY_ENV_VAR_NAME]
+        if ((masterKey is not None) and (masterKey != '')):
+            pass
+        else:
+            keyLocation = environ[SECURITY_MASTER_KEY_LOCATION]
+            if (keyLocation is not None):
+                try:
+                    with open(keyLocation, 'r'):
+                        pass
+                except IOError:
+                    print_warning_msg('Cannot read Master key from path specified in environemnt.')
+                    prompt = True
+        if prompt:
+            masterKey = get_validated_string_input(('Please provide master key ' + 'for unlocking credential store: '), '', '.*', '', False)
+            tempDir = tempfile.gettempdir()
+            tempFilePath = ((tempDir + os.sep) + 'ambari.passwd')
+            with open(tempFilePath, 'w+') as file:
+                file.write(masterKey)
+            os.chmod(tempFilePath, (stat.S_IREAD | stat.S_IWRITE))
+            if (tempFilePath is not None):
+                environ[SECURITY_MASTER_KEY_LOCATION] = tempFilePath
     pidfile = ((PID_DIR + os.sep) + PID_NAME)
     command_base = (SERVER_START_CMD_DEBUG if (SERVER_DEBUG_MODE or SERVER_START_DEBUG) else SERVER_START_CMD)
     command = command_base.format(jdk_path, conf_dir, get_ambari_classpath(), pidfile)
@@ -50,5 +76,5 @@ def start(args):
     else:
         param_list = ['/bin/sh', '-c', command]
     print ('Running server: ' + str(param_list))
-    server_process = subprocess.Popen(param_list)
+    server_process = subprocess.Popen(param_list, env=environ)
     print 'done.'

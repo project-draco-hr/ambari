@@ -1,0 +1,49 @@
+def setup_master_key(resetKey=False):
+    properties = get_ambari_properties()
+    passwordPattern = '^[a-zA-Z0-9_-]*$'
+    passwordDescr = 'Invalid characters in password. Use only alphanumeric or _ or - characters'
+    passwordDefault = 'hadooprocks!'
+    keyLocation = get_master_key_location(properties)
+    persist = get_master_key_ispersisted(properties)
+    masterKeyFile = search_file(SECURITY_MASTER_KEY_FILENAME, keyLocation)
+    if (persist is not None):
+        if (persist and (masterKeyFile is not None) and (not resetKey)):
+            return (None, True, True)
+        elif ((not persist) and (not resetKey)):
+            masterKey = get_validated_string_input(('Please provide master key ' + 'for unlocking credential store: '), '', '.*', '', False)
+            return (masterKey, True, False)
+    elif (masterKeyFile is not None):
+        print_info_msg('Master key file exists. Updating property...')
+        update_properties({SECURITY_KEY_IS_PERSISTED: True, })
+        return (None, True, True)
+    enable_ok = True
+    if (not resetKey):
+        enable_ok = get_YN_input(('Do you want encryption enabled for saving ' + 'passwords [y/n] (n)? '), False)
+    if (not enable_ok):
+        return (None, False, None)
+    key = None
+    if ((masterKeyFile is None) or resetKey):
+        key = get_validated_string_input('Please provide master key for the credential store: ', passwordDefault, passwordPattern, passwordDescr, True)
+        if (key != passwordDefault):
+            key = get_validated_string_input('Please re-enter master key: ', passwordDefault, passwordPattern, passwordDescr, True)
+        persist = get_YN_input((('Do you want to persist master key. If you choose not to persist, you need to provide the master key while starting the ambari server as a env variable named ' + SECURITY_KEY_ENV_VAR_NAME) + ' or the start will prompt for the master key. Persist [y/n] (y)? '), True)
+        if persist:
+            save_master_key(key, ((keyLocation + os.sep) + SECURITY_MASTER_KEY_FILENAME), persist)
+        elif ((not persist) and (masterKeyFile is not None)):
+            try:
+                print_warning_msg((('Master key exists although security ' + 'is disabled. location: ') + str(masterKeyFile)))
+            except Exception as e:
+                print ('Could not remove master key file. %s' % e)
+    if (persist is not None):
+        update_properties({SECURITY_KEY_IS_PERSISTED: persist, })
+    if resetKey:
+        try:
+            db_password_alias = args.database_password
+            ldap_password_alias = args.ldap_mgr_password
+        except KeyError as e:
+            print_warning_msg(('KeyError: ' + str(e)))
+        if ((db_password_alias is not None) and is_alias_string(db_password_alias)):
+            configure_database_password(True, False)
+        if ((ldap_password_alias is not None) and is_alias_string(ldap_password_alias)):
+            configure_ldap_password(True)
+    return (key, True, persist)

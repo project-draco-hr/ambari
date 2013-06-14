@@ -4,11 +4,25 @@ def configure_database_username_password(args):
         print_error_msg('Error getting ambari properties')
         return (-1)
     username = properties[JDBC_USER_NAME_PROPERTY]
-    passFilePath = properties[JDBC_PASSWORD_FILE_PROPERTY]
-    if (username and passFilePath):
-        print_info_msg('Database username + password already configured - skipping')
+    passwordProp = properties[JDBC_PASSWORD_PROPERTY]
+    isPersisted = get_master_key_ispersisted(properties)
+    if (username and passwordProp):
+        print_info_msg('Database username + password already configured')
         args.database_username = username
-        args.database_password = open(passFilePath).read()
+        if is_alias_string(passwordProp):
+            if isPersisted:
+                args.postgres_password = read_passwd_for_alias(JDBC_RCA_PASSWORD_ALIAS)
+            else:
+                (masterKey, isSecure, isPersisted) = setup_master_key()
+                args.postgres_password = read_passwd_for_alias(JDBC_RCA_PASSWORD_ALIAS, masterKey)
+        else:
+            (masterKey, isSecure, isPersisted) = setup_master_key()
+            if isSecure:
+                (password, passwordAlias) = configure_database_password(isSecure, masterKey, False)
+                update_properties({JDBC_PASSWORD_PROPERTY: passwordAlias, })
+                args.postgres_password = password
+            else:
+                args.postgres_password = open(passwordProp).read()
         return 1
     else:
         print_error_msg('Connection properties not set in config file.')
