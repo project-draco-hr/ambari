@@ -1,0 +1,24 @@
+@patch.object(RepoInstaller, 'generate_repo_manifests')
+@patch.object(PuppetExecutor, 'runPuppetFile')
+def test_overwrite_repos(self, runPuppetFileMock, generateRepoManifestMock):
+    tmpdir = AmbariConfig().getConfig().get('stack', 'installprefix')
+    puppetInstance = PuppetExecutor('/tmp', '/x', '/y', tmpdir, AmbariConfig().getConfig())
+    jsonFile = open('../../main/python/ambari_agent/test.json', 'r')
+    jsonStr = jsonFile.read()
+    parsedJson = json.loads(jsonStr)
+    parsedJson['taskId'] = 77
+
+    def side_effect(puppetFile, result, puppetEnv, tmpoutfile, tmperrfile):
+        result['exitcode'] = 0
+    runPuppetFileMock.side_effect = side_effect
+    self.assertEquals(0, generateRepoManifestMock.call_count)
+    self.assertFalse(puppetInstance.reposInstalled)
+    puppetInstance.runCommand(parsedJson, (tmpdir + '/out.txt'), (tmpdir + '/err.txt'))
+    self.assertTrue(puppetInstance.reposInstalled)
+    self.assertEquals(1, generateRepoManifestMock.call_count)
+    puppetInstance.runCommand(parsedJson, (tmpdir + '/out.txt'), (tmpdir + '/err.txt'))
+    self.assertTrue(puppetInstance.reposInstalled)
+    self.assertEquals(1, generateRepoManifestMock.call_count)
+    puppetInstance.runCommand(parsedJson, (tmpdir + '/out.txt'), (tmpdir + '/err.txt'))
+    self.assertTrue(puppetInstance.reposInstalled)
+    self.assertEquals(1, generateRepoManifestMock.call_count)
