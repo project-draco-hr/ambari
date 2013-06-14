@@ -1,0 +1,23 @@
+@patch('shutil.copy')
+@patch('os.path.join')
+@patch('os.path.exists')
+@patch.object(ambari_server, 'get_ambari_properties')
+def test_install_jce_manualy(self, get_ambari_properties_mock, os_path_exists_mock, os_path_join_mock, shutil_copy_mock):
+    args = MagicMock()
+    args.jce_policy = 'somewhere'
+    p = MagicMock()
+    get_ambari_properties_mock.return_value = p
+    p.__getitem__.side_effect = None
+    p.__getitem__.return_value = 'somewhere'
+    os_path_exists_mock.return_value = True
+    os_path_join_mock.return_value = '/var/lib/ambari-server/resources/jce_policy-6.zip'
+    ambari_server.install_jce_manualy(args)
+    self.assertTrue(shutil_copy_mock.called)
+    os_path_exists_mock.return_value = False
+    args.jce_policy = None
+    try:
+        ambari_server.install_jce_manualy(args)
+        self.fail('Should throw exception because of not found jce_policy-6.zip')
+    except FatalException:
+        self.assertTrue(shutil_copy_mock.called)
+        pass
