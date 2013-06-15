@@ -1,0 +1,25 @@
+@patch.object(ambari_server, 'setup_master_key')
+@patch.object(ambari_server, 'read_passwd_for_alias')
+@patch.object(ambari_server, 'is_alias_string')
+@patch.object(ambari_server, 'get_ambari_properties')
+def test_configure_database_username_password_masterkey_persisted(self, get_ambari_properties_method, is_alias_string_method, read_passwd_for_alias_method, setup_master_key_method):
+    out = StringIO.StringIO()
+    sys.stdout = out
+    configs = {ambari_server.JDBC_USER_NAME_PROPERTY: 'fakeuser', ambari_server.JDBC_PASSWORD_PROPERTY: '${alias=somealias}', ambari_server.SECURITY_KEY_IS_PERSISTED: 'True', }
+    get_ambari_properties_method.return_value = configs
+    is_alias_string_method.return_value = True
+    read_passwd_for_alias_method.return_value = 'falepasswd'
+    args = MagicMock()
+    ambari_server.configure_database_username_password(args)
+    self.assertTrue(read_passwd_for_alias_method.called)
+    self.assertTrue(is_alias_string_method.called)
+    self.assertEquals('fakeuser', args.database_username)
+    self.assertEquals('falepasswd', args.database_password)
+    configs[ambari_server.SECURITY_KEY_IS_PERSISTED] = 'False'
+    get_ambari_properties_method.return_value = configs
+    args.reset_mock()
+    setup_master_key_method.return_value = (None, True, True)
+    ambari_server.configure_database_username_password(args)
+    self.assertTrue(setup_master_key_method.called)
+    read_passwd_for_alias_method.assert_called_with(ambari_server.JDBC_RCA_PASSWORD_ALIAS, None)
+    sys.stdout = sys.__stdout__

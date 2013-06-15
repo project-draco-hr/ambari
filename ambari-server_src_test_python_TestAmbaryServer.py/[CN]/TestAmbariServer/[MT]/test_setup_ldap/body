@@ -1,0 +1,22 @@
+@patch.object(ambari_server, 'update_properties')
+@patch.object(ambari_server, 'configure_ldap_password')
+@patch.object(ambari_server, 'get_validated_string_input')
+@patch.object(ambari_server, 'setup_master_key')
+@patch.object(ambari_server, 'search_file')
+@patch.object(ambari_server, 'get_ambari_properties')
+def test_setup_ldap(self, get_ambari_properties_method, search_file_message, setup_master_key_method, get_validated_string_input_method, configure_ldap_password_method, update_properties_method):
+    out = StringIO.StringIO()
+    sys.stdout = out
+    search_file_message.return_value = 'filepath'
+    configs = {ambari_server.SECURITY_MASTER_KEY_LOCATION: 'filepath', ambari_server.SECURITY_KEYS_DIR: tempfile.gettempdir(), ambari_server.SECURITY_KEY_IS_PERSISTED: 'true', }
+    get_ambari_properties_method.return_value = configs
+    get_validated_string_input_method.return_value = 'test'
+    configure_ldap_password_method.return_value = '${alias=fake}'
+    setup_master_key_method.return_value = (None, True, True)
+    ambari_server.setup_ldap()
+    ldap_properties_map = {'authentication.ldap.primaryUrl': 'test', 'authentication.ldap.secondaryUrl': 'test', 'authentication.ldap.baseDn': 'test', 'authentication.ldap.bindAnonymously': 'test', 'authentication.ldap.usernameAttribute': 'test', 'authorization.ldap.groupBase': 'test', 'authorization.ldap.groupObjectClass': 'test', 'authorization.ldap.groupNamingAttr': 'test', 'authorization.ldap.groupMembershipAttr': 'test', 'authorization.ldap.adminGroupMappingRules': 'test', 'authorization.ldap.groupSearchFilter': 'test', 'authorization.userRoleName': 'test', 'authorization.adminRoleName': 'test', 'authentication.ldap.managerDn': 'test', 'authentication.ldap.managerPassword': configure_ldap_password_method.return_value, }
+    self.assertEquals(update_properties_method.call_args[0][0], ldap_properties_map)
+    self.assertTrue(update_properties_method.called)
+    self.assertTrue(configure_ldap_password_method.called)
+    self.assertTrue(get_validated_string_input_method.called)
+    sys.stdout = sys.__stdout__
