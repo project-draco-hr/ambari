@@ -1,0 +1,30 @@
+{
+  Result result=new ResultImpl(true);
+  Map<String,ResourceInstanceImpl> mapSubResources=queryResult.getResourceInstance().m_mapQuerySubResources;
+  ResourceInstanceImpl resourceInstance=queryResult.getResourceInstance();
+  if (isCollectionResource()) {
+    result.getResultTree().setProperty("isCollection","true");
+  }
+  TreeNode<Resource> tree=result.getResultTree();
+  int count=1;
+  for (  Resource resource : queryResult.getResources()) {
+    if (parentPredicate == null || parentPredicate.evaluate(resource)) {
+      TreeNode<Resource> node=tree.addChild(resource,resource.getType() + ":" + count++);
+      for (      Map.Entry<String,ResourceInstanceImpl> entry : mapSubResources.entrySet()) {
+        String subResCategory=entry.getKey();
+        ResourceInstanceImpl subResourceInstance=entry.getValue();
+        Resource.Type subResourceType=subResourceInstance.getResourceDefinition().getType();
+        QueryResult subQueryResult=queryResult.getSubResources().get(subResourceType);
+        if (subQueryResult != null) {
+          resourceInstance.setParentIdsOnSubResource(resource,subResourceInstance);
+          Predicate subPredicate=subResourceInstance.getQuery().getPredicate();
+          TreeNode<Resource> childResult=subResourceInstance.applyResult(subQueryResult,subPredicate).getResultTree();
+          childResult.setName(subResCategory);
+          childResult.setProperty("isCollection","false");
+          node.addChild(childResult);
+        }
+      }
+    }
+  }
+  return result;
+}
