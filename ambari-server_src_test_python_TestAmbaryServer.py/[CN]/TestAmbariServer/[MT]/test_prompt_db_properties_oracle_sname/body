@@ -1,0 +1,23 @@
+@patch.object(ambari_server, 'setup_master_key')
+@patch.object(ambari_server, 'read_password')
+@patch.object(ambari_server, 'get_validated_string_input')
+@patch.object(ambari_server, 'get_YN_input')
+def test_prompt_db_properties_oracle_sname(self, gyni_mock, gvsi_mock, rp_mock, smk_mock):
+    ambari_server.PROMPT_DATABASE_OPTIONS = True
+    gyni_mock.return_value = True
+    list_of_return_values = ['ambari-server', 'ambari', '1', '1521', 'localhost', '2']
+
+    def side_effect(*args, **kwargs):
+        return list_of_return_values.pop()
+    gvsi_mock.side_effect = side_effect
+    rp_mock.return_value = 'password'
+    smk_mock.return_value = (None, False, True)
+    args = MagicMock()
+    ambari_server.load_default_db_properties(args)
+    ambari_server.prompt_db_properties(args)
+    self.assertEqual(args.database, 'oracle')
+    self.assertEqual(args.database_port, '1521')
+    self.assertEqual(args.database_host, 'localhost')
+    self.assertEqual(args.database_name, 'ambari')
+    self.assertEqual(args.database_username, 'ambari-server')
+    self.assertEqual(args.sid_or_sname, 'sname')
