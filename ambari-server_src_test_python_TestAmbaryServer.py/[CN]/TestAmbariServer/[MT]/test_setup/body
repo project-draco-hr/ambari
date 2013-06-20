@@ -9,9 +9,29 @@
 @patch.object(ambari_server, 'check_selinux')
 @patch.object(ambari_server, 'setup_remote_db')
 @patch.object(ambari_server, 'store_remote_properties')
+@patch.object(ambari_server, 'is_local_database')
+@patch.object(ambari_server, 'store_local_properties')
 @patch.object(ambari_server, 'is_root')
-def test_setup(self, is_root_mock, store_remote_properties_mock, setup_remote_db_mock, check_selinux_mock, check_jdbc_drivers_mock, check_ambari_user_mock, check_iptables_mock, check_postgre_up_mock, setup_db_mock, configure_postgres_mock, download_jdk_mock, configure_os_settings_mock):
+def test_setup(self, is_root_mock, store_local_properties_mock, is_local_database_mock, store_remote_properties_mock, setup_remote_db_mock, check_selinux_mock, check_jdbc_drivers_mock, check_ambari_user_mock, check_iptables_mock, check_postgre_up_mock, setup_db_mock, configure_postgres_mock, download_jdk_mock, configure_os_settings_mock):
     args = MagicMock()
+    failed = False
+
+    def reset_mocks():
+        is_root_mock.reset_mock()
+        store_local_properties_mock.reset_mock()
+        store_remote_properties_mock.reset_mock()
+        is_local_database_mock.reset_mock()
+        setup_remote_db_mock.reset_mock()
+        check_selinux_mock.reset_mock()
+        check_jdbc_drivers_mock.reset_mock()
+        check_ambari_user_mock.reset_mock()
+        check_iptables_mock.reset_mock()
+        check_postgre_up_mock.reset_mock()
+        setup_db_mock.reset_mock()
+        configure_postgres_mock.reset_mock()
+        download_jdk_mock.reset_mock()
+        configure_os_settings_mock.reset_mock()
+        pass
     is_root_mock.return_value = False
     try:
         ambari_server.setup(args)
@@ -27,10 +47,31 @@ def test_setup(self, is_root_mock, store_remote_properties_mock, setup_remote_db
     check_postgre_up_mock.return_value = 0
     setup_db_mock.return_value = 0
     setup_remote_db_mock.return_value = 0
+    is_local_database_mock.return_value = False
     configure_postgres_mock.return_value = 0
     download_jdk_mock.return_value = 0
     configure_os_settings_mock.return_value = 0
     store_remote_properties_mock.return_value = 0
+    store_local_properties_mock.return_value = 0
     result = ambari_server.setup(args)
     self.assertEqual(None, result)
     self.assertTrue(check_ambari_user_mock.called)
+    self.assertEquals(True, store_remote_properties_mock.called)
+    self.assertEquals(False, store_local_properties_mock.called)
+    reset_mocks()
+    is_local_database_mock.return_value = True
+    try:
+        result = ambari_server.setup(args)
+    except FatalException:
+        self.fail('Setup should be successful')
+    self.assertEqual(None, result)
+    self.assertEquals(True, store_local_properties_mock.called)
+    self.assertEquals(False, store_remote_properties_mock.called)
+    reset_mocks()
+    is_local_database_mock.return_value = False
+    setup_remote_db_mock.return_value = (-1)
+    try:
+        result = ambari_server.setup(args)
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertEquals((-1), fe.code)
