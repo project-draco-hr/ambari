@@ -1,18 +1,86 @@
 @patch.object(ambari_server, 'get_ambari_properties')
 @patch.object(ambari_server, 'find_jdbc_driver')
 @patch.object(ambari_server, 'copy_files')
+@patch.object(ambari_server, 'print_error_msg')
+@patch.object(ambari_server, 'print_warning_msg')
 @patch('__builtin__.raw_input')
-def test_check_jdbc_drivers(self, raw_input_mock, copy_files_mock, find_jdbc_driver_mock, get_ambari_properties_mock):
+def test_check_jdbc_drivers(self, raw_input_mock, print_warning_msg, print_error_msg_mock, copy_files_mock, find_jdbc_driver_mock, get_ambari_properties_mock):
+    out = StringIO.StringIO()
+    sys.stdout = out
     args = MagicMock()
     drivers_list = ['driver_file']
     resources_dir = '/tmp'
     get_ambari_properties_mock.return_value = {ambari_server.RESOURCES_DIR_PROPERTY: resources_dir, }
     find_jdbc_driver_mock.return_value = drivers_list
-    rcode = ambari_server.check_jdbc_drivers(args)
-    self.assertEqual(0, rcode)
-    copy_files_mock.assert_called_with(drivers_list, resources_dir)
-    find_jdbc_driver_mock.return_value = (-1)
+    copy_files_mock.return_value = 0
     args.database = 'oracle'
     rcode = ambari_server.check_jdbc_drivers(args)
     self.assertEqual(0, rcode)
-    self.assertTrue(raw_input_mock.called)
+    copy_files_mock.assert_called_with(drivers_list, resources_dir)
+    get_ambari_properties_mock.reset_mock()
+    find_jdbc_driver_mock.reset_mock()
+    copy_files_mock.reset_mock()
+    print_error_msg_mock.reset_mock()
+    print_warning_msg.reset_mock()
+    raw_input_mock.reset_mock()
+    ambari_server.SILENT = True
+    find_jdbc_driver_mock.return_value = (-1)
+    failed = False
+    try:
+        rcode = ambari_server.check_jdbc_drivers(args)
+    except FatalException:
+        failed = True
+    self.assertTrue(print_error_msg_mock.called)
+    self.assertTrue(failed)
+    get_ambari_properties_mock.reset_mock()
+    find_jdbc_driver_mock.reset_mock()
+    copy_files_mock.reset_mock()
+    print_error_msg_mock.reset_mock()
+    print_warning_msg.reset_mock()
+    raw_input_mock.reset_mock()
+    ambari_server.SILENT = False
+    find_jdbc_driver_mock.return_value = (-1)
+    failed = False
+    try:
+        rcode = ambari_server.check_jdbc_drivers(args)
+    except FatalException:
+        failed = True
+    self.assertTrue(failed)
+    self.assertTrue(print_error_msg_mock.called)
+    get_ambari_properties_mock.reset_mock()
+    find_jdbc_driver_mock.reset_mock()
+    copy_files_mock.reset_mock()
+    print_error_msg_mock.reset_mock()
+    print_warning_msg.reset_mock()
+    raw_input_mock.reset_mock()
+    find_jdbc_driver_mock.side_effect = [(-1), drivers_list]
+    rcode = ambari_server.check_jdbc_drivers(args)
+    self.assertEqual(0, rcode)
+    copy_files_mock.assert_called_with(drivers_list, resources_dir)
+    get_ambari_properties_mock.reset_mock()
+    find_jdbc_driver_mock.reset_mock()
+    copy_files_mock.reset_mock()
+    print_error_msg_mock.reset_mock()
+    print_warning_msg.reset_mock()
+    raw_input_mock.reset_mock()
+    find_jdbc_driver_mock.side_effect = [(-1), (-1)]
+    failed = False
+    try:
+        rcode = ambari_server.check_jdbc_drivers(args)
+    except FatalException:
+        failed = True
+    self.assertTrue(failed)
+    self.assertTrue(print_error_msg_mock.called)
+    get_ambari_properties_mock.reset_mock()
+    find_jdbc_driver_mock.reset_mock()
+    copy_files_mock.reset_mock()
+    print_error_msg_mock.reset_mock()
+    print_warning_msg.reset_mock()
+    raw_input_mock.reset_mock()
+    find_jdbc_driver_mock.side_effect = [drivers_list]
+    try:
+        rcode = ambari_server.check_jdbc_drivers(args)
+    except FatalException:
+        failed = True
+    self.assertTrue(failed)
+    sys.stdout = sys.__stdout__
