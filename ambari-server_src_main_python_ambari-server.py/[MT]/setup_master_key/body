@@ -10,7 +10,7 @@ def setup_master_key(resetKey=False):
         if (persist and (masterKeyFile is not None) and (not resetKey)):
             return (None, True, True)
         elif ((not persist) and (not resetKey)):
-            masterKey = get_validated_string_input(('Please provide master key ' + 'for unlocking credential store: '), '', '.*', '', False)
+            masterKey = get_validated_string_input(('Please provide master key ' + 'for unlocking credential store: '), '', '.*', '', False, False)
             return (masterKey, True, False)
     elif (masterKeyFile is not None):
         print_info_msg('Master key file exists. Updating property...')
@@ -23,10 +23,10 @@ def setup_master_key(resetKey=False):
         return (None, False, None)
     key = None
     if ((masterKeyFile is None) or resetKey):
-        key = get_validated_string_input('Please provide master key for the credential store: ', passwordDefault, passwordPattern, passwordDescr, True)
+        key = get_validated_string_input('Please provide master key for the credential store: ', passwordDefault, passwordPattern, passwordDescr, True, False)
         if (key != passwordDefault):
-            key = get_validated_string_input('Please re-enter master key: ', passwordDefault, passwordPattern, passwordDescr, True)
-        persist = get_YN_input((('Do you want to persist master key. If you choose not to persist, you need to provide the master key while starting the ambari server as a env variable named ' + SECURITY_KEY_ENV_VAR_NAME) + ' or the start will prompt for the master key. Persist [y/n] (y)? '), True)
+            key = get_validated_string_input('Please re-enter master key: ', passwordDefault, passwordPattern, passwordDescr, True, False)
+        persist = get_YN_input((('Do you want to persist master key. If you choose not to persist, you need to provide the master key while starting the ambari server as an env variable named ' + SECURITY_KEY_ENV_VAR_NAME) + ' or the start will prompt for the master key. Persist [y/n] (y)? '), True)
         if persist:
             save_master_key(key, ((keyLocation + os.sep) + SECURITY_MASTER_KEY_FILENAME), persist)
         elif ((not persist) and (masterKeyFile is not None)):
@@ -41,6 +41,8 @@ def setup_master_key(resetKey=False):
         store_file = get_credential_store_location(properties)
         if os.path.exists(store_file):
             os.remove(store_file)
+        db_password_alias = None
+        ldap_password_alias = None
         try:
             db_password_alias = properties[JDBC_PASSWORD_PROPERTY]
             ldap_password_alias = properties[LDAP_MGR_PASSWORD_PROPERTY]
@@ -49,5 +51,8 @@ def setup_master_key(resetKey=False):
         if ((db_password_alias is not None) and is_alias_string(db_password_alias)):
             configure_database_password(True, key, True)
         if ((ldap_password_alias is not None) and is_alias_string(ldap_password_alias)):
-            configure_ldap_password(True)
+            password = configure_ldap_password()
+            retCode = save_passwd_for_alias(LDAP_MGR_PASSWORD_ALIAS, password, key)
+            if (retCode != 0):
+                print 'Saving secure ldap password failed. Exiting.'
     return (key, True, persist)
