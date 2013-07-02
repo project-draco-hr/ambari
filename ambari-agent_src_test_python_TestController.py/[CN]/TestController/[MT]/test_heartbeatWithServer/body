@@ -14,7 +14,7 @@ def test_heartbeatWithServer(self, dumpsMock, loadsMock, sleepMock):
     loadsMock.return_value = response
 
     def one_heartbeat(*args, **kwargs):
-        self.controller.DEBUG_STOP_HEARTBITTING = True
+        self.controller.DEBUG_STOP_HEARTBEATING = True
         return 'data'
     sendRequest.side_effect = one_heartbeat
     actionQueue = MagicMock()
@@ -30,22 +30,38 @@ def test_heartbeatWithServer(self, dumpsMock, loadsMock, sleepMock):
             response['responseId'] = '3'
             raise Exception()
         if (len(calls) > 0):
-            self.controller.DEBUG_STOP_HEARTBITTING = True
+            self.controller.DEBUG_STOP_HEARTBEATING = True
         return 'data'
     sendRequest.side_effect = retry
-    self.controller.DEBUG_STOP_HEARTBITTING = False
+    self.controller.DEBUG_STOP_HEARTBEATING = False
     self.controller.heartbeatWithServer()
     self.assertEqual(1, self.controller.DEBUG_SUCCESSFULL_HEARTBEATS)
     response['registrationCommand'] = 'true'
     sendRequest.side_effect = one_heartbeat
-    self.controller.DEBUG_STOP_HEARTBITTING = False
+    self.controller.DEBUG_STOP_HEARTBEATING = False
     self.controller.heartbeatWithServer()
     self.assertTrue(self.controller.repeatRegistration)
+    response['registrationCommand'] = 'false'
+    response['hasMappedComponents'] = False
+    sendRequest.side_effect = one_heartbeat
+    self.controller.DEBUG_STOP_HEARTBEATING = False
+    self.controller.heartbeatWithServer()
+    self.assertFalse(self.controller.hasMappedComponents)
+    response['hasMappedComponents'] = True
+    sendRequest.side_effect = one_heartbeat
+    self.controller.DEBUG_STOP_HEARTBEATING = False
+    self.controller.heartbeatWithServer()
+    self.assertTrue(self.controller.hasMappedComponents)
+    del response['hasMappedComponents']
+    sendRequest.side_effect = one_heartbeat
+    self.controller.DEBUG_STOP_HEARTBEATING = False
+    self.controller.heartbeatWithServer()
+    self.assertTrue(self.controller.hasMappedComponents)
     response = {'responseId': '2', 'restartAgent': 'false', }
     loadsMock.return_value = response
     restartAgent = MagicMock(name='restartAgent')
     self.controller.restartAgent = restartAgent
-    self.controller.DEBUG_STOP_HEARTBITTING = False
+    self.controller.DEBUG_STOP_HEARTBEATING = False
     self.controller.heartbeatWithServer()
     restartAgent.assert_called_once_with()
     self.controller.responseId = 1
@@ -53,18 +69,18 @@ def test_heartbeatWithServer(self, dumpsMock, loadsMock, sleepMock):
     self.controller.addToQueue = addToQueue
     response['executionCommands'] = 'executionCommands'
     response['statusCommands'] = 'statusCommands'
-    self.controller.DEBUG_STOP_HEARTBITTING = False
+    self.controller.DEBUG_STOP_HEARTBEATING = False
     self.controller.heartbeatWithServer()
     addToQueue.assert_has_calls([call('executionCommands'), call('statusCommands')])
     self.controller.responseId = 1
-    self.controller.DEBUG_STOP_HEARTBITTING = False
+    self.controller.DEBUG_STOP_HEARTBEATING = False
     response['restartAgent'] = 'true'
     restartAgent = MagicMock(name='restartAgent')
     self.controller.restartAgent = restartAgent
     self.controller.heartbeatWithServer()
     restartAgent.assert_called_once_with()
     self.controller.responseId = 1
-    self.controller.DEBUG_STOP_HEARTBITTING = False
+    self.controller.DEBUG_STOP_HEARTBEATING = False
     actionQueue.isIdle.return_value = False
     response['restartAgent'] = 'false'
     self.controller.heartbeatWithServer()

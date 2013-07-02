@@ -1,0 +1,52 @@
+def writeHostCheckFile(self, hostInfo):
+    if (self.hostCheckFilePath == None):
+        return
+    try:
+        logger.info(('Host check report at ' + self.hostCheckFilePath))
+        config = ConfigParser.RawConfigParser()
+        config.add_section('metadata')
+        config.set('metadata', 'created', str(datetime.datetime.now()))
+        if ('existingUsers' in hostInfo.keys()):
+            items = []
+            for itemDetail in hostInfo['existingUsers']:
+                items.append(itemDetail['name'])
+            config.add_section('users')
+            config.set('users', 'usr_list', ','.join(items))
+        if ('alternatives' in hostInfo.keys()):
+            items = []
+            items2 = []
+            for itemDetail in hostInfo['alternatives']:
+                items.append(itemDetail['name'])
+                items2.append(itemDetail['target'])
+            config.add_section('alternatives')
+            config.set('alternatives', 'symlink_list', ','.join(items))
+            config.set('alternatives', 'target_list', ','.join(items2))
+        if ('stackFoldersAndFiles' in hostInfo.keys()):
+            items = []
+            for itemDetail in hostInfo['stackFoldersAndFiles']:
+                items.append(itemDetail['name'])
+            config.add_section('directories')
+            config.set('directories', 'dir_list', ','.join(items))
+        if ('hostHealth' in hostInfo.keys()):
+            if ('activeJavaProcs' in hostInfo['hostHealth'].keys()):
+                items = []
+                for itemDetail in hostInfo['hostHealth']['activeJavaProcs']:
+                    items.append(itemDetail['pid'])
+                config.add_section('processes')
+                config.set('processes', 'proc_list', ','.join(map(str, items)))
+        if ('installedPackages' in hostInfo.keys()):
+            items = []
+            for itemDetail in hostInfo['installedPackages']:
+                items.append(itemDetail['name'])
+            config.add_section('packages')
+            config.set('packages', 'pkg_list', ','.join(map(str, items)))
+        if ('existingRepos' in hostInfo.keys()):
+            config.add_section('repositories')
+            config.set('repositories', 'repo_list', ','.join(hostInfo['existingRepos']))
+        self.removeFile()
+        self.touchFile()
+        with open(self.hostCheckFilePath, 'wb') as configfile:
+            config.write(configfile)
+    except Exception as err:
+        logger.error(("Can't write host check file at %s :%s " % (self.hostCheckFilePath, err.message)))
+        traceback.print_exc()

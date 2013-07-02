@@ -1,0 +1,34 @@
+def test_write_host_check_report(self):
+    tmpfile = tempfile.mktemp()
+    config = ConfigParser.RawConfigParser()
+    config.add_section('agent')
+    config.set('agent', 'prefix', os.path.dirname(tmpfile))
+    handler = HostCheckReportFileHandler(config)
+    dict = {}
+    dict['hostHealth'] = {}
+    dict['existingUsers'] = [{'name': 'user1', 'homeDir': '/var/log', 'status': 'Exists', }]
+    dict['alternatives'] = [{'name': '/etc/alternatives/hadoop-conf', 'target': '/etc/hadoop/conf.dist', }, {'name': '/etc/alternatives/hbase-conf', 'target': '/etc/hbase/conf.1', }]
+    dict['stackFoldersAndFiles'] = [{'name': '/a/b', 'type': 'directory', }, {'name': '/a/b.txt', 'type': 'file', }]
+    dict['hostHealth']['activeJavaProcs'] = [{'pid': 355, 'hadoop': True, 'command': 'some command', 'user': 'root', }, {'pid': 455, 'hadoop': True, 'command': 'some command', 'user': 'hdfs', }]
+    dict['installedPackages'] = [{'name': 'hadoop', 'version': '3.2.3', 'repoName': 'HDP', }, {'name': 'hadoop-lib', 'version': '3.2.3', 'repoName': 'HDP', }]
+    dict['existingRepos'] = ['HDP', 'HDP-epel']
+    handler.writeHostCheckFile(dict)
+    configValidator = ConfigParser.RawConfigParser()
+    configPath = os.path.join(os.path.dirname(tmpfile), HostCheckReportFileHandler.HOST_CHECK_FILE)
+    configValidator.read(configPath)
+    users = configValidator.get('users', 'usr_list')
+    self.assertEquals(users, 'user1')
+    names = configValidator.get('alternatives', 'symlink_list')
+    targets = configValidator.get('alternatives', 'target_list')
+    self.chkItemsEqual(names, ['/etc/alternatives/hadoop-conf', '/etc/alternatives/hbase-conf'])
+    self.chkItemsEqual(targets, ['/etc/hadoop/conf.dist', '/etc/hbase/conf.1'])
+    paths = configValidator.get('directories', 'dir_list')
+    self.chkItemsEqual(paths, ['/a/b', '/a/b.txt'])
+    procs = configValidator.get('processes', 'proc_list')
+    self.chkItemsEqual(procs, ['455', '355'])
+    pkgs = configValidator.get('packages', 'pkg_list')
+    self.chkItemsEqual(pkgs, ['hadoop', 'hadoop-lib'])
+    repos = configValidator.get('repositories', 'repo_list')
+    self.chkItemsEqual(repos, ['HDP', 'HDP-epel'])
+    time = configValidator.get('metadata', 'created')
+    self.assertTrue((time != None))

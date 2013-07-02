@@ -1,24 +1,44 @@
-def register(self, dict):
-    dict['varLogHadoopLogCount'] = self.hadoopVarLogCount()
-    dict['varRunHadoopPidCount'] = self.hadoopVarRunCount()
-    etcs = []
-    self.etcAlternativesConf(etcs)
-    dict['etcAlternativesConf'] = etcs
-    dirs = []
-    config = AmbariConfig.config
-    try:
-        for dirName in config.get('heartbeat', 'dirs').split(','):
-            obj = {}
-            obj['type'] = self.dirType(dirName.strip())
-            obj['name'] = dirName.strip()
-            dirs.append(obj)
-    except:
-        pass
-    dict['paths'] = dirs
+def register(self, dict, componentsMapped=True, commandsInProgress=True):
+    dict['hostHealth'] = {}
     java = []
     self.javaProcs(java)
-    dict['javaProcs'] = java
+    dict['hostHealth']['activeJavaProcs'] = java
+    dict['hostHealth']['diskStatus'] = [self.osdiskAvailableSpace('/')]
     rpms = []
     self.rpmInfo(rpms)
     dict['rpms'] = rpms
-    dict['repoInfo'] = self.repos()
+    liveSvcs = []
+    self.checkLiveServices(self.DEFAULT_LIVE_SERVICES, liveSvcs)
+    dict['hostHealth']['liveServices'] = liveSvcs
+    if (componentsMapped or commandsInProgress):
+        dict['existingRepos'] = [self.RESULT_UNAVAILABLE]
+        dict['installedPackages'] = []
+        dict['alternatives'] = []
+        dict['stackFoldersAndFiles'] = []
+        dict['existingUsers'] = []
+    else:
+        etcs = []
+        self.etcAlternativesConf(self.DEFAULT_PROJECT_NAMES, etcs)
+        dict['alternatives'] = etcs
+        dirs = []
+        self.checkFolders(self.DEFAULT_DIRS, self.DEFAULT_PROJECT_NAMES, dirs)
+        dict['stackFoldersAndFiles'] = dirs
+        existingUsers = []
+        self.checkUsers(self.DEFAULT_USERS, existingUsers)
+        dict['existingUsers'] = existingUsers
+        installedPackages = []
+        availablePackages = []
+        self.packages.allInstalledPackages(installedPackages)
+        self.packages.allAvailablePackages(availablePackages)
+        repos = []
+        self.packages.getInstalledRepos(self.PACKAGES, (installedPackages + availablePackages), self.IGNORE_PACKAGES_FROM_REPOS, repos)
+        repos = self.getReposToRemove(repos, self.IGNORE_REPOS)
+        dict['existingRepos'] = repos
+        packagesInstalled = self.packages.getInstalledPkgsByRepo(repos, installedPackages)
+        additionalPkgsInstalled = self.packages.getInstalledPkgsByNames(self.ADDITIONAL_PACKAGES, installedPackages)
+        allPackages = list(set((packagesInstalled + additionalPkgsInstalled)))
+        dict['installedPackages'] = self.packages.getPackageDetails(installedPackages, allPackages)
+        self.reportFileHandler.writeHostCheckFile(dict)
+        pass
+    dict['hostHealth']['agentTimeStampAtReporting'] = int((time.time() * 1000))
+    pass
