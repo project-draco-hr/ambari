@@ -1,0 +1,55 @@
+@patch.object(setup_agent, 'runAgent')
+@patch.object(setup_agent, 'configureAgent')
+@patch.object(setup_agent, 'installAgent')
+@patch.object(setup_agent, 'installPreReq')
+@patch.object(setup_agent, 'installAgentSuse')
+@patch.object(setup_agent, 'is_suse')
+@patch.object(setup_agent, 'getOptimalVersion')
+@patch.object(setup_agent, 'checkServerReachability')
+@patch('sys.exit')
+@patch('os.path.dirname')
+@patch('os.path.realpath')
+def test_setup_agent_main(self, dirname_mock, realpath_mock, exit_mock, checkServerReachability_mock, getOptimalVersion_mock, is_suse_mock, installAgentSuse_mock, installPreReq_mock, installAgent_mock, configureAgent_mock, runAgent_mock):
+    installPreReq_mock.return_value = {'log': 'log', 'exitstatus': 0, }
+    installAgent_mock.return_value = {'log': 'log', 'exitstatus': 0, }
+    installAgentSuse_mock.return_value = {'log': 'log', 'exitstatus': 0, }
+    runAgent_mock.return_value = 0
+    setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
+    self.assertTrue(exit_mock.called)
+    exit_mock.reset()
+    setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', 'null', '8080'))
+    self.assertTrue(exit_mock.called)
+    exit_mock.reset()
+    is_suse_mock.return_value = False
+    setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', 'null', 'null'))
+    self.assertTrue(exit_mock.called)
+    exit_mock.reset()
+
+    def side_effect(retcode):
+        raise Exception(retcode, 'sys.exit')
+    exit_mock.side_effect = side_effect
+    installPreReq_mock.return_value = {'log': 'log', 'exitstatus': 1, }
+    try:
+        setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
+        self.fail('Should throw exception')
+    except Exception:
+        pass
+    self.assertTrue(exit_mock.called)
+    exit_mock.reset()
+    installPreReq_mock.return_value = {'log': 'log', 'exitstatus': 0, }
+    installAgent_mock.return_value = {'log': 'log', 'exitstatus': 1, }
+    try:
+        setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
+        self.fail('Should throw exception')
+    except Exception:
+        pass
+    self.assertTrue(exit_mock.called)
+    exit_mock.reset()
+    is_suse_mock.return_value = True
+    installAgentSuse_mock.return_value = {'log': 'log', 'exitstatus': 1, }
+    try:
+        setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
+        self.fail('Should throw exception')
+    except Exception:
+        pass
+    self.assertTrue(exit_mock.called)
