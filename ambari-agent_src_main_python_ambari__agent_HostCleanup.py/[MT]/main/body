@@ -1,0 +1,34 @@
+def main():
+    h = HostCleanup()
+    config = h.resolve_ambari_config()
+    hostCheckFileDir = config.get('agent', 'prefix')
+    hostCheckFilePath = os.path.join(hostCheckFileDir, HOST_CHECK_FILE_NAME)
+    hostCheckResultPath = os.path.join(hostCheckFileDir, OUTPUT_FILE_NAME)
+    parser = optparse.OptionParser()
+    parser.add_option('-v', '--verbose', dest='verbose', action='store_false', default=False, help='output verbosity.')
+    parser.add_option('-f', '--file', dest='inputfile', default=hostCheckFilePath, help='host check result file to read.', metavar='FILE')
+    parser.add_option('-o', '--out', dest='outputfile', default=hostCheckResultPath, help='log file to store results.', metavar='FILE')
+    parser.add_option('-k', '--skip', dest='skip', help=('(packages|users|directories|repositories|processes|alternatives).' + ' separator = ,'))
+    (options, args) = parser.parse_args()
+    backup_file(options.outputfile)
+    global logger
+    logger = logging.getLogger('HostCleanup')
+    handler = logging.FileHandler(options.outputfile)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    if options.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+    if options.skip:
+        global SKIP_LIST
+        SKIP_LIST = options.skip.splt(',')
+    is_root = h.is_current_user_root()
+    if (not is_root):
+        raise RuntimeError('HostCleanup needs to be run as root.')
+    hostcheckfile = options.inputfile
+    propMap = h.read_host_check_file(hostcheckfile)
+    if propMap:
+        h.do_cleanup(propMap)
+    logger.info(('Clean-up completed. The output is at %s' % str(options.outputfile)))
