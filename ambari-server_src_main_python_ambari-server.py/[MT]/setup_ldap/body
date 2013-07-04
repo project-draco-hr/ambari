@@ -3,7 +3,6 @@ def setup_ldap():
         err = 'Ambari-server setup-ldap should be run with root-level privileges'
         raise FatalException(4, err)
     properties = get_ambari_properties()
-    (masterKey, isSecure, isPersisted) = setup_master_key(False)
     ldap_property_list_reqd = ['authentication.ldap.primaryUrl', 'authentication.ldap.secondaryUrl', 'authentication.ldap.useSSL', 'authentication.ldap.usernameAttribute', 'authentication.ldap.baseDn', 'authentication.ldap.bindAnonymously']
     ldap_property_list_opt = ['authentication.ldap.managerDn', LDAP_MGR_PASSWORD_PROPERTY]
     LDAP_PRIMARY_URL_DEFAULT = get_value_from_properties(properties, ldap_property_list_reqd[0])
@@ -13,23 +12,21 @@ def setup_ldap():
     LDAP_BASE_DN_DEFAULT = get_value_from_properties(properties, ldap_property_list_reqd[4])
     LDAP_BIND_DEFAULT = get_value_from_properties(properties, ldap_property_list_reqd[5], 'false')
     LDAP_MGR_DN_DEFAULT = get_value_from_properties(properties, ldap_property_list_opt[0])
-    ldap_properties_map_reqd = {ldap_property_list_reqd[0]: (LDAP_PRIMARY_URL_DEFAULT, 'Primary URL* {0}: '.format(get_prompt_default(LDAP_PRIMARY_URL_DEFAULT)), False), ldap_property_list_reqd[1]: (LDAP_SECONDARY_URL_DEFAULT, 'Secondary URL {0}: '.format(get_prompt_default(LDAP_SECONDARY_URL_DEFAULT)), True), ldap_property_list_reqd[2]: (LDAP_USE_SSL_DEFAULT, 'Use SSL* [true/false] {0}: '.format(get_prompt_default(LDAP_USE_SSL_DEFAULT)), False), ldap_property_list_reqd[3]: (LDAP_USER_ATT_DEFAULT, 'User name attribute* {0}: '.format(get_prompt_default(LDAP_USER_ATT_DEFAULT)), False), ldap_property_list_reqd[4]: (LDAP_BASE_DN_DEFAULT, 'Base DN* {0}: '.format(get_prompt_default(LDAP_BASE_DN_DEFAULT)), False), ldap_property_list_reqd[5]: (LDAP_BIND_DEFAULT, 'Bind anonymously* [true/false] {0}: '.format(get_prompt_default(LDAP_BIND_DEFAULT)), False), }
+    ldap_properties_map_reqd = {ldap_property_list_reqd[0]: (LDAP_PRIMARY_URL_DEFAULT, 'Primary URL* {{host:port}} {0}: '.format(get_prompt_default(LDAP_PRIMARY_URL_DEFAULT)), False), ldap_property_list_reqd[1]: (LDAP_SECONDARY_URL_DEFAULT, 'Secondary URL {0}: '.format(get_prompt_default(LDAP_SECONDARY_URL_DEFAULT)), True), ldap_property_list_reqd[2]: (LDAP_USE_SSL_DEFAULT, 'Use SSL* [true/false] {0}: '.format(get_prompt_default(LDAP_USE_SSL_DEFAULT)), False), ldap_property_list_reqd[3]: (LDAP_USER_ATT_DEFAULT, 'User name attribute* {0}: '.format(get_prompt_default(LDAP_USER_ATT_DEFAULT)), False), ldap_property_list_reqd[4]: (LDAP_BASE_DN_DEFAULT, 'Base DN* {0}: '.format(get_prompt_default(LDAP_BASE_DN_DEFAULT)), False), ldap_property_list_reqd[5]: (LDAP_BIND_DEFAULT, 'Bind anonymously* [true/false] {0}: '.format(get_prompt_default(LDAP_BIND_DEFAULT)), False), }
     ldap_property_value_map = {}
-    for key in ldap_property_list_reqd:
-        input = get_validated_string_input(ldap_properties_map_reqd[key][1], ldap_properties_map_reqd[key][0], '.*', '', False, ldap_properties_map_reqd[key][2])
+    for (idx, key) in enumerate(ldap_property_list_reqd):
+        pattern = ('.*' if (idx != 0) else '^(.*:[0-9]{1,5}$)')
+        input = get_validated_string_input(ldap_properties_map_reqd[key][1], ldap_properties_map_reqd[key][0], pattern, 'Invalid characters in the input!', False, ldap_properties_map_reqd[key][2])
         if ((input is not None) and (input != '')):
             ldap_property_value_map[key] = input
     bindAnonymously = ldap_property_value_map['authentication.ldap.bindAnonymously']
     anonymous = (bindAnonymously and (bindAnonymously.lower() == 'true'))
     password = None
     if (not anonymous):
-        username = get_validated_string_input('Manager DN* {0}:'.format(get_prompt_default(LDAP_MGR_DN_DEFAULT)), LDAP_MGR_DN_DEFAULT, '.*', '', False, False)
+        username = get_validated_string_input('Manager DN* {0}: '.format(get_prompt_default(LDAP_MGR_DN_DEFAULT)), LDAP_MGR_DN_DEFAULT, '.*', 'Invalid characters in the input!', False, False)
         ldap_property_value_map[LDAP_MGR_USERNAME_PROPERTY] = username
         password = configure_ldap_password()
-        if isSecure:
-            ldap_property_value_map[LDAP_MGR_PASSWORD_PROPERTY] = get_alias_string(LDAP_MGR_PASSWORD_ALIAS)
-        else:
-            ldap_property_value_map[LDAP_MGR_PASSWORD_PROPERTY] = password
+        ldap_property_value_map[LDAP_MGR_PASSWORD_PROPERTY] = password
     print ('=' * 20)
     print 'Review Settings'
     print ('=' * 20)
@@ -44,11 +41,6 @@ def setup_ldap():
                 print ('%s: %s' % (property, '****'))
     save_settings = get_YN_input('Save settings [y/n] (y)? ', True)
     if save_settings:
-        if (isSecure and password):
-            retCode = save_passwd_for_alias(LDAP_MGR_PASSWORD_ALIAS, password, masterKey)
-            if (retCode != 0):
-                print 'Failed to save secure LDAP password.'
-                return retCode
         ldap_property_value_map[CLIENT_SECURITY_KEY] = 'ldap'
         update_properties(ldap_property_value_map)
         print 'Saving...done'
