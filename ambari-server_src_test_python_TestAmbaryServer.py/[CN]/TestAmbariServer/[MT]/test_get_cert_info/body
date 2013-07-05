@@ -1,0 +1,29 @@
+@patch.object(ambari_server, 'run_os_command')
+def test_get_cert_info(self, run_os_command_mock):
+    path = 'path/to/certificate'
+    run_os_command_mock.return_value = ((-1), None, None)
+    cert_info = ambari_server.get_cert_info(path)
+    self.assertEqual(cert_info, None)
+    run_os_command_mock.return_value = (0, None, None)
+    cert_info = ambari_server.get_cert_info(path)
+    self.assertEqual(cert_info, None)
+    notAfter = 'Jul  3 14:12:57 2014 GMT'
+    notBefore = 'Jul  3 14:12:57 2013 GMT'
+    attr1_key = 'A'
+    attr1_value = 'foo'
+    attr2_key = 'B'
+    attr2_value = 'bar'
+    attr3_key = 'CN'
+    attr3_value = 'host.domain.com'
+    subject_pattern = '/{attr1_key}={attr1_value}/{attr2_key}={attr2_value}/{attr3_key}={attr3_value}'
+    subject = subject_pattern.format(attr1_key=attr1_key, attr1_value=attr1_value, attr2_key=attr2_key, attr2_value=attr2_value, attr3_key=attr3_key, attr3_value=attr3_value)
+    out_pattern = '\nnotAfter={notAfter}\nnotBefore={notBefore}\nsubject={subject}\n-----BEGIN CERTIFICATE-----\nMIIFHjCCAwYCCQDpHKOBI+Lt0zANBgkqhkiG9w0BAQUFADBRMQswCQYDVQQGEwJV\n...\n5lqd8XxOGSYoMOf+70BLN2sB\n-----END CERTIFICATE-----\n    '
+    out = out_pattern.format(notAfter=notAfter, notBefore=notBefore, subject=subject)
+    run_os_command_mock.return_value = (0, out, None)
+    cert_info = ambari_server.get_cert_info(path)
+    self.assertEqual(cert_info['notAfter'], notAfter)
+    self.assertEqual(cert_info['notBefore'], notBefore)
+    self.assertEqual(cert_info['subject'], subject)
+    self.assertEqual(cert_info[attr1_key], attr1_value)
+    self.assertEqual(cert_info[attr2_key], attr2_value)
+    self.assertEqual(cert_info[attr3_key], attr3_value)
