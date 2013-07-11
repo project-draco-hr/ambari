@@ -3,6 +3,7 @@ def store_local_properties(args):
     if (properties == (-1)):
         print_error_msg('Error getting ambari properties')
         return (-1)
+    isSecure = get_is_secure(properties)
     properties.removeOldProp(JDBC_SCHEMA_PROPERTY)
     properties.removeOldProp(JDBC_HOSTNAME_PROPERTY)
     properties.removeOldProp(JDBC_DATABASE_PROPERTY)
@@ -15,11 +16,13 @@ def store_local_properties(args):
     properties.removeOldProp(JDBC_DATABASE_PROPERTY)
     properties.process_pair(PERSISTENCE_TYPE_PROPERTY, 'local')
     properties.process_pair(JDBC_USER_NAME_PROPERTY, args.database_username)
-    isSecure = properties.get_property(SECURITY_IS_ENCRYPTION_ENABLED)
-    if (isSecure and (isSecure.lower() == 'true')):
-        properties.process_pair(JDBC_PASSWORD_PROPERTY, encrypt_password(JDBC_RCA_PASSWORD_ALIAS, args.database_password))
-    else:
-        properties.process_pair(JDBC_PASSWORD_PROPERTY, store_password_file(args.database_password, JDBC_PASSWORD_FILENAME))
+    properties.process_pair(JDBC_PASSWORD_PROPERTY, store_password_file(args.database_password, JDBC_PASSWORD_FILENAME))
+    if isSecure:
+        encrypted_password = encrypt_password(JDBC_RCA_PASSWORD_ALIAS, args.database_password)
+        if (args.database_password != encrypted_password):
+            properties.process_pair(JDBC_PASSWORD_PROPERTY, encrypted_password)
+        pass
+    pass
     conf_file = properties.fileName
     try:
         properties.store(open(conf_file, 'w'))

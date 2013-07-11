@@ -3,6 +3,7 @@ def setup_ldap():
         err = 'Ambari-server setup-ldap should be run with root-level privileges'
         raise FatalException(4, err)
     properties = get_ambari_properties()
+    isSecure = get_is_secure(properties)
     ldap_property_list_reqd = ['authentication.ldap.primaryUrl', 'authentication.ldap.secondaryUrl', 'authentication.ldap.useSSL', 'authentication.ldap.usernameAttribute', 'authentication.ldap.baseDn', 'authentication.ldap.bindAnonymously']
     ldap_property_list_opt = ['authentication.ldap.managerDn', LDAP_MGR_PASSWORD_PROPERTY, SSL_TRUSTSTORE_TYPE_PROPERTY, SSL_TRUSTSTORE_PATH_PROPERTY, SSL_TRUSTSTORE_PASSWORD_PROPERTY]
     ldap_property_list_truststore = [SSL_TRUSTSTORE_TYPE_PROPERTY, SSL_TRUSTSTORE_PATH_PROPERTY, SSL_TRUSTSTORE_PASSWORD_PROPERTY]
@@ -30,14 +31,15 @@ def setup_ldap():
             ldap_property_value_map[key] = input
     bindAnonymously = ldap_property_value_map['authentication.ldap.bindAnonymously']
     anonymous = (bindAnonymously and (bindAnonymously.lower() == 'true'))
-    password = None
+    mgr_password = None
     if (not anonymous):
         username = get_validated_string_input('Manager DN* {0}: '.format(get_prompt_default(LDAP_MGR_DN_DEFAULT)), LDAP_MGR_DN_DEFAULT, '.*', 'Invalid characters in the input!', False, False)
         ldap_property_value_map[LDAP_MGR_USERNAME_PROPERTY] = username
-        password = configure_ldap_password()
-        ldap_property_value_map[LDAP_MGR_PASSWORD_PROPERTY] = password
+        mgr_password = configure_ldap_password()
+        ldap_property_value_map[LDAP_MGR_PASSWORD_PROPERTY] = mgr_password
     useSSL = ldap_property_value_map['authentication.ldap.useSSL']
     ldaps = (useSSL and (useSSL.lower() == 'true'))
+    ts_password = None
     if ldaps:
         truststore_default = 'n'
         truststore_set = bool(SSL_TRUSTSTORE_PATH_DEFAULT)
@@ -61,6 +63,7 @@ def setup_ldap():
             properties.removeOldProp(SSL_TRUSTSTORE_PATH_PROPERTY)
             properties.removeOldProp(SSL_TRUSTSTORE_PASSWORD_PROPERTY)
         pass
+    pass
     print ('=' * 20)
     print 'Review Settings'
     print ('=' * 20)
@@ -76,6 +79,18 @@ def setup_ldap():
     save_settings = get_YN_input('Save settings [y/n] (y)? ', True)
     if save_settings:
         ldap_property_value_map[CLIENT_SECURITY_KEY] = 'ldap'
+        if isSecure:
+            if mgr_password:
+                encrypted_passwd = encrypt_password(LDAP_MGR_PASSWORD_ALIAS, mgr_password)
+                if (mgr_password != encrypted_passwd):
+                    ldap_property_value_map[LDAP_MGR_PASSWORD_PROPERTY] = encrypted_passwd
+            pass
+            if ts_password:
+                encrypted_passwd = encrypt_password(SSL_TRUSTSTORE_PASSWORD_ALIAS, ts_password)
+                if (ts_password != encrypted_passwd):
+                    ldap_property_value_map[SSL_TRUSTSTORE_PASSWORD_PROPERTY] = encrypted_passwd
+            pass
+        pass
         update_properties(properties, ldap_property_value_map)
         print 'Saving...done'
     return 0

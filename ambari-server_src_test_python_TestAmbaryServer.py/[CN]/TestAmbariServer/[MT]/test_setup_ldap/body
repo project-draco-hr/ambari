@@ -1,3 +1,5 @@
+@patch.object(ambari_server, 'get_is_secure')
+@patch.object(ambari_server, 'encrypt_password')
 @patch.object(ambari_server, 'save_passwd_for_alias')
 @patch.object(ambari_server, 'get_YN_input')
 @patch.object(ambari_server, 'update_properties')
@@ -7,7 +9,7 @@
 @patch.object(ambari_server, 'search_file')
 @patch.object(ambari_server, 'get_ambari_properties')
 @patch.object(ambari_server, 'is_root')
-def test_setup_ldap(self, is_root_method, get_ambari_properties_method, search_file_message, setup_master_key_method, get_validated_string_input_method, configure_ldap_password_method, update_properties_method, get_YN_input_method, save_passwd_for_alias_method):
+def test_setup_ldap(self, is_root_method, get_ambari_properties_method, search_file_message, setup_master_key_method, get_validated_string_input_method, configure_ldap_password_method, update_properties_method, get_YN_input_method, save_passwd_for_alias_method, encrypt_password_method, get_is_secure_method):
     out = StringIO.StringIO()
     sys.stdout = out
     is_root_method.return_value = False
@@ -19,12 +21,13 @@ def test_setup_ldap(self, is_root_method, get_ambari_properties_method, search_f
         pass
     is_root_method.return_value = True
     search_file_message.return_value = 'filepath'
-    configs = {ambari_server.SECURITY_MASTER_KEY_LOCATION: 'filepath', ambari_server.SECURITY_KEYS_DIR: tempfile.gettempdir(), ambari_server.SECURITY_KEY_IS_PERSISTED: 'true', }
+    configs = {ambari_server.SECURITY_MASTER_KEY_LOCATION: 'filepath', ambari_server.SECURITY_KEYS_DIR: tempfile.gettempdir(), ambari_server.SECURITY_IS_ENCRYPTION_ENABLED: 'true', }
     get_ambari_properties_method.return_value = configs
     configure_ldap_password_method.return_value = 'password'
     setup_master_key_method.return_value = (None, True, True)
     get_YN_input_method.return_value = True
     save_passwd_for_alias_method.return_value = 0
+    encrypt_password_method.return_value = ambari_server.get_alias_string(ambari_server.LDAP_MGR_PASSWORD_ALIAS)
 
     def side_effect(*args, **kwargs):
         if ('Bind anonymously' in args[0]):
@@ -35,7 +38,7 @@ def test_setup_ldap(self, is_root_method, get_ambari_properties_method, search_f
             return 'test'
     get_validated_string_input_method.side_effect = side_effect
     ambari_server.setup_ldap()
-    ldap_properties_map = {'authentication.ldap.primaryUrl': 'test', 'authentication.ldap.secondaryUrl': 'test', 'authentication.ldap.useSSL': 'false', 'authentication.ldap.usernameAttribute': 'test', 'authentication.ldap.baseDn': 'test', 'authentication.ldap.bindAnonymously': 'false', 'authentication.ldap.managerDn': 'test', 'authentication.ldap.managerPassword': 'password', 'client.security': 'ldap', }
+    ldap_properties_map = {'authentication.ldap.primaryUrl': 'test', 'authentication.ldap.secondaryUrl': 'test', 'authentication.ldap.useSSL': 'false', 'authentication.ldap.usernameAttribute': 'test', 'authentication.ldap.baseDn': 'test', 'authentication.ldap.bindAnonymously': 'false', 'authentication.ldap.managerDn': 'test', 'authentication.ldap.managerPassword': 'password', 'client.security': 'ldap', ambari_server.LDAP_MGR_PASSWORD_PROPERTY: ambari_server.get_alias_string(ambari_server.LDAP_MGR_PASSWORD_ALIAS), }
     sorted_x = sorted(ldap_properties_map.iteritems(), key=operator.itemgetter(0))
     sorted_y = sorted(update_properties_method.call_args[0][1].iteritems(), key=operator.itemgetter(0))
     self.assertEquals(sorted_x, sorted_y)
