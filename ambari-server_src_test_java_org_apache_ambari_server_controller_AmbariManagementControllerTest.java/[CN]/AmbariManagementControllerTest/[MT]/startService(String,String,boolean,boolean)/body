@@ -6,10 +6,16 @@
   mapRequestProps.put("context","Called from a test");
   RequestStatusResponse resp=controller.updateServices(requests,mapRequestProps,runSmokeTests,reconfigureClients);
   Assert.assertEquals(State.STARTED,clusters.getCluster(clusterName).getService(serviceName).getDesiredState());
-  for (  ServiceComponent sc : clusters.getCluster(clusterName).getService(serviceName).getServiceComponents().values()) {
-    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
-      sch.setState(State.STARTED);
+  if (resp != null) {
+    List<HostRoleCommand> commands=actionDB.getRequestTasks(resp.getRequestId());
+    for (    HostRoleCommand cmd : commands) {
+      if (!cmd.getRole().toString().endsWith("CHECK")) {
+        clusters.getCluster(clusterName).getService(serviceName).getServiceComponent(cmd.getRole().name()).getServiceComponentHost(cmd.getHostName()).setState(State.STARTED);
+      }
     }
+    return resp.getRequestId();
   }
-  return resp.getRequestId();
+ else {
+    return -1;
+  }
 }
