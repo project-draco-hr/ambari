@@ -1,0 +1,32 @@
+{
+  Map<String,PropertyHelper.MetricsVersion> clusterVersionsMap=new HashMap<String,PropertyHelper.MetricsVersion>();
+  clusterVersionsMap.put("c1",PropertyHelper.MetricsVersion.HDP1);
+  clusterVersionsMap.put("c2",PropertyHelper.MetricsVersion.HDP2);
+  Map<PropertyHelper.MetricsVersion,AbstractPropertyProvider> providers=new HashMap<PropertyHelper.MetricsVersion,AbstractPropertyProvider>();
+  TestJMXPropertyProvider propertyProvider1=new TestJMXPropertyProvider(PropertyHelper.getJMXPropertyIds(Resource.Type.HostComponent,PropertyHelper.MetricsVersion.HDP1),PropertyHelper.getPropertyId("HostRoles","cluster_name"),PropertyHelper.getPropertyId("HostRoles","host_name"),PropertyHelper.getPropertyId("HostRoles","component_name"),PropertyHelper.getPropertyId("HostRoles","state"),Collections.singleton("STARTED"));
+  providers.put(PropertyHelper.MetricsVersion.HDP1,propertyProvider1);
+  TestJMXPropertyProvider propertyProvider2=new TestJMXPropertyProvider(PropertyHelper.getJMXPropertyIds(Resource.Type.HostComponent,PropertyHelper.MetricsVersion.HDP2),PropertyHelper.getPropertyId("HostRoles","cluster_name"),PropertyHelper.getPropertyId("HostRoles","host_name"),PropertyHelper.getPropertyId("HostRoles","component_name"),PropertyHelper.getPropertyId("HostRoles","state"),Collections.singleton("STARTED"));
+  providers.put(PropertyHelper.MetricsVersion.HDP2,propertyProvider2);
+  VersioningPropertyProvider provider=new VersioningPropertyProvider(clusterVersionsMap,providers,PropertyHelper.getPropertyId("HostRoles","cluster_name"));
+  Request request=PropertyHelper.getReadRequest();
+  Resource resource1=new ResourceImpl(Resource.Type.HostComponent);
+  resource1.setProperty(PropertyHelper.getPropertyId("HostRoles","cluster_name"),"c1");
+  provider.populateResources(Collections.singleton(resource1),request,null);
+  Assert.assertEquals(resource1,propertyProvider1.getResource());
+  Assert.assertNull(propertyProvider2.getResource());
+  propertyProvider1.setResource(null);
+  propertyProvider2.setResource(null);
+  Resource resource2=new ResourceImpl(Resource.Type.HostComponent);
+  resource2.setProperty(PropertyHelper.getPropertyId("HostRoles","cluster_name"),"c2");
+  provider.populateResources(Collections.singleton(resource2),request,null);
+  Assert.assertNull(propertyProvider1.getResource());
+  Assert.assertEquals(resource2,propertyProvider2.getResource());
+  propertyProvider1.setResource(null);
+  propertyProvider2.setResource(null);
+  Set<Resource> resources=new HashSet<Resource>();
+  resources.add(resource1);
+  resources.add(resource2);
+  provider.populateResources(resources,request,null);
+  Assert.assertEquals(resource1,propertyProvider1.getResource());
+  Assert.assertEquals(resource2,propertyProvider2.getResource());
+}
