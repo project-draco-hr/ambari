@@ -1,0 +1,49 @@
+@patch('time.sleep')
+@patch('time.time')
+@patch('logging.warn')
+@patch('logging.info')
+@patch.object(Bootstrap, 'start')
+@patch.object(Bootstrap, 'interruptBootstrap')
+@patch.object(Bootstrap, 'getStatus')
+def test_PBootstrap(self, getStatus_mock, interruptBootstrap_mock, start_mock, info_mock, warn_mock, time_mock, sleep_mock):
+    shared_state = SharedState('root', 'sshkey_file', 'scriptDir', 'bootdir', 'setupAgentFile', 'ambariServer', 'centos6', None, '8440')
+    n = 180
+    time = 100500
+    time_mock.return_value = time
+    hosts = []
+    for i in range(0, n):
+        hosts.append(('host' + str(i)))
+    getStatus_mock.return_value = {'return_code': 0, 'start_time': (time + 999), }
+    pbootstrap_obj = PBootstrap(hosts, shared_state)
+    pbootstrap_obj.run()
+    self.assertEqual(start_mock.call_count, n)
+    self.assertEqual(interruptBootstrap_mock.call_count, 0)
+    start_mock.reset_mock()
+    getStatus_mock.reset_mock()
+
+    def fake_return_code_generator():
+        call_number = 0
+        while True:
+            call_number += 1
+            if ((call_number % 5) != 0):
+                yield 0
+            else:
+                yield None
+
+    def fake_start_time_generator():
+        while True:
+            yield ((time - bootstrap.HOST_BOOTSTRAP_TIMEOUT) - 1)
+    return_code_generator = fake_return_code_generator()
+    start_time_generator = fake_start_time_generator()
+
+    def status_get_item_mock(item):
+        if (item == 'return_code'):
+            return return_code_generator.next()
+        elif (item == 'start_time'):
+            return start_time_generator.next()
+    dict_mock = MagicMock()
+    dict_mock.__getitem__.side_effect = status_get_item_mock
+    getStatus_mock.return_value = dict_mock
+    pbootstrap_obj.run()
+    self.assertEqual(start_mock.call_count, n)
+    self.assertEqual(interruptBootstrap_mock.call_count, (n / 5))

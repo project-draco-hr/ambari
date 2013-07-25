@@ -1,11 +1,19 @@
-@patch.object(PSCP, 'run')
-@patch.object(PSCP, 'getstatus')
-def test_copyOsCheckScript(self, getstatus_method, run_method):
-    getstatus_method.return_value = {'hostname': {'exitstatus': 0, 'log': '', }, }
-    os.environ[AMBARI_PASSPHRASE_VAR_NAME] = ''
-    bootstrap = BootStrap(['hostname'], 'user', 'sshKeyFile', 'scriptDir', 'bootdir', 'setupAgentFile', 'ambariServer', 'centos6', None, '8440')
-    res = bootstrap.copyOsCheckScript()
-    self.assertTrue(run_method.called)
-    self.assertTrue(getstatus_method.called)
-    self.assertTrue((res == 0))
-    pass
+@patch.object(Bootstrap, 'getOsCheckScript')
+@patch.object(Bootstrap, 'getOsCheckScriptRemoteLocation')
+@patch.object(SCP, '__init__')
+@patch.object(SCP, 'run')
+@patch.object(HostLog, 'write')
+def test_copyOsCheckScript(self, write_mock, run_mock, init_mock, getOsCheckScriptRemoteLocation_mock, getOsCheckScript_mock):
+    shared_state = SharedState('root', 'sshkey_file', 'scriptDir', 'bootdir', 'setupAgentFile', 'ambariServer', 'centos6', None, '8440')
+    bootstrap_obj = Bootstrap('hostname', shared_state)
+    getOsCheckScript_mock.return_value = 'OsCheckScript'
+    getOsCheckScriptRemoteLocation_mock.return_value = 'OsCheckScriptRemoteLocation'
+    expected = 42
+    init_mock.return_value = None
+    run_mock.return_value = expected
+    res = bootstrap_obj.copyOsCheckScript()
+    self.assertEquals(res, expected)
+    input_file = str(init_mock.call_args[0][3])
+    remote_file = str(init_mock.call_args[0][4])
+    self.assertEqual(input_file, 'OsCheckScript')
+    self.assertEqual(remote_file, 'OsCheckScriptRemoteLocation')

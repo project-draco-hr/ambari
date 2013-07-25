@@ -1,0 +1,62 @@
+@patch.object(Bootstrap, 'try_to_execute')
+@patch.object(Bootstrap, 'hasPassword')
+@patch.object(Bootstrap, 'createDoneFile')
+@patch.object(HostLog, 'write')
+@patch('logging.warn')
+@patch('logging.error')
+def test_run(self, error_mock, warn_mock, write_mock, createDoneFile_mock, hasPassword_mock, try_to_execute_mock):
+    shared_state = SharedState('root', 'sshkey_file', 'scriptDir', 'bootdir', 'setupAgentFile', 'ambariServer', 'centos6', None, '8440')
+    bootstrap_obj = Bootstrap('hostname', shared_state)
+    bootstrap_obj.copied_password_file = False
+    hasPassword_mock.return_value = False
+    try_to_execute_mock.return_value = 0
+    bootstrap_obj.run()
+    self.assertEqual(try_to_execute_mock.call_count, 5)
+    self.assertTrue(createDoneFile_mock.called)
+    self.assertEqual(bootstrap_obj.getStatus()['return_code'], 0)
+    try_to_execute_mock.reset_mock()
+    createDoneFile_mock.reset_mock()
+    bootstrap_obj.copied_password_file = True
+    hasPassword_mock.return_value = True
+    try_to_execute_mock.return_value = 0
+    bootstrap_obj.run()
+    self.assertEqual(try_to_execute_mock.call_count, 8)
+    self.assertTrue(createDoneFile_mock.called)
+    self.assertEqual(bootstrap_obj.getStatus()['return_code'], 0)
+    error_mock.reset_mock()
+    write_mock.reset_mock()
+    try_to_execute_mock.reset_mock()
+    createDoneFile_mock.reset_mock()
+    bootstrap_obj.copied_password_file = False
+    hasPassword_mock.return_value = False
+    try_to_execute_mock.side_effect = [0, 1]
+    bootstrap_obj.run()
+    self.assertEqual(try_to_execute_mock.call_count, 2)
+    self.assertTrue(('ERROR' in error_mock.call_args[0][0]))
+    self.assertTrue(('ERROR' in write_mock.call_args[0][0]))
+    self.assertTrue(createDoneFile_mock.called)
+    self.assertEqual(bootstrap_obj.getStatus()['return_code'], 1)
+    try_to_execute_mock.reset_mock()
+    createDoneFile_mock.reset_mock()
+    bootstrap_obj.copied_password_file = True
+    hasPassword_mock.return_value = True
+    try_to_execute_mock.side_effect = [0, 42, 0]
+    bootstrap_obj.run()
+    self.assertEqual(try_to_execute_mock.call_count, 3)
+    self.assertTrue(createDoneFile_mock.called)
+    self.assertEqual(bootstrap_obj.getStatus()['return_code'], 42)
+    error_mock.reset_mock()
+    write_mock.reset_mock()
+    try_to_execute_mock.reset_mock()
+    createDoneFile_mock.reset_mock()
+    bootstrap_obj.copied_password_file = True
+    hasPassword_mock.return_value = True
+    try_to_execute_mock.side_effect = [0, 17, 19]
+    bootstrap_obj.run()
+    self.assertEqual(try_to_execute_mock.call_count, 3)
+    self.assertTrue(('ERROR' in write_mock.call_args_list[0][0][0]))
+    self.assertTrue(('ERROR' in error_mock.call_args[0][0]))
+    self.assertTrue(('WARNING' in write_mock.call_args_list[1][0][0]))
+    self.assertTrue(('WARNING' in warn_mock.call_args[0][0]))
+    self.assertTrue(createDoneFile_mock.called)
+    self.assertEqual(bootstrap_obj.getStatus()['return_code'], 17)

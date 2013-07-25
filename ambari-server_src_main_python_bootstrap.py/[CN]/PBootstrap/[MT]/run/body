@@ -1,0 +1,27 @@
+def run(self):
+    ' Run up to MAX_PARALLEL_BOOTSTRAPS at a time in parallel '
+    logging.info('Executing parallel bootstrap')
+    queue = list(self.hostlist)
+    queue.reverse()
+    running_list = []
+    finished_list = []
+    while (queue or running_list):
+        for bootstrap in running_list:
+            if (bootstrap.getStatus()['return_code'] is not None):
+                finished_list.append(bootstrap)
+            else:
+                starttime = bootstrap.getStatus()['start_time']
+                elapsedtime = (time.time() - starttime)
+                if (elapsedtime > HOST_BOOTSTRAP_TIMEOUT):
+                    logging.warn('Bootstrap at host {0} timed out and will be interrupted'.format(bootstrap.host))
+                    bootstrap.interruptBootstrap()
+                    finished_list.append(bootstrap)
+        running_list[:] = [b for b in running_list if (not (b in finished_list))]
+        free_slots = (MAX_PARALLEL_BOOTSTRAPS - len(running_list))
+        for i in range(free_slots):
+            if queue:
+                next_host = queue.pop()
+                bootstrap = self.run_bootstrap(next_host)
+                running_list.append(bootstrap)
+        time.sleep(POLL_INTERVAL_SEC)
+    logging.info('Finished parallel bootstrap')

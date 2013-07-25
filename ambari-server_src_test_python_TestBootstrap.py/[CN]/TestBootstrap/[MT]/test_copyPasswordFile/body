@@ -1,14 +1,28 @@
-@patch.object(bootstrap, 'get_difference')
-@patch.object(PSCP, 'run')
-def test_copyPasswordFile(self, run_mock, get_difference_mock):
-    bootstrap_obj = BootStrap(['hostname'], 'root', 'sshKeyFile', 'scriptDir', 'bootdir', 'setupAgentFile', 'ambariServer', 'centos6', None, '8440')
-    bootstrap_obj.statuses = {'hostname': {'exitstatus': 0, 'log': '', }, }
-    get_difference_mock.return_value = ['hostname']
-    ret = bootstrap_obj.copyPasswordFile()
-    self.assertTrue((ret == 1))
-    get_difference_mock.return_value = None
-    ret = bootstrap_obj.copyPasswordFile()
-    self.assertTrue((ret == 0))
-    bootstrap_obj.statuses = None
-    ret = bootstrap_obj.copyPasswordFile()
-    self.assertTrue((ret == 1))
+@patch.object(Bootstrap, 'getPasswordFile')
+@patch.object(SCP, '__init__')
+@patch.object(SCP, 'run')
+@patch.object(SSH, '__init__')
+@patch.object(SSH, 'run')
+@patch.object(HostLog, 'write')
+def test_copyPasswordFile(self, write_mock, ssh_run_mock, ssh_init_mock, scp_run_mock, scp_init_mock, getPasswordFile_mock):
+    shared_state = SharedState('root', 'sshkey_file', 'scriptDir', 'bootdir', 'setupAgentFile', 'ambariServer', 'centos6', None, '8440', password_file='PasswordFile')
+    bootstrap_obj = Bootstrap('hostname', shared_state)
+    getPasswordFile_mock.return_value = 'PasswordFile'
+    expected1 = 42
+    expected2 = 17
+    scp_init_mock.return_value = None
+    scp_run_mock.return_value = expected1
+    ssh_init_mock.return_value = None
+    ssh_run_mock.return_value = expected2
+    res = bootstrap_obj.copyPasswordFile()
+    self.assertEquals(res, expected1)
+    input_file = str(scp_init_mock.call_args[0][3])
+    remote_file = str(scp_init_mock.call_args[0][4])
+    self.assertEqual(input_file, 'PasswordFile')
+    self.assertEqual(remote_file, 'PasswordFile')
+    command = str(ssh_init_mock.call_args[0][3])
+    self.assertEqual(command, 'chmod 600 PasswordFile')
+    expected1 = 0
+    expected2 = 17
+    scp_run_mock.return_value = expected1
+    ssh_run_mock.return_value = expected2
