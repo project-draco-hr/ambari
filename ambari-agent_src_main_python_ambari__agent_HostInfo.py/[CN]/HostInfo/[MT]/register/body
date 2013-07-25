@@ -4,9 +4,7 @@ def register(self, dict, componentsMapped=True, commandsInProgress=True):
     self.javaProcs(java)
     dict['hostHealth']['activeJavaProcs'] = java
     dict['hostHealth']['diskStatus'] = [self.osdiskAvailableSpace('/')]
-    rpms = []
-    self.rpmInfo(rpms)
-    dict['rpms'] = rpms
+    dict['rpms'] = []
     liveSvcs = []
     self.checkLiveServices(self.DEFAULT_LIVE_SERVICES, liveSvcs)
     dict['hostHealth']['liveServices'] = liveSvcs
@@ -26,6 +24,7 @@ def register(self, dict, componentsMapped=True, commandsInProgress=True):
         dict['existingUsers'] = existingUsers
         dirs = []
         self.checkFolders(self.DEFAULT_DIRS, self.DEFAULT_PROJECT_NAMES, existingUsers, dirs)
+        self.checkFoldersBasedOnNames(self.DIRNAME_PATTERNS, self.DEFAULT_PROJECT_NAMES, existingUsers, dirs)
         dict['stackFoldersAndFiles'] = dirs
         installedPackages = []
         availablePackages = []
@@ -33,12 +32,12 @@ def register(self, dict, componentsMapped=True, commandsInProgress=True):
         self.packages.allAvailablePackages(availablePackages)
         repos = []
         self.packages.getInstalledRepos(self.PACKAGES, (installedPackages + availablePackages), self.IGNORE_PACKAGES_FROM_REPOS, repos)
-        repos = self.getReposToRemove(repos, self.IGNORE_REPOS)
-        dict['existingRepos'] = repos
-        packagesInstalled = self.packages.getInstalledPkgsByRepo(repos, installedPackages)
+        packagesInstalled = self.packages.getInstalledPkgsByRepo(repos, self.IGNORE_PACKAGES, installedPackages)
         additionalPkgsInstalled = self.packages.getInstalledPkgsByNames(self.ADDITIONAL_PACKAGES, installedPackages)
         allPackages = list(set((packagesInstalled + additionalPkgsInstalled)))
         dict['installedPackages'] = self.packages.getPackageDetails(installedPackages, allPackages)
+        repos = self.getReposToRemove(repos, self.IGNORE_REPOS)
+        dict['existingRepos'] = repos
         self.reportFileHandler.writeHostCheckFile(dict)
         pass
     dict['hostHealth']['agentTimeStampAtReporting'] = int((time.time() * 1000))
