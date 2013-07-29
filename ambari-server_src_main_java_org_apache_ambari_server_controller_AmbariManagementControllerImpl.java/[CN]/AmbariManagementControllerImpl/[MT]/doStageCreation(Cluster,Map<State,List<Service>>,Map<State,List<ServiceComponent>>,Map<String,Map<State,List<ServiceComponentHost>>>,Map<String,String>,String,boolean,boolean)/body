@@ -1,4 +1,5 @@
 {
+  Map<String,DesiredConfig> clusterDesiredConfigs=cluster.getDesiredConfigs();
   if ((changedServices == null || changedServices.isEmpty()) && (changedComps == null || changedComps.isEmpty()) && (changedScHosts == null || changedScHosts.isEmpty())) {
     return null;
   }
@@ -13,7 +14,17 @@
     long stageId=0;
     Stage stage=createNewStage(cluster,requestId.longValue(),requestContext);
     stage.setStageId(stageId);
+    Set<String> hostnames=new HashSet<String>();
+    for (    Map<State,List<ServiceComponentHost>> stateListMap : changedScHosts.values()) {
+      for (      List<ServiceComponentHost> serviceComponentHosts : stateListMap.values()) {
+        for (        ServiceComponentHost serviceComponentHost : serviceComponentHosts) {
+          hostnames.add(serviceComponentHost.getHostName());
+        }
+      }
+    }
+    Map<String,Map<String,DesiredConfig>> configsByHosts=cluster.getHostsDesiredConfigs(hostnames);
     String jobtrackerHost=this.getJobTrackerHost(cluster);
+    Map<String,List<String>> clusterHostInfo=StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster,hostsMap,injector);
     for (    String compName : changedScHosts.keySet()) {
       for (      State newState : changedScHosts.get(compName).keySet()) {
         for (        ServiceComponentHost scHost : changedScHosts.get(compName).get(newState)) {
@@ -79,14 +90,14 @@ LOG.debug("Create a new host action" + ", requestId=" + requestId.longValue() + 
 }
 Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
 Map<String,Map<String,String>> configTags=new HashMap<String,Map<String,String>>();
-findConfigurationPropertiesWithOverrides(configurations,configTags,cluster,scHost.getServiceName(),scHost.getHostName());
+findConfigurationPropertiesWithOverrides(configurations,configTags,cluster,scHost.getServiceName(),scHost.getHostName(),clusterDesiredConfigs,configsByHosts.get(scHost.getHostName()));
 if ((!scHost.getHostName().equals(jobtrackerHost)) && configurations.get("global") != null) {
 if (LOG.isDebugEnabled()) {
 LOG.debug("Setting rca_enabled to false for host " + scHost.getHostName());
 }
 configurations.get("global").put("rca_enabled","false");
 }
-createHostAction(cluster,stage,scHost,configurations,configTags,roleCommand,requestParameters,event);
+createHostAction(cluster,stage,scHost,configurations,configTags,roleCommand,requestParameters,event,clusterHostInfo);
 }
 }
 }
@@ -101,7 +112,7 @@ continue;
 stage.addHostRoleExecutionCommand(clientHost,Role.valueOf(smokeTestRole),RoleCommand.EXECUTE,new ServiceComponentHostOpInProgressEvent(null,clientHost,nowTimestamp),cluster.getClusterName(),serviceName);
 Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
 Map<String,Map<String,String>> configTags=new HashMap<String,Map<String,String>>();
-findConfigurationPropertiesWithOverrides(configurations,configTags,cluster,serviceName,clientHost);
+findConfigurationPropertiesWithOverrides(configurations,configTags,cluster,serviceName,clientHost,clusterDesiredConfigs);
 stage.getExecutionCommandWrapper(clientHost,smokeTestRole).getExecutionCommand().setConfigurations(configurations);
 stage.getExecutionCommandWrapper(clientHost,smokeTestRole).getExecutionCommand().setConfigurationTags(configTags);
 stage.getExecutionCommandWrapper(clientHost,smokeTestRole).getExecutionCommand().setClusterHostInfo(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster,hostsMap,injector));
