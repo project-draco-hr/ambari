@@ -35,6 +35,7 @@
       }
       for (      String propertyId : ids) {
         Map<String,PropertyInfo> propertyInfoMap=getPropertyInfoMap(componentName,propertyId);
+        String requestedPropertyId=propertyId;
         for (        Map.Entry<String,PropertyInfo> entry : propertyInfoMap.entrySet()) {
           PropertyInfo propertyInfo=entry.getValue();
           propertyId=entry.getKey();
@@ -59,22 +60,23 @@
               category=property.substring(0,dotIndex);
               property=property.substring(dotIndex + 1,firstKeyIndex);
             }
-            Map<String,Object> properties=categories.get(category);
-            if (properties != null && properties.containsKey(property)) {
-              Object value=properties.get(property);
-              if (keyList.size() > 0 && value instanceof Map) {
-                Map map=(Map)value;
-                for (                String key : keyList) {
-                  value=map.get(key);
-                  if (value instanceof Map) {
-                    map=(Map)value;
+            if (containsArguments(propertyId)) {
+              Pattern pattern=Pattern.compile(category);
+              for (              String jmxCat : categories.keySet()) {
+                Matcher matcher=pattern.matcher(jmxCat);
+                if (matcher.matches()) {
+                  String newPropertyId=propertyId;
+                  for (int i=0; i < matcher.groupCount(); i++) {
+                    newPropertyId=substituteArgument(newPropertyId,"$" + (i + 1),matcher.group(i + 1));
                   }
- else {
-                    break;
+                  if (isRequestedPropertyId(newPropertyId,requestedPropertyId,request)) {
+                    setResourceValue(resource,categories,newPropertyId,jmxCat,property,keyList);
                   }
                 }
               }
-              resource.setProperty(propertyId,value);
+            }
+ else {
+              setResourceValue(resource,categories,propertyId,category,property,keyList);
             }
           }
         }
