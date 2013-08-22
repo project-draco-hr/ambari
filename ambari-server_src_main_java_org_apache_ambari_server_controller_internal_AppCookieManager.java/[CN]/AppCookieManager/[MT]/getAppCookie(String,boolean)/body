@@ -1,0 +1,46 @@
+{
+  HttpUriRequest outboundRequest=new HttpGet(endpoint);
+  URI uri=outboundRequest.getURI();
+  String scheme=uri.getScheme();
+  String host=uri.getHost();
+  int port=uri.getPort();
+  String path=uri.getPath();
+  if (!refresh) {
+    String appCookie=endpointCookieMap.get(endpoint);
+    if (appCookie != null) {
+      return appCookie;
+    }
+  }
+  clearAppCookie(endpoint);
+  DefaultHttpClient client=new DefaultHttpClient();
+  SPNegoSchemeFactory spNegoSF=new SPNegoSchemeFactory(true);
+  client.getAuthSchemes().register(AuthPolicy.SPNEGO,spNegoSF);
+  client.getCredentialsProvider().setCredentials(new AuthScope(null,-1,null),EMPTY_JAAS_CREDENTIALS);
+  String hadoopAuthCookie=null;
+  HttpResponse httpResponse=null;
+  try {
+    HttpHost httpHost=new HttpHost(host,port,scheme);
+    HttpRequest httpRequest=new HttpOptions(path);
+    httpResponse=client.execute(httpHost,httpRequest);
+    Header[] headers=httpResponse.getHeaders(SET_COOKIE);
+    hadoopAuthCookie=getHadoopAuthCookieValue(headers);
+    if (hadoopAuthCookie == null) {
+      LOG.error("SPNego authentication failed, can not get hadoop.auth cookie for URL: " + endpoint);
+      throw new IOException("SPNego authentication failed, can not get hadoop.auth cookie");
+    }
+  }
+  finally {
+    if (httpResponse != null) {
+      HttpEntity entity=httpResponse.getEntity();
+      if (entity != null) {
+        entity.getContent().close();
+      }
+    }
+  }
+  hadoopAuthCookie=HADOOP_AUTH_EQ + quote(hadoopAuthCookie);
+  setAppCookie(endpoint,hadoopAuthCookie);
+  if (LOG.isInfoEnabled()) {
+    LOG.info("Successful SPNego authentication to URL:" + uri.toString());
+  }
+  return hadoopAuthCookie;
+}
