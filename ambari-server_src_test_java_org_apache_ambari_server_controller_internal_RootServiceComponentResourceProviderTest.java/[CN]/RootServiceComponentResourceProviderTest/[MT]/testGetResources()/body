@@ -1,0 +1,30 @@
+{
+  Resource.Type type=Resource.Type.RootServiceComponent;
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Set<RootServiceComponentResponse> allResponse=new HashSet<RootServiceComponentResponse>();
+  allResponse.add(new RootServiceComponentResponse("component1",Collections.<String,String>emptyMap()));
+  allResponse.add(new RootServiceComponentResponse("component2",Collections.<String,String>emptyMap()));
+  allResponse.add(new RootServiceComponentResponse("component3",Collections.<String,String>emptyMap()));
+  Set<RootServiceComponentResponse> nameResponse=new HashSet<RootServiceComponentResponse>();
+  nameResponse.add(new RootServiceComponentResponse("component4",Collections.<String,String>emptyMap()));
+  expect(managementController.getRootServiceComponents(EasyMock.<Set<RootServiceComponentRequest>>anyObject())).andReturn(allResponse).once();
+  expect(managementController.getRootServiceComponents(EasyMock.<Set<RootServiceComponentRequest>>anyObject())).andReturn(nameResponse).once();
+  replay(managementController);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  Set<String> propertyIds=new HashSet<String>();
+  propertyIds.add(RootServiceComponentResourceProvider.SERVICE_NAME_PROPERTY_ID);
+  propertyIds.add(RootServiceComponentResourceProvider.COMPONENT_NAME_PROPERTY_ID);
+  propertyIds.add(RootServiceComponentResourceProvider.PROPERTIES_PROPERTY_ID);
+  Request request=PropertyHelper.getReadRequest(propertyIds);
+  Set<Resource> resources=provider.getResources(request,null);
+  Assert.assertEquals(allResponse.size(),resources.size());
+  for (  Resource resource : resources) {
+    String componentName=(String)resource.getPropertyValue(RootServiceComponentResourceProvider.COMPONENT_NAME_PROPERTY_ID);
+    Assert.assertTrue(allResponse.contains(new RootServiceComponentResponse(componentName,Collections.<String,String>emptyMap())));
+  }
+  Predicate predicate=new PredicateBuilder().property(RootServiceComponentResourceProvider.COMPONENT_NAME_PROPERTY_ID).equals("component4").toPredicate();
+  resources=provider.getResources(request,predicate);
+  Assert.assertEquals(1,resources.size());
+  Assert.assertEquals("component4",resources.iterator().next().getPropertyValue(RootServiceComponentResourceProvider.COMPONENT_NAME_PROPERTY_ID));
+  verify(managementController);
+}

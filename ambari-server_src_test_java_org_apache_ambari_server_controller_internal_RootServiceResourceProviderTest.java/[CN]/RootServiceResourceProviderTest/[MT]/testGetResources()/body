@@ -1,0 +1,28 @@
+{
+  Resource.Type type=Resource.Type.RootService;
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Set<RootServiceResponse> allResponse=new HashSet<RootServiceResponse>();
+  allResponse.add(new RootServiceResponse("service1"));
+  allResponse.add(new RootServiceResponse("service2"));
+  allResponse.add(new RootServiceResponse("service3"));
+  Set<RootServiceResponse> nameResponse=new HashSet<RootServiceResponse>();
+  nameResponse.add(new RootServiceResponse("service4"));
+  expect(managementController.getRootServices(EasyMock.<Set<RootServiceRequest>>anyObject())).andReturn(allResponse).once();
+  expect(managementController.getRootServices(EasyMock.<Set<RootServiceRequest>>anyObject())).andReturn(nameResponse).once();
+  replay(managementController);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  Set<String> propertyIds=new HashSet<String>();
+  propertyIds.add(RootServiceResourceProvider.SERVICE_NAME_PROPERTY_ID);
+  Request request=PropertyHelper.getReadRequest(propertyIds);
+  Set<Resource> resources=provider.getResources(request,null);
+  Assert.assertEquals(allResponse.size(),resources.size());
+  for (  Resource resource : resources) {
+    String serviceName=(String)resource.getPropertyValue(RootServiceResourceProvider.SERVICE_NAME_PROPERTY_ID);
+    Assert.assertTrue(allResponse.contains(new RootServiceResponse(serviceName)));
+  }
+  Predicate predicate=new PredicateBuilder().property(RootServiceResourceProvider.SERVICE_NAME_PROPERTY_ID).equals("service4").toPredicate();
+  resources=provider.getResources(request,predicate);
+  Assert.assertEquals(1,resources.size());
+  Assert.assertEquals("service4",resources.iterator().next().getPropertyValue(RootServiceResourceProvider.SERVICE_NAME_PROPERTY_ID));
+  verify(managementController);
+}
