@@ -1,0 +1,57 @@
+def main():
+    parser = optparse.OptionParser(usage=('usage: %prog [options] action\n  Valid actions: ' + VALID_ACTIONS))
+    parser.add_option('-n', '--printonly', action='store_true', dest='printonly', default=False, help='Prints all the curl commands to be executed')
+    parser.add_option('-o', '--log', dest='logfile', default=UPGRADE_LOG_FILE, help='Log file')
+    parser.add_option('--hostname', default=None, help='Hostname for Ambari server', dest='hostname')
+    parser.add_option('--user', default=None, help='Ambari admin user', dest='user')
+    parser.add_option('--password', default=None, help='Ambari admin password', dest='password')
+    parser.add_option('--clustername', default=None, help='Cluster name', dest='clustername')
+    (options, args) = parser.parse_args()
+    options.warnings = []
+    if (options.user is None):
+        options.warnings.append('User name must be provided (e.g. admin)')
+    if (options.hostname is None):
+        options.warnings.append('Ambari server host name must be provided')
+    if (options.clustername is None):
+        options.warnings.append('Cluster name must be provided')
+    if (options.password is None):
+        options.warnings.append("Ambari admin user's password name must be provided (e.g. admin)")
+    if (len(options.warnings) != 0):
+        print parser.print_help()
+        for warning in options.warnings:
+            print ('  ' + warning)
+        parser.error('Invalid or missing options')
+    if (len(args) == 0):
+        print parser.print_help()
+        parser.error('No action entered')
+    action = args[0]
+    options.exit_message = ("Upgrade action '%s' completed successfully." % action)
+    backup_file(options.logfile)
+    global logger
+    logger = logging.getLogger('UpgradeHelper')
+    handler = logging.FileHandler(options.logfile)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logging.basicConfig(level=logging.DEBUG)
+    try:
+        if (action == GET_MR_MAPPING_ACTION):
+            get_mr1_mapping(options)
+        elif (action == DELETE_MR_ACTION):
+            delete_mr(options)
+        elif (action == ADD_YARN_MR2_ACTION):
+            add_services(options)
+        elif (action == MODIFY_CONFIG_ACTION):
+            modify_configs(options)
+        elif (action == INSTALL_YARN_MR2_ACTION):
+            install_services(options)
+        elif (action == BACKUP_CONFIG_ACTION):
+            backup_configs(options)
+        else:
+            parser.error('Invalid action')
+    except FatalException as e:
+        if (e.reason is not None):
+            pprint('ERROR: Exiting with exit code {0}. Reason: {1}'.format(e.code, e.reason))
+        sys.exit(e.code)
+    if (options.exit_message is not None):
+        print options.exit_message
