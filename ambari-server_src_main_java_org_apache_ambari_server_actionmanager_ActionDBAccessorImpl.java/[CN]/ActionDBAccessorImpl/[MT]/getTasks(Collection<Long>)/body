@@ -3,8 +3,27 @@
     return Collections.emptyList();
   }
   List<HostRoleCommand> commands=new ArrayList<HostRoleCommand>();
-  for (  HostRoleCommandEntity commandEntity : hostRoleCommandDAO.findByPKs(taskIds)) {
-    commands.add(hostRoleCommandFactory.createExisting(commandEntity));
+  Map<Long,HostRoleCommand> cached=hostRoleCommandCache.getAllPresent(taskIds);
+  commands.addAll(cached.values());
+  List<Long> absent=new ArrayList<Long>();
+  absent.addAll(taskIds);
+  absent.removeAll(cached.keySet());
+  if (!absent.isEmpty()) {
+    boolean allowStore=hostRoleCommandCache.size() <= cacheLimit;
+    for (    HostRoleCommandEntity commandEntity : hostRoleCommandDAO.findByPKs(absent)) {
+      HostRoleCommand hostRoleCommand=hostRoleCommandFactory.createExisting(commandEntity);
+      commands.add(hostRoleCommand);
+      if (allowStore) {
+switch (hostRoleCommand.getStatus()) {
+case ABORTED:
+case COMPLETED:
+case TIMEDOUT:
+case FAILED:
+          hostRoleCommandCache.put(hostRoleCommand.getTaskId(),hostRoleCommand);
+        break;
+    }
   }
-  return commands;
+}
+}
+return commands;
 }
