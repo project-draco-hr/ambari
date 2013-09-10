@@ -1,32 +1,38 @@
 @staticmethod
-def create_model(member_cls, dic, resource_root, RESOURCE_KEY_WORD):
+def create_model(model_cls, model_dict, resource_root, RESOURCE_KEY_WORD, exception_cls=None):
+    '\n    create a model.\n    @param model_cls : model class.\n    @param model_dict : model dict used for creating the object.\n    @param resource_root : resource object.\n    @param RESOURCE_KEY_WORD : tsake subset of model_dict based on this key.\n    @return: A model_cls object.\n    '
     rw_dict = {}
-    LOG.debug(('    create_model : dic =   ' + str(dic)))
-    if (isinstance(dic, dict) and dic.has_key(RESOURCE_KEY_WORD)):
-        dic = dic[RESOURCE_KEY_WORD]
-        LOG.debug(('    dic.items() 2   =   ' + str(dic.items())))
-    for (k, v) in dic.items():
-        LOG.debug(k)
-        LOG.debug(v)
-        if (k in member_cls.RW_ATTR):
+    LOG.debug(('model_dict =   ' + str(model_dict)))
+    if (isinstance(model_dict, dict) and model_dict.has_key(RESOURCE_KEY_WORD)):
+        model_dict = model_dict[RESOURCE_KEY_WORD]
+        LOG.debug(('model_dict has %s ;subset = %s' % (RESOURCE_KEY_WORD, str(model_dict.items()))))
+    if (isinstance(model_dict, dict) and model_dict.has_key('Requests')):
+        model_dict = model_dict['Requests']
+        LOG.debug(('model_dict has Requests ;subset = %s' % str(model_dict.items())))
+    if (isinstance(model_dict, dict) and model_dict.has_key('status') and exception_cls):
+        LOG.debug(('model_dict has status ,might be a exception from Ambari ;model_cls = %s ;exception_clss = %s' % (str(model_cls), str(exception_cls))))
+        return ModelUtils.create_model(exception_cls, model_dict, resource_root, 'NO_KEY')
+    for (k, v) in model_dict.items():
+        LOG.debug(('key = %s ; value = %s ' % (str(k), str(v))))
+        if (k in model_cls.RW_ATTR):
             LOG.debug((k + ' is there in RW_ATTR'))
             rw_dict[k] = v
-            del dic[k]
+            del model_dict[k]
     rw_dict = get_unicode_kw(rw_dict)
-    obj = member_cls(resource_root, **rw_dict)
-    for attr in member_cls.RO_ATTR:
+    obj = model_cls(resource_root, **rw_dict)
+    for attr in model_cls.RO_ATTR:
         obj._setattr(attr, None)
-    for (k, v) in dic.items():
-        if (k in member_cls.RO_ATTR):
+    for (k, v) in model_dict.items():
+        if (k in model_cls.RO_ATTR):
             obj._setattr(k, v)
         else:
-            LOG.debug(("Unexpected attribute '%s' in %s json" % (k, member_cls.__name__)))
-    for attr in member_cls.REF_ATTR:
-        LOG.debug(attr)
+            LOG.debug(("Unexpected attribute '%s' in %s json" % (k, model_cls.__name__)))
+    for attr in model_cls.REF_ATTR:
+        LOG.debug(('%s found as reference var' % attr))
         obj._setattr(getREF_class_name(attr), None)
-    for (k, v) in dic.items():
-        if (k in member_cls.REF_ATTR):
+    for (k, v) in model_dict.items():
+        if (k in model_cls.REF_ATTR):
             obj._setattr(getREF_class_name(k), v)
         else:
-            LOG.debug(("Unexpected attribute '%s' in %s json" % (k, member_cls.__name__)))
+            LOG.debug(("Unknown attribute '%s' found in model_dict for %s " % (k, model_cls.__name__)))
     return obj
