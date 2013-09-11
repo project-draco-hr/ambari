@@ -1,0 +1,41 @@
+@patch.object(logging.FileHandler, 'setFormatter')
+@patch.object(logging, 'basicConfig')
+@patch.object(logging, 'FileHandler')
+@patch.object(UpgradeHelper_HDP2, 'write_config')
+@patch.object(UpgradeHelper_HDP2, 'get_config_resp')
+@patch('os.remove')
+@patch('shutil.copyfile')
+@patch('os.path.exists')
+@patch('optparse.OptionParser')
+def test_save_configs(self, option_parser_mock, path_exists_mock, shutil_copy_mock, os_remove_mock, get_config_resp_mock, write_config_mock, file_handler_mock, logging_mock, set_formatter_mock):
+    file_handler_mock.return_value = logging.FileHandler('')
+    opm = option_parser_mock.return_value
+    path_exists_mock.return_value = True
+    shutil_copy_mock = MagicMock()
+    options = MagicMock()
+    args = ['backup-configs']
+    opm.parse_args.return_value = (options, args)
+    options.logfile = 'logfile'
+
+    def get_config_resp_side_effect(ops, type, error_if_na):
+        if (type == 'global'):
+            return ('version1', '')
+        elif (type == 'core-site'):
+            return ('version1', '')
+        elif (type == 'hdfs-site'):
+            return ('version1', '')
+        elif (type == 'mapred-site'):
+            return ('version2', '')
+        elif (type == 'hbase-site'):
+            return ('version2', '')
+        else:
+            return (None, None)
+    get_config_resp_mock.side_effect = get_config_resp_side_effect
+    UpgradeHelper_HDP2.main()
+    shutil_copy_mock.assert_called_once()
+    os_remove_mock.assert_called_once_with('logfile')
+    write_expected = [call('', 'global', 'version1'), call('', 'core-site', 'version1'), call('', 'hdfs-site', 'version1'), call('', 'mapred-site', 'version2'), call('', 'hbase-site', 'version2')]
+    write_config_mock.assert_has_calls(write_expected, any_order=True)
+    get_config_expected = [call(options, 'global', True), call(options, 'core-site', True), call(options, 'hdfs-site', True), call(options, 'mapred-site', True), call(options, 'hbase-site', False), call(options, 'oozie-site', False), call(options, 'webhcat-site', False), call(options, 'hive-site', False)]
+    get_config_resp_mock.assert_has_calls(get_config_expected, any_order=True)
+    pass

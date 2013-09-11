@@ -1,5 +1,5 @@
 def main():
-    parser = optparse.OptionParser(usage=('usage: %prog [options] action\n  Valid actions: ' + VALID_ACTIONS))
+    parser = optparse.OptionParser(usage=(('usage: %prog [options] action\n  Valid actions: ' + VALID_ACTIONS) + '\n  update-configs accepts type, e.g. hdfs-site to update specific configs'))
     parser.add_option('-n', '--printonly', action='store_true', dest='printonly', default=False, help='Prints all the curl commands to be executed')
     parser.add_option('-o', '--log', dest='logfile', default=UPGRADE_LOG_FILE, help='Log file')
     parser.add_option('--hostname', default=None, help='Hostname for Ambari server', dest='hostname')
@@ -37,12 +37,16 @@ def main():
     try:
         if (action == GET_MR_MAPPING_ACTION):
             get_mr1_mapping(options)
+            pprint('File mr_mapping contains the host mapping for mapreduce components. This file is critical for later steps.')
         elif (action == DELETE_MR_ACTION):
             delete_mr(options)
         elif (action == ADD_YARN_MR2_ACTION):
             add_services(options)
         elif (action == MODIFY_CONFIG_ACTION):
-            modify_configs(options)
+            config_type = None
+            if (len(args) > 1):
+                config_type = args[1]
+            modify_configs(options, config_type)
         elif (action == INSTALL_YARN_MR2_ACTION):
             install_services(options)
         elif (action == BACKUP_CONFIG_ACTION):
@@ -51,7 +55,9 @@ def main():
             parser.error('Invalid action')
     except FatalException as e:
         if (e.reason is not None):
-            pprint('ERROR: Exiting with exit code {0}. Reason: {1}'.format(e.code, e.reason))
+            error = 'ERROR: Exiting with exit code {0}. Reason: {1}'.format(e.code, e.reason)
+            pprint(error)
+            logger.error(error)
         sys.exit(e.code)
     if (options.exit_message is not None):
         print options.exit_message
