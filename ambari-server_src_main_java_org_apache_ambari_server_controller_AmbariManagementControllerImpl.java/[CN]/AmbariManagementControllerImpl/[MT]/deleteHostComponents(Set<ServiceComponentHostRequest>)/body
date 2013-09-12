@@ -1,6 +1,22 @@
 {
-  Map<ServiceComponent,Set<ServiceComponentHost>> safeToRemoveSCHs=new HashMap<ServiceComponent,Set<ServiceComponentHost>>();
+  Set<ServiceComponentHostRequest> expanded=new HashSet<ServiceComponentHostRequest>();
   for (  ServiceComponentHostRequest request : requests) {
+    if (null == request.getComponentName()) {
+      if (null == request.getClusterName() || request.getClusterName().isEmpty() || null == request.getHostname() || request.getHostname().isEmpty()) {
+        throw new IllegalArgumentException("Cluster name and hostname must be specified.");
+      }
+      Cluster cluster=clusters.getCluster(request.getClusterName());
+      for (      ServiceComponentHost sch : cluster.getServiceComponentHosts(request.getHostname())) {
+        ServiceComponentHostRequest schr=new ServiceComponentHostRequest(request.getClusterName(),sch.getServiceName(),sch.getServiceComponentName(),sch.getHostName(),null,null);
+        expanded.add(schr);
+      }
+    }
+ else {
+      expanded.add(request);
+    }
+  }
+  Map<ServiceComponent,Set<ServiceComponentHost>> safeToRemoveSCHs=new HashMap<ServiceComponent,Set<ServiceComponentHost>>();
+  for (  ServiceComponentHostRequest request : expanded) {
     validateServiceComponentHostRequest(request);
     Cluster cluster=clusters.getCluster(request.getClusterName());
     if (StringUtils.isEmpty(request.getServiceName())) {
