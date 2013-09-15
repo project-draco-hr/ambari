@@ -1,4 +1,5 @@
 {
+  String hdfsExcludeFileType="hdfs-exclude-file";
   String clusterName=decommissionRequest.getClusterName();
   Cluster cluster=clusters.getCluster(clusterName);
   String serviceName=decommissionRequest.getServiceName();
@@ -10,11 +11,14 @@
   if (excludeFileTag == null) {
     throw new IllegalArgumentException("No exclude file specified" + " when decommissioning datanodes");
   }
-  Config config=clusters.getCluster(clusterName).getConfig("hdfs-exclude-file",excludeFileTag);
+  Config config=clusters.getCluster(clusterName).getConfig(hdfsExcludeFileType,excludeFileTag);
+  LOG.info("Decommissioning data nodes: " + config.getProperties().get("datanodes") + " "+ hdfsExcludeFileType+ " tag: "+ excludeFileTag);
   Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
-  configurations.put(config.getType(),config.getProperties());
   Map<String,Map<String,String>> configTags=new TreeMap<String,Map<String,String>>();
   findConfigurationPropertiesWithOverrides(configurations,configTags,cluster,serviceName,namenodeHost);
+  Map<String,String> excludeTags=new HashMap<String,String>();
+  excludeTags.put(clusterLevelTag,config.getVersionTag());
+  configTags.put(hdfsExcludeFileType,excludeTags);
   stage.addHostRoleExecutionCommand(namenodeHost,Role.DECOMMISSION_DATANODE,RoleCommand.EXECUTE,new ServiceComponentHostOpInProgressEvent(Role.DECOMMISSION_DATANODE.toString(),namenodeHost,System.currentTimeMillis()),clusterName,serviceName);
   ExecutionCommand execCmd=stage.getExecutionCommandWrapper(namenodeHost,Role.DECOMMISSION_DATANODE.toString()).getExecutionCommand();
   execCmd.setConfigurations(configurations);
