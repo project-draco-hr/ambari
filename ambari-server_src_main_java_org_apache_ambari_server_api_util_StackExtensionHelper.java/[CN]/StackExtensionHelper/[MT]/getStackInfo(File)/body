@@ -2,7 +2,7 @@
   StackInfo stackInfo=new StackInfo();
   stackInfo.setName(stackVersionFolder.getParentFile().getName());
   stackInfo.setVersion(stackVersionFolder.getName());
-  File stackMetainfoFile=new File(stackVersionFolder.getAbsolutePath() + File.separator + STACK_METAINFO_FILE_NAME);
+  File stackMetainfoFile=new File(stackVersionFolder.getAbsolutePath() + File.separator + AmbariMetaInfo.STACK_METAINFO_FILE_NAME);
   if (stackMetainfoFile.exists()) {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Reading stack version metainfo from file " + stackMetainfoFile.getAbsolutePath());
@@ -12,13 +12,14 @@
       DocumentBuilder dBuilder=dbFactory.newDocumentBuilder();
       Document doc=dBuilder.parse(stackMetainfoFile);
       doc.getDocumentElement().normalize();
-      NodeList stackNodes=doc.getElementsByTagName(STACK_XML_MAIN_BLOCK_NAME);
+      NodeList stackNodes=doc.getElementsByTagName(AmbariMetaInfo.STACK_XML_MAIN_BLOCK_NAME);
       for (int index=0; index < stackNodes.getLength(); index++) {
         Node node=stackNodes.item(index);
         if (node.getNodeType() == Node.ELEMENT_NODE) {
           Element property=(Element)node;
-          stackInfo.setMinUpgradeVersion(getTagValue(STACK_XML_PROPERTY_UPGRADE,property));
-          stackInfo.setActive(Boolean.parseBoolean(getTagValue(STACK_XML_PROPERTY_ACTIVE,property)));
+          stackInfo.setMinUpgradeVersion(getTagValue(AmbariMetaInfo.STACK_XML_PROPERTY_UPGRADE,property));
+          stackInfo.setActive(Boolean.parseBoolean(getTagValue(AmbariMetaInfo.STACK_XML_PROPERTY_ACTIVE,property)));
+          stackInfo.setParentStackVersion(getTagValue(AmbariMetaInfo.STACK_XML_PROPERTY_PARENT_STACK,property));
         }
       }
     }
@@ -26,6 +27,13 @@
       e.printStackTrace();
       return null;
     }
+  }
+  try {
+    populateServicesForStack(stackInfo);
+  }
+ catch (  Exception e) {
+    LOG.error("Exception caught while populating services for stack: " + stackInfo.getName() + "-"+ stackInfo.getVersion());
+    e.printStackTrace();
   }
   return stackInfo;
 }

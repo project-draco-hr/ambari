@@ -1,52 +1,28 @@
 {
   if (LOG.isDebugEnabled()) {
-    LOG.debug("Loading stack information" + ", stackRoot=" + stackRoot.getAbsolutePath());
+    LOG.debug("Loading stack information" + ", stackRoot = " + stackRoot.getAbsolutePath());
   }
-  if (!stackRoot.isDirectory() && !stackRoot.exists())   throw new IOException("" + Configuration.METADETA_DIR_PATH + " should be a directory with stack"+ ", stackRoot="+ stackRoot.getAbsolutePath());
-  File[] stacks=stackRoot.listFiles(FILENAME_FILTER);
-  for (  File stackFolder : stacks) {
-    if (stackFolder.isFile())     continue;
-    File[] concretStacks=stackFolder.listFiles(FILENAME_FILTER);
-    for (    File stack : concretStacks) {
-      if (stack.isFile())       continue;
-      StackInfo stackInfo=getStackInfo(stack);
+  if (!stackRoot.isDirectory() && !stackRoot.exists())   throw new IOException("" + Configuration.METADETA_DIR_PATH + " should be a directory with stack"+ ", stackRoot = "+ stackRoot.getAbsolutePath());
+  StackExtensionHelper stackExtensionHelper=new StackExtensionHelper(stackRoot);
+  List<StackInfo> stacks=stackExtensionHelper.getAllAvailableStacks();
+  if (stacks.isEmpty()) {
+    throw new AmbariException("Unable to find stack definitions under " + "stackRoot = " + stackRoot.getAbsolutePath());
+  }
+  for (  StackInfo stack : stacks) {
+    LOG.debug("Adding new stack to known stacks" + ", stackName = " + stack.getName() + ", stackVersion = "+ stack.getVersion());
+    stacksResult.add(stack);
+    File repositoryFolder=new File(stackRoot.getAbsolutePath() + File.separator + stack.getName()+ File.separator+ stack.getVersion()+ File.separator+ REPOSITORY_FOLDER_NAME+ File.separator+ REPOSITORY_FILE_NAME);
+    if (repositoryFolder.exists()) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Adding new stack to known stacks" + ", stackName=" + stackFolder.getName() + ", stackVersion="+ stack.getName());
+        LOG.debug("Adding repositories to stack" + ", stackName=" + stack.getName() + ", stackVersion="+ stack.getVersion()+ ", repoFolder="+ repositoryFolder.getPath());
       }
-      stacksResult.add(stackInfo);
-      File repositoryFolder=new File(stack.getAbsolutePath() + File.separator + REPOSITORY_FOLDER_NAME+ File.separator+ REPOSITORY_FILE_NAME);
-      if (repositoryFolder.exists()) {
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Adding repositories to stack" + ", stackName=" + stackFolder.getName() + ", stackVersion="+ stack.getName()+ ", repoFolder="+ repositoryFolder.getPath());
-        }
-        List<RepositoryInfo> repositoryInfoList=getRepository(repositoryFolder,stackInfo.getVersion());
-        stackInfo.getRepositories().addAll(repositoryInfoList);
+ else {
+        LOG.warn("No repository information defined for " + ", stackName=" + stack.getName() + ", stackVersion="+ stack.getVersion()+ ", repoFolder="+ repositoryFolder.getPath());
       }
-      File servicesRootFolder=new File(stack.getAbsolutePath() + File.separator + SERVICES_FOLDER_NAME);
-      File[] servicesFolders=servicesRootFolder.listFiles(FILENAME_FILTER);
-      if (servicesFolders != null) {
-        for (        File serviceFolder : servicesFolders) {
-          ServiceInfo serviceInfo=new ServiceInfo();
-          serviceInfo.setName(serviceFolder.getName());
-          stackInfo.getServices().add(serviceInfo);
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Adding new service to stack" + ", stackName=" + stackFolder.getName() + ", stackVersion="+ stack.getName()+ ", serviceName="+ serviceInfo.getName());
-          }
-          File metainfoFile=new File(serviceFolder.getAbsolutePath() + File.separator + SERVICE_METAINFO_FILE_NAME);
-          if (metainfoFile.exists()) {
-            setMetaInfo(metainfoFile,serviceInfo);
-          }
-          File serviceConfigFolder=new File(serviceFolder.getAbsolutePath() + File.separator + SERVICE_CONFIG_FOLDER_NAME);
-          File[] configFiles=serviceConfigFolder.listFiles(FILENAME_FILTER);
-          if (configFiles != null) {
-            for (            File config : configFiles) {
-              if (config.getName().endsWith(SERVICE_CONFIG_FILE_NAME_POSTFIX)) {
-                serviceInfo.getProperties().addAll(getProperties(config));
-              }
-            }
-          }
-        }
-      }
+      List<RepositoryInfo> repositoryInfoList=getRepository(repositoryFolder,stack.getVersion());
+      stack.getRepositories().addAll(repositoryInfoList);
     }
+    List<ServiceInfo> services=stackExtensionHelper.getAllApplicableServices(stack);
+    stack.setServices(services);
   }
 }
