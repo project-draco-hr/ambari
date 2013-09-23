@@ -1,0 +1,82 @@
+@patch('__builtin__.open')
+@patch.object(ActionQueue, 'status_update_callback')
+@patch.object(ActionDependencyManager, 'read_dependencies')
+def test_execute_command(self, read_dependencies_mock, status_update_callback_mock, open_mock):
+
+    def open_side_effect(file, mode):
+        if (mode == 'r'):
+            file_mock = MagicMock()
+            file_mock.read.return_value = ('Read from ' + str(file))
+            return file_mock
+        else:
+            return self.original_open(file, mode)
+    open_mock.side_effect = open_side_effect
+    config = AmbariConfig().getConfig()
+    tmpfile = tempfile.gettempdir()
+    config.set('agent', 'prefix', tmpfile)
+    actionQueue = ActionQueue(config, 'dummy_controller')
+    unfreeze_flag = threading.Event()
+    puppet_execution_result_dict = {'stdout': 'out', 'stderr': 'stderr', }
+
+    def side_effect(command, tmpoutfile, tmperrfile):
+        unfreeze_flag.wait()
+        return puppet_execution_result_dict
+
+    def patched_aq_execute_command(command):
+        with patch.object(PuppetExecutor, 'runCommand') as runCommand_mock:
+            with patch.object(UpgradeExecutor, 'perform_stack_upgrade') as perform_stack_upgrade_mock:
+                runCommand_mock.side_effect = side_effect
+                perform_stack_upgrade_mock.side_effect = side_effect
+                actionQueue.execute_command(command)
+    puppet_execution_result_dict['status'] = 'COMPLETE'
+    puppet_execution_result_dict['exitcode'] = 0
+    execution_thread = Thread(target=patched_aq_execute_command, args=(self.datanode_install_command,))
+    execution_thread.start()
+    while True:
+        time.sleep(0.1)
+        report = actionQueue.result()
+        if (len(report['reports']) != 0):
+            break
+    expected = {'status': 'IN_PROGRESS', 'stderr': 'Read from /tmp/errors-3.txt', 'stdout': 'Read from /tmp/output-3.txt', 'clusterName': u'cc', 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 777, }
+    self.assertEqual(report['reports'][0], expected)
+    unfreeze_flag.set()
+    while (report['reports'][0]['status'] == 'IN_PROGRESS'):
+        time.sleep(0.1)
+        report = actionQueue.result()
+    configname = os.path.join(tmpfile, 'config.json')
+    expected = {'status': 'COMPLETED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': u'cc', 'configurationTags': {'global': {'tag': 'v1', }, }, 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 0, }
+    self.assertEqual(len(report['reports']), 1)
+    self.assertEqual(report['reports'][0], expected)
+    self.assertTrue(os.path.isfile(configname))
+    self.assertEqual(status_update_callback_mock.call_count, 2)
+    os.remove(configname)
+    report = actionQueue.result()
+    self.assertEqual(len(report['reports']), 0)
+    puppet_execution_result_dict['status'] = 'FAILED'
+    puppet_execution_result_dict['exitcode'] = 13
+    execution_thread = Thread(target=patched_aq_execute_command, args=(self.datanode_install_command,))
+    execution_thread.start()
+    unfreeze_flag.set()
+    report = actionQueue.result()
+    while ((len(report['reports']) == 0) or (report['reports'][0]['status'] == 'IN_PROGRESS')):
+        time.sleep(0.1)
+        report = actionQueue.result()
+    expected = {'status': 'FAILED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': u'cc', 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 13, }
+    self.assertEqual(len(report['reports']), 1)
+    self.assertEqual(report['reports'][0], expected)
+    report = actionQueue.result()
+    self.assertEqual(len(report['reports']), 0)
+    puppet_execution_result_dict['status'] = 'COMPLETE'
+    puppet_execution_result_dict['exitcode'] = 0
+    execution_thread = Thread(target=patched_aq_execute_command, args=(self.datanode_upgrade_command,))
+    execution_thread.start()
+    unfreeze_flag.set()
+    report = actionQueue.result()
+    while ((len(report['reports']) == 0) or (report['reports'][0]['status'] == 'IN_PROGRESS')):
+        time.sleep(0.1)
+        report = actionQueue.result()
+    expected = {'status': 'COMPLETED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': 'clusterName', 'roleCommand': 'UPGRADE', 'serviceName': 'serviceName', 'role': 'role', 'actionId': 17, 'taskId': 'taskId', 'exitCode': 0, }
+    self.assertEqual(len(report['reports']), 1)
+    self.assertEqual(report['reports'][0], expected)
+    report = actionQueue.result()
+    self.assertEqual(len(report['reports']), 0)

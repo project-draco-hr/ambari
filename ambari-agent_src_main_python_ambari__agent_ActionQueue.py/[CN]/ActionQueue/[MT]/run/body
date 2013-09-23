@@ -1,39 +1,5 @@
 def run(self):
-    result = []
     while (not self.stopped()):
-        while (not self.commandQueue.empty()):
-            command = self.commandQueue.get()
-            logger.debug(('Took an element of Queue: ' + pprint.pformat(command)))
-            if (command['commandType'] == self.EXECUTION_COMMAND):
-                try:
-                    result = self.executeCommand(command)
-                except Exception as err:
-                    traceback.print_exc()
-                    logger.warn(err)
-                    pass
-                for entry in result:
-                    self.resultQueue.put((command['commandType'], entry))
-            elif (command['commandType'] == self.STATUS_COMMAND):
-                try:
-                    cluster = command['clusterName']
-                    service = command['serviceName']
-                    component = command['componentName']
-                    configurations = command['configurations']
-                    if configurations.has_key('global'):
-                        globalConfig = configurations['global']
-                    else:
-                        globalConfig = {}
-                    livestatus = LiveStatus(cluster, service, component, globalConfig, self.config)
-                    result = livestatus.build()
-                    logger.debug(((((('Got live status for component ' + component) + ' of service ') + str(service)) + ' of cluster ') + str(cluster)))
-                    logger.debug(pprint.pformat(result))
-                    if (result is not None):
-                        self.resultQueue.put((ActionQueue.STATUS_COMMAND, result))
-                except Exception as err:
-                    traceback.print_exc()
-                    logger.warn(err)
-                pass
-            else:
-                logger.warn(('Unrecognized command ' + pprint.pformat(command)))
-        if (not self.stopped()):
-            time.sleep(self.IDLE_SLEEP_TIME)
+        portion = self.commandQueue.get_next_action_group()
+        portion = portion[::(-1)]
+        self.process_portion_of_actions(portion)

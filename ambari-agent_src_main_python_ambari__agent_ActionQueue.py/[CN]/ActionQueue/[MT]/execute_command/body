@@ -1,0 +1,34 @@
+def execute_command(self, command):
+    clusterName = command['clusterName']
+    commandId = command['commandId']
+    logger.info((((((('Executing command with id = ' + str(commandId)) + ' for role = ') + command['role']) + ' of ') + 'cluster ') + clusterName))
+    logger.debug(pprint.pformat(command))
+    taskId = command['taskId']
+    in_progress_status = self.commandStatuses.generate_report_template(command)
+    in_progress_status.update({'tmpout': ((((self.tmpdir + os.sep) + 'output-') + str(taskId)) + '.txt'), 'tmperr': ((((self.tmpdir + os.sep) + 'errors-') + str(taskId)) + '.txt'), 'status': self.IN_PROGRESS_STATUS, })
+    self.commandStatuses.put_command_status(command, in_progress_status)
+    puppetExecutor = PuppetExecutor.PuppetExecutor(self.config.get('puppet', 'puppetmodules'), self.config.get('puppet', 'puppet_home'), self.config.get('puppet', 'facter_home'), self.config.get('agent', 'prefix'), self.config)
+    if (command['roleCommand'] == ActionQueue.ROLE_COMMAND_UPGRADE):
+        pythonExecutor = PythonExecutor.PythonExecutor(self.config.get('agent', 'prefix'), self.config)
+        upgradeExecutor = UpgradeExecutor.UpgradeExecutor(pythonExecutor, puppetExecutor, self.config)
+        commandresult = upgradeExecutor.perform_stack_upgrade(command, in_progress_status['tmpout'], in_progress_status['tmperr'])
+    else:
+        commandresult = puppetExecutor.runCommand(command, in_progress_status['tmpout'], in_progress_status['tmperr'])
+    status = 'COMPLETED'
+    if (commandresult['exitcode'] != 0):
+        status = 'FAILED'
+    roleResult = self.commandStatuses.generate_report_template(command)
+    roleResult.update({'stdout': commandresult['stdout'], 'stderr': commandresult['stderr'], 'exitCode': commandresult['exitcode'], 'status': status, })
+    if (roleResult['stdout'] == ''):
+        roleResult['stdout'] = 'None'
+    if (roleResult['stderr'] == ''):
+        roleResult['stderr'] = 'None'
+    if (status == 'COMPLETED'):
+        configHandler = ActualConfigHandler(self.config)
+        if command.has_key('configurationTags'):
+            configHandler.write_actual(command['configurationTags'])
+            roleResult['configurationTags'] = command['configurationTags']
+        if (command.has_key('roleCommand') and (command['roleCommand'] == 'START')):
+            configHandler.copy_to_component(command['role'])
+            roleResult['configurationTags'] = configHandler.read_actual_component(command['role'])
+    self.commandStatuses.put_command_status(command, roleResult)

@@ -1,0 +1,25 @@
+{
+  RoleCommandOrder rco=injector.getInstance(RoleCommandOrder.class);
+  ClusterImpl cluster=createMock(ClusterImpl.class);
+  expect(cluster.getService("HCFS")).andReturn(null);
+  Service hdfsService=createMock(Service.class);
+  expect(cluster.getService("HDFS")).andReturn(hdfsService).atLeastOnce();
+  expect(hdfsService.getServiceComponent("JOURNALNODE")).andReturn(null);
+  replay(cluster);
+  replay(hdfsService);
+  Map<RoleCommandPair,Set<RoleCommandPair>> deps=rco.getDependencies();
+  assertTrue("Dependencies are empty before initialization",deps.size() == 0);
+  rco.initialize(cluster);
+  assertTrue("Dependencies are loaded after initialization",deps.size() > 0);
+  verify(cluster);
+  verify(hdfsService);
+  assertFalse(dependenciesContainBlockedRole(deps,Role.PEERSTATUS));
+  assertFalse(dependenciesContainBlockedRole(deps,Role.HCFS_SERVICE_CHECK));
+  assertFalse(dependenciesContainBlockedRole(deps,Role.HCFS_CLIENT));
+  assertFalse(dependenciesContainBlockerRole(deps,Role.PEERSTATUS));
+  assertFalse(dependenciesContainBlockerRole(deps,Role.HCFS_SERVICE_CHECK));
+  assertFalse(dependenciesContainBlockerRole(deps,Role.HCFS_CLIENT));
+  assertTrue(dependenciesContainBlockerRole(deps,Role.DATANODE));
+  assertFalse(dependenciesContainBlockerRole(deps,Role.JOURNALNODE));
+  assertFalse(dependenciesContainBlockedRole(deps,Role.ZKFC));
+}
