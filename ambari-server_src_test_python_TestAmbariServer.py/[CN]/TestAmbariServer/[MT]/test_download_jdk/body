@@ -10,7 +10,8 @@
 @patch.object(ambari_server, 'get_JAVA_HOME')
 @patch.object(ambari_server, 'get_ambari_properties')
 @patch('shutil.copyfile')
-def test_download_jdk(self, copyfile_mock, get_ambari_properties_mock, get_JAVA_HOME_mock, print_info_msg_mock, write_property_mock, run_os_command_mock, get_YN_input_mock, track_jdk_mock, path_existsMock, path_isfileMock, statMock, install_jce_manualy_mock):
+@patch('sys.exit')
+def test_download_jdk(self, exit_mock, copyfile_mock, get_ambari_properties_mock, get_JAVA_HOME_mock, print_info_msg_mock, write_property_mock, run_os_command_mock, get_YN_input_mock, track_jdk_mock, path_existsMock, path_isfileMock, statMock, install_jce_manualy_mock):
     args = MagicMock()
     args.java_home = 'somewhere'
     path_existsMock.return_value = False
@@ -52,7 +53,6 @@ def test_download_jdk(self, copyfile_mock, get_ambari_properties_mock, get_JAVA_
     except FatalException:
         pass
     ambari_server.JDK_INSTALL_DIR = os.getcwd()
-    get_YN_input_mock.return_value = True
     run_os_command_mock.return_value = (0, 'Creating jdk-1.2/jreContent-Length: 32000\r\n', None)
     statResult = MagicMock()
     statResult.st_size = 32000
@@ -61,6 +61,12 @@ def test_download_jdk(self, copyfile_mock, get_ambari_properties_mock, get_JAVA_
     self.assertEqual(0, rcode)
     p.__getitem__.return_value = 'somewhere'
     p.__getitem__.side_effect = None
+    get_YN_input_mock.return_value = False
+    ambari_server.download_jdk(MagicMock())
+    self.assertTrue(exit_mock.called)
+    exit_mock.reset()
+    get_YN_input_mock.reset()
+    get_YN_input_mock.return_value = True
     args.jdk_location = '/existing/jdk/file'
     path_existsMock.side_effect = [False, False, True, False, False, False]
     ambari_server.download_jdk(args)
