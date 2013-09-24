@@ -12,8 +12,8 @@ def test_execute_command(self, read_dependencies_mock, status_update_callback_mo
             return self.original_open(file, mode)
     open_mock.side_effect = open_side_effect
     config = AmbariConfig().getConfig()
-    tmpfile = tempfile.gettempdir()
-    config.set('agent', 'prefix', tmpfile)
+    tempdir = tempfile.gettempdir()
+    config.set('agent', 'prefix', tempdir)
     actionQueue = ActionQueue(config, 'dummy_controller')
     unfreeze_flag = threading.Event()
     puppet_execution_result_dict = {'stdout': 'out', 'stderr': 'stderr', }
@@ -37,13 +37,13 @@ def test_execute_command(self, read_dependencies_mock, status_update_callback_mo
         report = actionQueue.result()
         if (len(report['reports']) != 0):
             break
-    expected = {'status': 'IN_PROGRESS', 'stderr': 'Read from /tmp/errors-3.txt', 'stdout': 'Read from /tmp/output-3.txt', 'clusterName': u'cc', 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 777, }
+    expected = {'status': 'IN_PROGRESS', 'stderr': 'Read from {0}/errors-3.txt'.format(tempdir), 'stdout': 'Read from {0}/output-3.txt'.format(tempdir), 'clusterName': u'cc', 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 777, }
     self.assertEqual(report['reports'][0], expected)
     unfreeze_flag.set()
     while (report['reports'][0]['status'] == 'IN_PROGRESS'):
         time.sleep(0.1)
         report = actionQueue.result()
-    configname = os.path.join(tmpfile, 'config.json')
+    configname = os.path.join(tempdir, 'config.json')
     expected = {'status': 'COMPLETED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': u'cc', 'configurationTags': {'global': {'tag': 'v1', }, }, 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 0, }
     self.assertEqual(len(report['reports']), 1)
     self.assertEqual(report['reports'][0], expected)
