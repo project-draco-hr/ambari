@@ -1,10 +1,17 @@
 def install_services(options):
-    SERVICE_URL_FORMAT = (URL_FORMAT + '/services?ServiceInfo/state=INIT')
-    PUT_IN_INSTALLED = '{"RequestInfo":{"context":"Install YARN and MapReduce2"},"Body":{"ServiceInfo": {"state":"INSTALLED"}}}'
-    response = curl(options.printonly, '-u', AUTH_FORMAT.format(options.user, options.password), '-X', 'PUT', '-d', PUT_IN_INSTALLED, SERVICE_URL_FORMAT.format(options.hostname, options.clustername))
-    (retcode, errdata) = validate_response(response, (not options.printonly))
-    if (not (retcode == 0)):
-        raise FatalException(retcode, (errdata + '(Services may already be installed.)'))
-    else:
-        options.exit_message = 'A request has been submitted to install Yarn and MapReduce2. Use Ambari Web to monitor the status of the install request.'
+    SERVICE_URL_FORMAT = (URL_FORMAT + '/services/{2}')
+    SERVICES = ['YARN', 'MAPREDUCE2']
+    PUT_IN_INSTALLED = ['{"RequestInfo":{"context":"Install YARN"}, "Body":{"ServiceInfo": {"state":"INSTALLED"}}}', '{"RequestInfo":{"context":"Install MapReduce2"}, "Body":{"ServiceInfo": {"state":"INSTALLED"}}}']
+    err_retcode = 0
+    err_message = ''
+    for index in [0, 1]:
+        response = curl(options.printonly, '-u', AUTH_FORMAT.format(options.user, options.password), '-X', 'PUT', '-d', PUT_IN_INSTALLED[index], SERVICE_URL_FORMAT.format(options.hostname, options.clustername, SERVICES[index]))
+        (retcode, errdata) = validate_response(response, (not options.printonly))
+        if (not (retcode == 0)):
+            err_retcode = retcode
+            error_msg = (((((err_message + ' Error while installing ') + SERVICES[index]) + '. Details: ') + errdata) + '.')
+    pass
+    if (err_retcode != 0):
+        raise FatalException(err_retcode, (error_msg + '(Services may already be installed or agents are not yet started.)'))
+    options.exit_message = 'Requests has been submitted to install YARN and MAPREDUCE2. Use Ambari Web to monitor the status of the install requests.'
     pass
