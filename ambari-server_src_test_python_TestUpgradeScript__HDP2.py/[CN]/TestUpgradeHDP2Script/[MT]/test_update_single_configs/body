@@ -1,10 +1,12 @@
-@patch.object(UpgradeHelper_HDP2, 'update_config_using_existing')
+@patch.object(UpgradeHelper_HDP2, 'get_config')
+@patch.object(UpgradeHelper_HDP2, 'rename_all_properties')
+@patch.object(UpgradeHelper_HDP2, 'update_config_using_existing_properties')
 @patch.object(UpgradeHelper_HDP2, 'read_mapping')
 @patch.object(logging, 'FileHandler')
 @patch.object(UpgradeHelper_HDP2, 'backup_file')
 @patch.object(UpgradeHelper_HDP2, 'curl')
 @patch('optparse.OptionParser')
-def test_update_single_configs(self, option_parser_mock, curl_mock, backup_file_mock, file_handler_mock, read_mapping_mock, update_config_mock):
+def test_update_single_configs(self, option_parser_mock, curl_mock, backup_file_mock, file_handler_mock, read_mapping_mock, update_config_mock, rename_all_prop_mock, get_config_mock):
     file_handler_mock.return_value = logging.FileHandler('')
     opm = option_parser_mock.return_value
     options = MagicMock()
@@ -13,6 +15,13 @@ def test_update_single_configs(self, option_parser_mock, curl_mock, backup_file_
     curl_mock.side_effect = ['', '', '', '', '', '', '']
     read_mapping_mock.return_value = {'JOBTRACKER': ['c6401'], }
     update_config_mock.side_effect = [None]
+    get_config_mock.return_value = {}
+    prop_to_move = {'dfs.namenode.checkpoint.edits.dir': 'a1', 'dfs.namenode.checkpoint.dir': 'a2', 'dfs.namenode.checkpoint.period': 'a3', }
+    rename_all_prop_mock.side_effect = [prop_to_move, {}, {}]
     UpgradeHelper_HDP2.main()
     self.assertTrue((update_config_mock.call_count == 1))
+    (args, kargs) = update_config_mock.call_args_list[0]
+    self.assertEqual('hdfs-site', args[1])
+    for key in prop_to_move.keys():
+        self.assertEqual(prop_to_move[key], args[3][key])
     pass

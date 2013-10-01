@@ -1,10 +1,8 @@
 def modify_configs(options, config_type):
+    properties_to_move = ['dfs.namenode.checkpoint.edits.dir', 'dfs.namenode.checkpoint.dir', 'dfs.namenode.checkpoint.period']
     hostmapping = read_mapping()
     if ((config_type is None) or (config_type == CAPACITY_SCHEDULER_TAG)):
         update_config(options, CAPACITY_SCHEDULER, CAPACITY_SCHEDULER_TAG)
-        pass
-    if ((config_type is None) or (config_type == MAPRED_QUEUE_ACLS_TAG)):
-        update_config(options, MAPRED_QUEUE_ACLS, MAPRED_QUEUE_ACLS_TAG)
         pass
     jt_host = hostmapping['JOBTRACKER'][0]
     if ((config_type is None) or (config_type == YARN_SITE_TAG)):
@@ -18,6 +16,17 @@ def modify_configs(options, config_type):
         pass
         update_config(options, YARN_SITE, YARN_SITE_TAG)
         pass
+    if ((config_type is None) or (config_type == GLOBAL_TAG)):
+        update_config_using_existing(options, GLOBAL_TAG, GLOBAL, True)
+        pass
+    core_site_latest = rename_all_properties(get_config(options, CORE_SITE_TAG), PROPERTY_MAPPING)
+    hdfs_site_latest = rename_all_properties(get_config(options, HDFS_SITE_TAG), PROPERTY_MAPPING)
+    mapred_site_latest = rename_all_properties(get_config(options, MAPRED_SITE_TAG), PROPERTY_MAPPING)
+    for property in properties_to_move:
+        if (property in core_site_latest.keys()):
+            hdfs_site_latest[property] = core_site_latest[property]
+            del core_site_latest[property]
+        pass
     if ((config_type is None) or (config_type == MAPRED_SITE_TAG)):
         for key in MAPRED_SITE.keys():
             if (REPLACE_JH_HOST_NAME_TAG in MAPRED_SITE[key]):
@@ -25,15 +34,12 @@ def modify_configs(options, config_type):
                 pass
             pass
         pass
-        update_config_using_existing(options, MAPRED_SITE_TAG, MAPRED_SITE, True)
-        pass
-    if ((config_type is None) or (config_type == GLOBAL_TAG)):
-        update_config_using_existing(options, GLOBAL_TAG, GLOBAL, True)
+        update_config_using_existing_properties(options, MAPRED_SITE_TAG, MAPRED_SITE, mapred_site_latest, True)
         pass
     if ((config_type is None) or (config_type == HDFS_SITE_TAG)):
-        update_config_using_existing(options, HDFS_SITE_TAG, HDFS_SITE, True)
+        update_config_using_existing_properties(options, HDFS_SITE_TAG, HDFS_SITE, hdfs_site_latest, True)
         pass
     if ((config_type is None) or (config_type == CORE_SITE_TAG)):
-        update_config_using_existing(options, CORE_SITE_TAG, CORE_SITE, True)
+        update_config_using_existing_properties(options, CORE_SITE_TAG, CORE_SITE, core_site_latest, True)
         pass
     pass
