@@ -5,7 +5,33 @@
     if (null == rr.getOsType() || rr.getOsType().isEmpty())     throw new AmbariException("OS type must be specified.");
     if (null == rr.getRepoId() || rr.getRepoId().isEmpty())     throw new AmbariException("Repo ID must be specified.");
     if (null != rr.getBaseUrl()) {
-      ambariMetaInfo.updateRepoBaseURL(rr.getStackName(),rr.getStackVersion(),rr.getOsType(),rr.getRepoId(),rr.getBaseUrl());
+      if (!rr.isVerifyBaseUrl()) {
+        ambariMetaInfo.updateRepoBaseURL(rr.getStackName(),rr.getStackVersion(),rr.getOsType(),rr.getRepoId(),rr.getBaseUrl());
+      }
+ else {
+        URLStreamProvider usp=new URLStreamProvider(REPO_URL_CONNECT_TIMEOUT,REPO_URL_READ_TIMEOUT,null,null,null);
+        boolean bFound=false;
+        String[] suffixes=configs.getRepoValidationSuffixes();
+        for (int i=0; i < suffixes.length && !bFound; i++) {
+          String suffix=suffixes[i];
+          String spec=rr.getBaseUrl();
+          if (spec.charAt(spec.length() - 1) != '/' && suffix.charAt(0) != '/')           spec=rr.getBaseUrl() + "/" + suffix;
+ else           if (spec.charAt(spec.length() - 1) == '/' && suffix.charAt(0) == '/')           spec=rr.getBaseUrl() + suffix.substring(1);
+ else           spec=rr.getBaseUrl() + suffix;
+          try {
+            IOUtils.readLines(usp.readFrom(spec));
+            bFound=true;
+          }
+ catch (          IOException ioe) {
+          }
+        }
+        if (bFound) {
+          ambariMetaInfo.updateRepoBaseURL(rr.getStackName(),rr.getStackVersion(),rr.getOsType(),rr.getRepoId(),rr.getBaseUrl());
+        }
+ else {
+          throw new IllegalArgumentException("Could not access base url '" + rr.getBaseUrl() + "'");
+        }
+      }
     }
   }
 }
