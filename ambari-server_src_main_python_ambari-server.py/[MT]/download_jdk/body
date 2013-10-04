@@ -1,5 +1,4 @@
 def download_jdk(args):
-    jce_installed = install_jce_manualy(args)
     properties = get_ambari_properties()
     if (properties == (-1)):
         err = 'Error getting ambari properties'
@@ -11,6 +10,9 @@ def download_jdk(args):
     elif (args.java_home and os.path.exists(args.java_home)):
         print_warning_msg((('JAVA_HOME ' + args.java_home) + ' must be valid on ALL hosts'))
         write_property(JAVA_HOME_PROPERTY, args.java_home)
+        warn = 'JCE Policy files are required for configuring Kerberos security. If you plan to use Kerberos,please make sure JCE Unlimited Strength Jurisdiction Policy Files are valid on all hosts.'
+        print_warning_msg(warn)
+        return 0
     else:
         try:
             jdk_url = properties[JDK_URL_PROPERTY]
@@ -89,12 +91,11 @@ def download_jdk(args):
                 raise FatalException(1, err)
         print 'Successfully installed JDK to {0}/{1}'.format(JDK_INSTALL_DIR, jdk_version)
         write_property(JAVA_HOME_PROPERTY, '{0}/{1}'.format(JDK_INSTALL_DIR, jdk_version))
-    if (jce_installed != 0):
-        try:
-            download_jce_policy(properties, ok)
-        except FatalException as e:
-            print 'JCE Policy files are required for configuring Kerberos security. Please ensure  all hosts have the JCE Unlimited Strength Jurisdiction Policy Files.'
-            print_error_msg('Failed to download JCE Policy files:')
-            if (e.reason is not None):
-                print_error_msg('Reason: {0}'.format(e.reason))
+    try:
+        download_jce_policy(properties, ok)
+    except FatalException as e:
+        print 'JCE Policy files are required for secure HDP setup. Please ensure  all hosts have the JCE unlimited strength policy 6, files.'
+        print_error_msg('Failed to download JCE policy files:')
+        if (e.reason is not None):
+            print_error_msg('Reason: {0}'.format(e.reason))
     return 0
