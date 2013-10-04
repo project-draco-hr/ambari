@@ -1,0 +1,24 @@
+@patch.object(UpgradeHelper_HDP2, 'get_config_resp')
+@patch.object(UpgradeHelper_HDP2, 'get_config')
+@patch.object(UpgradeHelper_HDP2, 'read_mapping')
+@patch.object(logging, 'FileHandler')
+@patch.object(UpgradeHelper_HDP2, 'backup_file')
+@patch.object(UpgradeHelper_HDP2, 'curl')
+@patch('optparse.OptionParser')
+def test_no_hbase(self, option_parser_mock, curl_mock, backup_file_mock, file_handler_mock, read_mapping_mock, get_config_mock, get_config_resp_mock):
+    file_handler_mock.return_value = logging.FileHandler('')
+    opm = option_parser_mock.return_value
+    options = MagicMock()
+    args = ['update-configs']
+    opm.parse_args.return_value = (options, args)
+    options.logfile = 'logfile'
+    options.user = 'admin'
+    options.password = 'admin'
+    options.hostname = 'localhost'
+    options.clustername = 'c1'
+    curl_mock.side_effect = ['', '', '', '', '', '', '']
+    read_mapping_mock.return_value = {'TASKTRACKER': ['c6401', 'c6402'], 'JOBTRACKER': ['c6401'], 'MAPREDUCE_CLIENT': ['c6403'], }
+    get_config_resp_mock.return_value = ('hbase-site', None)
+    get_config_mock.return_value = {'mapred.hosts': 'an_old_value', 'mapred.hosts.exclude': 'an_old_value', 'mapred.jobtracker.maxtasks.per.job': 'an_old_value', 'mapred.jobtracker.taskScheduler': 'an_old_value', 'dfs.df.interval': 'an_old_value', 'mapred.userlog.retain.hours': 'will_not_be_stored', 'global1': 'global11', }
+    UpgradeHelper_HDP2.main()
+    self.assertEqual(6, len(curl_mock.call_args_list))
