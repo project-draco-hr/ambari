@@ -16,14 +16,27 @@
  catch (  AmbariException e) {
   }
   ObjectMapper mapper=new ObjectMapper();
-  File rcoFile=getRCOFile();
+  StackId currentStackVersion=cluster.getCurrentStackVersion();
+  String stackName=currentStackVersion.getStackName();
+  String stackVersion=currentStackVersion.getStackVersion();
+  File rcoFile=getRCOFile(stackName,stackVersion);
   Map<String,Object> userData=null;
   try {
-    userData=mapper.readValue(rcoFile,Map.class);
+    TypeReference<Map<String,Object>> rcoElementTypeReference=new TypeReference<Map<String,Object>>(){
+    }
+;
+    if (rcoFile != null) {
+      userData=mapper.readValue(rcoFile,rcoElementTypeReference);
+      LOG.info("Role command order info was loaded from file: " + rcoFile.getAbsolutePath());
+    }
+ else {
+      InputStream rcoInputStream=ClassLoader.getSystemResourceAsStream(ROLE_COMMAND_ORDER_FILE);
+      userData=mapper.readValue(rcoInputStream,rcoElementTypeReference);
+      LOG.info("Role command order info was loaded from classpath: " + ClassLoader.getSystemResource(ROLE_COMMAND_ORDER_FILE));
+    }
   }
  catch (  IOException e) {
-    String errorMsg=String.format("Can not read file %s",rcoFile.getAbsolutePath());
-    LOG.error(errorMsg,e);
+    LOG.error("Can not read role command order info",e);
     return;
   }
   Map<String,Object> generalSection=(Map<String,Object>)userData.get(GENERAL_DEPS_KEY);
