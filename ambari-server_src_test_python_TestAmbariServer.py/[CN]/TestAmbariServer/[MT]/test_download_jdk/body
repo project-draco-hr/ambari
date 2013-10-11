@@ -26,13 +26,15 @@ def test_download_jdk(self, exit_mock, copyfile_mock, get_ambari_properties_mock
     get_ambari_properties_mock.return_value = p
     p.__getitem__.return_value = 'somewhere'
     get_JAVA_HOME_mock.return_value = True
-    path_existsMock.return_value = True
+    path_existsMock.side_effect = [True, False]
     rcode = ambari_server.download_jdk(args)
     self.assertEqual(0, rcode)
+    path_existsMock.side_effect = [True, False]
     get_JAVA_HOME_mock.return_value = False
     rcode = ambari_server.download_jdk(args)
     self.assertEqual(0, rcode)
     self.assertTrue(write_property_mock.called)
+    path_existsMock.side_effect = None
     path_existsMock.return_value = False
     p = MagicMock()
     get_ambari_properties_mock.return_value = p
@@ -96,7 +98,18 @@ def test_download_jdk(self, exit_mock, copyfile_mock, get_ambari_properties_mock
     write_property_mock.reset_mock()
     args.java_home = 'somewhere'
     path_existsMock.return_value = True
-    path_existsMock.side_effect = None
+    path_existsMock.side_effect = [True, False]
     get_JAVA_HOME_mock.return_value = True
-    rcode = ambari_server.download_jdk(args)
+    ambari_server.download_jdk(args)
     self.assertTrue(write_property_mock.called)
+    write_property_mock.reset_mock()
+    args.java_home = 'somewhere'
+    path_existsMock.side_effect = None
+    path_existsMock.return_value = True
+    get_JAVA_HOME_mock.return_value = True
+    try:
+        ambari_server.download_jdk(args)
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertFalse(write_property_mock.called)
+        pass
