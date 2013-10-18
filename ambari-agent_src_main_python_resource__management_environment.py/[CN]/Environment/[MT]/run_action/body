@@ -1,0 +1,16 @@
+def run_action(self, resource, action):
+    self.log.debug(('Performing action %s on %s' % (action, resource)))
+    provider_class = find_provider(self, resource.__class__.__name__, resource.provider)
+    provider = provider_class(resource)
+    try:
+        provider_action = getattr(provider, ('action_%s' % action))
+    except AttributeError:
+        raise Fail(('%r does not implement action %s' % (provider, action)))
+    provider_action()
+    if resource.is_updated:
+        for (action, res) in resource.subscriptions['immediate']:
+            self.log.info(('%s sending %s action to %s (immediate)' % (resource, action, res)))
+            self.run_action(res, action)
+        for (action, res) in resource.subscriptions['delayed']:
+            self.log.info(('%s sending %s action to %s (delayed)' % (resource, action, res)))
+        self.delayed_actions |= resource.subscriptions['delayed']

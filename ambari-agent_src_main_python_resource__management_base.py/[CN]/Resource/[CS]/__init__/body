@@ -1,0 +1,30 @@
+def __init__(self, name, env=None, provider=None, **kwargs):
+    if hasattr(self, 'name'):
+        return
+    self.name = name
+    self.env = (env or Environment.get_instance())
+    self.provider = (provider or getattr(self, 'provider', None))
+    self.log = logging.getLogger('resource_management.resource')
+    self.arguments = {}
+    for (key, value) in kwargs.items():
+        try:
+            arg = self._arguments[key]
+        except KeyError:
+            raise Fail(('%s received unsupported argument %s' % (self, key)))
+        else:
+            try:
+                self.arguments[key] = arg.validate(value)
+            except InvalidArgument as exc:
+                raise InvalidArgument(('%s %s' % (self, exc)))
+    self.log.debug(('New resource %s: %s' % (self, self.arguments)))
+    self.subscriptions = {'immediate': set(), 'delayed': set(), }
+    for sub in self.subscribes:
+        if (len(sub) == 2):
+            (action, res) = sub
+            immediate = False
+        else:
+            (action, res, immediate) = sub
+        res.subscribe(action, self, immediate)
+    for sub in self.notifies:
+        self.subscribe(*sub)
+    self.validate()
