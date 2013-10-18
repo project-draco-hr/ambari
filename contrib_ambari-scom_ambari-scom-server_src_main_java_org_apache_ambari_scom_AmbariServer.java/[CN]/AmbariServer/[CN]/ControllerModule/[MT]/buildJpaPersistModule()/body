@@ -1,0 +1,59 @@
+{
+  PersistenceType persistenceType=getPersistenceType(configuration);
+  JpaPersistModule jpaPersistModule=new JpaPersistModule(Configuration.JDBC_UNIT_NAME);
+  Properties properties=new Properties();
+  String databaseDriver;
+  String databaseUrl;
+  if (persistenceType == PersistenceType.LOCAL) {
+    databaseDriver=configuration.getLocalDatabaseUrl();
+    databaseUrl=Configuration.JDBC_LOCAL_DRIVER;
+  }
+ else {
+    databaseDriver=configuration.getDatabaseDriver();
+    databaseUrl=configuration.getDatabaseUrl();
+    if (persistenceType == PersistenceType.IN_MEMORY) {
+      if (databaseDriver == null) {
+        databaseDriver=Configuration.JDBC_IN_MEMROY_DRIVER;
+      }
+      if (databaseUrl == null) {
+        databaseUrl=Configuration.JDBC_IN_MEMORY_URL;
+      }
+    }
+  }
+  if (databaseDriver != null && databaseUrl != null) {
+    properties.setProperty("javax.persistence.jdbc.url",databaseUrl);
+    properties.setProperty("javax.persistence.jdbc.driver",databaseDriver);
+    properties.setProperty("eclipselink.logging.level","INFO");
+    properties.setProperty("eclipselink.logging.logger","org.apache.ambari.scom.logging.JpaLogger");
+    Map<String,String> custom=configuration.getDatabaseCustomProperties();
+    if (0 != custom.size()) {
+      for (      Map.Entry<String,String> entry : custom.entrySet()) {
+        properties.setProperty("eclipselink.jdbc.property." + entry.getKey(),entry.getValue());
+      }
+    }
+    if (persistenceType == PersistenceType.IN_MEMORY) {
+      properties.setProperty("eclipselink.ddl-generation","drop-and-create-tables");
+      properties.setProperty("eclipselink.orm.throw.exceptions","true");
+      jpaPersistModule.properties(properties);
+    }
+ else {
+      properties.setProperty("javax.persistence.jdbc.user",configuration.getDatabaseUser());
+      properties.setProperty("javax.persistence.jdbc.password",configuration.getProperty(Configuration.SERVER_JDBC_USER_PASSWD_KEY));
+switch (configuration.getJPATableGenerationStrategy()) {
+case CREATE:
+        properties.setProperty("eclipselink.ddl-generation","create-tables");
+      break;
+case DROP_AND_CREATE:
+    properties.setProperty("eclipselink.ddl-generation","drop-and-create-tables");
+  break;
+default :
+break;
+}
+properties.setProperty("eclipselink.ddl-generation.output-mode","both");
+properties.setProperty("eclipselink.create-ddl-jdbc-file-name","DDL-create.jdbc");
+properties.setProperty("eclipselink.drop-ddl-jdbc-file-name","DDL-drop.jdbc");
+jpaPersistModule.properties(properties);
+}
+}
+return jpaPersistModule;
+}

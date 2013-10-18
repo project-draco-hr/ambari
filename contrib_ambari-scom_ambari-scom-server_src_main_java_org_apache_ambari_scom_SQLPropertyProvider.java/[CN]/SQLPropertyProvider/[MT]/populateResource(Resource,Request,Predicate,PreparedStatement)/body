@@ -1,0 +1,63 @@
+{
+  Set<String> ids=getRequestPropertyIds(request,predicate);
+  if (ids.isEmpty()) {
+    return true;
+  }
+  String componentName=(String)resource.getPropertyValue(componentNamePropertyId);
+  if (getComponentMetrics().get(componentName) == null) {
+    return true;
+  }
+  String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
+  String hostName=getHost(resource,clusterName,componentName);
+  if (hostName == null) {
+    throw new SystemException("Unable to get metrics.  No host name for " + componentName,null);
+  }
+  for (  String id : ids) {
+    Map<String,PropertyInfo> propertyInfoMap=getPropertyInfoMap(componentName,id);
+    for (    Map.Entry<String,PropertyInfo> entry : propertyInfoMap.entrySet()) {
+      String propertyKey=entry.getKey();
+      PropertyInfo propertyInfo=entry.getValue();
+      String propertyId=propertyInfo.getPropertyId();
+      TemporalInfo temporalInfo=request.getTemporalInfo(id);
+      if ((propertyInfo.isPointInTime() && temporalInfo == null) || (propertyInfo.isTemporal() && temporalInfo != null)) {
+        long startTime;
+        long endTime;
+        if (temporalInfo != null) {
+          Long endTimeSeconds=temporalInfo.getEndTime();
+          endTime=endTimeSeconds != -1 ? endTimeSeconds * 1000 : Long.MAX_VALUE;
+          startTime=temporalInfo.getStartTime() * 1000;
+        }
+ else {
+          startTime=0L;
+          endTime=Long.MAX_VALUE;
+        }
+        String[] parts=propertyId.split("\\.");
+        int size=parts.length;
+        if (size >= 3) {
+          List<DataPoint> dataPoints=getMetric(startTime,endTime,parts[size - 3],parts[size - 2],parts[size - 1],componentName.toLowerCase(),hostName,preparedStatement);
+          if (dataPoints != null) {
+            if (temporalInfo == null) {
+              int length=dataPoints.size();
+              Serializable value=length > 0 ? dataPoints.get(length - 1).getValue() : 0;
+              resource.setProperty(propertyKey,value);
+            }
+ else {
+              Number[][] dp=new Number[dataPoints.size()][2];
+              for (int i=0; i < dp.length; i++) {
+                dp[i][0]=dataPoints.get(i).getValue();
+                dp[i][1]=dataPoints.get(i).getTimestamp();
+              }
+              resource.setProperty(propertyKey,dp);
+            }
+          }
+        }
+ else {
+          if (LOG.isWarnEnabled()) {
+            LOG.warn("Can't get metrics for " + id + " : "+ propertyId);
+          }
+        }
+      }
+    }
+  }
+  return true;
+}

@@ -1,0 +1,104 @@
+{
+  addInMemoryUsers();
+  server=new Server();
+  try {
+    ClassPathXmlApplicationContext parentSpringAppContext=new ClassPathXmlApplicationContext();
+    parentSpringAppContext.refresh();
+    ConfigurableListableBeanFactory factory=parentSpringAppContext.getBeanFactory();
+    factory.registerSingleton("guiceInjector",injector);
+    factory.registerSingleton("passwordEncoder",injector.getInstance(PasswordEncoder.class));
+    factory.registerSingleton("ambariLocalUserService",injector.getInstance(AmbariLocalUserDetailsService.class));
+    factory.registerSingleton("ambariLdapAuthenticationProvider",injector.getInstance(AmbariLdapAuthenticationProvider.class));
+    String[] contextLocations={SPRING_CONTEXT_LOCATION};
+    ClassPathXmlApplicationContext springAppContext=new ClassPathXmlApplicationContext(contextLocations,parentSpringAppContext);
+    ServletContextHandler root=new ServletContextHandler(server,CONTEXT_PATH,ServletContextHandler.SECURITY | ServletContextHandler.SESSIONS);
+    root.getSessionHandler().getSessionManager().setSessionCookie("AMBARISESSIONID");
+    GenericWebApplicationContext springWebAppContext=new GenericWebApplicationContext();
+    springWebAppContext.setServletContext(root.getServletContext());
+    springWebAppContext.setParent(springAppContext);
+    root.setResourceBase(configuration.getWebAppDir());
+    root.getServletContext().setAttribute(WebApplicationContext.ROOT_WEB_APPLICATION_CONTEXT_ATTRIBUTE,springWebAppContext);
+    ServletHolder rootServlet=root.addServlet(DefaultServlet.class,"/");
+    rootServlet.setInitOrder(1);
+    DelegatingFilterProxy springSecurityFilter=new DelegatingFilterProxy();
+    springSecurityFilter.setTargetBeanName("springSecurityFilterChain");
+    root.addFilter(new FilterHolder(injector.getInstance(AmbariPersistFilter.class)),"/api/*",1);
+    if (configuration.getApiAuthentication()) {
+      root.addFilter(new FilterHolder(springSecurityFilter),"/api/*",1);
+    }
+    SslSelectChannelConnector sslConnectorTwoWay=new SslSelectChannelConnector();
+    sslConnectorTwoWay.setPort(configuration.getTwoWayAuthPort());
+    Map<String,String> configsMap=configuration.getConfigsMap();
+    String keystore=configsMap.get(Configuration.SRVR_KSTR_DIR_KEY) + File.separator + configsMap.get(Configuration.KSTR_NAME_KEY);
+    String srvrCrtPass=configsMap.get(Configuration.SRVR_CRT_PASS_KEY);
+    sslConnectorTwoWay.setKeystore(keystore);
+    sslConnectorTwoWay.setTruststore(keystore);
+    sslConnectorTwoWay.setPassword(srvrCrtPass);
+    sslConnectorTwoWay.setKeyPassword(srvrCrtPass);
+    sslConnectorTwoWay.setTrustPassword(srvrCrtPass);
+    sslConnectorTwoWay.setKeystoreType("PKCS12");
+    sslConnectorTwoWay.setTruststoreType("PKCS12");
+    sslConnectorTwoWay.setNeedClientAuth(configuration.getTwoWaySsl());
+    SslContextFactory contextFactory=new SslContextFactory(true);
+    contextFactory.setKeyStorePath(keystore);
+    contextFactory.setTrustStore(keystore);
+    contextFactory.setKeyStorePassword(srvrCrtPass);
+    contextFactory.setKeyManagerPassword(srvrCrtPass);
+    contextFactory.setTrustStorePassword(srvrCrtPass);
+    contextFactory.setKeyStoreType("PKCS12");
+    contextFactory.setTrustStoreType("PKCS12");
+    contextFactory.setNeedClientAuth(false);
+    SslSelectChannelConnector sslConnectorOneWay=new SslSelectChannelConnector(contextFactory);
+    sslConnectorOneWay.setPort(configuration.getOneWayAuthPort());
+    sslConnectorOneWay.setAcceptors(2);
+    sslConnectorTwoWay.setAcceptors(2);
+    ServletHolder sh=new ServletHolder(ServletContainer.class);
+    sh.setInitParameter("com.sun.jersey.config.property.resourceConfigClass","com.sun.jersey.api.core.PackagesResourceConfig");
+    sh.setInitParameter("com.sun.jersey.config.property.packages","org.apache.ambari.server.api.rest;" + "org.apache.ambari.server.api.services;" + "org.apache.ambari.eventdb.webservice;"+ "org.apache.ambari.server.api");
+    sh.setInitParameter("com.sun.jersey.api.json.POJOMappingFeature","true");
+    root.addServlet(sh,"/api/v1/*");
+    sh.setInitOrder(2);
+    server.setThreadPool(new QueuedThreadPool(25));
+    SelectChannelConnector apiConnector;
+    if (configuration.getApiSSLAuthentication()) {
+      String httpsKeystore=configsMap.get(Configuration.CLIENT_API_SSL_KSTR_DIR_NAME_KEY) + File.separator + configsMap.get(Configuration.CLIENT_API_SSL_KSTR_NAME_KEY);
+      LOG.info("API SSL Authentication is turned on. Keystore - " + httpsKeystore);
+      String httpsCrtPass=configsMap.get(Configuration.CLIENT_API_SSL_CRT_PASS_KEY);
+      SslSelectChannelConnector sapiConnector=new SslSelectChannelConnector();
+      sapiConnector.setPort(configuration.getClientSSLApiPort());
+      sapiConnector.setKeystore(httpsKeystore);
+      sapiConnector.setTruststore(httpsKeystore);
+      sapiConnector.setPassword(httpsCrtPass);
+      sapiConnector.setKeyPassword(httpsCrtPass);
+      sapiConnector.setTrustPassword(httpsCrtPass);
+      sapiConnector.setKeystoreType("PKCS12");
+      sapiConnector.setTruststoreType("PKCS12");
+      sapiConnector.setMaxIdleTime(configuration.getConnectionMaxIdleTime());
+      apiConnector=sapiConnector;
+    }
+ else {
+      apiConnector=new SelectChannelConnector();
+      apiConnector.setPort(configuration.getClientApiPort());
+      apiConnector.setMaxIdleTime(configuration.getConnectionMaxIdleTime());
+    }
+    server.addConnector(apiConnector);
+    server.setStopAtShutdown(true);
+    springAppContext.start();
+    String osType=configuration.getServerOsType();
+    if (osType == null || osType.isEmpty()) {
+      throw new RuntimeException(Configuration.OS_VERSION_KEY + " is not " + " set in the ambari.properties file");
+    }
+    server.start();
+    LOG.info("********* Started Server **********");
+    server.join();
+    LOG.info("Joined the Server");
+  }
+ catch (  BadPaddingException bpe) {
+    LOG.error("Bad keystore or private key password. " + "HTTPS certificate re-importing may be required.");
+    throw bpe;
+  }
+catch (  BindException bindException) {
+    LOG.error("Could not bind to server port - instance may already be running. " + "Terminating this instance.",bindException);
+    throw bindException;
+  }
+}

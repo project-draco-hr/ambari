@@ -1,0 +1,33 @@
+{
+  ConnectionFactory connectionFactory=createNiceMock(ConnectionFactory.class);
+  Connection connection=createNiceMock(Connection.class);
+  PreparedStatement statement=createNiceMock(PreparedStatement.class);
+  ResultSet resultSet=createNiceMock(ResultSet.class);
+  expect(connectionFactory.getConnection()).andReturn(connection).once();
+  expect(connection.prepareStatement((String)anyObject())).andReturn(statement).once();
+  expect(statement.executeQuery()).andReturn(resultSet).once();
+  expect(resultSet.next()).andReturn(true);
+  expect(resultSet.getNString("MetricValue")).andReturn("0");
+  expect(resultSet.getLong("RecordTimeStamp")).andReturn(999990L);
+  expect(resultSet.next()).andReturn(true);
+  expect(resultSet.getNString("MetricValue")).andReturn("1");
+  expect(resultSet.getLong("RecordTimeStamp")).andReturn(999991L);
+  expect(resultSet.next()).andReturn(true);
+  expect(resultSet.getNString("MetricValue")).andReturn("2");
+  expect(resultSet.getLong("RecordTimeStamp")).andReturn(999992L);
+  expect(resultSet.next()).andReturn(true);
+  expect(resultSet.getNString("MetricValue")).andReturn("3");
+  expect(resultSet.getLong("RecordTimeStamp")).andReturn(999993L);
+  expect(resultSet.next()).andReturn(false);
+  replay(connectionFactory,connection,statement,resultSet);
+  SQLPropertyProvider provider=new SQLPropertyProvider(PropertyHelper.getGangliaPropertyIds(Resource.Type.HostComponent,PropertyHelper.MetricsVersion.HDP1),new TestHostInfoProvider(),CLUSTER_NAME_PROPERTY_ID,HOST_NAME_PROPERTY_ID,COMPONENT_NAME_PROPERTY_ID,connectionFactory);
+  Resource resource=new ResourceImpl(Resource.Type.HostComponent);
+  resource.setProperty(CLUSTER_NAME_PROPERTY_ID,"c1");
+  resource.setProperty(HOST_NAME_PROPERTY_ID,"domU-12-31-39-0E-34-E1.compute-1.internal");
+  resource.setProperty(COMPONENT_NAME_PROPERTY_ID,"DATANODE");
+  Map<String,TemporalInfo> temporalInfoMap=new HashMap<String,TemporalInfo>();
+  Request request=PropertyHelper.getReadRequest(Collections.singleton(PROPERTY_ID_2),temporalInfoMap);
+  Assert.assertEquals(1,provider.populateResources(Collections.singleton(resource),request,null).size());
+  Assert.assertEquals(3L,resource.getPropertyValue(PROPERTY_ID_2));
+  verify(connectionFactory,connection,statement,resultSet);
+}

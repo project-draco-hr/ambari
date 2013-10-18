@@ -1,0 +1,60 @@
+{
+  InputStream is=definitionProvider.getInputStream();
+  try {
+    BufferedReader br=new BufferedReader(new InputStreamReader(is));
+    String line;
+    boolean hostsSection=false;
+    while ((line=br.readLine()) != null) {
+      line=line.trim();
+      if (line.startsWith(HEADER_TAG)) {
+        String header=line.substring(HEADER_TAG.length());
+        hostsSection=header.equals(HOSTS_HEADER);
+        if (!hostsSection && (header.startsWith(HOSTS_HEADER))) {
+          char c=header.charAt(HOSTS_HEADER.length());
+          hostsSection=c == ' ' || c == '(';
+        }
+      }
+ else {
+        if (hostsSection) {
+          int i=line.indexOf('=');
+          if (i > -1) {
+            String name=line.substring(0,i);
+            String hostLine=line.substring(i + 1);
+            Set<String> componentNames=componentNameMap.get(name);
+            if (componentNames != null) {
+              for (              String componentName : componentNames) {
+                String serviceName=componentServiceMap.get(componentName);
+                services.add(serviceName);
+                Set<String> serviceComponents=components.get(serviceName);
+                if (serviceComponents == null) {
+                  serviceComponents=new HashSet<String>();
+                  components.put(serviceName,serviceComponents);
+                }
+                serviceComponents.add(componentName);
+                Map<String,Set<String>> serviceHostComponents=hostComponents.get(serviceName);
+                if (serviceHostComponents == null) {
+                  serviceHostComponents=new HashMap<String,Set<String>>();
+                  hostComponents.put(serviceName,serviceHostComponents);
+                }
+                String[] hostNames=hostLine.split(",");
+                for (                String hostName : hostNames) {
+                  hostName=hostName.trim();
+                  Set<String> hostHostComponents=serviceHostComponents.get(hostName);
+                  if (hostHostComponents == null) {
+                    hostHostComponents=new HashSet<String>();
+                    serviceHostComponents.put(hostName,hostHostComponents);
+                  }
+                  hostHostComponents.add(componentName);
+                  hosts.add(hostName);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  finally {
+    is.close();
+  }
+}
