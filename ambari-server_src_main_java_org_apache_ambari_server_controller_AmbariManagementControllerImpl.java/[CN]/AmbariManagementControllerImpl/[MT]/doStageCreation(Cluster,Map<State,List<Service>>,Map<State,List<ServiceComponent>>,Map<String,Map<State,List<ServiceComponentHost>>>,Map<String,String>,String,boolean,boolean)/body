@@ -3,16 +3,15 @@
   if ((changedServices == null || changedServices.isEmpty()) && (changedComps == null || changedComps.isEmpty()) && (changedScHosts == null || changedScHosts.isEmpty())) {
     return null;
   }
-  Long requestId=null;
   Set<String> smokeTestServices=getServicesForSmokeTests(cluster,changedServices,changedScHosts,runSmokeTest);
   if (reconfigureClients) {
     addClientSchForReinstall(cluster,changedServices,changedScHosts);
   }
   if (!changedScHosts.isEmpty() || !smokeTestServices.isEmpty()) {
     long nowTimestamp=System.currentTimeMillis();
-    requestId=Long.valueOf(actionManager.getNextRequestId());
+    Long requestId=actionManager.getNextRequestId();
     long stageId=0;
-    Stage stage=createNewStage(cluster,requestId.longValue(),requestContext);
+    Stage stage=createNewStage(cluster,requestId,requestContext);
     stage.setStageId(stageId);
     Set<String> hostnames=new HashSet<String>();
     for (    Map<State,List<ServiceComponentHost>> stateListMap : changedScHosts.values()) {
@@ -23,7 +22,7 @@
       }
     }
     Map<String,Map<String,DesiredConfig>> configsByHosts=cluster.getHostsDesiredConfigs(hostnames);
-    String jobtrackerHost=this.getJobTrackerHost(cluster);
+    String jobtrackerHost=getJobTrackerHost(cluster);
     Map<String,List<String>> clusterHostInfo=StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster,hostsMap,injector);
     for (    String compName : changedScHosts.keySet()) {
       for (      State newState : changedScHosts.get(compName).keySet()) {
@@ -86,11 +85,11 @@ default :
 throw new AmbariException("Unsupported state change operation" + ", newState=" + newState.toString());
 }
 if (LOG.isDebugEnabled()) {
-LOG.debug("Create a new host action" + ", requestId=" + requestId.longValue() + ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", roleCommand="+ roleCommand.name());
+LOG.debug("Create a new host action" + ", requestId=" + requestId + ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", roleCommand="+ roleCommand.name());
 }
 Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
 Map<String,Map<String,String>> configTags=new HashMap<String,Map<String,String>>();
-findConfigurationPropertiesWithOverrides(configurations,configTags,cluster,scHost.getServiceName(),scHost.getHostName(),clusterDesiredConfigs,configsByHosts.get(scHost.getHostName()));
+findConfigurationPropertiesWithOverrides(configurations,configTags,cluster,scHost.getServiceName(),clusterDesiredConfigs,configsByHosts.get(scHost.getHostName()));
 if (!scHost.getHostName().equals(jobtrackerHost)) {
 if (configTags.get(Configuration.GLOBAL_CONFIG_TAG) != null) {
 ExecutionCommandWrapper.applyCustomConfig(configurations,Configuration.GLOBAL_CONFIG_TAG,Configuration.RCA_ENABLED_PROPERTY,"false",false);
@@ -119,7 +118,7 @@ Map<String,String> hostParams=new HashMap<String,String>();
 hostParams.put("stack_version",cluster.getDesiredStackVersion().getStackVersion());
 stage.getExecutionCommandWrapper(clientHost,smokeTestRole).getExecutionCommand().setHostLevelParams(hostParams);
 }
-RoleCommandOrder rco=this.getRCO(cluster);
+RoleCommandOrder rco=getRoleCommandOrder(cluster);
 RoleGraph rg=new RoleGraph(rco);
 rg.build(stage);
 return rg.getStages();

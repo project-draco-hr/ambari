@@ -45,7 +45,6 @@
     componentNames.get(request.getClusterName()).get(request.getServiceName()).add(request.getComponentName());
     Service s=cluster.getService(request.getServiceName());
     ServiceComponent sc=s.getServiceComponent(request.getComponentName());
-    State oldState=sc.getDesiredState();
     State newState=null;
     if (request.getDesiredState() != null) {
       newState=State.valueOf(request.getDesiredState());
@@ -54,7 +53,7 @@
       }
     }
     if (request.getConfigVersions() != null) {
-      safeToUpdateConfigsForServiceComponent(sc,oldState,newState);
+      State.checkUpdateConfiguration(sc,newState);
       for (      Entry<String,String> entry : request.getConfigVersions().entrySet()) {
         Config config=cluster.getConfig(entry.getKey(),entry.getValue());
         if (null == config) {
@@ -74,7 +73,7 @@
     seenNewStates.add(newState);
     State oldScState=sc.getDesiredState();
     if (newState != oldScState) {
-      if (!isValidDesiredStateTransition(oldScState,newState)) {
+      if (!State.isValidDesiredStateTransition(oldScState,newState)) {
         throw new AmbariException("Invalid transition for" + " servicecomponent" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sc.getServiceName()+ ", componentName="+ sc.getName()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
       }
       if (!changedComps.containsKey(newState)) {
@@ -100,7 +99,7 @@
         }
         continue;
       }
-      if (!isValidStateTransition(oldSchState,newState)) {
+      if (!State.isValidStateTransition(oldSchState,newState)) {
         throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sch.getServiceName()+ ", componentName="+ sch.getServiceComponentName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
       }
       if (!changedScHosts.containsKey(sc.getName())) {
@@ -139,11 +138,5 @@
     }
   }
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
-  List<Stage> stages=doStageCreation(cluster,null,changedComps,changedScHosts,null,requestProperties.get(REQUEST_CONTEXT_PROPERTY),runSmokeTest,false);
-  persistStages(stages);
-  updateServiceStates(null,changedComps,changedScHosts,ignoredScHosts);
-  if (stages == null || stages.isEmpty()) {
-    return null;
-  }
-  return getRequestStatusResponse(stages.get(0).getRequestId());
+  return createStages(cluster,requestProperties,null,null,changedComps,changedScHosts,ignoredScHosts,runSmokeTest,false);
 }
