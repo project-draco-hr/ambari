@@ -1,0 +1,57 @@
+def parse(self, parser):
+    'Parse a translatable tag.'
+    lineno = next(parser.stream).lineno
+    num_called_num = False
+    plural_expr = None
+    variables = {}
+    while (parser.stream.current.type != 'block_end'):
+        if variables:
+            parser.stream.expect('comma')
+        if parser.stream.skip_if('colon'):
+            break
+        name = parser.stream.expect('name')
+        if (name.value in variables):
+            parser.fail(('translatable variable %r defined twice.' % name.value), name.lineno, exc=TemplateAssertionError)
+        if (parser.stream.current.type == 'assign'):
+            next(parser.stream)
+            variables[name.value] = var = parser.parse_expression()
+        else:
+            variables[name.value] = var = nodes.Name(name.value, 'load')
+        if (plural_expr is None):
+            plural_expr = var
+            num_called_num = (name.value == 'num')
+    parser.stream.expect('block_end')
+    plural = plural_names = None
+    have_plural = False
+    referenced = set()
+    (singular_names, singular) = self._parse_block(parser, True)
+    if singular_names:
+        referenced.update(singular_names)
+        if (plural_expr is None):
+            plural_expr = nodes.Name(singular_names[0], 'load')
+            num_called_num = (singular_names[0] == 'num')
+    if parser.stream.current.test('name:pluralize'):
+        have_plural = True
+        next(parser.stream)
+        if (parser.stream.current.type != 'block_end'):
+            name = parser.stream.expect('name')
+            if (name.value not in variables):
+                parser.fail(('unknown variable %r for pluralization' % name.value), name.lineno, exc=TemplateAssertionError)
+            plural_expr = variables[name.value]
+            num_called_num = (name.value == 'num')
+        parser.stream.expect('block_end')
+        (plural_names, plural) = self._parse_block(parser, False)
+        next(parser.stream)
+        referenced.update(plural_names)
+    else:
+        next(parser.stream)
+    for var in referenced:
+        if (var not in variables):
+            variables[var] = nodes.Name(var, 'load')
+    if (not have_plural):
+        plural_expr = None
+    elif (plural_expr is None):
+        parser.fail('pluralize without variables', lineno)
+    node = self._make_node(singular, plural, variables, plural_expr, bool(referenced), (num_called_num and have_plural))
+    node.set_lineno(lineno)
+    return node

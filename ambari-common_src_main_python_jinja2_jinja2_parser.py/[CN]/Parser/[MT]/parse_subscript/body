@@ -1,0 +1,25 @@
+def parse_subscript(self, node):
+    token = next(self.stream)
+    if (token.type == 'dot'):
+        attr_token = self.stream.current
+        next(self.stream)
+        if (attr_token.type == 'name'):
+            return nodes.Getattr(node, attr_token.value, 'load', lineno=token.lineno)
+        elif (attr_token.type != 'integer'):
+            self.fail('expected name or number', attr_token.lineno)
+        arg = nodes.Const(attr_token.value, lineno=attr_token.lineno)
+        return nodes.Getitem(node, arg, 'load', lineno=token.lineno)
+    if (token.type == 'lbracket'):
+        priority_on_attribute = False
+        args = []
+        while (self.stream.current.type != 'rbracket'):
+            if args:
+                self.stream.expect('comma')
+            args.append(self.parse_subscribed())
+        self.stream.expect('rbracket')
+        if (len(args) == 1):
+            arg = args[0]
+        else:
+            arg = nodes.Tuple(args, 'load', lineno=token.lineno)
+        return nodes.Getitem(node, arg, 'load', lineno=token.lineno)
+    self.fail('expected subscript expression', self.lineno)

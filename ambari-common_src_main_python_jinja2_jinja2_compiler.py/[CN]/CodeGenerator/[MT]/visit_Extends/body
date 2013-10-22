@@ -1,0 +1,22 @@
+def visit_Extends(self, node, frame):
+    'Calls the extender.'
+    if (not frame.toplevel):
+        self.fail('cannot use extend from a non top-level scope', node.lineno)
+    if (self.extends_so_far > 0):
+        if (not self.has_known_extends):
+            self.writeline('if parent_template is not None:')
+            self.indent()
+        self.writeline(('raise TemplateRuntimeError(%r)' % 'extended multiple times'))
+        self.outdent()
+        if self.has_known_extends:
+            raise CompilerExit()
+    self.writeline('parent_template = environment.get_template(', node)
+    self.visit(node.template, frame)
+    self.write((', %r)' % self.name))
+    self.writeline(('for name, parent_block in parent_template.blocks.%s():' % dict_item_iter))
+    self.indent()
+    self.writeline('context.blocks.setdefault(name, []).append(parent_block)')
+    self.outdent()
+    if frame.rootlevel:
+        self.has_known_extends = True
+    self.extends_so_far += 1

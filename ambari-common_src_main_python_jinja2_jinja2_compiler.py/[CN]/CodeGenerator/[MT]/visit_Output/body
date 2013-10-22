@@ -1,0 +1,100 @@
+def visit_Output(self, node, frame):
+    if (self.has_known_extends and frame.require_output_check):
+        return
+    if self.environment.finalize:
+        finalize = (lambda x: unicode(self.environment.finalize(x)))
+    else:
+        finalize = unicode
+    outdent_later = False
+    if frame.require_output_check:
+        self.writeline('if parent_template is None:')
+        self.indent()
+        outdent_later = True
+    body = []
+    for child in node.nodes:
+        try:
+            const = child.as_const(frame.eval_ctx)
+        except nodes.Impossible:
+            body.append(child)
+            continue
+        try:
+            if frame.eval_ctx.autoescape:
+                if hasattr(const, '__html__'):
+                    const = const.__html__()
+                else:
+                    const = escape(const)
+            const = finalize(const)
+        except:
+            body.append(child)
+            continue
+        if (body and isinstance(body[(-1)], list)):
+            body[(-1)].append(const)
+        else:
+            body.append([const])
+    if ((len(body) < 3) or (frame.buffer is not None)):
+        if (frame.buffer is not None):
+            if (len(body) == 1):
+                self.writeline(('%s.append(' % frame.buffer))
+            else:
+                self.writeline(('%s.extend((' % frame.buffer))
+            self.indent()
+        for item in body:
+            if isinstance(item, list):
+                val = repr(concat(item))
+                if (frame.buffer is None):
+                    self.writeline(('yield ' + val))
+                else:
+                    self.writeline((val + ', '))
+            else:
+                if (frame.buffer is None):
+                    self.writeline('yield ', item)
+                else:
+                    self.newline(item)
+                close = 1
+                if frame.eval_ctx.volatile:
+                    self.write('(context.eval_ctx.autoescape and escape or to_string)(')
+                elif frame.eval_ctx.autoescape:
+                    self.write('escape(')
+                else:
+                    self.write('to_string(')
+                if (self.environment.finalize is not None):
+                    self.write('environment.finalize(')
+                    close += 1
+                self.visit(item, frame)
+                self.write((')' * close))
+                if (frame.buffer is not None):
+                    self.write(', ')
+        if (frame.buffer is not None):
+            self.outdent()
+            self.writeline((((len(body) == 1) and ')') or '))'))
+    else:
+        format = []
+        arguments = []
+        for item in body:
+            if isinstance(item, list):
+                format.append(concat(item).replace('%', '%%'))
+            else:
+                format.append('%s')
+                arguments.append(item)
+        self.writeline('yield ')
+        self.write((repr(concat(format)) + ' % ('))
+        idx = (-1)
+        self.indent()
+        for argument in arguments:
+            self.newline(argument)
+            close = 0
+            if frame.eval_ctx.volatile:
+                self.write('(context.eval_ctx.autoescape and escape or to_string)(')
+                close += 1
+            elif frame.eval_ctx.autoescape:
+                self.write('escape(')
+                close += 1
+            if (self.environment.finalize is not None):
+                self.write('environment.finalize(')
+                close += 1
+            self.visit(argument, frame)
+            self.write(((')' * close) + ', '))
+        self.outdent()
+        self.writeline(')')
+    if outdent_later:
+        self.outdent()

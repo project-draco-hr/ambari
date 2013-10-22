@@ -1,0 +1,28 @@
+def as_const(self, eval_ctx=None):
+    eval_ctx = get_eval_context(self, eval_ctx)
+    if (eval_ctx.volatile or (self.node is None)):
+        raise Impossible()
+    filter_ = self.environment.filters.get(self.name)
+    if ((filter_ is None) or getattr(filter_, 'contextfilter', False)):
+        raise Impossible()
+    obj = self.node.as_const(eval_ctx)
+    args = [x.as_const(eval_ctx) for x in self.args]
+    if getattr(filter_, 'evalcontextfilter', False):
+        args.insert(0, eval_ctx)
+    elif getattr(filter_, 'environmentfilter', False):
+        args.insert(0, self.environment)
+    kwargs = dict((x.as_const(eval_ctx) for x in self.kwargs))
+    if (self.dyn_args is not None):
+        try:
+            args.extend(self.dyn_args.as_const(eval_ctx))
+        except:
+            raise Impossible()
+    if (self.dyn_kwargs is not None):
+        try:
+            kwargs.update(self.dyn_kwargs.as_const(eval_ctx))
+        except:
+            raise Impossible()
+    try:
+        return filter_(obj, *args, **kwargs)
+    except:
+        raise Impossible()

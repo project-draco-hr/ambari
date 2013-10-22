@@ -1,0 +1,25 @@
+def babel_extract(fileobj, keywords, comment_tags, options):
+    'Babel extraction method for Jinja templates.\n\n    .. versionchanged:: 2.3\n       Basic support for translation comments was added.  If `comment_tags`\n       is now set to a list of keywords for extraction, the extractor will\n       try to find the best preceeding comment that begins with one of the\n       keywords.  For best results, make sure to not have more than one\n       gettext call in one line of code and the matching comment in the\n       same line or the line before.\n\n    .. versionchanged:: 2.5.1\n       The `newstyle_gettext` flag can be set to `True` to enable newstyle\n       gettext calls.\n\n    :param fileobj: the file-like object the messages should be extracted from\n    :param keywords: a list of keywords (i.e. function names) that should be\n                     recognized as translation functions\n    :param comment_tags: a list of translator tags to search for and include\n                         in the results.\n    :param options: a dictionary of additional options (optional)\n    :return: an iterator over ``(lineno, funcname, message, comments)`` tuples.\n             (comments will be empty currently)\n    '
+    extensions = set()
+    for extension in options.get('extensions', '').split(','):
+        extension = extension.strip()
+        if (not extension):
+            continue
+        extensions.add(import_string(extension))
+    if (InternationalizationExtension not in extensions):
+        extensions.add(InternationalizationExtension)
+
+    def getbool(options, key, default=False):
+        (options.get(key, str(default)).lower() in ('1', 'on', 'yes', 'true'))
+    environment = Environment(options.get('block_start_string', BLOCK_START_STRING), options.get('block_end_string', BLOCK_END_STRING), options.get('variable_start_string', VARIABLE_START_STRING), options.get('variable_end_string', VARIABLE_END_STRING), options.get('comment_start_string', COMMENT_START_STRING), options.get('comment_end_string', COMMENT_END_STRING), (options.get('line_statement_prefix') or LINE_STATEMENT_PREFIX), (options.get('line_comment_prefix') or LINE_COMMENT_PREFIX), getbool(options, 'trim_blocks', TRIM_BLOCKS), NEWLINE_SEQUENCE, frozenset(extensions), cache_size=0, auto_reload=False)
+    if getbool(options, 'newstyle_gettext'):
+        environment.newstyle_gettext = True
+    source = fileobj.read().decode(options.get('encoding', 'utf-8'))
+    try:
+        node = environment.parse(source)
+        tokens = list(environment.lex(environment.preprocess(source)))
+    except TemplateSyntaxError as e:
+        return
+    finder = _CommentFinder(tokens, comment_tags)
+    for (lineno, func, message) in extract_from_ast(node, keywords):
+        yield (lineno, func, message, finder.find_comments(lineno))

@@ -1,0 +1,79 @@
+def visit_For(self, node, frame):
+    children = node.iter_child_nodes(exclude=('iter',))
+    if node.recursive:
+        loop_frame = self.function_scoping(node, frame, children, find_special=False)
+    else:
+        loop_frame = frame.inner()
+        loop_frame.inspect(children)
+    extended_loop = (node.recursive or ('loop' in find_undeclared(node.iter_child_nodes(only=('body',)), ('loop',))))
+    if (not node.recursive):
+        aliases = self.push_scope(loop_frame, ('loop',))
+    else:
+        self.writeline('def loop(reciter, loop_render_func):', node)
+        self.indent()
+        self.buffer(loop_frame)
+        aliases = {}
+    if extended_loop:
+        loop_frame.identifiers.add_special('loop')
+    for name in node.find_all(nodes.Name):
+        if ((name.ctx == 'store') and (name.name == 'loop')):
+            self.fail("Can't assign to special loop variable in for-loop target", name.lineno)
+    self.pull_locals(loop_frame)
+    if node.else_:
+        iteration_indicator = self.temporary_identifier()
+        self.writeline(('%s = 1' % iteration_indicator))
+    if (('loop' not in aliases) and ('loop' in find_undeclared(node.iter_child_nodes(only=('else_', 'test')), ('loop',)))):
+        self.writeline(("l_loop = environment.undefined(%r, name='loop')" % ("'loop' is undefined. the filter section of a loop as well as the else block doesn't have access to the special 'loop' variable of the current loop.  Because there is no parent loop it's undefined.  Happened in loop on %s" % self.position(node))))
+    self.writeline('for ', node)
+    self.visit(node.target, loop_frame)
+    self.write(((extended_loop and ', l_loop in LoopContext(') or ' in '))
+    if (extended_loop and (node.test is not None)):
+        self.write('(')
+        self.visit(node.target, loop_frame)
+        self.write(' for ')
+        self.visit(node.target, loop_frame)
+        self.write(' in ')
+        if node.recursive:
+            self.write('reciter')
+        else:
+            self.visit(node.iter, loop_frame)
+        self.write(' if (')
+        test_frame = loop_frame.copy()
+        self.visit(node.test, test_frame)
+        self.write('))')
+    elif node.recursive:
+        self.write('reciter')
+    else:
+        self.visit(node.iter, loop_frame)
+    if node.recursive:
+        self.write(', recurse=loop_render_func):')
+    else:
+        self.write(((extended_loop and '):') or ':'))
+    if ((not extended_loop) and (node.test is not None)):
+        self.indent()
+        self.writeline('if not ')
+        self.visit(node.test, loop_frame)
+        self.write(':')
+        self.indent()
+        self.writeline('continue')
+        self.outdent(2)
+    self.indent()
+    self.blockvisit(node.body, loop_frame)
+    if node.else_:
+        self.writeline(('%s = 0' % iteration_indicator))
+    self.outdent()
+    if node.else_:
+        self.writeline(('if %s:' % iteration_indicator))
+        self.indent()
+        self.blockvisit(node.else_, loop_frame)
+        self.outdent()
+    if (not node.recursive):
+        self.pop_scope(aliases, loop_frame)
+    if node.recursive:
+        self.return_buffer_contents(loop_frame)
+        self.outdent()
+        self.start_write(frame, node)
+        self.write('loop(')
+        self.visit(node.iter, frame)
+        self.write(', loop)')
+        self.end_write(frame)

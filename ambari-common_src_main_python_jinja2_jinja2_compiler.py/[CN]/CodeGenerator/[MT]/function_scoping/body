@@ -1,0 +1,31 @@
+def function_scoping(self, node, frame, children=None, find_special=True):
+    "In Jinja a few statements require the help of anonymous\n        functions.  Those are currently macros and call blocks and in\n        the future also recursive loops.  As there is currently\n        technical limitation that doesn't allow reading and writing a\n        variable in a scope where the initial value is coming from an\n        outer scope, this function tries to fall back with a common\n        error message.  Additionally the frame passed is modified so\n        that the argumetns are collected and callers are looked up.\n\n        This will return the modified frame.\n        "
+    if (children is None):
+        children = node.iter_child_nodes()
+    children = list(children)
+    func_frame = frame.inner()
+    func_frame.inspect(children, hard_scope=True)
+    overriden_closure_vars = ((func_frame.identifiers.undeclared & func_frame.identifiers.declared) & (func_frame.identifiers.declared_locally | func_frame.identifiers.declared_parameter))
+    if overriden_closure_vars:
+        self.fail(("It's not possible to set and access variables derived from an outer scope! (affects: %s)" % ', '.join(sorted(overriden_closure_vars))), node.lineno)
+    func_frame.identifiers.undeclared -= (func_frame.identifiers.undeclared & func_frame.identifiers.declared)
+    if (not find_special):
+        return func_frame
+    func_frame.accesses_kwargs = False
+    func_frame.accesses_varargs = False
+    func_frame.accesses_caller = False
+    func_frame.arguments = args = [('l_' + x.name) for x in node.args]
+    undeclared = find_undeclared(children, ('caller', 'kwargs', 'varargs'))
+    if ('caller' in undeclared):
+        func_frame.accesses_caller = True
+        func_frame.identifiers.add_special('caller')
+        args.append('l_caller')
+    if ('kwargs' in undeclared):
+        func_frame.accesses_kwargs = True
+        func_frame.identifiers.add_special('kwargs')
+        args.append('l_kwargs')
+    if ('varargs' in undeclared):
+        func_frame.accesses_varargs = True
+        func_frame.identifiers.add_special('varargs')
+        args.append('l_varargs')
+    return func_frame

@@ -1,0 +1,78 @@
+def tokeniter(self, source, name, filename=None, state=None):
+    'This method tokenizes the text and returns the tokens in a\n        generator.  Use this method if you just want to tokenize a template.\n        '
+    source = '\n'.join(unicode(source).splitlines())
+    pos = 0
+    lineno = 1
+    stack = ['root']
+    if ((state is not None) and (state != 'root')):
+        assert (state in ('variable', 'block')), 'invalid state'
+        stack.append((state + '_begin'))
+    else:
+        state = 'root'
+    statetokens = self.rules[stack[(-1)]]
+    source_length = len(source)
+    balancing_stack = []
+    while 1:
+        for (regex, tokens, new_state) in statetokens:
+            m = regex.match(source, pos)
+            if (m is None):
+                continue
+            if (balancing_stack and (tokens in ('variable_end', 'block_end', 'linestatement_end'))):
+                continue
+            if isinstance(tokens, tuple):
+                for (idx, token) in enumerate(tokens):
+                    if (token.__class__ is Failure):
+                        raise token(lineno, filename)
+                    elif (token == '#bygroup'):
+                        for (key, value) in m.groupdict().iteritems():
+                            if (value is not None):
+                                yield (lineno, key, value)
+                                lineno += value.count('\n')
+                                break
+                        else:
+                            raise RuntimeError(('%r wanted to resolve the token dynamically but no group matched' % regex))
+                    else:
+                        data = m.group((idx + 1))
+                        if (data or (token not in ignore_if_empty)):
+                            yield (lineno, token, data)
+                        lineno += data.count('\n')
+            else:
+                data = m.group()
+                if (tokens == 'operator'):
+                    if (data == '{'):
+                        balancing_stack.append('}')
+                    elif (data == '('):
+                        balancing_stack.append(')')
+                    elif (data == '['):
+                        balancing_stack.append(']')
+                    elif (data in ('}', ')', ']')):
+                        if (not balancing_stack):
+                            raise TemplateSyntaxError(("unexpected '%s'" % data), lineno, name, filename)
+                        expected_op = balancing_stack.pop()
+                        if (expected_op != data):
+                            raise TemplateSyntaxError(("unexpected '%s', expected '%s'" % (data, expected_op)), lineno, name, filename)
+                if (data or (tokens not in ignore_if_empty)):
+                    yield (lineno, tokens, data)
+                lineno += data.count('\n')
+            pos2 = m.end()
+            if (new_state is not None):
+                if (new_state == '#pop'):
+                    stack.pop()
+                elif (new_state == '#bygroup'):
+                    for (key, value) in m.groupdict().iteritems():
+                        if (value is not None):
+                            stack.append(key)
+                            break
+                    else:
+                        raise RuntimeError(('%r wanted to resolve the new state dynamically but no group matched' % regex))
+                else:
+                    stack.append(new_state)
+                statetokens = self.rules[stack[(-1)]]
+            elif (pos2 == pos):
+                raise RuntimeError(('%r yielded empty string without stack change' % regex))
+            pos = pos2
+            break
+        else:
+            if (pos >= source_length):
+                return
+            raise TemplateSyntaxError(('unexpected char %r at %d' % (source[pos], pos)), lineno, name, filename)

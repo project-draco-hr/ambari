@@ -1,0 +1,25 @@
+def translate_exception(exc_info, initial_skip=0):
+    'If passed an exc_info it will automatically rewrite the exceptions\n    all the way down to the correct line numbers and frames.\n    '
+    tb = exc_info[2]
+    frames = []
+    for x in xrange(initial_skip):
+        if (tb is not None):
+            tb = tb.tb_next
+    initial_tb = tb
+    while (tb is not None):
+        if (tb.tb_frame.f_code in internal_code):
+            tb = tb.tb_next
+            continue
+        next = tb.tb_next
+        template = tb.tb_frame.f_globals.get('__jinja_template__')
+        if (template is not None):
+            lineno = template.get_corresponding_lineno(tb.tb_lineno)
+            tb = fake_exc_info((exc_info[:2] + (tb,)), template.filename, lineno)[2]
+        frames.append(TracebackFrameProxy(tb))
+        tb = next
+    if (not frames):
+        raise exc_info[0], exc_info[1], exc_info[2]
+    traceback = ProcessedTraceback(exc_info[0], exc_info[1], frames)
+    if (tb_set_next is not None):
+        traceback.chain_frames()
+    return traceback

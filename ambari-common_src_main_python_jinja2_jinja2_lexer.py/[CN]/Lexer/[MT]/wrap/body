@@ -1,0 +1,34 @@
+def wrap(self, stream, name=None, filename=None):
+    'This is called with the stream as returned by `tokenize` and wraps\n        every token in a :class:`Token` and converts the value.\n        '
+    for (lineno, token, value) in stream:
+        if (token in ignored_tokens):
+            continue
+        elif (token == 'linestatement_begin'):
+            token = 'block_begin'
+        elif (token == 'linestatement_end'):
+            token = 'block_end'
+        elif (token in ('raw_begin', 'raw_end')):
+            continue
+        elif (token == 'data'):
+            value = self._normalize_newlines(value)
+        elif (token == 'keyword'):
+            token = value
+        elif (token == 'name'):
+            value = str(value)
+        elif (token == 'string'):
+            try:
+                value = self._normalize_newlines(value[1:(-1)]).encode('ascii', 'backslashreplace').decode('unicode-escape')
+            except Exception as e:
+                msg = str(e).split(':')[(-1)].strip()
+                raise TemplateSyntaxError(msg, lineno, name, filename)
+            try:
+                value = str(value)
+            except UnicodeError:
+                pass
+        elif (token == 'integer'):
+            value = int(value)
+        elif (token == 'float'):
+            value = float(value)
+        elif (token == 'operator'):
+            token = operators[value]
+        yield Token(lineno, token, value)

@@ -1,0 +1,50 @@
+def compile_templates(self, target, extensions=None, filter_func=None, zip='deflated', log_function=None, ignore_errors=True, py_compile=False):
+    "Compiles all the templates the loader can find, compiles them\n        and stores them in `target`.  If `zip` is `None`, instead of in a\n        zipfile, the templates will be will be stored in a directory.\n        By default a deflate zip algorithm is used, to switch to\n        the stored algorithm, `zip` can be set to ``'stored'``.\n\n        `extensions` and `filter_func` are passed to :meth:`list_templates`.\n        Each template returned will be compiled to the target folder or\n        zipfile.\n\n        By default template compilation errors are ignored.  In case a\n        log function is provided, errors are logged.  If you want template\n        syntax errors to abort the compilation you can set `ignore_errors`\n        to `False` and you will get an exception on syntax errors.\n\n        If `py_compile` is set to `True` .pyc files will be written to the\n        target instead of standard .py files.\n\n        .. versionadded:: 2.4\n        "
+    from jinja2.loaders import ModuleLoader
+    if (log_function is None):
+        log_function = (lambda x: None)
+    if py_compile:
+        import imp, struct, marshal
+        py_header = (imp.get_magic() + u'\xff\xff\xff\xff'.encode('iso-8859-15'))
+
+    def write_file(filename, data, mode):
+        if zip:
+            info = ZipInfo(filename)
+            info.external_attr = (493 << 16L)
+            zip_file.writestr(info, data)
+        else:
+            f = open(os.path.join(target, filename), mode)
+            try:
+                f.write(data)
+            finally:
+                f.close()
+    if (zip is not None):
+        from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED, ZIP_STORED
+        zip_file = ZipFile(target, 'w', dict(deflated=ZIP_DEFLATED, stored=ZIP_STORED)[zip])
+        log_function(('Compiling into Zip archive "%s"' % target))
+    else:
+        if (not os.path.isdir(target)):
+            os.makedirs(target)
+        log_function(('Compiling into folder "%s"' % target))
+    try:
+        for name in self.list_templates(extensions, filter_func):
+            (source, filename, _) = self.loader.get_source(self, name)
+            try:
+                code = self.compile(source, name, filename, True, True)
+            except TemplateSyntaxError as e:
+                if (not ignore_errors):
+                    raise
+                log_function(('Could not compile "%s": %s' % (name, e)))
+                continue
+            filename = ModuleLoader.get_module_filename(name)
+            if py_compile:
+                c = self._compile(code, _encode_filename(filename))
+                write_file((filename + 'c'), (py_header + marshal.dumps(c)), 'wb')
+                log_function(('Byte-compiled "%s" as %s' % (name, (filename + 'c'))))
+            else:
+                write_file(filename, code, 'w')
+                log_function(('Compiled "%s" as %s' % (name, filename)))
+    finally:
+        if zip:
+            zip_file.close()
+    log_function('Finished compiling templates')

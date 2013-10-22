@@ -1,0 +1,34 @@
+def parse_from(self):
+    node = nodes.FromImport(lineno=next(self.stream).lineno)
+    node.template = self.parse_expression()
+    self.stream.expect('name:import')
+    node.names = []
+
+    def parse_context():
+        if ((self.stream.current.value in ('with', 'without')) and self.stream.look().test('name:context')):
+            node.with_context = (next(self.stream).value == 'with')
+            self.stream.skip()
+            return True
+        return False
+    while 1:
+        if node.names:
+            self.stream.expect('comma')
+        if (self.stream.current.type == 'name'):
+            if parse_context():
+                break
+            target = self.parse_assign_target(name_only=True)
+            if target.name.startswith('_'):
+                self.fail('names starting with an underline can not be imported', target.lineno, exc=TemplateAssertionError)
+            if self.stream.skip_if('name:as'):
+                alias = self.parse_assign_target(name_only=True)
+                node.names.append((target.name, alias.name))
+            else:
+                node.names.append(target.name)
+            if (parse_context() or (self.stream.current.type != 'comma')):
+                break
+        else:
+            break
+    if (not hasattr(node, 'with_context')):
+        node.with_context = False
+        self.stream.skip_if('comma')
+    return node

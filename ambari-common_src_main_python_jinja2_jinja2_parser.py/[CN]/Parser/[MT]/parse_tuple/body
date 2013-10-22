@@ -1,0 +1,28 @@
+def parse_tuple(self, simplified=False, with_condexpr=True, extra_end_rules=None, explicit_parentheses=False):
+    "Works like `parse_expression` but if multiple expressions are\n        delimited by a comma a :class:`~jinja2.nodes.Tuple` node is created.\n        This method could also return a regular expression instead of a tuple\n        if no commas where found.\n\n        The default parsing mode is a full tuple.  If `simplified` is `True`\n        only names and literals are parsed.  The `no_condexpr` parameter is\n        forwarded to :meth:`parse_expression`.\n\n        Because tuples do not require delimiters and may end in a bogus comma\n        an extra hint is needed that marks the end of a tuple.  For example\n        for loops support tuples between `for` and `in`.  In that case the\n        `extra_end_rules` is set to ``['name:in']``.\n\n        `explicit_parentheses` is true if the parsing was triggered by an\n        expression in parentheses.  This is used to figure out if an empty\n        tuple is a valid expression or not.\n        "
+    lineno = self.stream.current.lineno
+    if simplified:
+        parse = self.parse_primary
+    elif with_condexpr:
+        parse = self.parse_expression
+    else:
+        parse = (lambda : self.parse_expression(with_condexpr=False))
+    args = []
+    is_tuple = False
+    while 1:
+        if args:
+            self.stream.expect('comma')
+        if self.is_tuple_end(extra_end_rules):
+            break
+        args.append(parse())
+        if (self.stream.current.type == 'comma'):
+            is_tuple = True
+        else:
+            break
+        lineno = self.stream.current.lineno
+    if (not is_tuple):
+        if args:
+            return args[0]
+        if (not explicit_parentheses):
+            self.fail(("Expected an expression, got '%s'" % describe_token(self.stream.current)))
+    return nodes.Tuple(args, 'load', lineno=lineno)

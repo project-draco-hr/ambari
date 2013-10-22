@@ -1,0 +1,28 @@
+def _parse_block(self, parser, allow_pluralize):
+    'Parse until the next block tag with a given name.'
+    referenced = []
+    buf = []
+    while 1:
+        if (parser.stream.current.type == 'data'):
+            buf.append(parser.stream.current.value.replace('%', '%%'))
+            next(parser.stream)
+        elif (parser.stream.current.type == 'variable_begin'):
+            next(parser.stream)
+            name = parser.stream.expect('name').value
+            referenced.append(name)
+            buf.append(('%%(%s)s' % name))
+            parser.stream.expect('variable_end')
+        elif (parser.stream.current.type == 'block_begin'):
+            next(parser.stream)
+            if parser.stream.current.test('name:endtrans'):
+                break
+            elif parser.stream.current.test('name:pluralize'):
+                if allow_pluralize:
+                    break
+                parser.fail('a translatable section can have only one pluralize section')
+            parser.fail('control structures in translatable sections are not allowed')
+        elif parser.stream.eos:
+            parser.fail('unclosed translation block')
+        else:
+            assert False, 'internal parser error'
+    return (referenced, concat(buf))

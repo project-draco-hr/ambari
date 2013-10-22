@@ -1,0 +1,21 @@
+def visit_Filter(self, node, frame):
+    self.write((self.filters[node.name] + '('))
+    func = self.environment.filters.get(node.name)
+    if (func is None):
+        self.fail(('no filter named %r' % node.name), node.lineno)
+    if getattr(func, 'contextfilter', False):
+        self.write('context, ')
+    elif getattr(func, 'evalcontextfilter', False):
+        self.write('context.eval_ctx, ')
+    elif getattr(func, 'environmentfilter', False):
+        self.write('environment, ')
+    if (node.node is not None):
+        self.visit(node.node, frame)
+    elif frame.eval_ctx.volatile:
+        self.write(('(context.eval_ctx.autoescape and Markup(concat(%s)) or concat(%s))' % (frame.buffer, frame.buffer)))
+    elif frame.eval_ctx.autoescape:
+        self.write(('Markup(concat(%s))' % frame.buffer))
+    else:
+        self.write(('concat(%s)' % frame.buffer))
+    self.signature(node, frame)
+    self.write(')')

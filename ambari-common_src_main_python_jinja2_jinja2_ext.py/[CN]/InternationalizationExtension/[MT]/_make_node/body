@@ -1,0 +1,22 @@
+def _make_node(self, singular, plural, variables, plural_expr, vars_referenced, num_called_num):
+    'Generates a useful node from the data provided.'
+    if ((not vars_referenced) and (not self.environment.newstyle_gettext)):
+        singular = singular.replace('%%', '%')
+        if plural:
+            plural = plural.replace('%%', '%')
+    if (plural_expr is None):
+        gettext = nodes.Name('gettext', 'load')
+        node = nodes.Call(gettext, [nodes.Const(singular)], [], None, None)
+    else:
+        ngettext = nodes.Name('ngettext', 'load')
+        node = nodes.Call(ngettext, [nodes.Const(singular), nodes.Const(plural), plural_expr], [], None, None)
+    if self.environment.newstyle_gettext:
+        for (key, value) in variables.iteritems():
+            if (num_called_num and (key == 'num')):
+                continue
+            node.kwargs.append(nodes.Keyword(key, value))
+    else:
+        node = nodes.MarkSafeIfAutoescape(node)
+        if variables:
+            node = nodes.Mod(node, nodes.Dict([nodes.Pair(nodes.Const(key), value) for (key, value) in variables.items()]))
+    return nodes.Output([node])

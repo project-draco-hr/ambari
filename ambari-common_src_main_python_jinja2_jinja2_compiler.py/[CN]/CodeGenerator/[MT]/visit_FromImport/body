@@ -1,0 +1,38 @@
+def visit_FromImport(self, node, frame):
+    'Visit named imports.'
+    self.newline(node)
+    self.write('included_template = environment.get_template(')
+    self.visit(node.template, frame)
+    self.write((', %r).' % self.name))
+    if node.with_context:
+        self.write('make_module(context.parent, True)')
+    else:
+        self.write('module')
+    var_names = []
+    discarded_names = []
+    for name in node.names:
+        if isinstance(name, tuple):
+            (name, alias) = name
+        else:
+            alias = name
+        self.writeline(('l_%s = getattr(included_template, %r, missing)' % (alias, name)))
+        self.writeline(('if l_%s is missing:' % alias))
+        self.indent()
+        self.writeline(('l_%s = environment.undefined(%r %% included_template.__name__, name=%r)' % (alias, ('the template %%r (imported on %s) does not export the requested name %s' % (self.position(node), repr(name))), name)))
+        self.outdent()
+        if frame.toplevel:
+            var_names.append(alias)
+            if (not alias.startswith('_')):
+                discarded_names.append(alias)
+        frame.assigned_names.add(alias)
+    if var_names:
+        if (len(var_names) == 1):
+            name = var_names[0]
+            self.writeline(('context.vars[%r] = l_%s' % (name, name)))
+        else:
+            self.writeline(('context.vars.update({%s})' % ', '.join((('%r: l_%s' % (name, name)) for name in var_names))))
+    if discarded_names:
+        if (len(discarded_names) == 1):
+            self.writeline(('context.exported_vars.discard(%r)' % discarded_names[0]))
+        else:
+            self.writeline(('context.exported_vars.difference_update((%s))' % ', '.join(map(repr, discarded_names))))

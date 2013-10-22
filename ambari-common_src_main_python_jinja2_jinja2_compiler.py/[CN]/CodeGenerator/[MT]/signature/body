@@ -1,0 +1,41 @@
+def signature(self, node, frame, extra_kwargs=None):
+    'Writes a function call to the stream for the current node.\n        A leading comma is added automatically.  The extra keyword\n        arguments may not include python keywords otherwise a syntax\n        error could occour.  The extra keyword arguments should be given\n        as python dict.\n        '
+    kwarg_workaround = False
+    for kwarg in chain((x.key for x in node.kwargs), (extra_kwargs or ())):
+        if is_python_keyword(kwarg):
+            kwarg_workaround = True
+            break
+    for arg in node.args:
+        self.write(', ')
+        self.visit(arg, frame)
+    if (not kwarg_workaround):
+        for kwarg in node.kwargs:
+            self.write(', ')
+            self.visit(kwarg, frame)
+        if (extra_kwargs is not None):
+            for (key, value) in extra_kwargs.iteritems():
+                self.write((', %s=%s' % (key, value)))
+    if node.dyn_args:
+        self.write(', *')
+        self.visit(node.dyn_args, frame)
+    if kwarg_workaround:
+        if (node.dyn_kwargs is not None):
+            self.write(', **dict({')
+        else:
+            self.write(', **{')
+        for kwarg in node.kwargs:
+            self.write(('%r: ' % kwarg.key))
+            self.visit(kwarg.value, frame)
+            self.write(', ')
+        if (extra_kwargs is not None):
+            for (key, value) in extra_kwargs.iteritems():
+                self.write(('%r: %s, ' % (key, value)))
+        if (node.dyn_kwargs is not None):
+            self.write('}, **')
+            self.visit(node.dyn_kwargs, frame)
+            self.write(')')
+        else:
+            self.write('}')
+    elif (node.dyn_kwargs is not None):
+        self.write(', **')
+        self.visit(node.dyn_kwargs, frame)

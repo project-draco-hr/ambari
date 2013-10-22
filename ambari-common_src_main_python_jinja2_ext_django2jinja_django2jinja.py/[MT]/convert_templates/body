@@ -1,0 +1,37 @@
+def convert_templates(output_dir, extensions=('.html', '.txt'), writer=None, callback=None):
+    'Iterates over all templates in the template dirs configured and\n    translates them and writes the new templates into the output directory.\n    '
+    if (writer is None):
+        writer = Writer()
+
+    def filter_templates(files):
+        for filename in files:
+            ifilename = filename.lower()
+            for extension in extensions:
+                if ifilename.endswith(extension):
+                    yield filename
+
+    def translate(f, loadname):
+        template = loader.get_template(loadname)
+        original = writer.stream
+        writer.stream = f
+        writer.body(template.nodelist)
+        writer.stream = original
+    if (callback is None):
+
+        def callback(template):
+            print template
+    for directory in settings.TEMPLATE_DIRS:
+        for (dirname, _, files) in os.walk(directory):
+            dirname = dirname[(len(directory) + 1):]
+            for filename in filter_templates(files):
+                source = os.path.normpath(os.path.join(dirname, filename))
+                target = os.path.join(output_dir, dirname, filename)
+                basetarget = os.path.dirname(target)
+                if (not os.path.exists(basetarget)):
+                    os.makedirs(basetarget)
+                callback(source)
+                f = file(target, 'w')
+                try:
+                    translate(f, source)
+                finally:
+                    f.close()

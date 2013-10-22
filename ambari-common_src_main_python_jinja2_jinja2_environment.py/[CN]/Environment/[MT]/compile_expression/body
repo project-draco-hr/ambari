@@ -1,0 +1,16 @@
+def compile_expression(self, source, undefined_to_none=True):
+    'A handy helper method that returns a callable that accepts keyword\n        arguments that appear as variables in the expression.  If called it\n        returns the result of the expression.\n\n        This is useful if applications want to use the same rules as Jinja\n        in template "configuration files" or similar situations.\n\n        Example usage:\n\n        >>> env = Environment()\n        >>> expr = env.compile_expression(\'foo == 42\')\n        >>> expr(foo=23)\n        False\n        >>> expr(foo=42)\n        True\n\n        Per default the return value is converted to `None` if the\n        expression returns an undefined value.  This can be changed\n        by setting `undefined_to_none` to `False`.\n\n        >>> env.compile_expression(\'var\')() is None\n        True\n        >>> env.compile_expression(\'var\', undefined_to_none=False)()\n        Undefined\n\n        .. versionadded:: 2.1\n        '
+    parser = Parser(self, source, state='variable')
+    exc_info = None
+    try:
+        expr = parser.parse_expression()
+        if (not parser.stream.eos):
+            raise TemplateSyntaxError('chunk after expression', parser.stream.current.lineno, None, None)
+        expr.set_environment(self)
+    except TemplateSyntaxError:
+        exc_info = sys.exc_info()
+    if (exc_info is not None):
+        self.handle_exception(exc_info, source_hint=source)
+    body = [nodes.Assign(nodes.Name('result', 'store'), expr, lineno=1)]
+    template = self.from_string(nodes.Template(body, lineno=1))
+    return TemplateExpression(template, undefined_to_none)

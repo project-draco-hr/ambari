@@ -1,0 +1,48 @@
+@node(i18n_tags.BlockTranslateNode)
+def translate_block(writer, node):
+    first_var = []
+    variables = set()
+
+    def touch_var(name):
+        variables.add(name)
+        if (not first_var):
+            first_var.append(name)
+
+    def dump_token_list(tokens):
+        for token in tokens:
+            if (token.token_type == TOKEN_TEXT):
+                writer.write(token.contents)
+            elif (token.token_type == TOKEN_VAR):
+                writer.print_expr(token.contents)
+                touch_var(token.contents)
+    writer.warn('i18n system used, make sure to install translations', node)
+    writer.start_block()
+    writer.write('trans')
+    idx = (-1)
+    for (idx, (key, var)) in enumerate(node.extra_context.items()):
+        if idx:
+            writer.write(',')
+        writer.write((' %s=' % key))
+        touch_var(key)
+        writer.node(var.filter_expression)
+    have_plural = False
+    plural_var = None
+    if (node.plural and node.countervar and node.counter):
+        have_plural = True
+        plural_var = node.countervar
+        if (plural_var not in variables):
+            if (idx > (-1)):
+                writer.write(',')
+            touch_var(plural_var)
+            writer.write((' %s=' % plural_var))
+            writer.node(node.counter)
+    writer.end_block()
+    dump_token_list(node.singular)
+    if (node.plural and node.countervar and node.counter):
+        writer.start_block()
+        writer.write('pluralize')
+        if (node.countervar != first_var[0]):
+            writer.write((' ' + node.countervar))
+        writer.end_block()
+        dump_token_list(node.plural)
+    writer.tag('endtrans')

@@ -1,0 +1,19 @@
+def visit_If(self, node):
+    self.visit(node.test)
+    real_identifiers = self.identifiers
+    old_names = (real_identifiers.declared_locally | real_identifiers.declared_parameter)
+
+    def inner_visit(nodes):
+        if (not nodes):
+            return set()
+        self.identifiers = real_identifiers.copy()
+        for subnode in nodes:
+            self.visit(subnode)
+        rv = (self.identifiers.declared_locally - old_names)
+        real_identifiers.undeclared.update(self.identifiers.undeclared)
+        self.identifiers = real_identifiers
+        return rv
+    body = inner_visit(node.body)
+    else_ = inner_visit((node.else_ or ()))
+    real_identifiers.undeclared.update((body.symmetric_difference(else_) - real_identifiers.declared))
+    real_identifiers.declared_locally.update((body | else_))

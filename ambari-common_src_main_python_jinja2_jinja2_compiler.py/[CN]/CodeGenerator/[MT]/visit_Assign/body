@@ -1,0 +1,27 @@
+def visit_Assign(self, node, frame):
+    self.newline(node)
+    if frame.toplevel:
+        assignment_frame = frame.copy()
+        assignment_frame.toplevel_assignments = set()
+    else:
+        assignment_frame = frame
+    self.visit(node.target, assignment_frame)
+    self.write(' = ')
+    self.visit(node.node, frame)
+    if frame.toplevel:
+        public_names = [x for x in assignment_frame.toplevel_assignments if (not x.startswith('_'))]
+        if (len(assignment_frame.toplevel_assignments) == 1):
+            name = next(iter(assignment_frame.toplevel_assignments))
+            self.writeline(('context.vars[%r] = l_%s' % (name, name)))
+        else:
+            self.writeline('context.vars.update({')
+            for (idx, name) in enumerate(assignment_frame.toplevel_assignments):
+                if idx:
+                    self.write(', ')
+                self.write(('%r: l_%s' % (name, name)))
+            self.write('})')
+        if public_names:
+            if (len(public_names) == 1):
+                self.writeline(('context.exported_vars.add(%r)' % public_names[0]))
+            else:
+                self.writeline(('context.exported_vars.update((%s))' % ', '.join(map(repr, public_names))))
