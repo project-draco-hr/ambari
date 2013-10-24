@@ -1,14 +1,14 @@
-def run_file(self, command, file, tmpoutfile, tmperrfile):
-    '\n    Executes the specified python file in a separate subprocess.\n    Method returns only when the subprocess is finished.\n    '
+def run_file(self, script, script_params, tmpoutfile, tmperrfile, timeout):
+    '\n    Executes the specified python file in a separate subprocess.\n    Method returns only when the subprocess is finished.\n    Params arg is a list of script parameters\n    Timeout meaning: how many seconds should pass before script execution\n    is forcibly terminated\n    '
     tmpout = open(tmpoutfile, 'w')
     tmperr = open(tmperrfile, 'w')
-    pythonCommand = self.pythonCommand(file)
+    pythonCommand = self.pythonCommand(script, script_params)
     logger.info(('Running command ' + pprint.pformat(pythonCommand)))
-    process = self.lauch_python_subprocess(pythonCommand, tmpout, tmperr)
+    process = self.launch_python_subprocess(pythonCommand, tmpout, tmperr)
     logger.debug('Launching watchdog thread')
     self.event.clear()
     self.python_process_has_been_killed = False
-    thread = Thread(target=self.python_watchdog_func, args=(process,))
+    thread = Thread(target=self.python_watchdog_func, args=(process, timeout))
     thread.start()
     process.communicate()
     self.event.set()
@@ -18,7 +18,7 @@ def run_file(self, command, file, tmpoutfile, tmperrfile):
     out = open(tmpoutfile, 'r').read()
     error = open(tmperrfile, 'r').read()
     if self.python_process_has_been_killed:
-        error = (str(error) + '\n Puppet has been killed due to timeout')
+        error = (str(error) + '\n Python script has been killed due to timeout')
         returncode = 999
     result = self.condenseOutput(out, error, returncode)
     logger.info(('Result: %s' % result))

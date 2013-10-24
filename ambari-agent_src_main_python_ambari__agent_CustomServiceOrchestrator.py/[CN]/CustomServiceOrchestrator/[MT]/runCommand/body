@@ -1,0 +1,25 @@
+def runCommand(self, command, tmpoutfile, tmperrfile):
+    try:
+        service_name = command['serviceName']
+        component_name = command['role']
+        stack_name = command['stackName']
+        stack_version = command['stackVersion']
+        script_type = command['scriptType']
+        script = command['script']
+        command_name = command['roleCommand']
+        timeout = int(command['timeout'])
+        base_dir = self.file_cache.get_service_base_dir(stack_name, stack_version, service_name, component_name)
+        script_path = self.resolve_script_path(base_dir, script, script_type)
+        if (script_type == self.SCRIPT_TYPE_PYTHON):
+            json_path = self.dump_command_to_json(command)
+            script_params = [command_name, json_path, base_dir]
+            ret = self.python_executor.run_file(script_path, script_params, tmpoutfile, tmperrfile, timeout)
+        else:
+            message = 'Unknown script type {0}'.format(script_type)
+            raise AgentException(message)
+    except Exception:
+        (exc_type, exc_obj, exc_tb) = sys.exc_info()
+        message = 'Catched an exception while executing custom service command: {0}: {1}'.format(exc_type, exc_obj)
+        logger.error(message)
+        ret = {'stdout': message, 'stderr': message, 'exitCode': 1, }
+    return ret

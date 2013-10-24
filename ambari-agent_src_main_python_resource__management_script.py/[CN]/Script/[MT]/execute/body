@@ -1,0 +1,37 @@
+def execute(self):
+    '\n    Sets up logging;\n    Parses command parameters and executes method relevant to command type\n    '
+    logger = logging.getLogger('resource_management')
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    chout = logging.StreamHandler(sys.stdout)
+    chout.setLevel(logging.DEBUG)
+    chout.setFormatter(formatter)
+    cherr = logging.StreamHandler(sys.stderr)
+    cherr.setLevel(logging.ERROR)
+    cherr.setFormatter(formatter)
+    logger.addHandler(cherr)
+    if (len(sys.argv) < (1 + 3)):
+        logger.error('Script expects at least 3 arguments')
+        sys.exit(1)
+    command_type = str.lower(sys.argv[1])
+    command_data_file = sys.argv[2]
+    basedir = sys.argv[3]
+    try:
+        with open(command_data_file, 'r') as f:
+            pass
+            params = json.load(f)
+    except IOError:
+        logger.exception('Can not read json file with command parameters: ')
+        sys.exit(1)
+    self_methods = dir(self)
+    if (not (command_type in self_methods)):
+        logger.error("Script {0} has not method '{1}'".format(sys.argv[0], command_type))
+        sys.exit(1)
+    method = getattr(self, command_type)
+    try:
+        with Environment(basedir, params) as env:
+            method(env, params)
+        env.run()
+    except Fail:
+        logger.exception("Got exception while executing method '{0}':".format(command_type))
+        sys.exit(1)
