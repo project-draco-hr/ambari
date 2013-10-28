@@ -1,9 +1,26 @@
 {
   Resource.Type type=Resource.Type.Component;
   AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  Service service=createNiceMock(Service.class);
   RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
-  managementController.createComponents(AbstractResourceProviderTest.Matcher.getComponentRequestSet("Cluster100","Service100","Component100",null,null));
-  replay(managementController,response);
+  AmbariMetaInfo ambariMetaInfo=createNiceMock(AmbariMetaInfo.class);
+  ServiceComponentFactory serviceComponentFactory=createNiceMock(ServiceComponentFactory.class);
+  ServiceComponent serviceComponent=createNiceMock(ServiceComponent.class);
+  StackId stackId=createNiceMock(StackId.class);
+  expect(managementController.getClusters()).andReturn(clusters);
+  expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo);
+  expect(managementController.getServiceComponentFactory()).andReturn(serviceComponentFactory);
+  expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
+  expect(cluster.getService("Service100")).andReturn(service).anyTimes();
+  expect(service.getDesiredStackVersion()).andReturn(stackId).anyTimes();
+  expect(service.getName()).andReturn("Service100").anyTimes();
+  expect(stackId.getStackName()).andReturn("HDP").anyTimes();
+  expect(stackId.getStackVersion()).andReturn("99").anyTimes();
+  expect(ambariMetaInfo.isValidServiceComponent("HDP","99","Service100","Component100")).andReturn(true).anyTimes();
+  expect(serviceComponentFactory.createNew(service,"Component100")).andReturn(serviceComponent);
+  replay(managementController,response,clusters,cluster,service,stackId,ambariMetaInfo,serviceComponentFactory,serviceComponent);
   ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
   Set<Map<String,Object>> propertySet=new LinkedHashSet<Map<String,Object>>();
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
@@ -13,5 +30,5 @@
   propertySet.add(properties);
   Request request=PropertyHelper.getCreateRequest(propertySet,null);
   provider.createResources(request);
-  verify(managementController,response);
+  verify(managementController,response,clusters,cluster,service,stackId,ambariMetaInfo,serviceComponentFactory,serviceComponent);
 }
