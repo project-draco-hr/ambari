@@ -1,0 +1,122 @@
+{
+  String stackVersion="HDP-2.0.6";
+  String clusterName="c2";
+  String hostName="h3";
+  clusters.addCluster(clusterName);
+  clusters.addHost(hostName);
+  clusters.getHost(hostName).setOsType("centos5");
+  clusters.getHost(hostName).persist();
+  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId(stackVersion));
+  metaInfo.init();
+  clusters.mapHostToCluster(hostName,clusterName);
+  Cluster cluster=clusters.getCluster(clusterName);
+  ServiceComponentHost sch1=createNewServiceComponentHost(cluster,"HDFS","NAMENODE",hostName,false);
+  ServiceComponentHost sch2=createNewServiceComponentHost(cluster,"HDFS","DATANODE",hostName,false);
+  ServiceComponentHost sch3=createNewServiceComponentHost(cluster,"MAPREDUCE2","HISTORYSERVER",hostName,false);
+  sch1.setDesiredState(State.INSTALLED);
+  sch1.setState(State.INSTALLING);
+  sch1.setStackVersion(new StackId(stackVersion));
+  sch2.setDesiredState(State.INSTALLED);
+  sch2.setState(State.INSTALLING);
+  sch2.setStackVersion(new StackId(stackVersion));
+  sch3.setDesiredState(State.INSTALLED);
+  sch3.setState(State.INSTALLING);
+  sch3.setStackVersion(new StackId(stackVersion));
+  Assert.assertFalse(sch1.convertToResponse().isStaleConfig());
+  Assert.assertFalse(sch2.convertToResponse().isStaleConfig());
+  makeConfig(cluster,"global","version1",new HashMap<String,String>(){
+{
+      put("a","b");
+      put("dfs_namenode_name_dir","/foo1");
+      put("mapred_log_dir_prefix","/foo2");
+    }
+  }
+);
+  Map<String,Map<String,String>> actual=new HashMap<String,Map<String,String>>(){
+{
+      put("global",new HashMap<String,String>(){
+{
+          put("tag","version1");
+        }
+      }
+);
+    }
+  }
+;
+  sch1.updateActualConfigs(actual);
+  sch2.updateActualConfigs(actual);
+  sch3.updateActualConfigs(actual);
+  makeConfig(cluster,"foo","version1",new HashMap<String,String>(){
+{
+      put("a","c");
+    }
+  }
+);
+  Assert.assertFalse(sch1.convertToResponse().isStaleConfig());
+  Assert.assertFalse(sch2.convertToResponse().isStaleConfig());
+  makeConfig(cluster,"hdfs-site","version1",new HashMap<String,String>(){
+{
+      put("a","b");
+    }
+  }
+);
+  Assert.assertTrue(sch1.convertToResponse().isStaleConfig());
+  Assert.assertTrue(sch2.convertToResponse().isStaleConfig());
+  actual.put("hdfs-site",new HashMap<String,String>(){
+{
+      put("tag","version1");
+    }
+  }
+);
+  sch1.updateActualConfigs(actual);
+  Assert.assertFalse(sch1.convertToResponse().isStaleConfig());
+  Assert.assertTrue(sch2.convertToResponse().isStaleConfig());
+  sch2.updateActualConfigs(actual);
+  Assert.assertFalse(sch1.convertToResponse().isStaleConfig());
+  Assert.assertFalse(sch2.convertToResponse().isStaleConfig());
+  makeConfig(cluster,"hdfs-site","version2",new HashMap<String,String>(){
+{
+      put("dfs.journalnode.http-address","http://foo");
+    }
+  }
+);
+  Assert.assertTrue(sch1.convertToResponse().isStaleConfig());
+  Assert.assertTrue(sch2.convertToResponse().isStaleConfig());
+  actual.get("hdfs-site").put("tag","version2");
+  sch1.updateActualConfigs(actual);
+  sch2.updateActualConfigs(actual);
+  Assert.assertFalse(sch1.convertToResponse().isStaleConfig());
+  Assert.assertFalse(sch2.convertToResponse().isStaleConfig());
+  Host host=clusters.getHostsForCluster(cluster.getClusterName()).get(hostName);
+  Assert.assertNotNull(host);
+  Config c=configFactory.createNew(cluster,"hdfs-site",new HashMap<String,String>(){
+{
+      put("dfs.journalnode.http-address","http://goo");
+    }
+  }
+);
+  c.setVersionTag("version3");
+  c.persist();
+  cluster.addConfig(c);
+  host.addDesiredConfig(cluster.getClusterId(),true,"user",c);
+  Assert.assertTrue(sch1.convertToResponse().isStaleConfig());
+  Assert.assertTrue(sch2.convertToResponse().isStaleConfig());
+  actual.get("hdfs-site").put("host_override_tag","version3");
+  sch2.updateActualConfigs(actual);
+  Assert.assertTrue(sch1.convertToResponse().isStaleConfig());
+  Assert.assertFalse(sch2.convertToResponse().isStaleConfig());
+  sch1.updateActualConfigs(actual);
+  Assert.assertFalse(sch1.convertToResponse().isStaleConfig());
+  Assert.assertFalse(sch2.convertToResponse().isStaleConfig());
+  makeConfig(cluster,"global","version2",new HashMap<String,String>(){
+{
+      put("a","b");
+      put("dfs_namenode_name_dir","/foo3");
+      put("mapred_log_dir_prefix","/foo2");
+    }
+  }
+);
+  Assert.assertTrue(sch1.convertToResponse().isStaleConfig());
+  Assert.assertTrue(sch2.convertToResponse().isStaleConfig());
+  Assert.assertFalse(sch3.convertToResponse().isStaleConfig());
+}
