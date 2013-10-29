@@ -1,6 +1,5 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
 import optparse
-from pprint import pprint
 import shlex
 import sys
 import os
@@ -18,13 +17,14 @@ import time
 import getpass
 import socket
 import datetime
-import socket
 import tempfile
 import random
 import pwd
 VERBOSE = False
 SILENT = False
 SERVER_START_DEBUG = False
+OS = platform.dist()[0].lower()
+OS_UBUNTU = 'ubuntu'
 SETUP_ACTION = 'setup'
 START_ACTION = 'start'
 STOP_ACTION = 'stop'
@@ -46,8 +46,6 @@ SE_STATUS_DISABLED = 'disabled'
 SE_STATUS_ENABLED = 'enabled'
 SE_MODE_ENFORCING = 'enforcing'
 SE_MODE_PERMISSIVE = 'permissive'
-IP_TBLS_STATUS_CMD = '/sbin/service iptables status'
-IP_TBLS_IS_NOT_RUNNING = 'iptables: Firewall is not running.'
 ambari_provider_module_option = ''
 ambari_provider_module = os.environ.get('AMBARI_PROVIDER_MODULE')
 NR_USER_PROPERTY = 'ambari-server.user'
@@ -130,17 +128,27 @@ SETUP_DB_CONNECT_ATTEMPTS = 3
 SETUP_DB_CMD = ['su', '-', 'postgres', '--command=psql -f {0} -v username=\'"{1}"\' -v password="\'{2}\'" -v dbname="{3}"']
 UPGRADE_STACK_CMD = ['su', 'postgres', '--command=psql -f {0} -v stack_name="\'{1}\'"  -v stack_version="\'{2}\'" -v dbname="{3}"']
 UPDATE_METAINFO_CMD = 'curl -X PUT "http://{0}:{1}/api/v1/stacks2" -u "{2}":"{3}"'
-PG_ST_CMD = '/sbin/service postgresql status'
-PG_INITDB_CMD = '/sbin/service postgresql initdb'
-PG_START_CMD = '/sbin/service postgresql start'
-PG_RESTART_CMD = '/sbin/service postgresql restart'
 PG_STATUS_RUNNING = 'running'
-PG_HBA_DIR = '/var/lib/pgsql/data/'
-PG_HBA_CONF_FILE = (PG_HBA_DIR + 'pg_hba.conf')
-PG_HBA_CONF_FILE_BACKUP = (PG_HBA_DIR + 'pg_hba_bak.conf.old')
-POSTGRESQL_CONF_FILE = (PG_HBA_DIR + 'postgresql.conf')
-PG_HBA_RELOAD_CMD = "su postgres --command='pg_ctl -D {0} reload'"
 PG_DEFAULT_PASSWORD = 'bigdata'
+SERVICE_CMD = '/sbin/service'
+PG_SERVICE_NAME = 'postgresql'
+PG_HBA_DIR = '/var/lib/pgsql/data'
+FIREWALL_SERVICE_NAME = 'iptables'
+IP_TBLS_IS_NOT_RUNNING = 'iptables: Firewall is not running.'
+if (OS == OS_UBUNTU):
+    FIREWALL_SERVICE_NAME = 'ufw'
+    IP_TBLS_IS_NOT_RUNNING = 'ufw stop/waiting'
+    PG_HBA_DIR = '/etc/postgresql/8.4/main'
+    SERVICE_CMD = '/usr/sbin/service'
+IP_TBLS_STATUS_CMD = ('%s %s status' % (SERVICE_CMD, FIREWALL_SERVICE_NAME))
+PG_ST_CMD = ('%s %s status' % (SERVICE_CMD, PG_SERVICE_NAME))
+PG_INITDB_CMD = ('%s %s initdb' % (SERVICE_CMD, PG_SERVICE_NAME))
+PG_START_CMD = ('%s %s start' % (SERVICE_CMD, PG_SERVICE_NAME))
+PG_RESTART_CMD = ('%s %s restart' % (SERVICE_CMD, PG_SERVICE_NAME))
+PG_HBA_RELOAD_CMD = ('%s %s reload' % (SERVICE_CMD, PG_SERVICE_NAME))
+PG_HBA_CONF_FILE = os.path.join(PG_HBA_DIR, 'pg_hba.conf')
+PG_HBA_CONF_FILE_BACKUP = os.path.join(PG_HBA_DIR, 'pg_hba_bak.conf.old')
+POSTGRESQL_CONF_FILE = os.path.join(PG_HBA_DIR, 'postgresql.conf')
 JDBC_DATABASE_PROPERTY = 'server.jdbc.database'
 JDBC_HOSTNAME_PROPERTY = 'server.jdbc.hostname'
 JDBC_PORT_PROPERTY = 'server.jdbc.port'
