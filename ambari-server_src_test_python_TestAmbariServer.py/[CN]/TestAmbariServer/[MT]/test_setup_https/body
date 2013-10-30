@@ -1,3 +1,4 @@
+@patch.object(ambari_server, 'adjust_directory_permissions')
 @patch.object(ambari_server, 'read_ambari_user')
 @patch.object(ambari_server, 'get_validated_string_input')
 @patch.object(ambari_server, 'find_properties_file')
@@ -10,7 +11,7 @@
 @patch.object(ambari_server, 'is_root')
 @patch.object(ambari_server, 'is_valid_cert_host')
 @patch.object(ambari_server, 'is_valid_cert_exp')
-def test_setup_https(self, is_valid_cert_exp_mock, is_valid_cert_host_mock, is_root_mock, Properties_mock, open_Mock, get_YN_input_mock, import_cert_and_key_action_mock, is_server_runing_mock, get_ambari_properties_mock, find_properties_file_mock, get_validated_string_input_mock, read_ambari_user_method):
+def test_setup_https(self, is_valid_cert_exp_mock, is_valid_cert_host_mock, is_root_mock, Properties_mock, open_Mock, get_YN_input_mock, import_cert_and_key_action_mock, is_server_runing_mock, get_ambari_properties_mock, find_properties_file_mock, get_validated_string_input_mock, read_ambari_user_method, adjust_directory_permissions_mock):
     is_valid_cert_exp_mock.return_value = True
     is_valid_cert_host_mock.return_value = True
     args = MagicMock()
@@ -24,7 +25,7 @@ def test_setup_https(self, is_valid_cert_exp_mock, is_valid_cert_host_mock, is_r
         self.assertTrue(('root-level' in fe.reason))
         pass
     is_root_mock.return_value = True
-    read_ambari_user_method.return_value = None
+    read_ambari_user_method.return_value = 'user'
     p.get_property.side_effect = ['key_dir', '5555', '6666', 'true']
     get_YN_input_mock.side_effect = [False, True]
     get_validated_string_input_mock.side_effect = ['4444']
@@ -90,9 +91,38 @@ def test_setup_https(self, is_valid_cert_exp_mock, is_valid_cert_host_mock, is_r
     p.get_property.reset_mock()
     p.store.reset_mock()
     import_cert_and_key_action_mock.reset_mock()
+    p.get_property.side_effect = ['key_dir', '', 'false']
+    get_YN_input_mock.side_effect = [True]
+    import_cert_and_key_action_mock.side_effect = [False]
+    get_validated_string_input_mock.side_effect = ['4444']
+    get_property_expected = ("[call('security.server.keys_dir'),\n" + " call('client.api.ssl.port'),\n call('api.ssl')]")
+    process_pair_expected = "[call('client.api.ssl.port', '4444')]"
+    self.assertFalse(ambari_server.setup_https(args))
+    self.assertTrue(p.process_pair.called)
+    self.assertTrue((p.get_property.call_count == 3))
+    self.assertEqual(str(p.get_property.call_args_list), get_property_expected)
+    self.assertEqual(str(p.process_pair.call_args_list), process_pair_expected)
+    self.assertFalse(p.store.called)
+    self.assertTrue(import_cert_and_key_action_mock.called)
+    p.process_pair.reset_mock()
+    p.get_property.reset_mock()
+    p.store.reset_mock()
+    import_cert_and_key_action_mock.reset_mock()
     ambari_server.SILENT = True
     try:
         ambari_server.setup_https(args)
         self.fail('Should throw exception')
     except NonFatalException as fe:
         self.assertTrue(('setup-https is not enabled in silent mode' in fe.reason))
+    p.process_pair.reset_mock()
+    p.get_property.reset_mock()
+    p.store.reset_mock()
+    import_cert_and_key_action_mock.reset_mock()
+    ambari_server.SILENT = False
+    find_properties_file_mock.return_value = 'propertyFile'
+    p.get_property.side_effect = KeyError('Failed to read property')
+    try:
+        ambari_server.setup_https(args)
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertTrue(('Failed to read property' in fe.reason))
