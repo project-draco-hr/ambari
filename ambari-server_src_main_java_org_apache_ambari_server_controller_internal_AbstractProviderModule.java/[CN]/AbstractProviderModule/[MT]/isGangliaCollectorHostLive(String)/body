@@ -1,20 +1,14 @@
 {
-  HostResponse gangliaCollectorHost=null;
+  HostResponse gangliaCollectorHost;
   try {
-    HostRequest hostRequest=new HostRequest(null,clusterName,Collections.<String,String>emptyMap());
-    Set<HostResponse> hosts=managementController.getHosts(Collections.singleton(hostRequest));
     final String gangliaCollectorHostName=getGangliaCollectorHostName(clusterName);
-    gangliaCollectorHost=(HostResponse)CollectionUtils.find(hosts,new org.apache.commons.collections.Predicate(){
-      @Override public boolean evaluate(      Object hostResponse){
-        return ((HostResponse)hostResponse).getHostname().equals(gangliaCollectorHostName);
-      }
-    }
-);
+    HostRequest hostRequest=new HostRequest(gangliaCollectorHostName,clusterName,Collections.<String,String>emptyMap());
+    Set<HostResponse> hosts=HostResourceProvider.getHosts(managementController,hostRequest);
+    gangliaCollectorHost=hosts.size() == 1 ? hosts.iterator().next() : null;
   }
  catch (  AmbariException e) {
     LOG.debug("Error checking of Ganglia server host live status: ",e);
     return false;
   }
-  if (gangliaCollectorHost == null)   return false;
-  return !gangliaCollectorHost.getHostState().equals(HostState.HEARTBEAT_LOST.name());
+  return gangliaCollectorHost != null && !gangliaCollectorHost.getHostState().equals(HostState.HEARTBEAT_LOST.name());
 }
