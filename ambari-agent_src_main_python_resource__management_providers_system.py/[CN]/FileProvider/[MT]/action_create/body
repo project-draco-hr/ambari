@@ -1,17 +1,24 @@
 def action_create(self):
     path = self.resource.path
+    if os.path.isdir(path):
+        raise Fail(('Applying %s failed, directory with name %s exists' % (self.resource, path)))
+    dirname = os.path.dirname(path)
+    if (not os.path.isdir(dirname)):
+        raise Fail(("Applying %s failed, parent directory %s doesn't exist" % (self.resource, dirname)))
     write = False
     content = self._get_content()
     if (not os.path.exists(path)):
         write = True
         reason = "it doesn't exist"
-    elif (content is not None):
-        with open(path, 'rb') as fp:
-            old_content = fp.read()
-        if (content != old_content):
-            write = True
-            reason = "contents don't match"
-            self.resource.env.backup_file(path)
+    elif self.resource.replace:
+        if (content is not None):
+            with open(path, 'rb') as fp:
+                old_content = fp.read()
+            if (content != old_content):
+                write = True
+                reason = "contents don't match"
+                if self.resource.backup:
+                    self.resource.env.backup_file(path)
     if write:
         self.log.info(('Writing %s because %s' % (self.resource, reason)))
         with open(path, 'wb') as fp:
