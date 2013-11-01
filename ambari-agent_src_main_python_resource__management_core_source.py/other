@@ -1,12 +1,12 @@
 from __future__ import with_statement
-from resource_management.core import environment
+from resource_management.core.environment import Substitutor, Environment
 __all__ = ['Source', 'Template', 'InlineTemplate', 'StaticFile', 'DownloadSource']
 import hashlib
 import os
 import urllib2
 import urlparse
 try:
-    from jinja2 import Environment, BaseLoader, TemplateNotFound, FunctionLoader
+    from jinja2 import Environment as JinjaEnvironment, BaseLoader, TemplateNotFound, FunctionLoader
 except ImportError:
 
 
@@ -26,7 +26,7 @@ else:
     class TemplateLoader(BaseLoader):
 
         def __init__(self, env=None):
-            self.env = (env or environment.Environment.get_instance())
+            self.env = (env or Environment.get_instance())
 
         def get_source(self, environment, template_name):
             if template_name.startswith(os.path.sep):
@@ -45,13 +45,12 @@ else:
     class Template(Source):
 
         def __init__(self, name, variables=None, env=None):
-            self.name = name
-            self.env = (env or environment.Environment.get_instance())
+            super(Template, self).__init__(name, env)
             params = self.env.config.params
             variables = (params if params else variables)
             self.context = (variables.copy() if variables else {})
             if (not hasattr(self, 'template_env')):
-                self.template_env = Environment(loader=TemplateLoader(self.env), autoescape=False)
+                self.template_env = JinjaEnvironment(loader=TemplateLoader(self.env), autoescape=False)
             self.template = self.template_env.get_template(self.name)
 
         def get_content(self):
@@ -63,5 +62,5 @@ else:
     class InlineTemplate(Template):
 
         def __init__(self, name, variables=None, env=None):
-            self.template_env = Environment(loader=FunctionLoader((lambda text: text)))
+            self.template_env = JinjaEnvironment(loader=FunctionLoader((lambda text: text)))
             super(InlineTemplate, self).__init__(name, variables, env)
