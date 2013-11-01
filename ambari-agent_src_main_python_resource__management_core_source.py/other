@@ -1,12 +1,13 @@
 from __future__ import with_statement
-from resource_management.core.environment import Substitutor, Environment
+from resource_management.core.environment import Environment
+from resource_management.core.utils import checked_unite
 __all__ = ['Source', 'Template', 'InlineTemplate', 'StaticFile', 'DownloadSource']
 import hashlib
 import os
 import urllib2
 import urlparse
 try:
-    from jinja2 import Environment as JinjaEnvironment, BaseLoader, TemplateNotFound, FunctionLoader
+    from jinja2 import Environment as JinjaEnvironment, BaseLoader, TemplateNotFound, FunctionLoader, StrictUndefined
 except ImportError:
 
 
@@ -44,13 +45,14 @@ else:
 
     class Template(Source):
 
-        def __init__(self, name, variables=None, env=None):
-            super(Template, self).__init__(name, env)
+        def __init__(self, name, **kwargs):
+            '\n      @param kwargs: Additional variables passed to template\n      '
+            super(Template, self).__init__(name)
             params = self.env.config.params
-            variables = (params if params else variables)
+            variables = checked_unite(params, kwargs)
             self.context = (variables.copy() if variables else {})
             if (not hasattr(self, 'template_env')):
-                self.template_env = JinjaEnvironment(loader=TemplateLoader(self.env), autoescape=False)
+                self.template_env = JinjaEnvironment(loader=TemplateLoader(self.env), autoescape=False, undefined=StrictUndefined)
             self.template = self.template_env.get_template(self.name)
 
         def get_content(self):
@@ -61,6 +63,6 @@ else:
 
     class InlineTemplate(Template):
 
-        def __init__(self, name, variables=None, env=None):
+        def __init__(self, name, **kwargs):
             self.template_env = JinjaEnvironment(loader=FunctionLoader((lambda text: text)))
-            super(InlineTemplate, self).__init__(name, variables, env)
+            super(InlineTemplate, self).__init__(name, **kwargs)
