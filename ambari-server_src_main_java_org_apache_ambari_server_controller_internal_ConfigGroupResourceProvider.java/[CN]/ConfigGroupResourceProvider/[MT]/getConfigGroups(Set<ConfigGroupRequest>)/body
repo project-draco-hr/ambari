@@ -1,0 +1,64 @@
+{
+  Set<ConfigGroupResponse> responses=new HashSet<ConfigGroupResponse>();
+  if (requests != null) {
+    for (    ConfigGroupRequest request : requests) {
+      LOG.debug("Received a Config group request with" + ", clusterName = " + request.getClusterName() + ", groupId = "+ request.getId()+ ", groupName = "+ request.getGroupName()+ ", tag = "+ request.getTag());
+      if (request.getClusterName() == null) {
+        LOG.warn("Cluster name is a required field.");
+        continue;
+      }
+      Cluster cluster=getManagementController().getClusters().getCluster(request.getClusterName());
+      Map<Long,ConfigGroup> configGroupMap=cluster.getConfigGroups();
+      if (request.getId() != null) {
+        ConfigGroup configGroup=configGroupMap.get(request.getId());
+        if (configGroup != null) {
+          responses.add(configGroup.convertToResponse());
+        }
+        continue;
+      }
+      if (request.getGroupName() != null) {
+        for (        ConfigGroup configGroup : configGroupMap.values()) {
+          if (configGroup.getName().equals(request.getGroupName())) {
+            responses.add(configGroup.convertToResponse());
+          }
+        }
+        continue;
+      }
+      if (request.getTag() != null && request.getHosts().isEmpty()) {
+        for (        ConfigGroup configGroup : configGroupMap.values()) {
+          if (configGroup.getTag().equals(request.getTag())) {
+            responses.add(configGroup.convertToResponse());
+          }
+        }
+        continue;
+      }
+      if (!request.getHosts().isEmpty() && request.getTag() == null) {
+        for (        String hostname : request.getHosts()) {
+          Map<Long,ConfigGroup> groupMap=cluster.getConfigGroupsByHostname(hostname);
+          if (!groupMap.isEmpty()) {
+            for (            ConfigGroup configGroup : groupMap.values()) {
+              responses.add(configGroup.convertToResponse());
+            }
+          }
+        }
+        continue;
+      }
+      if (request.getTag() != null && !request.getHosts().isEmpty()) {
+        for (        ConfigGroup configGroup : configGroupMap.values()) {
+          if (configGroup.getTag().equals(request.getTag())) {
+            Set<String> groupHosts=new HashSet<String>(configGroup.getHosts().keySet());
+            groupHosts.retainAll(request.getHosts());
+            if (!groupHosts.isEmpty()) {
+              responses.add(configGroup.convertToResponse());
+            }
+          }
+        }
+        continue;
+      }
+      for (      ConfigGroup configGroup : configGroupMap.values()) {
+        responses.add(configGroup.convertToResponse());
+      }
+    }
+  }
+  return responses;
+}

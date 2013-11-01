@@ -1,0 +1,59 @@
+{
+  Object groupIdObj=properties.get(CONFIGGROUP_ID_PROPERTY_ID);
+  Long groupId=null;
+  if (groupIdObj != null) {
+    groupId=groupIdObj instanceof Long ? (Long)groupIdObj : Long.parseLong((String)groupIdObj);
+  }
+  ConfigGroupRequest request=new ConfigGroupRequest(groupId,(String)properties.get(CONFIGGROUP_CLUSTER_NAME_PROPERTY_ID),(String)properties.get(CONFIGGROUP_NAME_PROPERTY_ID),(String)properties.get(CONFIGGROUP_TAG_PROPERTY_ID),(String)properties.get(CONFIGGROUP_DESC_PROPERTY_ID),null,null);
+  Map<String,Config> configurations=new HashMap<String,Config>();
+  Set<String> hosts=new HashSet<String>();
+  Object hostObj=properties.get(CONFIGGROUP_HOSTS_PROPERTY_ID);
+  if (hostObj != null) {
+    if (hostObj instanceof HashSet<?>) {
+      try {
+        Set<Map<String,String>> hostsSet=(Set<Map<String,String>>)hostObj;
+        for (        Map<String,String> hostMap : hostsSet) {
+          if (hostMap.containsKey(CONFIGGROUP_HOSTNAME_PROPERTY_ID)) {
+            String hostname=hostMap.get(CONFIGGROUP_HOSTNAME_PROPERTY_ID);
+            hosts.add(hostname);
+          }
+        }
+      }
+ catch (      Exception e) {
+        LOG.warn("Host json in unparseable format. " + hostObj,e);
+      }
+    }
+ else {
+      if (hostObj instanceof String) {
+        hosts.add((String)hostObj);
+      }
+    }
+  }
+  Object configObj=properties.get(CONFIGGROUP_CONFIGS_PROPERTY_ID);
+  if (configObj != null && configObj instanceof HashSet<?>) {
+    try {
+      Set<Map<String,Object>> configSet=(Set<Map<String,Object>>)configObj;
+      for (      Map<String,Object> configMap : configSet) {
+        String type=(String)configMap.get(ConfigurationResourceProvider.CONFIGURATION_CONFIG_TYPE_PROPERTY_ID);
+        String tag=(String)configMap.get(ConfigurationResourceProvider.CONFIGURATION_CONFIG_TAG_PROPERTY_ID);
+        Map<String,String> configProperties=new HashMap<String,String>();
+        for (        Map.Entry<String,Object> entry : configMap.entrySet()) {
+          String propertyCategory=PropertyHelper.getPropertyCategory(entry.getKey());
+          if (propertyCategory != null && propertyCategory.equals("properties") && null != entry.getValue()) {
+            configProperties.put(PropertyHelper.getPropertyName(entry.getKey()),entry.getValue().toString());
+          }
+        }
+        Config config=new ConfigImpl(type);
+        config.setVersionTag(tag);
+        config.setProperties(configProperties);
+        configurations.put(config.getType(),config);
+      }
+    }
+ catch (    Exception e) {
+      LOG.warn("Config json in unparseable format. " + configObj,e);
+    }
+  }
+  request.setConfigs(configurations);
+  request.setHosts(hosts);
+  return request;
+}

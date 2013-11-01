@@ -1,0 +1,46 @@
+{
+  if (isPersisted) {
+    configGroupConfigMappingDAO.removeAllByGroup(configGroupEntity.getGroupId());
+    configGroupEntity.getConfigGroupConfigMappingEntities().clear();
+  }
+  if (configurations != null && !configurations.isEmpty()) {
+    for (    Config config : configurations.values()) {
+      ClusterConfigEntityPK clusterConfigEntityPK=new ClusterConfigEntityPK();
+      clusterConfigEntityPK.setClusterId(cluster.getClusterId());
+      clusterConfigEntityPK.setTag(config.getVersionTag());
+      clusterConfigEntityPK.setType(config.getType());
+      ClusterConfigEntity clusterConfigEntity=clusterDAO.findConfig(clusterConfigEntityPK);
+      if (clusterConfigEntity == null) {
+        clusterConfigEntity=new ClusterConfigEntity();
+        clusterConfigEntity.setClusterId(clusterEntity.getClusterId());
+        clusterConfigEntity.setClusterEntity(clusterEntity);
+        clusterConfigEntity.setType(config.getType());
+        clusterConfigEntity.setTag(config.getVersionTag());
+        clusterConfigEntity.setData(gson.toJson(config.getProperties()));
+        clusterConfigEntity.setTimestamp(System.currentTimeMillis());
+        cluster.getClusterGlobalLock().writeLock().lock();
+        try {
+          clusterDAO.createConfig(clusterConfigEntity);
+          clusterEntity.getClusterConfigEntities().add(clusterConfigEntity);
+          cluster.addConfig(config);
+          clusterDAO.merge(clusterEntity);
+          cluster.refresh();
+        }
+  finally {
+          cluster.getClusterGlobalLock().writeLock().unlock();
+        }
+      }
+      ConfigGroupConfigMappingEntity configMappingEntity=new ConfigGroupConfigMappingEntity();
+      configMappingEntity.setTimestamp(System.currentTimeMillis());
+      configMappingEntity.setClusterId(clusterEntity.getClusterId());
+      configMappingEntity.setClusterConfigEntity(clusterConfigEntity);
+      configMappingEntity.setConfigGroupEntity(configGroupEntity);
+      configMappingEntity.setConfigGroupId(configGroupEntity.getGroupId());
+      configMappingEntity.setConfigType(clusterConfigEntity.getType());
+      configMappingEntity.setVersionTag(clusterConfigEntity.getTag());
+      configGroupConfigMappingDAO.create(configMappingEntity);
+      configGroupEntity.getConfigGroupConfigMappingEntities().add(configMappingEntity);
+      configGroupDAO.merge(configGroupEntity);
+    }
+  }
+}

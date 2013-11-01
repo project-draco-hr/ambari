@@ -1,0 +1,46 @@
+{
+  if (requests.isEmpty()) {
+    LOG.warn("Received an empty requests set");
+    return null;
+  }
+  Set<ConfigGroupResponse> configGroupResponses=new HashSet<ConfigGroupResponse>();
+  Clusters clusters=getManagementController().getClusters();
+  ConfigGroupFactory configGroupFactory=getManagementController().getConfigGroupFactory();
+  for (  ConfigGroupRequest request : requests) {
+    Cluster cluster;
+    try {
+      cluster=clusters.getCluster(request.getClusterName());
+    }
+ catch (    ClusterNotFoundException e) {
+      throw new ParentObjectNotFoundException("Attempted to add a config group to a cluster which doesn't exist",e);
+    }
+    validateRequest(request);
+    Map<Long,ConfigGroup> configGroupMap=cluster.getConfigGroups();
+    if (configGroupMap != null) {
+      for (      ConfigGroup configGroup : configGroupMap.values()) {
+        if (configGroup.getName().equals(request.getGroupName())) {
+          throw new DuplicateResourceException("Config group already " + "exists with the same name, " + "clusterName = " + request.getClusterName() + ", groupName = "+ request.getGroupName());
+        }
+      }
+    }
+    Map<String,Host> hosts=new HashMap<String,Host>();
+    if (request.getHosts() != null && !request.getHosts().isEmpty()) {
+      for (      String hostname : request.getHosts()) {
+        Host host=clusters.getHost(hostname);
+        if (host == null) {
+          throw new HostNotFoundException(hostname);
+        }
+        hosts.put(hostname,host);
+      }
+    }
+    verifyHostList(cluster,hosts,request);
+    ConfigGroup configGroup=configGroupFactory.createNew(cluster,request.getGroupName(),request.getTag(),request.getDescription(),request.getConfigs(),hosts);
+    Logger logger=LoggerFactory.getLogger("configchange");
+    logger.info("Persisting new Config group, " + ", clusterName = " + configGroup.getClusterName() + ", id = "+ configGroup.getId()+ ", tag = "+ configGroup.getTag()+ ", user = "+ getManagementController().getAuthName());
+    configGroup.persist();
+    cluster.addConfigGroup(configGroup);
+    ConfigGroupResponse response=new ConfigGroupResponse(configGroup.getId(),configGroup.getClusterName(),configGroup.getName(),configGroup.getTag(),configGroup.getDescription(),null,null);
+    configGroupResponses.add(response);
+  }
+  return configGroupResponses;
+}
