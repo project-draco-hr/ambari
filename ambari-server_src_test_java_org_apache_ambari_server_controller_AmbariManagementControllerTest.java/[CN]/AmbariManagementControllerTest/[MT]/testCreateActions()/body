@@ -45,18 +45,16 @@
   mapReduce.addServiceComponent(Role.MAPREDUCE_CLIENT.name()).persist();
   hdfs.getServiceComponent(Role.HDFS_CLIENT.name()).addServiceComponentHost("h1").persist();
   mapReduce.getServiceComponent(Role.MAPREDUCE_CLIENT.name()).addServiceComponentHost("h2").persist();
-  Set<ActionRequest> actionRequests=new HashSet<ActionRequest>();
   Map<String,String> params=new HashMap<String,String>(){
 {
       put("test","test");
     }
   }
 ;
-  ActionRequest actionRequest=new ActionRequest("c1","HDFS",Role.HDFS_SERVICE_CHECK.name(),params);
-  actionRequests.add(actionRequest);
+  ExecuteActionRequest actionRequest=new ExecuteActionRequest("c1",Role.HDFS_SERVICE_CHECK.name(),"HDFS",params);
   Map<String,String> requestProperties=new HashMap<String,String>();
   requestProperties.put(REQUEST_CONTEXT_PROPERTY,"Called from a test");
-  RequestStatusResponse response=controller.createActions(actionRequests,requestProperties);
+  RequestStatusResponse response=controller.createAction(actionRequest,requestProperties);
   assertEquals(1,response.getTasks().size());
   ShortTaskStatus task=response.getTasks().get(0);
   List<HostRoleCommand> storedTasks=actionDB.getRequestTasks(response.getRequestId());
@@ -71,18 +69,18 @@
   assertEquals(task.getTaskId(),hostRoleCommand.getTaskId());
   assertEquals(actionRequest.getServiceName(),hostRoleCommand.getExecutionCommandWrapper().getExecutionCommand().getServiceName());
   assertEquals(actionRequest.getClusterName(),hostRoleCommand.getExecutionCommandWrapper().getExecutionCommand().getClusterName());
-  assertEquals(actionRequest.getActionName(),hostRoleCommand.getExecutionCommandWrapper().getExecutionCommand().getRole());
+  assertEquals(actionRequest.getCommandName(),hostRoleCommand.getExecutionCommandWrapper().getExecutionCommand().getRole());
   assertEquals(Role.HDFS_CLIENT.name(),hostRoleCommand.getEvent().getEvent().getServiceComponentName());
   assertEquals(actionRequest.getParameters(),hostRoleCommand.getExecutionCommandWrapper().getExecutionCommand().getRoleParams());
   assertNotNull(hostRoleCommand.getExecutionCommandWrapper().getExecutionCommand().getConfigurations());
   assertEquals(2,hostRoleCommand.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().size());
   assertEquals(requestProperties.get(REQUEST_CONTEXT_PROPERTY),stage.getRequestContext());
-  actionRequests.add(new ActionRequest("c1","MAPREDUCE",Role.MAPREDUCE_SERVICE_CHECK.name(),null));
-  response=controller.createActions(actionRequests,requestProperties);
-  assertEquals(2,response.getTasks().size());
+  actionRequest=new ExecuteActionRequest("c1",Role.MAPREDUCE_SERVICE_CHECK.name(),"MAPREDUCE",null);
+  response=controller.createAction(actionRequest,requestProperties);
+  assertEquals(1,response.getTasks().size());
   List<HostRoleCommand> tasks=actionDB.getRequestTasks(response.getRequestId());
-  assertEquals(2,tasks.size());
+  assertEquals(1,tasks.size());
   requestProperties.put(REQUEST_CONTEXT_PROPERTY,null);
-  response=controller.createActions(actionRequests,requestProperties);
-  assertEquals(2,response.getTasks().size());
+  response=controller.createAction(actionRequest,requestProperties);
+  assertEquals(1,response.getTasks().size());
 }

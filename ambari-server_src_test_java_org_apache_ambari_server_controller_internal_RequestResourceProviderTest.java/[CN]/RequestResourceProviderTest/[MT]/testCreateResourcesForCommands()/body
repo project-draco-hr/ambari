@@ -1,0 +1,28 @@
+{
+  Resource.Type type=Resource.Type.Request;
+  Capture<ExecuteActionRequest> actionRequest=new Capture<ExecuteActionRequest>();
+  Capture<HashMap<String,String>> propertyMap=new Capture<HashMap<String,String>>();
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
+  expect(managementController.createAction(capture(actionRequest),capture(propertyMap))).andReturn(response).anyTimes();
+  replay(managementController);
+  Set<Map<String,Object>> propertySet=new LinkedHashSet<Map<String,Object>>();
+  Map<String,Object> properties=new LinkedHashMap<String,Object>();
+  properties.put(RequestResourceProvider.REQUEST_CLUSTER_NAME_PROPERTY_ID,"c1");
+  propertySet.add(properties);
+  Map<String,String> requestInfoProperties=new HashMap<String,String>();
+  requestInfoProperties.put(RequestResourceProvider.SERVICE_NAME_ID,"HDFS");
+  requestInfoProperties.put(RequestResourceProvider.COMMAND_ID,"HDFS_SERVICE_CHECK");
+  Request request=PropertyHelper.getCreateRequest(propertySet,requestInfoProperties);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  provider.createResources(request);
+  Assert.assertTrue(actionRequest.hasCaptured());
+  Assert.assertTrue(actionRequest.getValue().isCommand());
+  Assert.assertEquals(null,actionRequest.getValue().getActionName());
+  Assert.assertEquals("HDFS_SERVICE_CHECK",actionRequest.getValue().getCommandName());
+  Assert.assertEquals("HDFS",actionRequest.getValue().getServiceName());
+  Assert.assertEquals(null,actionRequest.getValue().getComponentName());
+  Assert.assertNotNull(actionRequest.getValue().getHosts());
+  Assert.assertEquals(0,actionRequest.getValue().getHosts().size());
+  Assert.assertEquals(0,actionRequest.getValue().getParameters().size());
+}

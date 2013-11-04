@@ -1,3 +1,35 @@
 {
-  throw new UnsupportedOperationException("Not currently supported.");
+  final Set<ActionRequest> requests=new HashSet<ActionRequest>();
+  if (predicate != null) {
+    for (    Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+      ActionRequest actionReq=getRequest(propertyMap);
+      LOG.debug("Received a get request for Action with" + ", actionName = " + actionReq.getActionName());
+      requests.add(actionReq);
+    }
+  }
+ else {
+    LOG.debug("Received a get request for all Actions");
+    requests.add(ActionRequest.getAllRequest());
+  }
+  Set<ActionResponse> responses=getResources(new Command<Set<ActionResponse>>(){
+    @Override public Set<ActionResponse> invoke() throws AmbariException {
+      return getActionDefinitions(requests);
+    }
+  }
+);
+  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  Set<Resource> resources=new HashSet<Resource>();
+  for (  ActionResponse response : responses) {
+    Resource resource=new ResourceImpl(Type.Action);
+    setResourceProperty(resource,ACTION_NAME_PROPERTY_ID,response.getActionName(),requestedIds);
+    setResourceProperty(resource,ACTION_TYPE_PROPERTY_ID,response.getActionType(),requestedIds);
+    setResourceProperty(resource,INPUTS_PROPERTY_ID,response.getInputs(),requestedIds);
+    setResourceProperty(resource,TARGET_SERVICE_PROPERTY_ID,response.getTargetService(),requestedIds);
+    setResourceProperty(resource,TARGET_COMPONENT_PROPERTY_ID,response.getTargetComponent(),requestedIds);
+    setResourceProperty(resource,DESCRIPTION_PROPERTY_ID,response.getDescription(),requestedIds);
+    setResourceProperty(resource,TARGET_HOST_PROPERTY_ID,response.getTargetType(),requestedIds);
+    setResourceProperty(resource,DEFAULT_TIMEOUT_PROPERTY_ID,response.getDefaultTimeout(),requestedIds);
+    resources.add(resource);
+  }
+  return resources;
 }

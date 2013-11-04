@@ -1,18 +1,49 @@
 {
   Resource.Type type=Resource.Type.Action;
-  AmbariManagementController managementController=createMock(AmbariManagementController.class);
-  replay(managementController);
+  ActionManager am=createNiceMock(ActionManager.class);
+  AmbariManagementController managementController=createNiceMock(AmbariManagementController.class);
+  expect(managementController.getActionManager()).andReturn(am).anyTimes();
+  List<ActionDefinition> allDefinition=new ArrayList<ActionDefinition>();
+  allDefinition.add(new ActionDefinition("a1",ActionType.SYSTEM,"fileName","HDFS","DATANODE","Does file exist",TargetHostType.ANY,Short.valueOf("100")));
+  allDefinition.add(new ActionDefinition("a2",ActionType.SYSTEM,"fileName","HDFS","DATANODE","Does file exist",TargetHostType.ANY,Short.valueOf("100")));
+  allDefinition.add(new ActionDefinition("a3",ActionType.SYSTEM,"fileName","HDFS","DATANODE","Does file exist",TargetHostType.ANY,Short.valueOf("100")));
+  Set<ActionResponse> allResponse=new HashSet<ActionResponse>();
+  for (  ActionDefinition definition : allDefinition) {
+    allResponse.add(new ActionResponse(definition));
+  }
+  ActionDefinition namedDefinition=new ActionDefinition("a1",ActionType.SYSTEM,"fileName","HDFS","DATANODE","Does file exist",TargetHostType.ANY,Short.valueOf("100"));
+  Set<ActionResponse> nameResponse=new HashSet<ActionResponse>();
+  nameResponse.add(new ActionResponse(namedDefinition));
+  expect(am.getAllActionDefinition()).andReturn(allDefinition).once();
+  expect(am.getActionDefinition("a1")).andReturn(namedDefinition).once();
+  replay(managementController,am);
   ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
   Set<String> propertyIds=new HashSet<String>();
-  propertyIds.add(ActionResourceProvider.ACTION_CLUSTER_NAME_PROPERTY_ID);
-  propertyIds.add(ActionResourceProvider.ACTION_SERVICE_NAME_PROPERTY_ID);
-  propertyIds.add(ActionResourceProvider.ACTION_ACTION_NAME_PROPERTY_ID);
+  propertyIds.add(ActionResourceProvider.ACTION_NAME_PROPERTY_ID);
+  propertyIds.add(ActionResourceProvider.ACTION_TYPE_PROPERTY_ID);
+  propertyIds.add(ActionResourceProvider.DEFAULT_TIMEOUT_PROPERTY_ID);
+  propertyIds.add(ActionResourceProvider.DESCRIPTION_PROPERTY_ID);
+  propertyIds.add(ActionResourceProvider.INPUTS_PROPERTY_ID);
+  propertyIds.add(ActionResourceProvider.TARGET_COMPONENT_PROPERTY_ID);
+  propertyIds.add(ActionResourceProvider.TARGET_HOST_PROPERTY_ID);
+  propertyIds.add(ActionResourceProvider.TARGET_SERVICE_PROPERTY_ID);
   Request request=PropertyHelper.getReadRequest(propertyIds);
-  try {
-    provider.getResources(request,null);
-    Assert.fail("Expected an UnsupportedOperationException");
+  Set<Resource> resources=provider.getResources(request,null);
+  Assert.assertEquals(allResponse.size(),resources.size());
+  for (  Resource resource : resources) {
+    String actionName=(String)resource.getPropertyValue(ActionResourceProvider.ACTION_NAME_PROPERTY_ID);
+    String actionType=(String)resource.getPropertyValue(ActionResourceProvider.ACTION_TYPE_PROPERTY_ID);
+    String defaultTimeout=(String)resource.getPropertyValue(ActionResourceProvider.DEFAULT_TIMEOUT_PROPERTY_ID);
+    String description=(String)resource.getPropertyValue(ActionResourceProvider.DESCRIPTION_PROPERTY_ID);
+    String inputs=(String)resource.getPropertyValue(ActionResourceProvider.INPUTS_PROPERTY_ID);
+    String comp=(String)resource.getPropertyValue(ActionResourceProvider.TARGET_COMPONENT_PROPERTY_ID);
+    String svc=(String)resource.getPropertyValue(ActionResourceProvider.TARGET_SERVICE_PROPERTY_ID);
+    String host=(String)resource.getPropertyValue(ActionResourceProvider.TARGET_HOST_PROPERTY_ID);
+    Assert.assertTrue(allResponse.contains(new ActionResponse(actionName,actionType,inputs,svc,comp,description,host,defaultTimeout)));
   }
- catch (  UnsupportedOperationException e) {
-  }
+  Predicate predicate=new PredicateBuilder().property(ActionResourceProvider.ACTION_NAME_PROPERTY_ID).equals("a1").toPredicate();
+  resources=provider.getResources(request,predicate);
+  Assert.assertEquals(1,resources.size());
+  Assert.assertEquals("a1",resources.iterator().next().getPropertyValue(ActionResourceProvider.ACTION_NAME_PROPERTY_ID));
   verify(managementController);
 }

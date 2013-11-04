@@ -1,17 +1,19 @@
 {
   Resource.Type type=Resource.Type.Action;
-  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  AmbariManagementController managementController=createNiceMock(AmbariManagementController.class);
+  ActionManager am=createMock(ActionManager.class);
   RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
-  replay(managementController,response);
+  expect(managementController.getActionManager()).andReturn(am).anyTimes();
+  am.updateActionDefinition(eq("a2"),eq((ActionType)null),eq("Updated description"),eq((TargetHostType)null),eq((Short)null));
+  Map<String,String> mapRequestProps=new HashMap<String,String>();
+  mapRequestProps.put("context","Called from a test");
+  replay(managementController,response,am);
   ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  ((ActionResourceProvider)provider).setEnableExperimental(true);
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
-  Request request=PropertyHelper.getUpdateRequest(properties,null);
-  Predicate predicate=new PredicateBuilder().property(ActionResourceProvider.ACTION_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ActionResourceProvider.ACTION_SERVICE_NAME_PROPERTY_ID).equals("Service102").and().property(ActionResourceProvider.ACTION_ACTION_NAME_PROPERTY_ID).equals("Action100").toPredicate();
-  try {
-    provider.updateResources(request,predicate);
-    Assert.fail("Expected an UnsupportedOperationException");
-  }
- catch (  UnsupportedOperationException e) {
-  }
-  verify(managementController,response);
+  properties.put(ActionResourceProvider.DESCRIPTION_PROPERTY_ID,"Updated description");
+  Request request=PropertyHelper.getUpdateRequest(properties,mapRequestProps);
+  Predicate predicate=new PredicateBuilder().property(ActionResourceProvider.ACTION_NAME_PROPERTY_ID).equals("a2").toPredicate();
+  provider.updateResources(request,predicate);
+  verify(managementController,response,am);
 }
