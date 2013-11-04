@@ -1,3 +1,4 @@
+@patch.object(setup_agent, 'isAgentPackageAlreadyInstalled')
 @patch.object(setup_agent, 'runAgent')
 @patch.object(setup_agent, 'configureAgent')
 @patch.object(setup_agent, 'installAgent')
@@ -8,28 +9,75 @@
 @patch('sys.exit')
 @patch('os.path.dirname')
 @patch('os.path.realpath')
-def test_setup_agent_main(self, dirname_mock, realpath_mock, exit_mock, checkServerReachability_mock, getOptimalVersion_mock, is_suse_mock, installAgentSuse_mock, installAgent_mock, configureAgent_mock, runAgent_mock):
+def test_setup_agent_main(self, dirname_mock, realpath_mock, exit_mock, checkServerReachability_mock, getOptimalVersion_mock, is_suse_mock, installAgentSuse_mock, installAgent_mock, configureAgent_mock, runAgent_mock, isAgentPackageAlreadyInstalled_mock):
     installAgent_mock.return_value = {'log': 'log', 'exitstatus': 0, }
     installAgentSuse_mock.return_value = {'log': 'log', 'exitstatus': 0, }
     runAgent_mock.return_value = 0
+    getOptimalVersion_mock.return_value = {'log': '1.1.2, 1.1.3, ', 'exitstatus': 1, }
     setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
     self.assertTrue(exit_mock.called)
-    self.assertFalse(getOptimalVersion_mock.called)
-    exit_mock.reset()
-    getOptimalVersion_mock.reset()
-    setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '{ambariVersion}', '8080'))
-    self.assertFalse(getOptimalVersion_mock.called)
+    self.assertTrue(getOptimalVersion_mock.called)
+    exit_mock.reset_mock()
+    getOptimalVersion_mock.reset_mock()
+    getOptimalVersion_mock.return_value = {'log': '1.1.1', 'exitstatus': 0, }
+    isAgentPackageAlreadyInstalled_mock.return_value = False
+    is_suse_mock.return_value = True
+    setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
     self.assertTrue(exit_mock.called)
-    exit_mock.reset()
-    getOptimalVersion_mock.reset()
+    self.assertTrue(getOptimalVersion_mock.called)
+    self.assertTrue(isAgentPackageAlreadyInstalled_mock.called)
+    self.assertTrue(is_suse_mock.called)
+    self.assertTrue(installAgentSuse_mock.called)
+    self.assertFalse(installAgent_mock.called)
+    exit_mock.reset_mock()
+    getOptimalVersion_mock.reset_mock()
+    isAgentPackageAlreadyInstalled_mock.reset_mock()
+    is_suse_mock.reset_mock()
+    installAgentSuse_mock.reset_mock()
+    installAgent_mock.reset_mock()
+    getOptimalVersion_mock.return_value = {'log': '', 'exitstatus': 0, }
+    setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
+    self.assertTrue(exit_mock.called)
+    self.assertTrue(getOptimalVersion_mock.called)
+    self.assertFalse(isAgentPackageAlreadyInstalled_mock.called)
+    self.assertFalse(is_suse_mock.called)
+    self.assertFalse(installAgentSuse_mock.called)
+    exit_mock.reset_mock()
+    getOptimalVersion_mock.reset_mock()
+    isAgentPackageAlreadyInstalled_mock.reset_mock()
+    is_suse_mock.reset_mock()
+    installAgentSuse_mock.reset_mock()
+    installAgent_mock.reset_mock()
+    is_suse_mock.return_value = False
+    getOptimalVersion_mock.return_value = {'log': '1.1.1', 'exitstatus': 0, }
+    setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
+    self.assertTrue(exit_mock.called)
+    self.assertTrue(getOptimalVersion_mock.called)
+    self.assertTrue(isAgentPackageAlreadyInstalled_mock.called)
+    self.assertTrue(is_suse_mock.called)
+    self.assertTrue(installAgent_mock.called)
+    exit_mock.reset_mock()
+    getOptimalVersion_mock.reset_mock()
+    isAgentPackageAlreadyInstalled_mock.reset_mock()
+    exit_mock.reset_mock()
+    getOptimalVersion_mock.reset_mock()
+    isAgentPackageAlreadyInstalled_mock.reset_mock()
+    is_suse_mock.reset_mock()
+    installAgentSuse_mock.reset_mock()
+    installAgent_mock.reset_mock()
+    setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '{ambariVersion}', '8080'))
+    self.assertTrue(getOptimalVersion_mock.called)
+    self.assertTrue(exit_mock.called)
+    exit_mock.reset_mock()
+    getOptimalVersion_mock.reset_mock()
     setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', 'null', '8080'))
     self.assertTrue(exit_mock.called)
     self.assertTrue(getOptimalVersion_mock.called)
-    exit_mock.reset()
+    exit_mock.reset_mock()
     is_suse_mock.return_value = False
     setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', 'null', 'null'))
     self.assertTrue(exit_mock.called)
-    exit_mock.reset()
+    exit_mock.reset_mock()
 
     def side_effect(retcode):
         raise Exception(retcode, 'sys.exit')
@@ -41,7 +89,7 @@ def test_setup_agent_main(self, dirname_mock, realpath_mock, exit_mock, checkSer
     except Exception:
         pass
     self.assertTrue(exit_mock.called)
-    exit_mock.reset()
+    exit_mock.reset_mock()
     is_suse_mock.return_value = True
     installAgentSuse_mock.return_value = {'log': 'log', 'exitstatus': 1, }
     try:

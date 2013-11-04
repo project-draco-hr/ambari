@@ -15,19 +15,22 @@ def main(argv=None):
     except Exception as e:
         server_port = 8080
     checkServerReachability(hostname, server_port)
-    if ((projectVersion is None) or (projectVersion == 'null')):
-        projectVersion = getOptimalVersion('')
-    elif ((projectVersion != '') and (projectVersion != '{ambariVersion}')):
-        projectVersion = ('-' + projectVersion)
-    elif (projectVersion == '{ambariVersion}'):
-        projectVersion = ''
-    if is_suse():
-        ret = installAgentSuse(projectVersion)
-        if (not (ret['exitstatus'] == 0)):
-            sys.exit(ret)
+    if ((projectVersion is None) or (projectVersion == 'null') or (projectVersion == '{ambariVersion}') or (projectVersion == '')):
+        retcode = getOptimalVersion('')
     else:
-        ret = installAgent(projectVersion)
-        if (not (ret['exitstatus'] == 0)):
-            sys.exit(ret)
+        retcode = getOptimalVersion(projectVersion)
+    if ((retcode['exitstatus'] == 0) and (retcode['log'] != None) and (retcode['log'] != '') and (retcode['log'][0].strip() != '')):
+        availiableProjectVersion = ('-' + retcode['log'].strip())
+        if (not isAgentPackageAlreadyInstalled(availiableProjectVersion)):
+            if is_suse():
+                ret = installAgentSuse(availiableProjectVersion)
+            else:
+                ret = installAgent(availiableProjectVersion)
+            if (not (ret['exitstatus'] == 0)):
+                sys.exit(ret)
+    elif ((retcode['exitstatus'] == 1) and (retcode['log'][0].strip() != '')):
+        sys.exit({'exitstatus': 1, 'log': ((('Desired version (' + projectVersion) + ') of ambari-agent package is not available. Repository has following versions of ambari-agent:') + retcode['log'][0].strip()), })
+    else:
+        sys.exit(retcode)
     configureAgent(hostname)
     sys.exit(runAgent(passPhrase, expected_hostname))
