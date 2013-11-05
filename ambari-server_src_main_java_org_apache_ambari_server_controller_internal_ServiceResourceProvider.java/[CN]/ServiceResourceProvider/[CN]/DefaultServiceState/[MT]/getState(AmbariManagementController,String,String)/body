@@ -1,0 +1,34 @@
+{
+  AmbariMetaInfo ambariMetaInfo=controller.getAmbariMetaInfo();
+  Clusters clusters=controller.getClusters();
+  if (clusterName != null && clusterName.length() > 0) {
+    try {
+      Cluster cluster=clusters.getCluster(clusterName);
+      if (cluster != null) {
+        StackId stackId=cluster.getDesiredStackVersion();
+        ServiceComponentHostRequest request=new ServiceComponentHostRequest(clusterName,serviceName,null,null,null,null);
+        Set<ServiceComponentHostResponse> hostComponentResponses=controller.getHostComponents(Collections.singleton(request));
+        for (        ServiceComponentHostResponse hostComponentResponse : hostComponentResponses) {
+          ComponentInfo componentInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),hostComponentResponse.getServiceName(),hostComponentResponse.getComponentName());
+          if (componentInfo != null) {
+            if (componentInfo.isMaster()) {
+              State state=getHostComponentState(hostComponentResponse);
+switch (state) {
+case STARTED:
+case MAINTENANCE:
+                break;
+default :
+              return state;
+          }
+        }
+      }
+    }
+    return State.STARTED;
+  }
+}
+ catch (AmbariException e) {
+  LOG.error("Can't determine service state.",e);
+}
+}
+return State.UNKNOWN;
+}

@@ -1,0 +1,43 @@
+{
+  AmbariMetaInfo ambariMetaInfo=controller.getAmbariMetaInfo();
+  Clusters clusters=controller.getClusters();
+  if (clusterName != null && clusterName.length() > 0) {
+    try {
+      Cluster cluster=clusters.getCluster(clusterName);
+      if (cluster != null) {
+        StackId stackId=cluster.getDesiredStackVersion();
+        ServiceComponentHostRequest request=new ServiceComponentHostRequest(clusterName,serviceName,"NAMENODE",null,null,null);
+        Set<ServiceComponentHostResponse> hostComponentResponses=controller.getHostComponents(Collections.singleton(request));
+        int hBaseMasterActiveCount=0;
+        State nonStartedState=null;
+        for (        ServiceComponentHostResponse hostComponentResponse : hostComponentResponses) {
+          ComponentInfo componentInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),hostComponentResponse.getServiceName(),hostComponentResponse.getComponentName());
+          if (componentInfo != null) {
+            if (componentInfo.isMaster()) {
+              State state=getHostComponentState(hostComponentResponse);
+switch (state) {
+case STARTED:
+case MAINTENANCE:
+                String componentName=hostComponentResponse.getComponentName();
+              if (componentName.equals("HBASE_MASTER")) {
+                ++hBaseMasterActiveCount;
+              }
+            break;
+default :
+          nonStartedState=state;
+      }
+    }
+  }
+}
+if (nonStartedState == null || hBaseMasterActiveCount > 0) {
+  return State.STARTED;
+}
+return nonStartedState;
+}
+}
+ catch (AmbariException e) {
+LOG.error("Can't determine service state.",e);
+}
+}
+return State.UNKNOWN;
+}
