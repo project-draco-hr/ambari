@@ -1,0 +1,85 @@
+{
+  String clusterName="foo1";
+  createCluster(clusterName);
+  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-0.1"));
+  String serviceName="HDFS";
+  createService(clusterName,serviceName,null);
+  String componentName1="NAMENODE";
+  String componentName2="DATANODE";
+  String componentName3="HDFS_CLIENT";
+  createServiceComponent(clusterName,serviceName,componentName1,State.INIT);
+  createServiceComponent(clusterName,serviceName,componentName2,State.INIT);
+  createServiceComponent(clusterName,serviceName,componentName3,State.INIT);
+  String host1="h1";
+  clusters.addHost(host1);
+  clusters.getHost("h1").setOsType("centos5");
+  clusters.getHost("h1").setState(HostState.HEALTHY);
+  clusters.getHost("h1").persist();
+  String host2="h2";
+  clusters.addHost(host2);
+  clusters.getHost("h2").setOsType("centos6");
+  clusters.getHost("h2").setState(HostState.HEALTHY);
+  clusters.getHost("h2").persist();
+  clusters.mapHostToCluster(host1,clusterName);
+  clusters.mapHostToCluster(host2,clusterName);
+  createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName2,host2,null);
+  createServiceComponentHost(clusterName,serviceName,componentName3,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName3,host2,null);
+  installService(clusterName,serviceName,false,false);
+  Map<String,String> configs=new HashMap<String,String>();
+  configs.put("a","b");
+  ConfigurationRequest cr1, cr2;
+  cr1=new ConfigurationRequest(clusterName,"hdfs-site","version1",configs);
+  ClusterRequest crReq=new ClusterRequest(null,clusterName,null,null);
+  crReq.setDesiredConfig(cr1);
+  controller.updateClusters(Collections.singleton(crReq),null);
+  Map<String,String> props=new HashMap<String,String>();
+  props.put("datanodes",host2);
+  cr2=new ConfigurationRequest(clusterName,"hdfs-exclude-file","tag1",props);
+  crReq=new ClusterRequest(null,clusterName,null,null);
+  crReq.setDesiredConfig(cr2);
+  controller.updateClusters(Collections.singleton(crReq),null);
+  startService(clusterName,serviceName,false,false);
+  configs=new HashMap<String,String>();
+  configs.put("a","c");
+  final Config config=new ConfigImpl("hdfs-site");
+  config.setProperties(configs);
+  config.setVersionTag("version122");
+  Long groupId=createConfigGroup(clusters.getCluster(clusterName),"g1","t1",new ArrayList<String>(){
+{
+      add("h1");
+      add("h2");
+    }
+  }
+,new ArrayList<Config>(){
+{
+      add(config);
+    }
+  }
+);
+  Assert.assertNotNull(groupId);
+  Cluster cluster=clusters.getCluster(clusterName);
+  Service s=cluster.getService(serviceName);
+  Assert.assertEquals(State.STARTED,s.getDesiredState());
+  Map<String,String> params=new HashMap<String,String>(){
+{
+      put("test","test");
+      put("excludeFileTag","tag1");
+    }
+  }
+;
+  ExecuteActionRequest request=new ExecuteActionRequest(clusterName,Role.DECOMMISSION_DATANODE.name(),"HDFS",params);
+  Map<String,String> requestProperties=new HashMap<String,String>();
+  requestProperties.put(REQUEST_CONTEXT_PROPERTY,"Called from a test");
+  RequestStatusResponse response=controller.createAction(request,requestProperties);
+  List<HostRoleCommand> storedTasks=actionDB.getRequestTasks(response.getRequestId());
+  ExecutionCommand execCmd=storedTasks.get(0).getExecutionCommandWrapper().getExecutionCommand();
+  Assert.assertNotNull(storedTasks);
+  Assert.assertNotNull(execCmd.getConfigurationTags().get("hdfs-site"));
+  Assert.assertEquals(1,storedTasks.size());
+  Assert.assertEquals(host2,execCmd.getConfigurations().get("hdfs-exclude-file").get("datanodes"));
+  Assert.assertNotNull(execCmd.getConfigurationTags().get("hdfs-exclude-file"));
+  Assert.assertEquals("c",execCmd.getConfigurations().get("hdfs-site").get("a"));
+}

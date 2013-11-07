@@ -1,0 +1,73 @@
+{
+  String clusterName="foo1";
+  createCluster(clusterName);
+  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-0.1"));
+  String serviceName="HDFS";
+  createService(clusterName,serviceName,null);
+  String componentName1="NAMENODE";
+  String componentName2="DATANODE";
+  String componentName3="HDFS_CLIENT";
+  createServiceComponent(clusterName,serviceName,componentName1,State.INIT);
+  createServiceComponent(clusterName,serviceName,componentName2,State.INIT);
+  createServiceComponent(clusterName,serviceName,componentName3,State.INIT);
+  String host1="h1";
+  clusters.addHost(host1);
+  clusters.getHost("h1").setOsType("centos5");
+  clusters.getHost("h1").setState(HostState.HEALTHY);
+  clusters.getHost("h1").persist();
+  String host2="h2";
+  clusters.addHost(host2);
+  clusters.getHost("h2").setOsType("centos6");
+  clusters.getHost("h2").setState(HostState.HEALTHY);
+  clusters.getHost("h2").persist();
+  clusters.mapHostToCluster(host1,clusterName);
+  clusters.mapHostToCluster(host2,clusterName);
+  createServiceComponentHost(clusterName,null,componentName1,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName2,host2,null);
+  createServiceComponentHost(clusterName,serviceName,componentName3,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName3,host2,null);
+  Map<String,String> configs=new HashMap<String,String>();
+  configs.put("a","b");
+  ConfigurationRequest cr1, cr2;
+  cr1=new ConfigurationRequest(clusterName,"core-site","version1",configs);
+  cr2=new ConfigurationRequest(clusterName,"hdfs-site","version1",configs);
+  ClusterRequest crReq=new ClusterRequest(null,clusterName,null,null);
+  crReq.setDesiredConfig(cr1);
+  controller.updateClusters(Collections.singleton(crReq),null);
+  crReq=new ClusterRequest(null,clusterName,null,null);
+  crReq.setDesiredConfig(cr2);
+  controller.updateClusters(Collections.singleton(crReq),null);
+  installService(clusterName,serviceName,false,false);
+  configs=new HashMap<String,String>();
+  configs.put("a","c");
+  final Config config=new ConfigImpl("hdfs-site");
+  config.setProperties(configs);
+  config.setVersionTag("version122");
+  Long groupId=createConfigGroup(clusters.getCluster(clusterName),"g1","t1",new ArrayList<String>(){
+{
+      add("h1");
+      add("h2");
+    }
+  }
+,new ArrayList<Config>(){
+{
+      add(config);
+    }
+  }
+);
+  Assert.assertNotNull(groupId);
+  long requestId=startService(clusterName,serviceName,true,false);
+  HostRoleCommand smokeTestCmd=null;
+  List<Stage> stages=actionDB.getAllStages(requestId);
+  for (  Stage stage : stages) {
+    for (    HostRoleCommand hrc : stage.getOrderedHostRoleCommands()) {
+      if (hrc.getRole().equals(Role.HDFS_SERVICE_CHECK)) {
+        Assert.assertEquals(2,hrc.getExecutionCommandWrapper().getExecutionCommand().getConfigurationTags().size());
+        smokeTestCmd=hrc;
+      }
+    }
+  }
+  Assert.assertNotNull(smokeTestCmd);
+  Assert.assertEquals("c",smokeTestCmd.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().get("hdfs-site").get("a"));
+}

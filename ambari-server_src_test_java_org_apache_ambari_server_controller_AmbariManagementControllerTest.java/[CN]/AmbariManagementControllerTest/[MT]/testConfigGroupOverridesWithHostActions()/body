@@ -1,0 +1,147 @@
+{
+  String clusterName="foo1";
+  createCluster(clusterName);
+  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-2.0.6"));
+  String serviceName1="HDFS";
+  String serviceName2="MAPREDUCE2";
+  createService(clusterName,serviceName1,null);
+  createService(clusterName,serviceName2,null);
+  String componentName1="NAMENODE";
+  String componentName2="DATANODE";
+  String componentName3="HDFS_CLIENT";
+  String componentName4="HISTORYSERVER";
+  createServiceComponent(clusterName,serviceName1,componentName1,State.INIT);
+  createServiceComponent(clusterName,serviceName1,componentName2,State.INIT);
+  createServiceComponent(clusterName,serviceName1,componentName3,State.INIT);
+  createServiceComponent(clusterName,serviceName2,componentName4,State.INIT);
+  String host1="h1";
+  clusters.addHost(host1);
+  clusters.getHost("h1").setOsType("centos5");
+  clusters.getHost("h1").setState(HostState.HEALTHY);
+  clusters.getHost("h1").persist();
+  String host2="h2";
+  clusters.addHost(host2);
+  clusters.getHost("h2").setOsType("centos6");
+  clusters.getHost("h2").setState(HostState.HEALTHY);
+  clusters.getHost("h2").persist();
+  String host3="h3";
+  clusters.addHost(host3);
+  clusters.getHost("h3").setOsType("centos6");
+  clusters.getHost("h3").setState(HostState.HEALTHY);
+  clusters.getHost("h3").persist();
+  clusters.mapHostToCluster(host1,clusterName);
+  clusters.mapHostToCluster(host2,clusterName);
+  clusters.mapHostToCluster(host3,clusterName);
+  createServiceComponentHost(clusterName,serviceName1,componentName1,host1,null);
+  createServiceComponentHost(clusterName,serviceName1,componentName2,host2,null);
+  createServiceComponentHost(clusterName,serviceName1,componentName3,host2,null);
+  createServiceComponentHost(clusterName,serviceName1,componentName3,host3,null);
+  createServiceComponentHost(clusterName,serviceName2,componentName4,host3,null);
+  Map<String,String> configs=new HashMap<String,String>();
+  configs.put("a","b");
+  ConfigurationRequest cr1, cr2, cr3;
+  cr1=new ConfigurationRequest(clusterName,"core-site","version1",configs);
+  cr2=new ConfigurationRequest(clusterName,"hdfs-site","version1",configs);
+  cr3=new ConfigurationRequest(clusterName,"mapred-site","version1",configs);
+  ClusterRequest crReq=new ClusterRequest(null,clusterName,null,null);
+  crReq.setDesiredConfig(cr1);
+  controller.updateClusters(Collections.singleton(crReq),null);
+  crReq=new ClusterRequest(null,clusterName,null,null);
+  crReq.setDesiredConfig(cr2);
+  controller.updateClusters(Collections.singleton(crReq),null);
+  crReq=new ClusterRequest(null,clusterName,null,null);
+  crReq.setDesiredConfig(cr3);
+  controller.updateClusters(Collections.singleton(crReq),null);
+  configs=new HashMap<String,String>();
+  configs.put("a","c");
+  Cluster cluster=clusters.getCluster(clusterName);
+  final Config config=new ConfigImpl("core-site");
+  config.setProperties(configs);
+  config.setVersionTag("version122");
+  Long groupId=createConfigGroup(cluster,"g1","t1",new ArrayList<String>(){
+{
+      add("h1");
+    }
+  }
+,new ArrayList<Config>(){
+{
+      add(config);
+    }
+  }
+);
+  Assert.assertNotNull(groupId);
+  configs=new HashMap<String,String>();
+  configs.put("a","c");
+  final Config config2=new ConfigImpl("mapred-site");
+  config2.setProperties(configs);
+  config2.setVersionTag("version122");
+  groupId=createConfigGroup(cluster,"g2","t2",new ArrayList<String>(){
+{
+      add("h1");
+    }
+  }
+,new ArrayList<Config>(){
+{
+      add(config2);
+    }
+  }
+);
+  Assert.assertNotNull(groupId);
+  Long requestId=installService(clusterName,serviceName1,false,false);
+  HostRoleCommand namenodeInstall=null;
+  HostRoleCommand clientInstall=null;
+  HostRoleCommand slaveInstall=null;
+  for (  Stage stage : actionDB.getAllStages(requestId)) {
+    for (    HostRoleCommand hrc : stage.getOrderedHostRoleCommands()) {
+      if (hrc.getRole().equals(Role.NAMENODE) && hrc.getHostName().equals("h1")) {
+        namenodeInstall=hrc;
+      }
+ else       if (hrc.getRole().equals(Role.HDFS_CLIENT) && hrc.getHostName().equals("h3")) {
+        clientInstall=hrc;
+      }
+ else       if (hrc.getRole().equals(Role.DATANODE) && hrc.getHostName().equals("h2")) {
+        slaveInstall=hrc;
+      }
+    }
+  }
+  Assert.assertNotNull(namenodeInstall);
+  Assert.assertNotNull(clientInstall);
+  Assert.assertNotNull(slaveInstall);
+  Assert.assertTrue(namenodeInstall.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().get("core-site").containsKey("a"));
+  Assert.assertEquals("c",namenodeInstall.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().get("core-site").get("a"));
+  Assert.assertTrue(clientInstall.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().get("core-site").containsKey("a"));
+  Assert.assertEquals("b",clientInstall.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().get("core-site").get("a"));
+  Assert.assertTrue(slaveInstall.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().get("core-site").containsKey("a"));
+  Assert.assertEquals("b",slaveInstall.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().get("core-site").get("a"));
+  startService(clusterName,serviceName1,false,false);
+  requestId=installService(clusterName,serviceName2,false,false);
+  HostRoleCommand mapredInstall=null;
+  for (  Stage stage : actionDB.getAllStages(requestId)) {
+    for (    HostRoleCommand hrc : stage.getOrderedHostRoleCommands()) {
+      if (hrc.getRole().equals(Role.HISTORYSERVER) && hrc.getHostName().equals("h3")) {
+        mapredInstall=hrc;
+      }
+    }
+  }
+  Assert.assertNotNull(mapredInstall);
+  Assert.assertEquals("b",mapredInstall.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().get("mapred-site").get("a"));
+  ConfigGroup configGroup=cluster.getConfigGroups().get(groupId);
+  configGroup.setHosts(new HashMap<String,Host>(){
+{
+      put("h3",clusters.getHost("h3"));
+    }
+  }
+);
+  configGroup.persist();
+  requestId=startService(clusterName,serviceName2,false,false);
+  mapredInstall=null;
+  for (  Stage stage : actionDB.getAllStages(requestId)) {
+    for (    HostRoleCommand hrc : stage.getOrderedHostRoleCommands()) {
+      if (hrc.getRole().equals(Role.HISTORYSERVER) && hrc.getHostName().equals("h3")) {
+        mapredInstall=hrc;
+      }
+    }
+  }
+  Assert.assertNotNull(mapredInstall);
+  Assert.assertEquals("c",mapredInstall.getExecutionCommandWrapper().getExecutionCommand().getConfigurations().get("mapred-site").get("a"));
+}

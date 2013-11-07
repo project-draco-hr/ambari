@@ -87,9 +87,9 @@
   sch2.updateActualConfigs(actual);
   Assert.assertFalse(sch1.convertToResponse().isStaleConfig());
   Assert.assertFalse(sch2.convertToResponse().isStaleConfig());
-  Host host=clusters.getHostsForCluster(cluster.getClusterName()).get(hostName);
+  final Host host=clusters.getHostsForCluster(cluster.getClusterName()).get(hostName);
   Assert.assertNotNull(host);
-  Config c=configFactory.createNew(cluster,"hdfs-site",new HashMap<String,String>(){
+  final Config c=configFactory.createNew(cluster,"hdfs-site",new HashMap<String,String>(){
 {
       put("dfs.journalnode.http-address","http://goo");
     }
@@ -98,10 +98,22 @@
   c.setVersionTag("version3");
   c.persist();
   cluster.addConfig(c);
-  host.addDesiredConfig(cluster.getClusterId(),true,"user",c);
+  ConfigGroup configGroup=configGroupFactory.createNew(cluster,"g1","t1","",new HashMap<String,Config>(){
+{
+      put("hdfs-site",c);
+    }
+  }
+,new HashMap<String,Host>(){
+{
+      put("h3",host);
+    }
+  }
+);
+  configGroup.persist();
+  cluster.addConfigGroup(configGroup);
   Assert.assertTrue(sch1.convertToResponse().isStaleConfig());
   Assert.assertTrue(sch2.convertToResponse().isStaleConfig());
-  actual.get("hdfs-site").put("host_override_tag","version3");
+  actual.get("hdfs-site").put(configGroup.getId().toString(),"version3");
   sch2.updateActualConfigs(actual);
   Assert.assertTrue(sch1.convertToResponse().isStaleConfig());
   Assert.assertFalse(sch2.convertToResponse().isStaleConfig());
