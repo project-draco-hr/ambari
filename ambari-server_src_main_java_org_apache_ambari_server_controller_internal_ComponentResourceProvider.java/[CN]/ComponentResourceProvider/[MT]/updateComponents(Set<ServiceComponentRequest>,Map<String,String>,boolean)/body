@@ -54,15 +54,6 @@
         throw new IllegalArgumentException("Invalid arguments, invalid" + " desired state, desiredState=" + newState.toString());
       }
     }
-    if (request.getConfigVersions() != null) {
-      State.checkUpdateConfiguration(sc,newState);
-      for (      Map.Entry<String,String> entry : request.getConfigVersions().entrySet()) {
-        Config config=cluster.getConfig(entry.getKey(),entry.getValue());
-        if (null == config) {
-          throw new AmbariException("Trying to update servicecomponent with" + " invalid configs" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", invalidConfigType="+ entry.getKey()+ ", invalidConfigTag="+ entry.getValue());
-        }
-      }
-    }
     if (newState == null) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Nothing to do for new updateServiceComponent request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", newDesiredState=null");
@@ -118,26 +109,6 @@
   }
   if (seenNewStates.size() > 1) {
     throw new IllegalArgumentException("Cannot handle different desired" + " state changes for a set of service components at the same time");
-  }
-  for (  ServiceComponentRequest request : requests) {
-    Cluster cluster=clusters.getCluster(request.getClusterName());
-    Service s=cluster.getService(request.getServiceName());
-    ServiceComponent sc=s.getServiceComponent(request.getComponentName());
-    if (request.getConfigVersions() != null) {
-      Map<String,Config> updated=new HashMap<String,Config>();
-      for (      Map.Entry<String,String> entry : request.getConfigVersions().entrySet()) {
-        Config config=cluster.getConfig(entry.getKey(),entry.getValue());
-        updated.put(config.getType(),config);
-      }
-      if (!updated.isEmpty()) {
-        sc.updateDesiredConfigs(updated);
-        for (        ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
-          sch.deleteDesiredConfigs(updated.keySet());
-          sch.persist();
-        }
-        sc.persist();
-      }
-    }
   }
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
   return getManagementController().createStages(cluster,requestProperties,null,null,changedComps,changedScHosts,ignoredScHosts,runSmokeTest,false);

@@ -39,18 +39,6 @@
         throw new IllegalArgumentException("Invalid arguments, invalid" + " desired state, desiredState=" + newState);
       }
     }
-    if (request.getConfigVersions() != null) {
-      State.checkUpdateConfiguration(s,newState);
-      for (      Map.Entry<String,String> entry : request.getConfigVersions().entrySet()) {
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Attaching config to service" + ", clusterName=" + cluster.getClusterName() + ", serviceName="+ s.getName()+ ", configType="+ entry.getKey()+ ", configTag="+ entry.getValue());
-        }
-        Config config=cluster.getConfig(entry.getKey(),entry.getValue());
-        if (null == config) {
-          throw new AmbariException("Trying to update service with" + " invalid configs" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ s.getName()+ ", invalidConfigType="+ entry.getKey()+ ", invalidConfigTag="+ entry.getValue());
-        }
-      }
-    }
     if (newState == null) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Nothing to do for new updateService request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", newDesiredState=null");
@@ -128,32 +116,6 @@
   }
   if (seenNewStates.size() > 1) {
     throw new IllegalArgumentException("Cannot handle different desired state" + " changes for a set of services at the same time");
-  }
-  for (  ServiceRequest request : requests) {
-    Cluster cluster=clusters.getCluster(request.getClusterName());
-    Service s=cluster.getService(request.getServiceName());
-    if (request.getConfigVersions() != null) {
-      Map<String,Config> updated=new HashMap<String,Config>();
-      for (      Map.Entry<String,String> entry : request.getConfigVersions().entrySet()) {
-        Config config=cluster.getConfig(entry.getKey(),entry.getValue());
-        updated.put(config.getType(),config);
-      }
-      if (!updated.isEmpty()) {
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Updating service configs, attaching configs" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", configCount="+ updated.size());
-        }
-        s.updateDesiredConfigs(updated);
-        s.persist();
-      }
-      for (      ServiceComponent sc : s.getServiceComponents().values()) {
-        sc.deleteDesiredConfigs(updated.keySet());
-        for (        ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
-          sch.deleteDesiredConfigs(updated.keySet());
-          sch.persist();
-        }
-        sc.persist();
-      }
-    }
   }
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
   return controller.createStages(cluster,requestProperties,null,changedServices,changedComps,changedScHosts,ignoredScHosts,runSmokeTest,reconfigureClients);
