@@ -2,14 +2,19 @@ def execute_command(self, command):
     '\n    Executes commands of type  EXECUTION_COMMAND\n    '
     clusterName = command['clusterName']
     commandId = command['commandId']
-    logger.info((((((('Executing command with id = ' + str(commandId)) + ' for role = ') + command['role']) + ' of ') + 'cluster ') + clusterName))
+    command_format = self.determine_command_format_version(command)
+    message = 'Executing command with id = {commandId} for role = {role} of cluster {cluster}. Command format={command_format}'.format(commandId=str(commandId), role=command['role'], cluster=clusterName, command_format=command_format)
+    logger.info(message)
     logger.debug(pprint.pformat(command))
     taskId = command['taskId']
     in_progress_status = self.commandStatuses.generate_report_template(command)
     in_progress_status.update({'tmpout': ((((self.tmpdir + os.sep) + 'output-') + str(taskId)) + '.txt'), 'tmperr': ((((self.tmpdir + os.sep) + 'errors-') + str(taskId)) + '.txt'), 'status': self.IN_PROGRESS_STATUS, })
     self.commandStatuses.put_command_status(command, in_progress_status)
-    puppetExecutor = PuppetExecutor.PuppetExecutor(self.config.get('puppet', 'puppetmodules'), self.config.get('puppet', 'puppet_home'), self.config.get('puppet', 'facter_home'), self.config.get('agent', 'prefix'), self.config)
-    commandresult = puppetExecutor.runCommand(command, in_progress_status['tmpout'], in_progress_status['tmperr'])
+    if (command_format == self.COMMAND_FORMAT_V1):
+        puppetExecutor = PuppetExecutor.PuppetExecutor(self.config.get('puppet', 'puppetmodules'), self.config.get('puppet', 'puppet_home'), self.config.get('puppet', 'facter_home'), self.config.get('agent', 'prefix'), self.config)
+        commandresult = puppetExecutor.runCommand(command, in_progress_status['tmpout'], in_progress_status['tmperr'])
+    else:
+        commandresult = self.customServiceOrchestrator.runCommand(command, in_progress_status['tmpout'], in_progress_status['tmperr'])
     status = self.COMPLETED_STATUS
     if (commandresult['exitcode'] != 0):
         status = self.FAILED_STATUS
