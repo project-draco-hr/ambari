@@ -1,0 +1,27 @@
+{
+  populateActionDBWithCustomAction(db,hostName,requestId,stageId);
+  Stage stage=db.getStage(StageUtils.getActionId(requestId,stageId));
+  assertEquals(HostRoleStatus.PENDING,stage.getHostRoleStatus(hostName,actionName));
+  List<HostRoleCommandEntity> entities=hostRoleCommandDAO.findByHostRole(hostName,requestId,stageId,actionName);
+  assertEquals(HostRoleStatus.PENDING,entities.get(0).getStatus());
+  stage.setHostRoleStatus(hostName,actionName,HostRoleStatus.QUEUED);
+  entities=hostRoleCommandDAO.findByHostRole(hostName,requestId,stageId,actionName);
+  assertEquals(HostRoleStatus.QUEUED,stage.getHostRoleStatus(hostName,actionName));
+  assertEquals(HostRoleStatus.PENDING,entities.get(0).getStatus());
+  long now=System.currentTimeMillis();
+  db.hostRoleScheduled(stage,hostName,actionName);
+  entities=hostRoleCommandDAO.findByHostRole(hostName,requestId,stageId,actionName);
+  assertEquals(HostRoleStatus.QUEUED,entities.get(0).getStatus());
+  Thread thread=new Thread(){
+    @Override public void run(){
+      Stage stage1=db.getStage("23-31");
+      stage1.setHostRoleStatus(hostName,actionName,HostRoleStatus.COMPLETED);
+      db.hostRoleScheduled(stage1,hostName,actionName);
+    }
+  }
+;
+  thread.start();
+  thread.join();
+  entities=hostRoleCommandDAO.findByHostRole(hostName,requestId,stageId,actionName);
+  assertEquals("Concurrent update failed",HostRoleStatus.COMPLETED,entities.get(0).getStatus());
+}

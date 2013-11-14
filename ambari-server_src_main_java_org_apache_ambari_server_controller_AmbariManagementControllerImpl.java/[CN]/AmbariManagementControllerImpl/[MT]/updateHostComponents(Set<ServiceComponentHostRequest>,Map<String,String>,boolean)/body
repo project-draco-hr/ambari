@@ -8,7 +8,6 @@
   Set<String> clusterNames=new HashSet<String>();
   Map<String,Map<String,Map<String,Set<String>>>> hostComponentNames=new HashMap<String,Map<String,Map<String,Set<String>>>>();
   Set<State> seenNewStates=new HashSet<State>();
-  boolean processingUpgradeRequest=false;
   int numberOfRequestsProcessed=0;
   StackId fromStackVersion=new StackId();
   Map<ServiceComponentHost,State> directTransitionScHosts=new HashMap<ServiceComponentHost,State>();
@@ -48,7 +47,6 @@
         throw new IllegalArgumentException("Invalid arguments, invalid" + " desired state, desiredState=" + newState.toString());
       }
     }
-    boolean upgradeRequest=checkIfUpgradeRequestAndValidate(request,cluster,s,sc,sch);
     if (newState == null) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Nothing to do for new updateServiceComponentHost request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", hostname="+ request.getHostname()+ ", oldState="+ oldState+ ", newDesiredState=null");
@@ -59,20 +57,6 @@
       throw new IllegalArgumentException("Invalid desired state for a client" + " component");
     }
     seenNewStates.add(newState);
-    if (!processingUpgradeRequest && upgradeRequest) {
-      processingUpgradeRequest=true;
-      if (numberOfRequestsProcessed > 1) {
-        throw new AmbariException("An upgrade request cannot be combined with " + "other non-upgrade requests.");
-      }
-      fromStackVersion=sch.getStackVersion();
-    }
-    if (processingUpgradeRequest) {
-      if (!upgradeRequest) {
-        throw new AmbariException("An upgrade request cannot be combined with " + "other non-upgrade requests.");
-      }
-      sch.setState(State.UPGRADING);
-      sch.setDesiredStackVersion(cluster.getCurrentStackVersion());
-    }
     State oldSchState=sch.getState();
     if (newState == oldSchState && !sc.isClientComponent()) {
       ignoredScHosts.add(sch);
@@ -130,11 +114,5 @@ throw new AmbariException("Internal error - not supported transition",e);
 }
 }
 Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
-Map<String,String> requestParameters=null;
-if (processingUpgradeRequest) {
-requestParameters=new HashMap<String,String>();
-requestParameters.put(Configuration.UPGRADE_TO_STACK,gson.toJson(cluster.getCurrentStackVersion()));
-requestParameters.put(Configuration.UPGRADE_FROM_STACK,gson.toJson(fromStackVersion));
-}
-return createStages(cluster,requestProperties,requestParameters,null,null,changedScHosts,ignoredScHosts,runSmokeTest,false);
+return createStages(cluster,requestProperties,null,null,null,changedScHosts,ignoredScHosts,runSmokeTest,false);
 }

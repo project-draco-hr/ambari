@@ -1,0 +1,42 @@
+{
+  Map<String,List<String>> info=new HashMap<String,List<String>>();
+  if (cluster.getServices() != null) {
+    String hostName=getHostName();
+    for (    String serviceName : cluster.getServices().keySet()) {
+      if (cluster.getServices().get(serviceName) != null) {
+        for (        String componentName : cluster.getServices().get(serviceName).getServiceComponents().keySet()) {
+          String clusterInfoKey=componentToClusterInfoKeyMap.get(componentName);
+          if (clusterInfoKey == null) {
+            continue;
+          }
+          ServiceComponent scomp=cluster.getServices().get(serviceName).getServiceComponents().get(componentName);
+          if (scomp.getServiceComponentHosts() != null && !scomp.getServiceComponentHosts().isEmpty()) {
+            List<String> hostList=new ArrayList<String>();
+            for (            String host : scomp.getServiceComponentHosts().keySet()) {
+              String mappedHost=hostsMap.getHostMap(host);
+              hostList.add(mappedHost);
+            }
+            info.put(clusterInfoKey,hostList);
+          }
+          String url=configuration.getRcaDatabaseUrl();
+          if (url.contains(Configuration.HOSTNAME_MACRO)) {
+            url=url.replace(Configuration.HOSTNAME_MACRO,hostsMap.getHostMap(hostName));
+          }
+          info.put("ambari_db_rca_url",Arrays.asList(url));
+          info.put("ambari_db_rca_driver",Arrays.asList(configuration.getRcaDatabaseDriver()));
+          info.put("ambari_db_rca_username",Arrays.asList(configuration.getRcaDatabaseUser()));
+          info.put("ambari_db_rca_password",Arrays.asList(configuration.getRcaDatabasePassword()));
+        }
+      }
+    }
+  }
+  List<String> allHostNames=new ArrayList<String>();
+  List<String> allHostPingPorts=new ArrayList<String>();
+  for (  Host host : allHosts.values()) {
+    allHostNames.add(host.getHostName());
+    allHostPingPorts.add(host.getCurrentPingPort() == null ? null : host.getCurrentPingPort().toString());
+  }
+  info.put("all_hosts",allHostNames);
+  info.put("all_ping_ports",allHostPingPorts);
+  return info;
+}

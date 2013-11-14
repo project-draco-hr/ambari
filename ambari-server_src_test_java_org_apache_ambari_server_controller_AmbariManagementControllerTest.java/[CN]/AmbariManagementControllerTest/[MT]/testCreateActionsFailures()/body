@@ -1,16 +1,10 @@
 {
-  clusters.addCluster("c1");
-  clusters.getCluster("c1").setDesiredStackVersion(new StackId("HDP-0.1"));
-  clusters.addHost("h1");
-  clusters.getHost("h1").setOsType("centos5");
-  clusters.getHost("h1").persist();
-  Set<String> hostNames=new HashSet<String>(){
+  setupClusterWithHosts("c1","HDP-0.1",new ArrayList<String>(){
 {
       add("h1");
     }
   }
-;
-  clusters.mapHostsToCluster(hostNames,"c1");
+,"centos5");
   Cluster cluster=clusters.getCluster("c1");
   cluster.setDesiredStackVersion(new StackId("HDP-0.1"));
   cluster.setCurrentStackVersion(new StackId("HDP-0.1"));
@@ -35,9 +29,12 @@
   cluster.addDesiredConfig("_test",config2);
   Service hdfs=cluster.addService("HDFS");
   hdfs.persist();
+  Service mapred=cluster.addService("MAPREDUCE");
+  mapred.persist();
   hdfs.addServiceComponent(Role.HDFS_CLIENT.name()).persist();
   hdfs.addServiceComponent(Role.NAMENODE.name()).persist();
   hdfs.addServiceComponent(Role.DATANODE.name()).persist();
+  mapred.addServiceComponent(Role.MAPREDUCE_CLIENT.name()).persist();
   hdfs.getServiceComponent(Role.HDFS_CLIENT.name()).addServiceComponentHost("h1").persist();
   hdfs.getServiceComponent(Role.NAMENODE.name()).addServiceComponentHost("h1").persist();
   hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h1").persist();
@@ -50,54 +47,45 @@
   ExecuteActionRequest actionRequest=new ExecuteActionRequest("c1","NON_EXISTENT_CHECK","HDFS",params);
   Map<String,String> requestProperties=new HashMap<String,String>();
   requestProperties.put(REQUEST_CONTEXT_PROPERTY,"Called from a test");
-  try {
-    controller.createAction(actionRequest,requestProperties);
-    Assert.fail("createAction should fail for NON_EXISTENT_CHECK");
-  }
- catch (  AmbariException ex) {
-    Assert.assertTrue(ex.getMessage().contains("Unsupported action"));
-  }
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Unsupported action");
   actionRequest=new ExecuteActionRequest("c1","NON_EXISTENT_SERVICE_CHECK","HDFS",params);
-  try {
-    controller.createAction(actionRequest,requestProperties);
-    Assert.fail("createAction should fail for NON_EXISTENT_SERVICE_CHECK");
-  }
- catch (  AmbariException ex) {
-    Assert.assertTrue(ex.getMessage().contains("Unsupported action"));
-  }
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Unsupported action");
   actionRequest=new ExecuteActionRequest("c1","DECOMMISSION_DATANODE","MAPREDUCE",params);
-  try {
-    controller.createAction(actionRequest,requestProperties);
-    Assert.fail("createAction should fail for DECOMMISSION_DATANODE on MAPREDUCE");
-  }
- catch (  AmbariException ex) {
-    Assert.assertTrue(ex.getMessage().contains("Unsupported action DECOMMISSION_DATANODE for MAPREDUCE"));
-  }
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Unsupported action DECOMMISSION_DATANODE for MAPREDUCE");
   actionRequest=new ExecuteActionRequest("c1","DECOMMISSION_DATANODE","HDFS",params);
-  try {
-    controller.createAction(actionRequest,requestProperties);
-    Assert.fail("createAction should fail for DECOMMISSION_DATANODE on HDFS - no excludeFileTag");
-  }
- catch (  IllegalArgumentException ex) {
-    Assert.assertTrue(ex.getMessage().contains("No exclude file specified when decommissioning datanodes"));
-  }
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"No exclude file specified when decommissioning datanodes");
   params.put("excludeFileTag","tag1");
   actionRequest=new ExecuteActionRequest("c1","DECOMMISSION_DATANODE","HDFS",params);
-  try {
-    controller.createAction(actionRequest,requestProperties);
-    Assert.fail("createAction should fail for DECOMMISSION_DATANODE on HDFS - no config type hdfs-exclude-file");
-  }
- catch (  AmbariException ex) {
-    Assert.assertTrue(ex.getMessage().contains("Decommissioning datanodes requires the cluster"));
-  }
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Decommissioning datanodes requires the cluster");
   actionRequest=new ExecuteActionRequest("c1",null,"DECOMMISSION_DATANODE","HDFS",null,null,params);
-  try {
-    RequestStatusResponse response=controller.createAction(actionRequest,requestProperties);
-    if (response != null) {
-      Assert.fail("createAction should fail for action DECOMMISSION_DATANODE");
-    }
-  }
- catch (  AmbariException ex) {
-    Assert.assertTrue(ex.getMessage().contains("Invalid action request"));
-  }
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action DECOMMISSION_DATANODE does not exist");
+  controller.getActionManager().createActionDefinition("a1",ActionType.SYSTEM,"test,dirName","Does file exist","","",TargetHostType.SPECIFIC,Short.valueOf("100"));
+  controller.getActionManager().createActionDefinition("a2",ActionType.SYSTEM,"","Does file exist","HDFS","DATANODE",TargetHostType.ANY,Short.valueOf("100"));
+  controller.getActionManager().createActionDefinition("a3",ActionType.SYSTEM,"","Does file exist","YARN","NODEMANAGER",TargetHostType.ANY,Short.valueOf("100"));
+  controller.getActionManager().createActionDefinition("a4",ActionType.SYSTEM,"","Does file exist","MAPREDUCE","",TargetHostType.ANY,Short.valueOf("100"));
+  actionRequest=new ExecuteActionRequest("c1",null,"a1",null,null,null,null);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action a1 requires input 'test' that is not provided");
+  actionRequest=new ExecuteActionRequest("c1",null,"a1",null,null,null,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action a1 requires input 'dirName' that is not provided");
+  params.put("dirName","dirName");
+  actionRequest=new ExecuteActionRequest("c1",null,"a1",null,null,null,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action a1 requires explicit target host(s)");
+  actionRequest=new ExecuteActionRequest("c1",null,"a2","MAPREDUCE",null,null,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action a2 targets service MAPREDUCE that does not match with expected HDFS");
+  actionRequest=new ExecuteActionRequest("c1",null,"a2","HDFS","HDFS_CLIENT",null,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action a2 targets component HDFS_CLIENT that does not match with expected DATANODE");
+  actionRequest=new ExecuteActionRequest("c1",null,"a1","HDFS2","HDFS_CLIENT",null,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action a1 targets service HDFS2 that does not exist");
+  actionRequest=new ExecuteActionRequest("c1",null,"a1","HDFS","HDFS_CLIENT2",null,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action a1 targets component HDFS_CLIENT2 that does not exist");
+  actionRequest=new ExecuteActionRequest("c1",null,"a1","","HDFS_CLIENT2",null,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action a1 targets component HDFS_CLIENT2 without specifying the target service");
+  actionRequest=new ExecuteActionRequest("c1",null,"a3","","",null,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Action a3 targets service YARN that does not exist");
+  List<String> hosts=new ArrayList<String>();
+  hosts.add("h6");
+  actionRequest=new ExecuteActionRequest("c1",null,"a2","","",hosts,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Request specifies host h6 but its not a valid host based on the target service=HDFS and component=DATANODE");
+  actionRequest=new ExecuteActionRequest("c1",null,"a4","MAPREDUCE","",null,params);
+  expectActionCreationErrorWithMessage(actionRequest,requestProperties,"Suitable hosts not found, component=, service=MAPREDUCE, cluster=c1, actionName=a4");
 }

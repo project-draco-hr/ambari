@@ -1,5 +1,6 @@
 {
-  String clusterName=null;
+  String clusterName;
+  Configuration configuration=injector.getInstance(Configuration.class);
   String requestContext="";
   if (requestProperties != null) {
     requestContext=requestProperties.get(REQUEST_CONTEXT_PROPERTY);
@@ -7,35 +8,37 @@
       requestContext="";
     }
   }
-  String logDir="";
-  if (actionRequest.getClusterName() == null || actionRequest.getClusterName().isEmpty() || actionRequest.getServiceName() == null || actionRequest.getServiceName().isEmpty() || actionRequest.getCommandName() == null || actionRequest.getCommandName().isEmpty()) {
-    throw new AmbariException("Invalid action request : " + "cluster=" + actionRequest.getClusterName() + ", service="+ actionRequest.getServiceName()+ ", command="+ actionRequest.getCommandName());
+  if (actionRequest.getClusterName() == null || actionRequest.getClusterName().isEmpty()) {
+    throw new AmbariException("Invalid request, cluster name must be specified");
   }
   clusterName=actionRequest.getClusterName();
   Cluster cluster=clusters.getCluster(clusterName);
-  Map<String,List<String>> clusterHostInfoMap=StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster,hostsMap,injector);
-  String clusterHostInfo=StageUtils.getGson().toJson(clusterHostInfoMap);
-  Stage stage=stageFactory.createNew(actionManager.getNextRequestId(),logDir,clusterName,requestContext,clusterHostInfo);
-  stage.setStageId(0);
-  LOG.info("Received a createAction request" + ", clusterName=" + actionRequest.getClusterName() + ", serviceName="+ actionRequest.getServiceName()+ ", request="+ actionRequest.toString());
-  if (!isValidCommand(actionRequest.getCommandName(),actionRequest.getServiceName())) {
-    throw new AmbariException("Unsupported action " + actionRequest.getCommandName() + " for "+ actionRequest.getServiceName());
-  }
-  if (actionRequest.getCommandName().contains("SERVICE_CHECK")) {
-    addServiceCheckAction(actionRequest,stage);
-  }
- else   if (actionRequest.getCommandName().equals("DECOMMISSION_DATANODE")) {
-    addDecommissionDatanodeAction(actionRequest,stage);
+  ActionExecutionContext actionExecContext=null;
+  if (actionRequest.isCommand()) {
+    customCommandExecutionHelper.validateCustomCommand(actionRequest);
   }
  else {
-    throw new AmbariException("Unsupported action " + actionRequest.getCommandName());
+    actionExecContext=actionExecutionHelper.validateCustomAction(actionRequest,cluster);
+  }
+  Map<String,List<String>> clusterHostInfo=StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster,hostsMap,injector.getInstance(Configuration.class));
+  String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
+  Stage stage=createNewStage(cluster,actionManager.getNextRequestId(),requestContext,clusterHostInfoJson);
+  stage.setStageId(0);
+  Map<String,String> params=new TreeMap<String,String>();
+  params.put("jdk_location",this.jdkResourceUrl);
+  params.put("stack_version",cluster.getDesiredStackVersion().getStackVersion());
+  if (actionRequest.isCommand()) {
+    customCommandExecutionHelper.addAction(actionRequest,stage,configuration,hostsMap,params);
+  }
+ else {
+    actionExecutionHelper.addAction(actionExecContext,stage,configuration,hostsMap,params);
   }
   RoleCommandOrder rco=this.getRoleCommandOrder(cluster);
   RoleGraph rg=new RoleGraph(rco);
   rg.build(stage);
   List<Stage> stages=rg.getStages();
   if (stages != null && !stages.isEmpty()) {
-    actionManager.sendActions(stages);
+    actionManager.sendActions(stages,actionRequest);
     return getRequestStatusResponse(stage.getRequestId());
   }
  else {
