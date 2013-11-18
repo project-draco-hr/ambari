@@ -1,6 +1,7 @@
+@patch.object(manifestGenerator, 'generateManifest')
 @patch.object(PuppetExecutor, 'isJavaAvailable')
 @patch.object(PuppetExecutor, 'runPuppetFile')
-def test_run_command(self, runPuppetFileMock, isJavaAvailableMock):
+def test_run_command(self, runPuppetFileMock, isJavaAvailableMock, generateManifestMock):
     tmpdir = tempfile.gettempdir()
     puppetInstance = PuppetExecutor('/tmp', '/x', '/y', tmpdir, AmbariConfig().getConfig())
     jsonFile = open('../../main/python/ambari_agent/test.json', 'r')
@@ -11,6 +12,7 @@ def test_run_command(self, runPuppetFileMock, isJavaAvailableMock):
     def side_effect1(puppetFile, result, puppetEnv, tmpoutfile, tmperrfile):
         result['exitcode'] = 0
     runPuppetFileMock.side_effect = side_effect1
+    generateManifestMock.return_value = ''
     puppetInstance.reposInstalled = False
     isJavaAvailableMock.return_value = True
     res = puppetInstance.runCommand(parsedJson, (tmpdir + '/out.txt'), (tmpdir + '/err.txt'))
@@ -25,7 +27,11 @@ def test_run_command(self, runPuppetFileMock, isJavaAvailableMock):
     res = puppetInstance.runCommand(parsedJson, (tmpdir + '/out.txt'), (tmpdir + '/err.txt'))
     self.assertEquals(res['exitcode'], 999)
     self.assertFalse(puppetInstance.reposInstalled)
-    os.unlink(((((tmpdir + os.sep) + 'site-') + str(parsedJson['taskId'])) + '.pp'))
+    generateManifestMock.return_value = 'error during manifest generation'
+    res = puppetInstance.runCommand(parsedJson, (tmpdir + '/out.txt'), (tmpdir + '/err.txt'))
+    self.assertTrue(generateManifestMock.called)
+    self.assertEquals(res['exitcode'], 1)
+    generateManifestMock.return_value = ''
 
     def side_effect2(puppetFile, result, puppetEnv, tmpoutfile, tmperrfile):
         result['exitcode'] = 0
