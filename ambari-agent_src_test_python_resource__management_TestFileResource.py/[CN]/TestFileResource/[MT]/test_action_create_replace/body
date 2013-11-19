@@ -1,0 +1,20 @@
+@patch('resource_management.core.providers.system._ensure_metadata')
+@patch('__builtin__.open')
+@patch.object(os.path, 'exists')
+@patch.object(os.path, 'isdir')
+def test_action_create_replace(self, isdir_mock, exists_mock, open_mock, ensure_mock):
+    "\n    Tests if 'create' action rewrite existent file with new data\n    "
+    isdir_mock.side_effect = [False, True]
+    (old_file, new_file) = (MagicMock(), MagicMock())
+    open_mock.side_effect = [old_file, new_file]
+    old_file.read.return_value = 'old-content'
+    exists_mock.return_value = True
+    with Environment('/') as env:
+        File('/directory/file', action='create', mode=511, backup=False, content='new-content')
+    env.run()
+    old_file.read.assert_called()
+    new_file.__enter__().write.assert_called_with('new-content')
+    ensure_mock.assert_called()
+    self.assertEqual(open_mock.call_count, 2)
+    open_mock.assert_any_call('/directory/file', 'rb')
+    open_mock.assert_any_call('/directory/file', 'wb')
