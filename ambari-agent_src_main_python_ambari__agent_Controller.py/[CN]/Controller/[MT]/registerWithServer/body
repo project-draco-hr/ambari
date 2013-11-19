@@ -1,19 +1,28 @@
 def registerWithServer(self):
     retry = False
     firstTime = True
-    registered = False
     id = (-1)
     ret = {}
-    while (not registered):
+    while (not self.isRegistered):
         try:
             data = json.dumps(self.register.build(id))
             logger.info(('Registering with the server ' + pprint.pformat(data)))
             response = self.sendRequest(self.registerUrl, data)
             ret = json.loads(response)
+            exitstatus = 0
+            if ('exitstatus' in ret.keys()):
+                exitstatus = int(ret['exitstatus'])
+            if ('log' in ret.keys()):
+                log = ret['log']
+            if (exitstatus == 1):
+                logger.error(log)
+                self.isRegistered = False
+                self.repeatRegistration = False
+                return ret
             logger.info(('Registered with the server with ' + pprint.pformat(ret)))
             print 'Registered with the server'
             self.responseId = int(ret['responseId'])
-            registered = True
+            self.isRegistered = True
             if ('statusCommands' in ret.keys()):
                 logger.info(('Got status commands on registration ' + pprint.pformat(ret['statusCommands'])))
                 self.addToQueue(ret['statusCommands'])
@@ -23,6 +32,7 @@ def registerWithServer(self):
             pass
         except ssl.SSLError:
             self.repeatRegistration = False
+            self.isRegistered = False
             return
         except Exception as err:
             delay = randint(0, self.range)
