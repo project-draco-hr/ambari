@@ -1,11 +1,22 @@
 {
-  Map<String,Predicate> predicateMap=getSubResourcePredicates(providerResourceSet);
   for (  Map.Entry<String,QueryImpl> entry : querySubResourceSet.entrySet()) {
     QueryImpl subResource=entry.getValue();
-    subResource.providerResourceSet=new LinkedHashSet<Resource>();
-    for (    Resource resource : subResource.doQuery(predicateMap.get(entry.getKey()))) {
-      subResource.providerResourceSet.add(resource);
+    Resource.Type resourceType=subResource.getResourceDefinition().getType();
+    Request request=subResource.createRequest();
+    Set<Resource> providerResourceSet=new LinkedHashSet<Resource>();
+    for (    QueryResult queryResult : queryResults) {
+      for (      Resource resource : queryResult.getProviderResourceSet()) {
+        Map<Resource.Type,String> map=getKeyValueMap(resource,queryResult.getKeyValueMap());
+        Predicate predicate=subResource.createPredicate(map);
+        Set<Resource> resourceSet=new LinkedHashSet<Resource>();
+        for (        Resource queryResource : subResource.doQuery(resourceType,request,predicate)) {
+          providerResourceSet.add(queryResource);
+          resourceSet.add(queryResource);
+        }
+        subResource.queryResults.add(new QueryResult(request,predicate,map,resourceSet));
+      }
     }
+    clusterController.populateResources(resourceType,providerResourceSet,request,null);
     subResource.queryForSubResources();
   }
 }

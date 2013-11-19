@@ -1,31 +1,34 @@
 {
   Result result=new ResultImpl(true);
   Resource.Type resourceType=getResourceDefinition().getType();
-  if (getKeyValueMap().get(resourceType) == null) {
-    result.getResultTree().setProperty("isCollection","true");
-  }
-  Predicate predicate=createPredicate();
-  Request request=createRequest();
-  Iterable<Resource> iterResource;
-  if (pageRequest == null) {
-    iterResource=clusterController.getIterable(resourceType,providerResourceSet,request,predicate);
-  }
- else {
-    PageResponse pageResponse=clusterController.getPage(resourceType,providerResourceSet,request,predicate,pageRequest);
-    iterResource=pageResponse.getIterable();
-  }
   TreeNode<Resource> tree=result.getResultTree();
-  int count=1;
-  for (  Resource resource : iterResource) {
-    TreeNode<Resource> node=tree.addChild(resource,resource.getType() + ":" + count++);
-    for (    Map.Entry<String,QueryImpl> entry : querySubResourceSet.entrySet()) {
-      String subResCategory=entry.getKey();
-      QueryImpl subResource=entry.getValue();
-      subResource.setKeyValueMap(getKeyValueMap(resource,getKeyValueMap()));
-      TreeNode<Resource> childResult=subResource.getResult().getResultTree();
-      childResult.setName(subResCategory);
-      childResult.setProperty("isCollection","false");
-      node.addChild(childResult);
+  if (isCollectionResource()) {
+    tree.setProperty("isCollection","true");
+  }
+  for (  QueryResult queryResult : queryResults) {
+    Predicate predicate=queryResult.getPredicate();
+    Request request=queryResult.getRequest();
+    Iterable<Resource> iterResource;
+    Set<Resource> providerResourceSet=queryResult.getProviderResourceSet();
+    if (pageRequest == null) {
+      iterResource=clusterController.getIterable(resourceType,providerResourceSet,request,predicate);
+    }
+ else {
+      PageResponse pageResponse=clusterController.getPage(resourceType,providerResourceSet,request,predicate,pageRequest);
+      iterResource=pageResponse.getIterable();
+    }
+    int count=1;
+    for (    Resource resource : iterResource) {
+      TreeNode<Resource> node=tree.addChild(resource,resource.getType() + ":" + count++);
+      for (      Map.Entry<String,QueryImpl> entry : querySubResourceSet.entrySet()) {
+        String subResCategory=entry.getKey();
+        QueryImpl subResource=entry.getValue();
+        subResource.setKeyValueMap(getKeyValueMap(resource,getKeyValueMap()));
+        TreeNode<Resource> childResult=subResource.getResult().getResultTree();
+        childResult.setName(subResCategory);
+        childResult.setProperty("isCollection","false");
+        node.addChild(childResult);
+      }
     }
   }
   return result;
