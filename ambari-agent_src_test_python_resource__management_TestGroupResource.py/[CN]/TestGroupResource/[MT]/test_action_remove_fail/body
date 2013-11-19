@@ -1,0 +1,17 @@
+@patch.object(grp, 'getgrnam')
+@patch.object(subprocess, 'Popen')
+def test_action_remove_fail(self, popen_mock, getgrnam_mock):
+    subproc_mock = MagicMock()
+    subproc_mock.returncode = 1
+    popen_mock.return_value = subproc_mock
+    getgrnam_mock.return_value = 'mapred'
+    try:
+        with Environment('/') as env:
+            Group('mapred', action='remove')
+        env.run()
+        self.fail("Action 'delete' should fail when checked_call fails")
+    except Fail:
+        pass
+    self.assertEqual(popen_mock.call_count, 1)
+    popen_mock.assert_called_with(['/bin/bash', '--login', '-c', 'groupdel mapred'], shell=False, preexec_fn=None, stderr=(-2), stdout=(-1), env=None, cwd=None)
+    getgrnam_mock.assert_called_with('mapred')
