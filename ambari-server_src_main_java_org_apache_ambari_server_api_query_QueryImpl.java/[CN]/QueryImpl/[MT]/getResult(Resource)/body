@@ -1,0 +1,35 @@
+{
+  Result result=new ResultImpl(true);
+  Resource.Type resourceType=getResourceDefinition().getType();
+  TreeNode<Resource> tree=result.getResultTree();
+  if (isCollectionResource()) {
+    tree.setProperty("isCollection","true");
+  }
+  QueryResult queryResult=queryResults.get(parentResource);
+  if (queryResult != null) {
+    Predicate predicate=queryResult.getPredicate();
+    Request request=queryResult.getRequest();
+    Iterable<Resource> iterResource;
+    Set<Resource> providerResourceSet=queryResult.getProviderResourceSet();
+    if (pageRequest == null) {
+      iterResource=clusterController.getIterable(resourceType,providerResourceSet,request,predicate);
+    }
+ else {
+      PageResponse pageResponse=clusterController.getPage(resourceType,providerResourceSet,request,predicate,pageRequest);
+      iterResource=pageResponse.getIterable();
+    }
+    int count=1;
+    for (    Resource resource : iterResource) {
+      TreeNode<Resource> node=tree.addChild(resource,resource.getType() + ":" + count++);
+      for (      Map.Entry<String,QueryImpl> entry : querySubResourceSet.entrySet()) {
+        String subResCategory=entry.getKey();
+        QueryImpl subResource=entry.getValue();
+        TreeNode<Resource> childResult=subResource.getResult(resource).getResultTree();
+        childResult.setName(subResCategory);
+        childResult.setProperty("isCollection","false");
+        node.addChild(childResult);
+      }
+    }
+  }
+  return result;
+}
