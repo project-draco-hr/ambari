@@ -3,24 +3,31 @@
   TestGangliaHostProvider hostProvider=new TestGangliaHostProvider();
   GangliaPropertyProvider propertyProvider=new GangliaHostPropertyProvider(PropertyHelper.getGangliaPropertyIds(Resource.Type.Host,PropertyHelper.MetricsVersion.HDP1),streamProvider,configuration,hostProvider,CLUSTER_NAME_PROPERTY_ID,HOST_NAME_PROPERTY_ID);
   Set<Resource> resources=new HashSet<Resource>();
+  StringBuilder hostsList=new StringBuilder();
   for (int i=0; i < 150; ++i) {
     Resource resource=new ResourceImpl(Resource.Type.Host);
     resource.setProperty(HOST_NAME_PROPERTY_ID,"host" + i);
     resources.add(resource);
+    if (hostsList.length() != 0)     hostsList.append("," + "host" + i);
+ else     hostsList.append("host" + i);
   }
   Map<String,TemporalInfo> temporalInfoMap=new HashMap<String,TemporalInfo>();
   temporalInfoMap.put(PROPERTY_ID,new TemporalInfoImpl(10L,20L,1L));
   Request request=PropertyHelper.getReadRequest(Collections.singleton(PROPERTY_ID),temporalInfoMap);
   Assert.assertEquals(150,propertyProvider.populateResources(resources,request,null).size());
-  URIBuilder uriBuilder=new URIBuilder();
-  uriBuilder.setScheme((configuration.isGangliaSSL() ? "https" : "http"));
-  uriBuilder.setHost("domU-12-31-39-0E-34-E1.compute-1.internal");
-  uriBuilder.setPath("/cgi-bin/rrd.py");
-  uriBuilder.setParameter("c","HDPJobTracker,HDPHBaseMaster,HDPResourceManager,HDPSlaves,HDPHistoryServer,HDPNameNode");
-  uriBuilder.setParameter("m","jvm.metrics.gcCount");
-  uriBuilder.setParameter("s","10");
-  uriBuilder.setParameter("e","20");
-  uriBuilder.setParameter("r","1");
-  String expected=uriBuilder.toString();
-  Assert.assertEquals(expected,streamProvider.getLastSpec());
+  URIBuilder expectedUri=new URIBuilder();
+  expectedUri.setScheme((configuration.isGangliaSSL() ? "https" : "http"));
+  expectedUri.setHost("domU-12-31-39-0E-34-E1.compute-1.internal");
+  expectedUri.setPath("/cgi-bin/rrd.py");
+  expectedUri.setParameter("c","HDPJobTracker,HDPHBaseMaster,HDPResourceManager,HDPSlaves,HDPHistoryServer,HDPNameNode");
+  expectedUri.setParameter("h",hostsList.toString());
+  expectedUri.setParameter("m","jvm.metrics.gcCount");
+  expectedUri.setParameter("s","10");
+  expectedUri.setParameter("e","20");
+  expectedUri.setParameter("r","1");
+  URIBuilder actualUri=new URIBuilder(streamProvider.getLastSpec());
+  Assert.assertEquals(expectedUri.getScheme(),actualUri.getScheme());
+  Assert.assertEquals(expectedUri.getHost(),actualUri.getHost());
+  Assert.assertEquals(expectedUri.getPath(),actualUri.getPath());
+  Assert.assertTrue(isUrlParamsEquals(actualUri,expectedUri));
 }
