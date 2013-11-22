@@ -37,11 +37,18 @@ def read_host_check_file(self, config_file_path):
             propertyMap[DIR_SECTION] = config.get(DIR_SECTION, DIR_KEY).split(',')
     except:
         logger.warn(('Cannot read dir list: ' + str(sys.exc_info()[0])))
+    process_items = []
     try:
-        if config.has_option(PROCESS_SECTION, PROCESS_KEY):
-            propertyMap[PROCESS_SECTION] = config.get(PROCESS_SECTION, PROCESS_KEY).split(',')
+        pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
+        for pid in pids:
+            cmd = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
+            cmd = cmd.replace('\x00', ' ')
+            if ((not ('AmbariServer' in cmd)) and (not ('HostCleanup' in cmd))):
+                if (('java' in cmd) and (JAVA_HOME in cmd)):
+                    process_items.append(int(pid))
     except:
-        logger.warn(('Cannot read process list: ' + str(sys.exc_info()[0])))
+        pass
+    propertyMap[PROCESS_SECTION] = process_items
     try:
         alt_map = {}
         if config.has_option(ALT_SECTION, ALT_KEYS[0]):

@@ -1,10 +1,14 @@
 @patch('ConfigParser.RawConfigParser')
 @patch('__builtin__.open')
-def test_read_host_check_file(self, openMock, readMock):
+@patch('os.listdir', create=True, autospec=True)
+def test_read_host_check_file(self, os_listdir_mock, openMock, readMock):
     out = StringIO.StringIO()
     sys.stdout = out
     f = MagicMock()
-    openMock.return_value = f
+    openRead = MagicMock()
+    openRead.read.return_value = 'java_home|hadoop'
+    openMock.side_effect = [f, openRead]
+    os_listdir_mock.return_value = ['111']
     propertyMap = self.hostcleanup.read_host_check_file('test')
     self.assertTrue(openMock.called)
     self.assertTrue(readMock.called)
@@ -13,4 +17,5 @@ def test_read_host_check_file(self, openMock, readMock):
     self.assertTrue(propertyMap.has_key(USER_SECTION))
     self.assertTrue(propertyMap.has_key(DIR_SECTION))
     self.assertTrue(propertyMap.has_key(PROCESS_SECTION))
+    self.assertEquals(propertyMap[PROCESS_SECTION][0], 111)
     sys.stdout = sys.__stdout__
