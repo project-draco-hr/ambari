@@ -5,27 +5,47 @@
     LOG.info("No services defined for stack: " + stackInfo.getName() + "-"+ stackInfo.getVersion());
   }
  else {
-    File[] servicesFolders=servicesFolder.listFiles(AmbariMetaInfo.FILENAME_FILTER);
-    if (servicesFolders != null) {
+    try {
+      File[] servicesFolders=servicesFolder.listFiles(AmbariMetaInfo.FILENAME_FILTER);
+      if (servicesFolders == null) {
+        String message=String.format("No service folders found at %s",servicesFolder.getAbsolutePath());
+        throw new AmbariException(message);
+      }
       for (      File serviceFolder : servicesFolders) {
         if (!serviceFolder.isDirectory())         continue;
-        ServiceInfo serviceInfo=new ServiceInfo();
-        serviceInfo.setName(serviceFolder.getName());
         File metainfoFile=new File(serviceFolder.getAbsolutePath() + File.separator + AmbariMetaInfo.SERVICE_METAINFO_FILE_NAME);
-        setMetaInfo(metainfoFile,serviceInfo);
         File metricsJson=new File(serviceFolder.getAbsolutePath() + File.separator + AmbariMetaInfo.SERVICE_METRIC_FILE_NAME);
-        if (metricsJson.exists())         serviceInfo.setMetricsFile(metricsJson);
-        services.add(serviceInfo);
-        File serviceConfigFolder=new File(serviceFolder.getAbsolutePath() + File.separator + AmbariMetaInfo.SERVICE_CONFIG_FOLDER_NAME);
-        File[] configFiles=serviceConfigFolder.listFiles(AmbariMetaInfo.FILENAME_FILTER);
-        if (configFiles != null) {
-          for (          File config : configFiles) {
-            if (config.getName().endsWith(AmbariMetaInfo.SERVICE_CONFIG_FILE_NAME_POSTFIX)) {
-              serviceInfo.getProperties().addAll(getProperties(config));
-            }
+        String version=getSchemaVersion(metainfoFile);
+        if (AmbariMetaInfo.SCHEMA_VERSION_LEGACY.equals(version)) {
+          ServiceInfo serviceInfo=new ServiceInfo();
+          serviceInfo.setSchemaVersion(AmbariMetaInfo.SCHEMA_VERSION_LEGACY);
+          serviceInfo.setName(serviceFolder.getName());
+          ServiceMetainfoXml smx=unmarshal(ServiceMetainfoXml.class,metainfoFile);
+          serviceInfo.setComment(smx.getComment());
+          serviceInfo.setUser(smx.getUser());
+          serviceInfo.setVersion(smx.getVersion());
+          serviceInfo.setDeleted(smx.isDeleted());
+          serviceInfo.setConfigDependencies(smx.getConfigDependencies());
+          serviceInfo.getComponents().addAll(smx.getComponents());
+          if (metricsJson.exists())           serviceInfo.setMetricsFile(metricsJson);
+          setPropertiesFromConfigs(serviceFolder,serviceInfo);
+          services.add(serviceInfo);
+        }
+ else {
+          ServiceMetainfoV2Xml smiv2x=unmarshal(ServiceMetainfoV2Xml.class,metainfoFile);
+          List<ServiceInfo> serviceInfos=smiv2x.getServices();
+          for (          ServiceInfo serviceInfo : serviceInfos) {
+            serviceInfo.setSchemaVersion(AmbariMetaInfo.SCHEMA_VERSION_2);
+            serviceInfo.setServiceMetadataFolder(serviceFolder.getName());
+            if (metricsJson.exists())             serviceInfo.setMetricsFile(metricsJson);
+            setPropertiesFromConfigs(serviceFolder,serviceInfo);
+            services.add(serviceInfo);
           }
         }
       }
+    }
+ catch (    Exception e) {
+      LOG.error("Error while parsing metainfo.xml for a service",e);
     }
   }
   stackInfo.getServices().addAll(services);
