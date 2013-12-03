@@ -1,0 +1,32 @@
+def upgrade_local_repo_db(args, dbkey, dbvalue):
+    if (not is_root()):
+        err = 'Ambari-server upgrade_local_repo_db should be run with root-level privileges'
+        raise FatalException(4, err)
+    check_database_name_property()
+    parse_properties_file(args)
+    if (args.persistence_type == 'remote'):
+        client_desc = ((DATABASE_NAMES[DATABASE_INDEX] + ' ') + DATABASE_CLI_TOOLS_DESC[DATABASE_INDEX])
+        client_usage_cmd = DATABASE_CLI_TOOLS_USAGE[DATABASE_INDEX].format(DATABASE_INSERT_METAINFO_SCRIPTS[DATABASE_INDEX], args.database_username, BLIND_PASSWORD, args.database_name)
+        if (not (args.database == 'oracle')):
+            raise FatalException((-20), 'Upgrade for remote database only supports Oracle.')
+        if get_db_cli_tool(args):
+            (retcode, out, err) = upgrade_local_repo_remote_db(args, DATABASE_INSERT_METAINFO_SCRIPTS[DATABASE_INDEX], dbkey, dbvalue)
+            if (not (retcode == 0)):
+                raise NonFatalException(err)
+        else:
+            err = ((('Cannot find ' + client_desc) + ' client in the path to upgrade the local ') + 'repo information.')
+            raise NonFatalException(err)
+        pass
+    else:
+        configure_database_username_password(args)
+        dbname = args.database_name
+        sqlfile = DATABASE_INSERT_METAINFO_SCRIPTS[0]
+        command = INSERT_METAINFO_CMD[:]
+        command[(-1)] = command[(-1)].format(sqlfile, dbkey, dbvalue, dbname)
+        (retcode, outdata, errdata) = run_os_command(command)
+        if (not (retcode == 0)):
+            raise FatalException(retcode, errdata)
+        if errdata:
+            print_warning_msg(errdata)
+        return retcode
+    pass

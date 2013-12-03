@@ -1,0 +1,23 @@
+@patch('os.listdir')
+@patch('os.path.exists')
+@patch.object(ambari_server, 'load_stack_values')
+@patch.object(ambari_server, 'get_ambari_properties')
+@patch.object(ambari_server, 'upgrade_local_repo_db')
+def test_upgrade_local_repo_nochange(self, upgrade_local_repo_db_mock, get_ambari_properties_mock, load_stack_values_mock, os_path_exists_mock, os_listdir_mock):
+    from mock.mock import call
+    args = MagicMock()
+    args.persistence_type = 'local'
+
+    def load_values_side_effect(*args, **kwargs):
+        res = {}
+        res['a'] = 'http://oldurl'
+        return res
+    load_stack_values_mock.side_effect = load_values_side_effect
+    properties = ambari_server.Properties()
+    get_ambari_properties_mock.return_value = properties
+    os_path_exists_mock.return_value = 1
+    os_listdir_mock.return_value = ['1.1']
+    ambari_server.upgrade_local_repo(args)
+    self.assertTrue(get_ambari_properties_mock.called)
+    self.assertTrue(load_stack_values_mock.called)
+    self.assertFalse(upgrade_local_repo_db_mock.called)

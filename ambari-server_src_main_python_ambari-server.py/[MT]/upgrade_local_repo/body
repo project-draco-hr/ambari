@@ -1,0 +1,28 @@
+def upgrade_local_repo(args):
+    properties = get_ambari_properties()
+    if (properties == (-1)):
+        print_error_msg('Error getting ambari properties')
+        return (-1)
+    stack_location = properties[STACK_LOCATION_KEY]
+    if (stack_location is None):
+        stack_location = STACK_LOCATION_DEFAULT
+    stack_root_local = os.path.join(stack_location, 'HDPLocal')
+    if (not os.path.exists(stack_root_local)):
+        print_info_msg('HDPLocal stack directory does not exist, skipping')
+        return
+    stack_root = os.path.join(stack_location, 'HDP')
+    if (not os.path.exists(stack_root)):
+        print_info_msg('HDP stack directory does not exist, skipping')
+        return
+    for stack_version_local in os.listdir(stack_root_local):
+        repo_file_local = os.path.join(stack_root_local, stack_version_local, 'repos', 'repoinfo.xml')
+        repo_file = os.path.join(stack_root, stack_version_local, 'repos', 'repoinfo.xml')
+        if (os.path.exists(repo_file_local) and os.path.exists(repo_file)):
+            local_values = load_stack_values(stack_version_local, repo_file_local)
+            repo_values = load_stack_values(stack_version_local, repo_file)
+            for (k, v) in local_values.iteritems():
+                if repo_values.has_key(k):
+                    local_url = local_values[k]
+                    repo_url = repo_values[k]
+                    if (repo_url != local_url):
+                        upgrade_local_repo_db(args, k, local_url)
