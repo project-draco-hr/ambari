@@ -1,0 +1,53 @@
+def main():
+    tempDir = tempfile.gettempdir()
+    outputFile = os.path.join(tempDir, 'ambari_reinstall_probe.out')
+    parser = optparse.OptionParser(usage='usage: %prog [options]')
+    parser.set_description('This python program is a Ambari thin client and supports relocation of ambari host components on Ambari managed clusters.')
+    parser.add_option('-v', '--verbose', dest='verbose', action='store_false', default=False, help='output verbosity.')
+    parser.add_option('-s', '--host', dest='server_hostname', help='Ambari server host name.')
+    parser.add_option('-p', '--port', dest='server_port', default='8080', help='Ambari server port. [default: 8080]')
+    parser.add_option('-r', '--protocol', dest='protocol', default='http', help='Protocol for communicating with Ambari server (http/https) [default: http].')
+    parser.add_option('-c', '--cluster-name', dest='cluster_name', help='Ambari cluster to operate on.')
+    parser.add_option('-e', '--service-name', dest='service_name', help='Ambari Service to which the component belongs to.')
+    parser.add_option('-m', '--component-name', dest='component_name', help='Ambari Service Component to operate on.')
+    parser.add_option('-n', '--new-host', dest='new_hostname', help='New host to relocate the component to.')
+    parser.add_option('-a', '--action', dest='action', default='relocate', help='Script action. [default: relocate]')
+    parser.add_option('-o', '--output-file', dest='outputfile', default=outputFile, metavar='FILE', help=('Output file. [default: %s]' % outputFile))
+    parser.add_option('-u', '--username', dest='username', default='admin', help='Ambari server admin user. [default: admin]')
+    parser.add_option('-w', '--password', dest='password', default='admin', help='Ambari server admin password.')
+    (options, args) = parser.parse_args()
+    if options.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+    global AMBARI_HOSTNAME
+    AMBARI_HOSTNAME = options.server_hostname
+    global AMBARI_PORT
+    AMBARI_PORT = options.server_port
+    global CLUSTER_NAME
+    CLUSTER_NAME = options.cluster_name
+    global PROTOCOL
+    PROTOCOL = options.protocol
+    global USERNAME
+    USERNAME = options.username
+    global PASSWORD
+    PASSWORD = options.password
+    global logger
+    logger = logging.getLogger('AmbariProbe')
+    handler = logging.FileHandler(options.outputfile)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    action = RELOCATE_ACTION
+    if (options.action is not None):
+        if (options.action not in get_supported_actions()):
+            logger.error(((('Unsupported action: ' + options.action) + ', valid actions: ') + str(get_supported_actions())))
+            sys.exit(1)
+        else:
+            action = options.action
+    socket.setdefaulttimeout(DEFAULT_TIMEOUT)
+    ambariResource = AmbariResource(serviceName=options.service_name, componentName=options.component_name)
+    ambariResource.initializeResource()
+    if (action == RELOCATE_ACTION):
+        if (options.new_hostname is not None):
+            ambariResource.relocate(options.new_hostname)
