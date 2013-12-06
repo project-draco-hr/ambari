@@ -1,7 +1,8 @@
-def run_file(self, script, script_params, tmpoutfile, tmperrfile, timeout):
+def run_file(self, script, script_params, tmpoutfile, tmperrfile, timeout, tmpstructedoutfile):
     '\n    Executes the specified python file in a separate subprocess.\n    Method returns only when the subprocess is finished.\n    Params arg is a list of script parameters\n    Timeout meaning: how many seconds should pass before script execution\n    is forcibly terminated\n    '
     tmpout = open(tmpoutfile, 'w')
     tmperr = open(tmperrfile, 'w')
+    script_params += [tmpstructedoutfile]
     pythonCommand = self.python_command(script, script_params)
     logger.info(('Running command ' + pprint.pformat(pythonCommand)))
     process = self.launch_python_subprocess(pythonCommand, tmpout, tmperr)
@@ -17,9 +18,19 @@ def run_file(self, script, script_params, tmpoutfile, tmperrfile, timeout):
     returncode = process.returncode
     out = open(tmpoutfile, 'r').read()
     error = open(tmperrfile, 'r').read()
+    try:
+        with open(tmpstructedoutfile, 'r') as fp:
+            structured_out = json.load(fp)
+    except Exception:
+        if os.path.exists(tmpstructedoutfile):
+            errMsg = ('Unable to read structured output from ' + tmpstructedoutfile)
+            structured_out = {'msg': errMsg, }
+            logger.warn(structured_out)
+        else:
+            structured_out = ''
     if self.python_process_has_been_killed:
         error = (str(error) + '\n Python script has been killed due to timeout')
         returncode = 999
-    result = self.condenseOutput(out, error, returncode)
+    result = self.condenseOutput(out, error, returncode, structured_out)
     logger.info(('Result: %s' % result))
     return result

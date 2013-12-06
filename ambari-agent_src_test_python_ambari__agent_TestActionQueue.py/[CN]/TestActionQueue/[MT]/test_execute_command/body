@@ -1,6 +1,7 @@
+@patch('json.load')
 @patch('__builtin__.open')
 @patch.object(ActionQueue, 'status_update_callback')
-def test_execute_command(self, status_update_callback_mock, open_mock):
+def test_execute_command(self, status_update_callback_mock, open_mock, json_load_mock):
 
     def open_side_effect(file, mode):
         if (mode == 'r'):
@@ -10,12 +11,13 @@ def test_execute_command(self, status_update_callback_mock, open_mock):
         else:
             return self.original_open(file, mode)
     open_mock.side_effect = open_side_effect
+    json_load_mock.return_value = ''
     config = AmbariConfig().getConfig()
     tempdir = tempfile.gettempdir()
     config.set('agent', 'prefix', tempdir)
     actionQueue = ActionQueue(config, 'dummy_controller')
     unfreeze_flag = threading.Event()
-    puppet_execution_result_dict = {'stdout': 'out', 'stderr': 'stderr', }
+    puppet_execution_result_dict = {'stdout': 'out', 'stderr': 'stderr', 'structuredOut': '', }
 
     def side_effect(command, tmpoutfile, tmperrfile):
         unfreeze_flag.wait()
@@ -34,14 +36,14 @@ def test_execute_command(self, status_update_callback_mock, open_mock):
         report = actionQueue.result()
         if (len(report['reports']) != 0):
             break
-    expected = {'status': 'IN_PROGRESS', 'stderr': 'Read from {0}/errors-3.txt'.format(tempdir), 'stdout': 'Read from {0}/output-3.txt'.format(tempdir), 'clusterName': u'cc', 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 777, }
+    expected = {'status': 'IN_PROGRESS', 'stderr': 'Read from {0}/errors-3.txt'.format(tempdir), 'stdout': 'Read from {0}/output-3.txt'.format(tempdir), 'structuredOut': '', 'clusterName': u'cc', 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 777, }
     self.assertEqual(report['reports'][0], expected)
     unfreeze_flag.set()
     while (report['reports'][0]['status'] == 'IN_PROGRESS'):
         time.sleep(0.1)
         report = actionQueue.result()
     configname = os.path.join(tempdir, 'config.json')
-    expected = {'status': 'COMPLETED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': u'cc', 'configurationTags': {'global': {'tag': 'v1', }, }, 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 0, }
+    expected = {'status': 'COMPLETED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': u'cc', 'configurationTags': {'global': {'tag': 'v1', }, }, 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'structuredOut': '', 'exitCode': 0, }
     self.assertEqual(len(report['reports']), 1)
     self.assertEqual(report['reports'][0], expected)
     self.assertTrue(os.path.isfile(configname))
@@ -58,7 +60,7 @@ def test_execute_command(self, status_update_callback_mock, open_mock):
     while ((len(report['reports']) == 0) or (report['reports'][0]['status'] == 'IN_PROGRESS')):
         time.sleep(0.1)
         report = actionQueue.result()
-    expected = {'status': 'FAILED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': u'cc', 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'exitCode': 13, }
+    expected = {'status': 'FAILED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': u'cc', 'roleCommand': u'INSTALL', 'serviceName': u'HDFS', 'role': u'DATANODE', 'actionId': '1-1', 'taskId': 3, 'structuredOut': '', 'exitCode': 13, }
     self.assertEqual(len(report['reports']), 1)
     self.assertEqual(report['reports'][0], expected)
     report = actionQueue.result()
@@ -72,7 +74,7 @@ def test_execute_command(self, status_update_callback_mock, open_mock):
     while ((len(report['reports']) == 0) or (report['reports'][0]['status'] == 'IN_PROGRESS')):
         time.sleep(0.1)
         report = actionQueue.result()
-    expected = {'status': 'COMPLETED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': 'clusterName', 'roleCommand': 'UPGRADE', 'serviceName': 'serviceName', 'role': 'role', 'actionId': 17, 'taskId': 'taskId', 'exitCode': 0, }
+    expected = {'status': 'COMPLETED', 'stderr': 'stderr', 'stdout': 'out', 'clusterName': 'clusterName', 'roleCommand': 'UPGRADE', 'serviceName': 'serviceName', 'role': 'role', 'actionId': 17, 'taskId': 'taskId', 'structuredOut': '', 'exitCode': 0, }
     self.assertEqual(len(report['reports']), 1)
     self.assertEqual(report['reports'][0], expected)
     report = actionQueue.result()
