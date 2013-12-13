@@ -1,0 +1,20 @@
+{
+  org.apache.ambari.server.controller.ganglia.TestStreamProvider streamProvider=new org.apache.ambari.server.controller.ganglia.TestStreamProvider("temporal_ganglia_data_yarn_queues.txt");
+  TestJMXHostProvider jmxHostProvider=new TestJMXHostProvider(true);
+  TestGangliaHostProvider hostProvider=new TestGangliaHostProvider();
+  StackDefinedPropertyProvider propertyProvider=new StackDefinedPropertyProvider(Resource.Type.HostComponent,jmxHostProvider,hostProvider,streamProvider,PropertyHelper.getPropertyId("HostRoles","cluster_name"),PropertyHelper.getPropertyId("HostRoles","host_name"),PropertyHelper.getPropertyId("HostRoles","component_name"),PropertyHelper.getPropertyId("HostRoles","state"),new EmptyPropertyProvider(),new EmptyPropertyProvider());
+  Resource resource=new ResourceImpl(Resource.Type.HostComponent);
+  resource.setProperty("HostRoles/cluster_name","c1");
+  resource.setProperty(HOST_COMPONENT_HOST_NAME_PROPERTY_ID,"dev01.ambari.apache.org");
+  resource.setProperty(HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID,"RESOURCEMANAGER");
+  String RM_CATEGORY_1="metrics/yarn/Queue/root/default";
+  String RM_AVAILABLE_MEMORY_PROPERTY=PropertyHelper.getPropertyId(RM_CATEGORY_1,"AvailableMB");
+  Map<String,TemporalInfo> temporalInfoMap=new HashMap<String,TemporalInfo>();
+  temporalInfoMap.put(RM_CATEGORY_1,new TemporalInfoImpl(10L,20L,1L));
+  Request request=PropertyHelper.getReadRequest(Collections.singleton(RM_CATEGORY_1),temporalInfoMap);
+  Assert.assertEquals(1,propertyProvider.populateResources(Collections.singleton(resource),request,null).size());
+  List<String> metricsRegexes=new ArrayList<String>();
+  metricsRegexes.add("metrics/yarn/Queue/$1.replaceAll(\"([.])\",\"/\")/");
+  Assert.assertTrue(PropertyHelper.getProperties(resource).size() > 2);
+  Assert.assertNotNull(resource.getPropertyValue(RM_AVAILABLE_MEMORY_PROPERTY));
+}
