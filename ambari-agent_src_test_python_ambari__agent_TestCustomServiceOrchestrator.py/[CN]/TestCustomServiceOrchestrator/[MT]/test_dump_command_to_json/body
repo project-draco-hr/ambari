@@ -1,14 +1,26 @@
 @patch('hostname.public_hostname')
-def test_dump_command_to_json(self, hostname_mock):
+@patch('os.path.isfile')
+@patch('os.unlink')
+def test_dump_command_to_json(self, unlink_mock, isfile_mock, hostname_mock):
     hostname_mock.return_value = 'test.hst'
     command = {'commandType': 'EXECUTION_COMMAND', 'role': u'DATANODE', 'roleCommand': u'INSTALL', 'commandId': '1-1', 'taskId': 3, 'clusterName': u'cc', 'serviceName': u'HDFS', 'configurations': {'global': {}, }, 'configurationTags': {'global': {'tag': 'v1', }, }, }
     config = AmbariConfig().getConfig()
     tempdir = tempfile.gettempdir()
     config.set('agent', 'prefix', tempdir)
     orchestrator = CustomServiceOrchestrator(config)
-    file = orchestrator.dump_command_to_json(command)
-    self.assertTrue(os.path.exists(file))
-    self.assertTrue((os.path.getsize(file) > 0))
-    self.assertEqual(oct((os.stat(file).st_mode & 511)), '0600')
-    os.unlink(file)
+    isfile_mock.return_value = True
+    json_file = orchestrator.dump_command_to_json(command)
+    self.assertTrue(os.path.exists(json_file))
+    self.assertTrue((os.path.getsize(json_file) > 0))
+    self.assertEqual(oct((os.stat(json_file).st_mode & 511)), '0600')
+    self.assertTrue(json_file.endswith('command-3.json'))
+    os.unlink(json_file)
+    command['commandType'] = 'STATUS_COMMAND'
+    json_file = orchestrator.dump_command_to_json(command)
+    self.assertTrue(os.path.exists(json_file))
+    self.assertTrue((os.path.getsize(json_file) > 0))
+    self.assertEqual(oct((os.stat(json_file).st_mode & 511)), '0600')
+    self.assertTrue(json_file.endswith('status_command.json'))
+    os.unlink(json_file)
     self.assertEquals(command['public_hostname'], 'test.hst')
+    self.assertTrue(unlink_mock.called)

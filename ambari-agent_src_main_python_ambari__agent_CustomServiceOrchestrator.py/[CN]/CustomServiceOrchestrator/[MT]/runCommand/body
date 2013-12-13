@@ -1,11 +1,21 @@
-def runCommand(self, command, tmpoutfile, tmperrfile):
+def runCommand(self, command, tmpoutfile, tmperrfile, forsed_command_name=None, override_output_files=True):
+    '\n    forsed_command_name may be specified manually. In this case, value, defined at\n    command json, is ignored.\n    '
     try:
-        component_name = command['role']
+        try:
+            component_name = command['role']
+        except KeyError:
+            component_name = command['componentName']
         script_type = command['commandParams']['script_type']
         script = command['commandParams']['script']
-        command_name = command['roleCommand']
         timeout = int(command['commandParams']['command_timeout'])
-        task_id = command['taskId']
+        task_id = 'status'
+        try:
+            task_id = command['taskId']
+            command_name = command['roleCommand']
+        except KeyError:
+            pass
+        if (forsed_command_name is not None):
+            command_name = forsed_command_name
         if (command_name == self.CUSTOM_ACTION_COMMAND):
             base_dir = self.config.get('python', 'custom_actions_dir')
             script_tuple = (os.path.join(base_dir, script), base_dir)
@@ -30,7 +40,8 @@ def runCommand(self, command, tmpoutfile, tmperrfile):
         ret = None
         for (py_file, current_base_dir) in filtered_py_file_list:
             script_params = [command_name, json_path, current_base_dir]
-            ret = self.python_executor.run_file(py_file, script_params, tmpoutfile, tmperrfile, timeout, tmpstrucoutfile)
+            ret = self.python_executor.run_file(py_file, script_params, tmpoutfile, tmperrfile, timeout, tmpstrucoutfile, override_output_files)
+            override_output_files = False
             if (ret['exitcode'] != 0):
                 break
         if (not ret):
@@ -38,6 +49,6 @@ def runCommand(self, command, tmpoutfile, tmperrfile):
     except Exception:
         (exc_type, exc_obj, exc_tb) = sys.exc_info()
         message = 'Catched an exception while executing custom service command: {0}: {1}'.format(exc_type, exc_obj)
-        logger.error(message)
+        logger.exception(message)
         ret = {'stdout': message, 'stderr': message, 'structuredOut': message, 'exitcode': 1, }
     return ret
