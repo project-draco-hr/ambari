@@ -1,0 +1,21 @@
+def service(name, action='start'):
+    import params
+    if (name == 'historyserver'):
+        daemon = format('{mapred_bin}/mr-jobhistory-daemon.sh')
+        pid_file = format('{mapred_pid_dir}/mapred-{mapred_user}-{name}.pid')
+        usr = params.mapred_user
+    else:
+        daemon = format('{yarn_bin}/yarn-daemon.sh')
+        pid_file = format('{yarn_pid_dir}/yarn-{yarn_user}-{name}.pid')
+        usr = params.yarn_user
+    cmd = format('export HADOOP_LIBEXEC_DIR={hadoop_libexec_dir} && {daemon} --config {config_dir}')
+    if (action == 'start'):
+        daemon_cmd = format("su - {usr} -c '{cmd} start {name}'")
+        no_op = format('ls {pid_file} >/dev/null 2>&1 && ps `cat {pid_file}` >/dev/null 2>&1')
+        Execute(daemon_cmd, not_if=no_op)
+        Execute(no_op, user=usr, not_if=no_op, initial_wait=5)
+    elif (action == 'stop'):
+        daemon_cmd = format('{cmd} stop {name}')
+        Execute(daemon_cmd, user=usr)
+        rm_pid = format('rm -f {pid_file}')
+        Execute(rm_pid, user=usr)
