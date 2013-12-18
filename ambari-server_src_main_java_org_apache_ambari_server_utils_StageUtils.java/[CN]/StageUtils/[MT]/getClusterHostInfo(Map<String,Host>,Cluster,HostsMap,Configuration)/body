@@ -1,42 +1,42 @@
 {
-  Map<String,List<String>> info=new HashMap<String,List<String>>();
-  if (cluster.getServices() != null) {
-    String hostName=getHostName();
-    for (    String serviceName : cluster.getServices().keySet()) {
-      if (cluster.getServices().get(serviceName) != null) {
-        for (        String componentName : cluster.getServices().get(serviceName).getServiceComponents().keySet()) {
-          String clusterInfoKey=componentToClusterInfoKeyMap.get(componentName);
-          if (clusterInfoKey == null) {
-            continue;
+  Map<String,SortedSet<Integer>> hostRolesInfo=new HashMap<String,SortedSet<Integer>>();
+  Map<String,Set<String>> clusterHostInfo=new HashMap<String,Set<String>>();
+  Set<String> hostsSet=new LinkedHashSet<String>();
+  List<Integer> portsList=new ArrayList<Integer>();
+  for (  Host host : allHosts.values()) {
+    Integer currentPingPort=host.getCurrentPingPort() == null ? DEFAULT_PING_PORT : host.getCurrentPingPort();
+    hostsSet.add(host.getHostName());
+    portsList.add(currentPingPort);
+  }
+  List<String> hostsList=new ArrayList<String>(hostsSet);
+  for (  Entry<String,Service> serviceEntry : cluster.getServices().entrySet()) {
+    Service service=serviceEntry.getValue();
+    for (    Entry<String,ServiceComponent> serviceComponentEntry : service.getServiceComponents().entrySet()) {
+      ServiceComponent serviceComponent=serviceComponentEntry.getValue();
+      String componentName=serviceComponent.getName();
+      for (      final String hostName : serviceComponent.getServiceComponentHosts().keySet()) {
+        if (componentToClusterInfoKeyMap.containsKey(componentName)) {
+          String roleName=componentToClusterInfoKeyMap.get(componentName);
+          SortedSet<Integer> hostsForComponentsHost=hostRolesInfo.get(roleName);
+          if (hostsForComponentsHost == null) {
+            hostsForComponentsHost=new TreeSet<Integer>();
+            hostRolesInfo.put(roleName,hostsForComponentsHost);
           }
-          ServiceComponent scomp=cluster.getServices().get(serviceName).getServiceComponents().get(componentName);
-          if (scomp.getServiceComponentHosts() != null && !scomp.getServiceComponentHosts().isEmpty()) {
-            List<String> hostList=new ArrayList<String>();
-            for (            String host : scomp.getServiceComponentHosts().keySet()) {
-              String mappedHost=hostsMap.getHostMap(host);
-              hostList.add(mappedHost);
-            }
-            info.put(clusterInfoKey,hostList);
-          }
-          String url=configuration.getRcaDatabaseUrl();
-          if (url.contains(Configuration.HOSTNAME_MACRO)) {
-            url=url.replace(Configuration.HOSTNAME_MACRO,hostsMap.getHostMap(hostName));
-          }
-          info.put("ambari_db_rca_url",Arrays.asList(url));
-          info.put("ambari_db_rca_driver",Arrays.asList(configuration.getRcaDatabaseDriver()));
-          info.put("ambari_db_rca_username",Arrays.asList(configuration.getRcaDatabaseUser()));
-          info.put("ambari_db_rca_password",Arrays.asList(configuration.getRcaDatabasePassword()));
+          int hostIndex=hostsList.indexOf(hostName);
+          hostsForComponentsHost.add(hostIndex);
         }
+ else         LOG.warn("Component " + componentName + " doesn't have mapped role name for cluster host info");
       }
     }
   }
-  List<String> allHostNames=new ArrayList<String>();
-  List<String> allHostPingPorts=new ArrayList<String>();
-  for (  Host host : allHosts.values()) {
-    allHostNames.add(host.getHostName());
-    allHostPingPorts.add(host.getCurrentPingPort() == null ? DEFAULT_PING_PORT : host.getCurrentPingPort().toString());
+  for (  String roleName : componentToClusterInfoKeyMap.values()) {
+    if (hostRolesInfo.containsKey(roleName)) {
+      TreeSet<Integer> sortedSet=new TreeSet<Integer>(hostRolesInfo.get(roleName));
+      Set<String> replacedRangesSet=replaceRanges(sortedSet);
+      clusterHostInfo.put(roleName,replacedRangesSet);
+    }
   }
-  info.put("all_hosts",allHostNames);
-  info.put("all_ping_ports",allHostPingPorts);
-  return info;
+  clusterHostInfo.put(HOSTS_LIST,hostsSet);
+  clusterHostInfo.put(PORTS,replaceMappedRanges(portsList));
+  return clusterHostInfo;
 }
