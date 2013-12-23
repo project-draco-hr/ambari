@@ -1,0 +1,22 @@
+{
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  expect(managementController.getAuthName()).andReturn("admin").anyTimes();
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
+  cluster.deleteRequestExecution(1L);
+  replay(managementController,clusters,cluster);
+  RequestScheduleResourceProvider resourceProvider=getResourceProvider(managementController);
+  AbstractResourceProviderTest.TestObserver observer=new AbstractResourceProviderTest.TestObserver();
+  ((ObservableResourceProvider)resourceProvider).addObserver(observer);
+  Predicate predicate=new PredicateBuilder().property(RequestScheduleResourceProvider.REQUEST_SCHEDULE_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(RequestScheduleResourceProvider.REQUEST_SCHEDULE_ID_PROPERTY_ID).equals(1L).toPredicate();
+  resourceProvider.deleteResources(predicate);
+  ResourceProviderEvent lastEvent=observer.getLastEvent();
+  Assert.assertNotNull(lastEvent);
+  Assert.assertEquals(Resource.Type.RequestSchedule,lastEvent.getResourceType());
+  Assert.assertEquals(ResourceProviderEvent.Type.Delete,lastEvent.getType());
+  Assert.assertEquals(predicate,lastEvent.getPredicate());
+  Assert.assertNull(lastEvent.getRequest());
+  verify(managementController,clusters,cluster);
+}

@@ -1,0 +1,29 @@
+{
+  if (requests.isEmpty()) {
+    LOG.warn("Received an empty requests set");
+    return null;
+  }
+  Set<RequestScheduleResponse> responses=new HashSet<RequestScheduleResponse>();
+  Clusters clusters=getManagementController().getClusters();
+  RequestExecutionFactory requestExecutionFactory=getManagementController().getRequestExecutionFactory();
+  for (  RequestScheduleRequest request : requests) {
+    validateRequest(request);
+    Cluster cluster;
+    try {
+      cluster=clusters.getCluster(request.getClusterName());
+    }
+ catch (    ClusterNotFoundException e) {
+      throw new ParentObjectNotFoundException("Attempted to add a request schedule to a cluster which doesn't " + "exist",e);
+    }
+    String username=getManagementController().getAuthName();
+    RequestExecution requestExecution=requestExecutionFactory.createNew(cluster,request.getBatch(),request.getSchedule());
+    requestExecution.setCreateUser(username);
+    requestExecution.setUpdateUser(username);
+    LOG.info("Persisting new Request Schedule " + ", clusterName = " + request.getClusterName() + ", description = "+ request.getDescription()+ ", user = "+ username);
+    requestExecution.persist();
+    cluster.addRequestExecution(requestExecution);
+    RequestScheduleResponse response=new RequestScheduleResponse(requestExecution.getId(),requestExecution.getClusterName(),requestExecution.getDescription(),requestExecution.getStatus(),requestExecution.getBatch(),request.getSchedule(),requestExecution.getCreateUser(),requestExecution.getCreateTime(),requestExecution.getUpdateUser(),requestExecution.getUpdateTime());
+    responses.add(response);
+  }
+  return responses;
+}

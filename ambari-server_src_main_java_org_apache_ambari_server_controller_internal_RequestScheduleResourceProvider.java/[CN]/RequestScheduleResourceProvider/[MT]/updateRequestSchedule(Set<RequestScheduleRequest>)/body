@@ -1,0 +1,34 @@
+{
+  if (requests.isEmpty()) {
+    LOG.warn("Received an empty requests set");
+    return;
+  }
+  Clusters clusters=getManagementController().getClusters();
+  for (  RequestScheduleRequest request : requests) {
+    validateRequest(request);
+    Cluster cluster;
+    try {
+      cluster=clusters.getCluster(request.getClusterName());
+    }
+ catch (    ClusterNotFoundException e) {
+      throw new ParentObjectNotFoundException("Attempted to add a request schedule to a cluster which doesn't " + "exist",e);
+    }
+    if (request.getId() == null) {
+      throw new AmbariException("Id is a required parameter.");
+    }
+    RequestExecution requestExecution=cluster.getAllRequestExecutions().get(request.getId());
+    if (requestExecution == null) {
+      throw new AmbariException("Request Schedule not found " + ", clusterName = " + request.getClusterName() + ", description = "+ request.getDescription()+ ", id = "+ request.getId());
+    }
+    String username=getManagementController().getAuthName();
+    requestExecution.setBatch(request.getBatch());
+    requestExecution.setDescription(request.getDescription());
+    requestExecution.setSchedule(request.getSchedule());
+    if (request.getStatus() != null && isValidRequestScheduleStatus(request.getStatus())) {
+      requestExecution.setStatus(RequestExecution.Status.valueOf(request.getStatus()));
+    }
+    requestExecution.setUpdateUser(username);
+    LOG.info("Persisting updated Request Schedule " + ", clusterName = " + request.getClusterName() + ", description = "+ request.getDescription()+ ", user = "+ username);
+    requestExecution.persist();
+  }
+}

@@ -1,0 +1,46 @@
+{
+  RequestExecution requestExecution=createRequestSchedule();
+  Assert.assertNotNull(requestExecution);
+  Long id=requestExecution.getId();
+  RequestScheduleEntity scheduleEntity=requestScheduleDAO.findById(id);
+  Assert.assertNotNull(scheduleEntity);
+  requestExecution=requestExecutionFactory.createExisting(cluster,scheduleEntity);
+  Batch batches=new Batch();
+  List<BatchRequest> batchRequests=new ArrayList<BatchRequest>();
+  BatchRequest batchRequest1=new BatchRequest();
+  batchRequest1.setOrderId(10L);
+  batchRequest1.setType(BatchRequest.Type.PUT);
+  batchRequest1.setUri("testUri3");
+  BatchRequest batchRequest2=new BatchRequest();
+  batchRequest2.setOrderId(12L);
+  batchRequest2.setType(BatchRequest.Type.POST);
+  batchRequest2.setUri("testUri4");
+  batchRequest2.setBody("testBody");
+  batchRequests.add(batchRequest1);
+  batchRequests.add(batchRequest2);
+  batches.getBatchRequests().addAll(batchRequests);
+  requestExecution.setBatch(batches);
+  requestExecution.getSchedule().setHours("11");
+  requestExecution.persist();
+  scheduleEntity=requestScheduleDAO.findById(id);
+  Assert.assertNotNull(scheduleEntity);
+  Collection<RequestScheduleBatchRequestEntity> batchRequestEntities=scheduleEntity.getRequestScheduleBatchRequestEntities();
+  Assert.assertNotNull(batchRequestEntities);
+  RequestScheduleBatchRequestEntity reqEntity1=null;
+  RequestScheduleBatchRequestEntity reqEntity2=null;
+  for (  RequestScheduleBatchRequestEntity reqEntity : batchRequestEntities) {
+    if (reqEntity.getRequestUri().equals("testUri3")) {
+      reqEntity1=reqEntity;
+    }
+ else     if (reqEntity.getRequestUri().equals("testUri4")) {
+      reqEntity2=reqEntity;
+    }
+  }
+  Assert.assertNotNull(reqEntity1);
+  Assert.assertNotNull(reqEntity2);
+  Assert.assertEquals(Long.valueOf(1L),reqEntity1.getBatchId());
+  Assert.assertEquals(Long.valueOf(2L),reqEntity2.getBatchId());
+  Assert.assertEquals(BatchRequest.Type.PUT.name(),reqEntity1.getRequestType());
+  Assert.assertEquals(BatchRequest.Type.POST.name(),reqEntity2.getRequestType());
+  Assert.assertEquals("11",scheduleEntity.getHours());
+}
