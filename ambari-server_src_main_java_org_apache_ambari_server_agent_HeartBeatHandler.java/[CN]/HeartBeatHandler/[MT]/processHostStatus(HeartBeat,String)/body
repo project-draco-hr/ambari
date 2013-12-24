@@ -1,0 +1,57 @@
+{
+  Host host=clusterFsm.getHost(hostname);
+  HealthStatus healthStatus=host.getHealthStatus().getHealthStatus();
+  if (!healthStatus.equals(HostHealthStatus.HealthStatus.UNKNOWN)) {
+    List<ComponentStatus> componentStatuses=heartbeat.getComponentStatus();
+    if (componentStatuses.size() > 0) {
+      int masterCount=0;
+      int mastersRunning=0;
+      int slaveCount=0;
+      int slavesRunning=0;
+      Map<String,StackId> stackIdsByClusters=new HashMap<String,StackId>();
+      for (      ComponentStatus componentStatus : componentStatuses) {
+        String clusterName=componentStatus.getClusterName();
+        StackId stackId;
+        if (stackIdsByClusters.containsKey(clusterName)) {
+          stackId=stackIdsByClusters.get(clusterName);
+        }
+ else {
+          Cluster cluster=clusterFsm.getCluster(clusterName);
+          stackId=cluster.getDesiredStackVersion();
+          stackIdsByClusters.put(clusterName,stackId);
+        }
+        ComponentInfo componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),componentStatus.getServiceName(),componentStatus.getComponentName());
+        String status=componentStatus.getStatus();
+        String category=componentInfo.getCategory();
+        if (category.equals("MASTER")) {
+          ++masterCount;
+          if (status.equals("STARTED")) {
+            ++mastersRunning;
+          }
+        }
+ else         if (category.equals("SLAVE")) {
+          ++slaveCount;
+          if (status.equals("STARTED")) {
+            ++slavesRunning;
+          }
+        }
+      }
+      if (masterCount == mastersRunning && slaveCount == slavesRunning) {
+        healthStatus=HostHealthStatus.HealthStatus.HEALTHY;
+      }
+ else       if (masterCount > 0 && mastersRunning < masterCount) {
+        healthStatus=HostHealthStatus.HealthStatus.UNHEALTHY;
+      }
+ else {
+        healthStatus=HostHealthStatus.HealthStatus.ALERT;
+      }
+      host.setStatus(healthStatus.name());
+      host.persist();
+    }
+    if ((clusterFsm.getClustersForHost(host.getHostName())).size() == 0) {
+      healthStatus=HostHealthStatus.HealthStatus.HEALTHY;
+      host.setStatus(healthStatus.name());
+      host.persist();
+    }
+  }
+}
