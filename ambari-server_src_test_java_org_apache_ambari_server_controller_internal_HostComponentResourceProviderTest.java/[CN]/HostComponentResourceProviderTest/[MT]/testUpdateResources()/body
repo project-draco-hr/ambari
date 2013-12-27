@@ -2,18 +2,20 @@
   Resource.Type type=Resource.Type.HostComponent;
   AmbariManagementController managementController=createMock(AmbariManagementController.class);
   RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
+  ResourceProviderFactory resourceProviderFactory=createNiceMock(ResourceProviderFactory.class);
   Map<String,String> mapRequestProps=new HashMap<String,String>();
   mapRequestProps.put("context","Called from a test");
   Set<ServiceComponentHostResponse> nameResponse=new HashSet<ServiceComponentHostResponse>();
   nameResponse.add(new ServiceComponentHostResponse("Cluster102","Service100","Component100","Host100","STARTED","","",""));
+  HostComponentResourceProvider provider=new HostComponentResourceProvider(PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
   expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject())).andReturn(nameResponse).once();
   expect(managementController.updateHostComponents(AbstractResourceProviderTest.Matcher.getHostComponentRequestSet("Cluster102",null,"Component100","Host100",null,"STARTED"),eq(mapRequestProps),eq(false))).andReturn(response).once();
-  replay(managementController,response);
-  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  expect(resourceProviderFactory.getHostComponentResourceProvider(anyObject(Set.class),anyObject(Map.class),eq(managementController))).andReturn(provider).anyTimes();
+  replay(managementController,response,resourceProviderFactory);
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
   properties.put(HostComponentResourceProvider.HOST_COMPONENT_STATE_PROPERTY_ID,"STARTED");
   Request request=PropertyHelper.getUpdateRequest(properties,mapRequestProps);
   Predicate predicate=new PredicateBuilder().property(HostComponentResourceProvider.HOST_COMPONENT_CLUSTER_NAME_PROPERTY_ID).equals("Cluster102").toPredicate();
   provider.updateResources(request,predicate);
-  verify(managementController,response);
+  verify(managementController,response,resourceProviderFactory);
 }
