@@ -1,0 +1,31 @@
+{
+  if (!cacheLoaded) {
+    gl.writeLock().lock();
+    try {
+      gl.writeLock().lock();
+      try {
+        if (hostConfigMappingByHost == null) {
+          hostConfigMappingByHost=new ConcurrentHashMap<String,Set<HostConfigMapping>>();
+          TypedQuery<HostConfigMappingEntity> query=entityManagerProvider.get().createQuery("SELECT entity FROM HostConfigMappingEntity entity",HostConfigMappingEntity.class);
+          List<HostConfigMappingEntity> hostConfigMappingEntities=daoUtils.selectList(query);
+          for (          HostConfigMappingEntity hostConfigMappingEntity : hostConfigMappingEntities) {
+            Set<HostConfigMapping> setByHost=hostConfigMappingByHost.get((hostConfigMappingEntity.getType()));
+            if (setByHost == null) {
+              setByHost=new HashSet<HostConfigMapping>();
+              hostConfigMappingByHost.put(hostConfigMappingEntity.getHostName(),setByHost);
+            }
+            HostConfigMapping hostConfigMapping=buildHostConfigMapping(hostConfigMappingEntity);
+            setByHost.add(hostConfigMapping);
+          }
+        }
+      }
+  finally {
+        gl.writeLock().unlock();
+      }
+    }
+  finally {
+      gl.writeLock().unlock();
+    }
+    cacheLoaded=true;
+  }
+}
