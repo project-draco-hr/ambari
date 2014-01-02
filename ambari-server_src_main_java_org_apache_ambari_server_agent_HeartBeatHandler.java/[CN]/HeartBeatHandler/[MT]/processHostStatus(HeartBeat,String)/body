@@ -3,25 +3,44 @@
   HealthStatus healthStatus=host.getHealthStatus().getHealthStatus();
   if (!healthStatus.equals(HostHealthStatus.HealthStatus.UNKNOWN)) {
     List<ComponentStatus> componentStatuses=heartbeat.getComponentStatus();
+    boolean calculateHostStatus=false;
+    String clusterName=null;
     if (componentStatuses.size() > 0) {
+      calculateHostStatus=true;
+      for (      ComponentStatus componentStatus : componentStatuses) {
+        clusterName=componentStatus.getClusterName();
+        break;
+      }
+    }
+    if (!calculateHostStatus) {
+      List<CommandReport> reports=heartbeat.getReports();
+      for (      CommandReport report : reports) {
+        if (RoleCommand.ACTIONEXECUTE.toString().equals(report.getRoleCommand())) {
+          continue;
+        }
+        String service=report.getServiceName();
+        if (actionMetadata.getActions(service.toLowerCase()).contains(report.getRole())) {
+          continue;
+        }
+        if (report.getStatus().equals("COMPLETED")) {
+          calculateHostStatus=true;
+          clusterName=report.getClusterName();
+          break;
+        }
+      }
+    }
+    if (calculateHostStatus) {
       int masterCount=0;
       int mastersRunning=0;
       int slaveCount=0;
       int slavesRunning=0;
-      Map<String,StackId> stackIdsByClusters=new HashMap<String,StackId>();
-      for (      ComponentStatus componentStatus : componentStatuses) {
-        String clusterName=componentStatus.getClusterName();
-        StackId stackId;
-        if (stackIdsByClusters.containsKey(clusterName)) {
-          stackId=stackIdsByClusters.get(clusterName);
-        }
- else {
-          Cluster cluster=clusterFsm.getCluster(clusterName);
-          stackId=cluster.getDesiredStackVersion();
-          stackIdsByClusters.put(clusterName,stackId);
-        }
-        ComponentInfo componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),componentStatus.getServiceName(),componentStatus.getComponentName());
-        String status=componentStatus.getStatus();
+      StackId stackId;
+      Cluster cluster=clusterFsm.getCluster(clusterName);
+      stackId=cluster.getDesiredStackVersion();
+      List<ServiceComponentHost> scHosts=cluster.getServiceComponentHosts(heartbeat.getHostname());
+      for (      ServiceComponentHost scHost : scHosts) {
+        ComponentInfo componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),scHost.getServiceName(),scHost.getServiceComponentName());
+        String status=scHost.getState().name();
         String category=componentInfo.getCategory();
         if (category.equals("MASTER")) {
           ++masterCount;
