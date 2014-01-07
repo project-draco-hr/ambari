@@ -1,0 +1,44 @@
+{
+  RequestExecution requestExecution=createRequestExecution();
+  Assert.assertNotNull(requestExecution);
+  executionScheduleManager.scheduleBatch(requestExecution);
+  String jobName1=executionScheduleManager.getJobName(requestExecution.getId(),10L);
+  String jobName2=executionScheduleManager.getJobName(requestExecution.getId(),12L);
+  JobDetail jobDetail1=null;
+  JobDetail jobDetail2=null;
+  Trigger trigger1=null;
+  Trigger trigger2=null;
+  for (  String group : scheduler.getJobGroupNames()) {
+    for (    JobKey jobKey : scheduler.getJobKeys(GroupMatcher.jobGroupEquals(ExecutionJob.LINEAR_EXECUTION_JOB_GROUP))) {
+      LOG.info("Found job identified by: " + jobKey);
+      String jobName=jobKey.getName();
+      String jobGroup=jobKey.getGroup();
+      List<Trigger> triggers=(List<Trigger>)scheduler.getTriggersOfJob(jobKey);
+      Trigger trigger=triggers != null && !triggers.isEmpty() ? triggers.get(0) : null;
+      Date nextFireTime=trigger != null ? trigger.getNextFireTime() : null;
+      LOG.info("[jobName] : " + jobName + " [groupName] : "+ jobGroup+ " - "+ nextFireTime);
+      if (jobName.equals(jobName1)) {
+        jobDetail1=scheduler.getJobDetail(jobKey);
+        trigger1=trigger;
+      }
+ else       if (jobName.equals(jobName2)) {
+        jobDetail2=scheduler.getJobDetail(jobKey);
+        trigger2=trigger;
+      }
+    }
+  }
+  Assert.assertNotNull(jobDetail1);
+  Assert.assertNotNull(trigger1);
+  Assert.assertNotNull(jobDetail2);
+  Assert.assertNull(trigger2);
+  CronTrigger cronTrigger=(CronTrigger)trigger1;
+  Schedule schedule=new Schedule();
+  schedule.setMinutes("10");
+  schedule.setHours("2");
+  schedule.setMonth("*");
+  schedule.setDaysOfMonth("*");
+  schedule.setDayOfWeek("?");
+  Assert.assertEquals(schedule.getScheduleExpression(),cronTrigger.getCronExpression());
+  Assert.assertEquals(jobName1,jobDetail1.getKey().getName());
+  Assert.assertEquals(jobName2,jobDetail2.getKey().getName());
+}

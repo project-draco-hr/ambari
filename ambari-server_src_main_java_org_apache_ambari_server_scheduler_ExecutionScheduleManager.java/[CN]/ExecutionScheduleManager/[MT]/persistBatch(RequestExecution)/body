@@ -1,0 +1,25 @@
+{
+  Batch batch=requestExecution.getBatch();
+  JobDetail jobDetail=null;
+  if (batch != null) {
+    List<BatchRequest> batchRequests=batch.getBatchRequests();
+    if (batchRequests != null) {
+      Collections.sort(batchRequests);
+      ListIterator<BatchRequest> iterator=batchRequests.listIterator(batchRequests.size());
+      String nextJobName=null;
+      while (iterator.hasPrevious()) {
+        BatchRequest batchRequest=iterator.previous();
+        String jobName=getJobName(requestExecution.getId(),batchRequest.getOrderId());
+        jobDetail=newJob(BatchRequestJob.class).withIdentity(jobName,ExecutionJob.LINEAR_EXECUTION_JOB_GROUP).usingJobData(ExecutionJob.NEXT_EXECUTION_JOB_NAME_KEY,nextJobName).usingJobData(ExecutionJob.NEXT_EXECUTION_JOB_GROUP_KEY,ExecutionJob.LINEAR_EXECUTION_JOB_GROUP).usingJobData(BatchRequestJob.BATCH_REQUEST_EXECUTION_ID_KEY,requestExecution.getId()).usingJobData(BatchRequestJob.BATCH_REQUEST_BATCH_ID_KEY,batchRequest.getOrderId()).storeDurably().build();
+        try {
+          executionScheduler.addJob(jobDetail);
+        }
+ catch (        SchedulerException e) {
+          LOG.error("Failed to add job detail. " + batchRequest,e);
+        }
+        nextJobName=jobName;
+      }
+    }
+  }
+  return jobDetail;
+}

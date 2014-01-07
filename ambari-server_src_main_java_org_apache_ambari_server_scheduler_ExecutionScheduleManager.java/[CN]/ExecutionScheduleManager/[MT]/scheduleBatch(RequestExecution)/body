@@ -1,0 +1,42 @@
+{
+  if (!isSchedulerAvailable()) {
+    throw new AmbariException("Scheduler unavailable.");
+  }
+  JobDetail firstJobDetail=persistBatch(requestExecution);
+  if (firstJobDetail == null) {
+    throw new AmbariException("Unable to schedule jobs. firstJobDetail = " + firstJobDetail);
+  }
+  Schedule schedule=requestExecution.getSchedule();
+  if (schedule != null) {
+    String triggerExpression=schedule.getScheduleExpression();
+    Date startDate=null;
+    Date endDate=null;
+    try {
+      String startTime=schedule.getStartTime();
+      String endTime=schedule.getEndTime();
+      startDate=startTime != null ? DateUtils.convertToDate(startTime) : new Date();
+      endDate=endTime != null ? DateUtils.convertToDate(endTime) : null;
+    }
+ catch (    ParseException e) {
+      LOG.error("Unable to parse startTime / endTime.",e);
+    }
+    Trigger trigger=newTrigger().withIdentity(REQUEST_EXECUTION_TRIGGER_PREFIX + "-" + requestExecution.getId(),ExecutionJob.LINEAR_EXECUTION_TRIGGER_GROUP).withSchedule(cronSchedule(triggerExpression).withMisfireHandlingInstructionFireAndProceed()).forJob(firstJobDetail).startAt(startDate).endAt(endDate).build();
+    try {
+      executionScheduler.scheduleJob(trigger);
+    }
+ catch (    SchedulerException e) {
+      LOG.error("Unable to schedule request execution.",e);
+      throw new AmbariException(e.getMessage());
+    }
+  }
+ else {
+    Trigger trigger=newTrigger().forJob(firstJobDetail).withIdentity(REQUEST_EXECUTION_TRIGGER_PREFIX + "-" + requestExecution.getId(),ExecutionJob.LINEAR_EXECUTION_TRIGGER_GROUP).withSchedule(simpleSchedule().withMisfireHandlingInstructionFireNow()).startNow().build();
+    try {
+      executionScheduler.scheduleJob(trigger);
+    }
+ catch (    SchedulerException e) {
+      LOG.error("Unable to schedule request execution.",e);
+      throw new AmbariException(e.getMessage());
+    }
+  }
+}
