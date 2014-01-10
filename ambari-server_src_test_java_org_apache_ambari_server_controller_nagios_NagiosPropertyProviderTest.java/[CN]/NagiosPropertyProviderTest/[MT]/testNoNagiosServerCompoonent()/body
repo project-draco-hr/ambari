@@ -1,0 +1,17 @@
+{
+  Cluster cluster=clusters.getCluster("c1");
+  Service service=cluster.addService("NAGIOS");
+  service.setDesiredStackVersion(new StackId("HDP-2.0.5"));
+  service.persist();
+  TestStreamProvider streamProvider=new TestStreamProvider("nagios_alerts.txt");
+  NagiosPropertyProvider npp=new NagiosPropertyProvider(Resource.Type.Service,streamProvider,"ServiceInfo/cluster_name","ServiceInfo/service_name");
+  Resource resource=new ResourceImpl(Resource.Type.Service);
+  resource.setProperty("ServiceInfo/cluster_name","c1");
+  resource.setProperty("ServiceInfo/service_name","HBASE");
+  Request request=PropertyHelper.getReadRequest(Collections.<String>emptySet(),new HashMap<String,TemporalInfo>());
+  Set<Resource> set=npp.populateResources(Collections.singleton(resource),request,null);
+  Assert.assertEquals(1,set.size());
+  Resource res=set.iterator().next();
+  Map<String,Map<String,Object>> values=res.getPropertiesMap();
+  Assert.assertFalse("Expected no alerts",values.containsKey("alerts"));
+}

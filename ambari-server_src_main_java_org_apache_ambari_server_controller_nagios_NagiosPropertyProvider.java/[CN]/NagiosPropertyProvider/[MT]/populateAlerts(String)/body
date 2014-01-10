@@ -1,0 +1,46 @@
+{
+  String nagiosHost=null;
+  try {
+    Cluster cluster=clusters.getCluster(clusterName);
+    Service service=cluster.getService("NAGIOS");
+    Map<String,ServiceComponentHost> hosts=service.getServiceComponent("NAGIOS_SERVER").getServiceComponentHosts();
+    if (!hosts.isEmpty())     nagiosHost=hosts.keySet().iterator().next();
+  }
+ catch (  AmbariException e) {
+    LOG.error("Cannot find a nagios service.  Skipping alerts.");
+  }
+  if (null != nagiosHost) {
+    String template=NAGIOS_TEMPLATE;
+    if (ComponentSSLConfiguration.instance().isNagiosSSL())     template=template.replace("http","https");
+    String url=String.format(template,nagiosHost);
+    InputStream in=null;
+    try {
+      in=urlStreamProvider.readFrom(url);
+      NagiosAlerts alerts=new Gson().fromJson(IOUtils.toString(in,"UTF-8"),NagiosAlerts.class);
+      Collections.sort(alerts.alerts,new Comparator<NagiosAlert>(){
+        @Override public int compare(        NagiosAlert o1,        NagiosAlert o2){
+          return o2.getStatus() - o1.getStatus();
+        }
+      }
+);
+      return alerts.alerts;
+    }
+ catch (    IOException ioe) {
+      LOG.error("Error reading HTTP response from " + url);
+    }
+catch (    JsonSyntaxException jse) {
+      LOG.error("Error parsing HTTP response from " + url);
+    }
+ finally {
+      if (in != null) {
+        try {
+          in.close();
+        }
+ catch (        IOException ioe) {
+          LOG.error("Error closing HTTP response stream " + url);
+        }
+      }
+    }
+  }
+  return new ArrayList<NagiosAlert>();
+}
