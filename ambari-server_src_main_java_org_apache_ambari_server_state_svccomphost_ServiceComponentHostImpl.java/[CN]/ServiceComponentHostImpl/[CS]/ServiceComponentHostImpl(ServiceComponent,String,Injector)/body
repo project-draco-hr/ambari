@@ -1,0 +1,39 @@
+{
+  injector.injectMembers(this);
+  if (serviceComponent.isClientComponent()) {
+    this.stateMachine=clientStateMachineFactory.make(this);
+  }
+ else {
+    this.stateMachine=daemonStateMachineFactory.make(this);
+  }
+  this.serviceComponent=serviceComponent;
+  this.clusterGlobalLock=serviceComponent.getClusterGlobalLock();
+  stateEntity=new HostComponentStateEntity();
+  stateEntity.setClusterId(serviceComponent.getClusterId());
+  stateEntity.setComponentName(serviceComponent.getName());
+  stateEntity.setServiceName(serviceComponent.getServiceName());
+  stateEntity.setHostName(hostName);
+  stateEntity.setCurrentState(stateMachine.getCurrentState());
+  stateEntity.setCurrentStackVersion(gson.toJson(new StackId()));
+  desiredStateEntity=new HostComponentDesiredStateEntity();
+  desiredStateEntity.setClusterId(serviceComponent.getClusterId());
+  desiredStateEntity.setComponentName(serviceComponent.getName());
+  desiredStateEntity.setServiceName(serviceComponent.getServiceName());
+  desiredStateEntity.setHostName(hostName);
+  desiredStateEntity.setDesiredState(State.INIT);
+  desiredStateEntity.setDesiredStackVersion(gson.toJson(serviceComponent.getDesiredStackVersion()));
+  if (!serviceComponent.isMasterComponent() && !serviceComponent.isClientComponent()) {
+    desiredStateEntity.setAdminState(HostComponentAdminState.INSERVICE);
+  }
+ else {
+    desiredStateEntity.setAdminState(null);
+  }
+  try {
+    this.host=clusters.getHost(hostName);
+  }
+ catch (  AmbariException e) {
+    LOG.error("Host '{}' was not found" + hostName);
+    throw new RuntimeException(e);
+  }
+  this.resetLastOpInfo();
+}

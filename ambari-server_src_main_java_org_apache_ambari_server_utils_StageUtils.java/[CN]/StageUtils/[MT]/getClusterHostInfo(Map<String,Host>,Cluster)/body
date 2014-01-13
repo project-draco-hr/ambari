@@ -1,0 +1,58 @@
+{
+  Map<String,SortedSet<Integer>> hostRolesInfo=new HashMap<String,SortedSet<Integer>>();
+  Map<String,Set<String>> clusterHostInfo=new HashMap<String,Set<String>>();
+  Set<String> hostsSet=new LinkedHashSet<String>();
+  List<Integer> portsList=new ArrayList<Integer>();
+  for (  Host host : allHosts.values()) {
+    Integer currentPingPort=host.getCurrentPingPort() == null ? DEFAULT_PING_PORT : host.getCurrentPingPort();
+    hostsSet.add(host.getHostName());
+    portsList.add(currentPingPort);
+  }
+  List<String> hostsList=new ArrayList<String>(hostsSet);
+  for (  Entry<String,Service> serviceEntry : cluster.getServices().entrySet()) {
+    Service service=serviceEntry.getValue();
+    for (    Entry<String,ServiceComponent> serviceComponentEntry : service.getServiceComponents().entrySet()) {
+      ServiceComponent serviceComponent=serviceComponentEntry.getValue();
+      String componentName=serviceComponent.getName();
+      String roleName=componentToClusterInfoKeyMap.get(componentName);
+      if (null == roleName && !serviceComponent.isClientComponent()) {
+        roleName=componentName.toLowerCase() + "_hosts";
+      }
+      String decomRoleName=decommissionedToClusterInfoKeyMap.get(componentName);
+      if (roleName == null && decomRoleName == null) {
+        continue;
+      }
+      for (      String hostName : serviceComponent.getServiceComponentHosts().keySet()) {
+        if (roleName != null) {
+          SortedSet<Integer> hostsForComponentsHost=hostRolesInfo.get(roleName);
+          if (hostsForComponentsHost == null) {
+            hostsForComponentsHost=new TreeSet<Integer>();
+            hostRolesInfo.put(roleName,hostsForComponentsHost);
+          }
+          int hostIndex=hostsList.indexOf(hostName);
+          hostsForComponentsHost.add(hostIndex);
+        }
+        if (decomRoleName != null) {
+          ServiceComponentHost scHost=serviceComponent.getServiceComponentHost(hostName);
+          if (scHost.getComponentAdminState() == HostComponentAdminState.DECOMMISSIONED) {
+            SortedSet<Integer> hostsForComponentsHost=hostRolesInfo.get(decomRoleName);
+            if (hostsForComponentsHost == null) {
+              hostsForComponentsHost=new TreeSet<Integer>();
+              hostRolesInfo.put(decomRoleName,hostsForComponentsHost);
+            }
+            int hostIndex=hostsList.indexOf(hostName);
+            hostsForComponentsHost.add(hostIndex);
+          }
+        }
+      }
+    }
+  }
+  for (  Entry<String,SortedSet<Integer>> entry : hostRolesInfo.entrySet()) {
+    TreeSet<Integer> sortedSet=new TreeSet<Integer>(entry.getValue());
+    Set<String> replacedRangesSet=replaceRanges(sortedSet);
+    clusterHostInfo.put(entry.getKey(),replacedRangesSet);
+  }
+  clusterHostInfo.put(HOSTS_LIST,hostsSet);
+  clusterHostInfo.put(PORTS,replaceMappedRanges(portsList));
+  return clusterHostInfo;
+}

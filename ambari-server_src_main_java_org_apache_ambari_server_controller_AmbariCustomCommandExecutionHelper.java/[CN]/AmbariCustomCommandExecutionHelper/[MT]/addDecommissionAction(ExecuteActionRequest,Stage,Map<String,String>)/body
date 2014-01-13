@@ -1,0 +1,53 @@
+{
+  String clusterName=request.getClusterName();
+  Cluster cluster=clusters.getCluster(clusterName);
+  String serviceName=request.getServiceName();
+  if (request.getHosts() != null && request.getHosts().size() != 0) {
+    throw new AmbariException("Decommission command cannot be issued with target host(s) specified.");
+  }
+  Set<String> excludedHosts=getHostList(request.getParameters(),DECOM_EXCLUDED_HOSTS);
+  Set<String> includedHosts=getHostList(request.getParameters(),DECOM_INCLUDED_HOSTS);
+  String slaveCompType=request.getParameters().get(DECOM_SLAVE_COMPONENT);
+  Set<String> cloneSet=new HashSet<String>(excludedHosts);
+  cloneSet.retainAll(includedHosts);
+  if (cloneSet.size() > 0) {
+    throw new AmbariException("Same host cannot be specified for inclusion as well as exclusion. Hosts: " + cloneSet.toString());
+  }
+  Service service=cluster.getService(serviceName);
+  if (service == null) {
+    throw new AmbariException("Specified service " + serviceName + " is not a valid/deployed service.");
+  }
+  String masterCompType=request.getComponentName();
+  Map<String,ServiceComponent> svcComponents=service.getServiceComponents();
+  if (!svcComponents.containsKey(masterCompType)) {
+    throw new AmbariException("Specified component " + masterCompType + " does not belong to service "+ serviceName+ ".");
+  }
+  ServiceComponent masterComponent=svcComponents.get(masterCompType);
+  if (!masterComponent.isMasterComponent()) {
+    throw new AmbariException("Specified component " + masterCompType + " is not a MASTER for service "+ serviceName+ ".");
+  }
+  if (!masterToSlaveMappingForDecom.containsKey(masterCompType)) {
+    throw new AmbariException("Decommissioning is not supported for " + masterCompType);
+  }
+  if (slaveCompType == null || slaveCompType.equals("")) {
+    slaveCompType=masterToSlaveMappingForDecom.get(masterCompType);
+  }
+ else   if (!masterToSlaveMappingForDecom.get(masterCompType).equals(slaveCompType)) {
+    throw new AmbariException("Component " + slaveCompType + " is not supported for decommissioning.");
+  }
+  for (  ServiceComponentHost sch : svcComponents.get(slaveCompType).getServiceComponentHosts().values()) {
+    if (excludedHosts.contains(sch.getHostName())) {
+      sch.setComponentAdminState(HostComponentAdminState.DECOMMISSIONED);
+      LOG.info("Adding " + slaveCompType + " host to decommissioned list : "+ sch.getHostName());
+    }
+    if (includedHosts.contains(sch.getHostName())) {
+      sch.setComponentAdminState(HostComponentAdminState.INSERVICE);
+      LOG.info("Removing " + slaveCompType + " host from the decommissioned list: "+ sch.getHostName());
+    }
+  }
+  Set<String> masterHosts=masterComponent.getServiceComponentHosts().keySet();
+  ExecuteActionRequest commandRequest=new ExecuteActionRequest(request.getClusterName(),request.getCommandName(),request.getActionName(),request.getServiceName(),masterComponent.getName(),new ArrayList<String>(masterHosts),null);
+  String clusterHostInfoJson=StageUtils.getGson().toJson(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster));
+  stage.setClusterHostInfo(clusterHostInfoJson);
+  addCustomCommandAction(commandRequest,stage,hostLevelParams);
+}

@@ -1,7 +1,7 @@
 {
   String clusterName="foo1";
   createCluster(clusterName);
-  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-0.1"));
+  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-2.0.7"));
   String serviceName="HDFS";
   createService(clusterName,serviceName,null);
   String componentName1="NAMENODE";
@@ -35,12 +35,6 @@
   ClusterRequest crReq=new ClusterRequest(null,clusterName,null,null);
   crReq.setDesiredConfig(cr1);
   controller.updateClusters(Collections.singleton(crReq),null);
-  Map<String,String> props=new HashMap<String,String>();
-  props.put("datanodes",host2);
-  cr2=new ConfigurationRequest(clusterName,"hdfs-exclude-file","tag1",props);
-  crReq=new ClusterRequest(null,clusterName,null,null);
-  crReq.setDesiredConfig(cr2);
-  controller.updateClusters(Collections.singleton(crReq),null);
   startService(clusterName,serviceName,false,false);
   configs=new HashMap<String,String>();
   configs.put("a","c");
@@ -66,11 +60,11 @@
   Map<String,String> params=new HashMap<String,String>(){
 {
       put("test","test");
-      put("excludeFileTag","tag1");
+      put("excluded_hosts"," h1 ");
     }
   }
 ;
-  ExecuteActionRequest request=new ExecuteActionRequest(clusterName,Role.DECOMMISSION_DATANODE.name(),"HDFS",params);
+  ExecuteActionRequest request=new ExecuteActionRequest(clusterName,"DECOMMISSION",null,"HDFS","NAMENODE",null,params);
   Map<String,String> requestProperties=new HashMap<String,String>();
   requestProperties.put(REQUEST_CONTEXT_PROPERTY,"Called from a test");
   RequestStatusResponse response=controller.createAction(request,requestProperties);
@@ -79,7 +73,12 @@
   Assert.assertNotNull(storedTasks);
   Assert.assertNotNull(execCmd.getConfigurationTags().get("hdfs-site"));
   Assert.assertEquals(1,storedTasks.size());
-  Assert.assertEquals(host2,execCmd.getConfigurations().get("hdfs-exclude-file").get("datanodes"));
-  Assert.assertNotNull(execCmd.getConfigurationTags().get("hdfs-exclude-file"));
-  Assert.assertEquals("c",execCmd.getConfigurations().get("hdfs-site").get("a"));
+  HostRoleCommand command=storedTasks.get(0);
+  Assert.assertEquals(Role.NAMENODE,command.getRole());
+  Assert.assertEquals(RoleCommand.CUSTOM_COMMAND,command.getRoleCommand());
+  Map<String,Set<String>> cInfo=execCmd.getClusterHostInfo();
+  Assert.assertTrue(cInfo.containsKey("decom_dn_hosts"));
+  Assert.assertTrue(cInfo.get("decom_dn_hosts").size() == 1);
+  Assert.assertEquals("h1",cInfo.get("all_hosts").toArray()[Integer.parseInt(cInfo.get("decom_dn_hosts").iterator().next())]);
+  Assert.assertEquals("DECOMMISSION",execCmd.getHostLevelParams().get("custom_command"));
 }
