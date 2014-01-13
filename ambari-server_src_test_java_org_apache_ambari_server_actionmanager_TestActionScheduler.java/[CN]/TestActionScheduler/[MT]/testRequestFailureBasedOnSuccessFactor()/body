@@ -6,13 +6,13 @@
   ServiceComponent scomp=mock(ServiceComponent.class);
   ServiceComponentHost sch=mock(ServiceComponentHost.class);
   UnitOfWork unitOfWork=mock(UnitOfWork.class);
+  RequestFactory requestFactory=mock(RequestFactory.class);
   when(fsm.getCluster(anyString())).thenReturn(oneClusterMock);
   when(oneClusterMock.getService(anyString())).thenReturn(serviceObj);
   when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
   when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
   when(serviceObj.getCluster()).thenReturn(oneClusterMock);
-  ActionDBAccessor db=new ActionDBInMemoryImpl();
-  List<Stage> stages=new ArrayList<Stage>();
+  final List<Stage> stages=new ArrayList<Stage>();
   long now=System.currentTimeMillis();
   Stage stage=new Stage(1,"/tmp","cluster1","testRequestFailureBasedOnSuccessFactor",CLUSTER_HOST_INFO);
   stage.setStageId(1);
@@ -27,9 +27,57 @@
   stage.getOrderedHostRoleCommands().get(1).setTaskId(2);
   stage.getOrderedHostRoleCommands().get(2).setTaskId(3);
   stages.add(getStageWithSingleTask("host1","cluster1",Role.HDFS_CLIENT,RoleCommand.UPGRADE,Service.Type.HDFS,4,2,1));
-  db.persistActions(stages);
+  ActionDBAccessor db=mock(ActionDBAccessor.class);
+  when(db.getStagesInProgress()).thenReturn(stages);
+  doAnswer(new Answer(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      String host=(String)invocation.getArguments()[0];
+      Long requestId=(Long)invocation.getArguments()[1];
+      Long stageId=(Long)invocation.getArguments()[2];
+      String role=(String)invocation.getArguments()[3];
+      CommandReport commandReport=(CommandReport)invocation.getArguments()[4];
+      for (      Stage stage : stages) {
+        if (requestId.equals(stage.getRequestId()) && stageId.equals(stage.getStageId())) {
+          HostRoleCommand command=stage.getHostRoleCommand(host,role);
+          command.setStatus(HostRoleStatus.valueOf(commandReport.getStatus()));
+        }
+      }
+      return null;
+    }
+  }
+).when(db).updateHostRoleState(anyString(),anyLong(),anyLong(),anyString(),any(CommandReport.class));
+  when(db.getTask(anyLong())).thenAnswer(new Answer<Object>(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      Long taskId=(Long)invocation.getArguments()[0];
+      for (      Stage stage : stages) {
+        for (        HostRoleCommand command : stage.getOrderedHostRoleCommands()) {
+          if (taskId.equals(command.getTaskId())) {
+            return command;
+          }
+        }
+      }
+      return null;
+    }
+  }
+);
+  doAnswer(new Answer(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      Long requestId=(Long)invocation.getArguments()[0];
+      for (      Stage stage : stages) {
+        if (requestId.equals(stage.getRequestId())) {
+          for (          HostRoleCommand command : stage.getOrderedHostRoleCommands()) {
+            if (command.getStatus() == HostRoleStatus.QUEUED || command.getStatus() == HostRoleStatus.IN_PROGRESS || command.getStatus() == HostRoleStatus.PENDING) {
+              command.setStatus(HostRoleStatus.ABORTED);
+            }
+          }
+        }
+      }
+      return null;
+    }
+  }
+).when(db).abortOperation(anyLong());
   ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),new ServerActionManagerImpl(fsm),unitOfWork);
-  ActionManager am=new ActionManager(2,2,aq,fsm,db,new HostsMap((String)null),new ServerActionManagerImpl(fsm),unitOfWork,null);
+  ActionManager am=new ActionManager(2,2,aq,fsm,db,new HostsMap((String)null),new ServerActionManagerImpl(fsm),unitOfWork,null,requestFactory);
   scheduler.doWork();
   List<CommandReport> reports=new ArrayList<CommandReport>();
   reports.add(getCommandReport(HostRoleStatus.FAILED,Role.DATANODE,Service.Type.HDFS,"1-1",1));

@@ -1,0 +1,44 @@
+{
+  BatchRequestResponse batchRequestResponse=new BatchRequestResponse();
+  int retCode=clientResponse.getStatus();
+  batchRequestResponse.setReturnCode(retCode);
+  String responseString=clientResponse.getEntity(String.class);
+  LOG.debug("Processing API response: status={}, body={}",retCode,responseString);
+  Map httpResponseMap;
+  try {
+    httpResponseMap=gson.fromJson(responseString,Map.class);
+    LOG.debug("Processing responce as JSON");
+  }
+ catch (  JsonSyntaxException e) {
+    LOG.debug("Response is not valid JSON object. Recording as is");
+    httpResponseMap=new HashMap();
+    httpResponseMap.put("message",responseString);
+  }
+  if (retCode < 300) {
+    if (httpResponseMap == null) {
+      batchRequestResponse.setStatus(HostRoleStatus.COMPLETED.toString());
+      return batchRequestResponse;
+    }
+    Map requestMap=null;
+    Object requestMapObject=httpResponseMap.get("Requests");
+    if (requestMapObject instanceof Map) {
+      requestMap=(Map)requestMapObject;
+    }
+    if (requestMap != null) {
+      batchRequestResponse.setRequestId(((Double)requestMap.get("id")).longValue());
+      String status=null;
+      if (requestMap.get("request_status") != null) {
+        status=requestMap.get("request_status").toString();
+      }
+      if (requestMap.get("status") != null) {
+        status=requestMap.get("status").toString();
+      }
+      batchRequestResponse.setStatus(status);
+    }
+  }
+ else {
+    batchRequestResponse.setReturnMessage((String)httpResponseMap.get("message"));
+    batchRequestResponse.setStatus(HostRoleStatus.FAILED.toString());
+  }
+  return batchRequestResponse;
+}

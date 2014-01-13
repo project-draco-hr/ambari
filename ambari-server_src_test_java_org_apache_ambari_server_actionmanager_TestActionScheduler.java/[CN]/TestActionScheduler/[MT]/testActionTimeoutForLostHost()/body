@@ -16,16 +16,26 @@
   when(fsm.getHost(anyString())).thenReturn(host);
   when(host.getState()).thenReturn(HostState.HEARTBEAT_LOST);
   when(host.getHostName()).thenReturn(hostname);
-  ActionDBAccessor db=new ActionDBInMemoryImpl();
   List<Stage> stages=new ArrayList<Stage>();
-  Stage s=StageUtils.getATestStage(1,977,hostname,CLUSTER_HOST_INFO);
+  final Stage s=StageUtils.getATestStage(1,977,hostname,CLUSTER_HOST_INFO);
   stages.add(s);
-  db.persistActions(stages);
+  ActionDBAccessor db=mock(ActionDBAccessor.class);
+  when(db.getStagesInProgress()).thenReturn(stages);
+  doAnswer(new Answer(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      String host=(String)invocation.getArguments()[0];
+      String role=(String)invocation.getArguments()[3];
+      HostRoleCommand command=s.getHostRoleCommand(host,role);
+      command.setStatus(HostRoleStatus.TIMEDOUT);
+      return null;
+    }
+  }
+).when(db).timeoutHostRole(anyString(),anyLong(),anyLong(),anyString());
   ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),null,unitOfWork);
   scheduler.setTaskTimeoutAdjustment(false);
   scheduler.start();
   while (!stages.get(0).getHostRoleStatus(hostname,"NAMENODE").equals(HostRoleStatus.TIMEDOUT)) {
     Thread.sleep(100L);
   }
-  assertEquals(stages.get(0).getHostRoleStatus(hostname,"NAMENODE"),HostRoleStatus.TIMEDOUT);
+  scheduler.stop();
 }

@@ -11,15 +11,26 @@
   when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
   when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
   when(serviceObj.getCluster()).thenReturn(oneClusterMock);
-  ActionDBAccessor db=new ActionDBInMemoryImpl();
   String hostname="ahost.ambari.apache.org";
   List<Stage> stages=new ArrayList<Stage>();
   Map<String,String> payload=new HashMap<String,String>();
   payload.put(ServerAction.PayloadName.CLUSTER_NAME,"cluster1");
   payload.put(ServerAction.PayloadName.CURRENT_STACK_VERSION,"HDP-0.2");
-  Stage s=getStageWithServerAction(1,977,hostname,payload,"test");
+  final Stage s=getStageWithServerAction(1,977,hostname,payload,"test");
   stages.add(s);
-  db.persistActions(stages);
+  ActionDBAccessor db=mock(ActionDBAccessor.class);
+  when(db.getStagesInProgress()).thenReturn(stages);
+  doAnswer(new Answer(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      String host=(String)invocation.getArguments()[0];
+      String role=(String)invocation.getArguments()[3];
+      CommandReport commandReport=(CommandReport)invocation.getArguments()[4];
+      HostRoleCommand command=s.getHostRoleCommand(host,role);
+      command.setStatus(HostRoleStatus.valueOf(commandReport.getStatus()));
+      return null;
+    }
+  }
+).when(db).updateHostRoleState(anyString(),anyLong(),anyLong(),anyString(),any(CommandReport.class));
   ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),new ServerActionManagerImpl(fsm),unitOfWork);
   scheduler.start();
   while (!stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION").equals(HostRoleStatus.COMPLETED)) {
@@ -27,17 +38,4 @@
   }
   scheduler.stop();
   assertEquals(stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION"),HostRoleStatus.COMPLETED);
-  stages=new ArrayList<Stage>();
-  payload.remove(ServerAction.PayloadName.CLUSTER_NAME);
-  s=getStageWithServerAction(1,23,hostname,payload,"test");
-  stages.add(s);
-  db.persistActions(stages);
-  scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),new ServerActionManagerImpl(fsm),unitOfWork);
-  scheduler.start();
-  while (!stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION").equals(HostRoleStatus.FAILED)) {
-    Thread.sleep(100);
-  }
-  scheduler.stop();
-  assertEquals(stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION"),HostRoleStatus.FAILED);
-  assertEquals("test",stages.get(0).getRequestContext());
 }

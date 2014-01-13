@@ -1,11 +1,26 @@
 {
-  String executionId=properties.get(BATCH_REQUEST_EXECUTION_ID_KEY) != null ? (String)properties.get(BATCH_REQUEST_EXECUTION_ID_KEY) : null;
-  String batchId=properties.get(BATCH_REQUEST_BATCH_ID_KEY) != null ? (String)properties.get(BATCH_REQUEST_BATCH_ID_KEY) : null;
+  Long executionId=properties.get(BATCH_REQUEST_EXECUTION_ID_KEY) != null ? (Long)properties.get(BATCH_REQUEST_EXECUTION_ID_KEY) : null;
+  Long batchId=properties.get(BATCH_REQUEST_BATCH_ID_KEY) != null ? (Long)properties.get(BATCH_REQUEST_BATCH_ID_KEY) : null;
+  String clusterName=(String)properties.get(BATCH_REQUEST_CLUSTER_NAME_KEY);
   if (executionId == null || batchId == null) {
     throw new AmbariException("Unable to retrieve persisted batch request" + ", execution_id = " + executionId + ", batch_id = "+ batchId);
   }
-  Long requestId=executionScheduleManager.executeBatchRequest(Long.parseLong(executionId),Long.parseLong(batchId));
+  Long requestId=executionScheduleManager.executeBatchRequest(executionId,batchId,clusterName);
   if (requestId != null) {
-    BatchRequestResponse batchRequestResponse=executionScheduleManager.getBatchRequestResponse(requestId);
+    HostRoleStatus status;
+    do {
+      BatchRequestResponse batchRequestResponse=executionScheduleManager.getBatchRequestResponse(requestId,clusterName);
+      status=HostRoleStatus.valueOf(batchRequestResponse.getStatus());
+      executionScheduleManager.updateBatchRequest(executionId,batchId,clusterName,batchRequestResponse,true);
+      try {
+        Thread.sleep(statusCheckInterval);
+      }
+ catch (      InterruptedException e) {
+        String message="Job Thread interrupted";
+        LOG.error(message,e);
+        throw new AmbariException(message,e);
+      }
+    }
+ while (!status.isCompletedState());
   }
 }
