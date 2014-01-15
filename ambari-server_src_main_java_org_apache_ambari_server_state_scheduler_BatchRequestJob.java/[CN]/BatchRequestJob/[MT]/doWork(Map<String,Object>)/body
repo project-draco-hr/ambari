@@ -5,11 +5,13 @@
   if (executionId == null || batchId == null) {
     throw new AmbariException("Unable to retrieve persisted batch request" + ", execution_id = " + executionId + ", batch_id = "+ batchId);
   }
+  Map<String,Integer> taskCounts=getTaskCountProperties(properties);
   Long requestId=executionScheduleManager.executeBatchRequest(executionId,batchId,clusterName);
   if (requestId != null) {
     HostRoleStatus status;
+    BatchRequestResponse batchRequestResponse;
     do {
-      BatchRequestResponse batchRequestResponse=executionScheduleManager.getBatchRequestResponse(requestId,clusterName);
+      batchRequestResponse=executionScheduleManager.getBatchRequestResponse(requestId,clusterName);
       status=HostRoleStatus.valueOf(batchRequestResponse.getStatus());
       executionScheduleManager.updateBatchRequest(executionId,batchId,clusterName,batchRequestResponse,true);
       try {
@@ -22,5 +24,9 @@
       }
     }
  while (!status.isCompletedState());
+    Map<String,Integer> aggregateCounts=addTaskCountToProperties(properties,taskCounts,batchRequestResponse);
+    if (executionScheduleManager.hasToleranceThresholdExceeded(executionId,clusterName,aggregateCounts)) {
+      throw new AmbariException("Task failure tolerance limit exceeded" + ", execution_id = " + executionId + ", processed batch_id = "+ batchId+ ", failed tasks = "+ aggregateCounts.get(BATCH_REQUEST_FAILED_TASKS_KEY)+ ", total tasks = "+ aggregateCounts.get(BATCH_REQUEST_TOTAL_TASKS_KEY));
+    }
   }
 }
