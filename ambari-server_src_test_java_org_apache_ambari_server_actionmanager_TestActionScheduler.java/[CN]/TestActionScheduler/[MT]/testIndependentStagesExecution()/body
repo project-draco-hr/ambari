@@ -1,0 +1,37 @@
+{
+  ActionQueue aq=new ActionQueue();
+  Clusters fsm=mock(Clusters.class);
+  Cluster oneClusterMock=mock(Cluster.class);
+  Service serviceObj=mock(Service.class);
+  ServiceComponent scomp=mock(ServiceComponent.class);
+  ServiceComponentHost sch=mock(ServiceComponentHost.class);
+  UnitOfWork unitOfWork=mock(UnitOfWork.class);
+  RequestFactory requestFactory=mock(RequestFactory.class);
+  when(fsm.getCluster(anyString())).thenReturn(oneClusterMock);
+  when(oneClusterMock.getService(anyString())).thenReturn(serviceObj);
+  when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
+  when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
+  when(serviceObj.getCluster()).thenReturn(oneClusterMock);
+  String hostname1="ahost.ambari.apache.org";
+  String hostname2="bhost.ambari.apache.org";
+  String hostname3="chost.ambari.apache.org";
+  String hostname4="chost.ambari.apache.org";
+  List<Stage> stages=new ArrayList<Stage>();
+  stages.add(getStageWithSingleTask(hostname1,"cluster1",Role.DATANODE,RoleCommand.START,Service.Type.HDFS,1,1,1));
+  stages.add(getStageWithSingleTask(hostname1,"cluster1",Role.GANGLIA_MONITOR,RoleCommand.START,Service.Type.GANGLIA,2,2,2));
+  stages.add(getStageWithSingleTask(hostname2,"cluster1",Role.DATANODE,RoleCommand.START,Service.Type.HDFS,3,3,3));
+  stages.add(getStageWithSingleTask(hostname3,"cluster1",Role.DATANODE,RoleCommand.START,Service.Type.HDFS,4,4,4));
+  stages.add(getStageWithSingleTask(hostname4,"cluster1",Role.GANGLIA_MONITOR,RoleCommand.START,Service.Type.GANGLIA,5,5,4));
+  ActionDBAccessor db=mock(ActionDBAccessor.class);
+  when(db.getStagesInProgress()).thenReturn(stages);
+  Properties properties=new Properties();
+  Configuration conf=new Configuration(properties);
+  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),new ServerActionManagerImpl(fsm),unitOfWork,conf);
+  ActionManager am=new ActionManager(2,2,aq,fsm,db,new HostsMap((String)null),new ServerActionManagerImpl(fsm),unitOfWork,null,requestFactory,conf);
+  scheduler.doWork();
+  Assert.assertEquals(HostRoleStatus.QUEUED,stages.get(0).getHostRoleStatus(hostname1,"DATANODE"));
+  Assert.assertEquals(HostRoleStatus.PENDING,stages.get(1).getHostRoleStatus(hostname1,"GANGLIA_MONITOR"));
+  Assert.assertEquals(HostRoleStatus.QUEUED,stages.get(2).getHostRoleStatus(hostname2,"DATANODE"));
+  Assert.assertEquals(HostRoleStatus.QUEUED,stages.get(3).getHostRoleStatus(hostname3,"DATANODE"));
+  Assert.assertEquals(HostRoleStatus.PENDING,stages.get(4).getHostRoleStatus(hostname4,"GANGLIA_MONITOR"));
+}

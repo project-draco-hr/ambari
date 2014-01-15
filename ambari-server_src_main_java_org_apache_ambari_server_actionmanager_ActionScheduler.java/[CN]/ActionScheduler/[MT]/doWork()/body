@@ -1,6 +1,8 @@
 {
   try {
     unitOfWork.begin();
+    Set<String> runningRequestIds=new HashSet<String>();
+    Set<String> affectedHosts=new HashSet<String>();
     List<Stage> stages=db.getStagesInProgress();
     if (LOG.isDebugEnabled()) {
       LOG.debug("Scheduler wakes up");
@@ -12,6 +14,28 @@
       return;
     }
     for (    Stage s : stages) {
+      long requestId=s.getRequestId();
+      String requestIdStr=String.valueOf(requestId);
+      if (runningRequestIds.contains(requestIdStr)) {
+        continue;
+      }
+ else {
+        runningRequestIds.add(requestIdStr);
+      }
+      List<String> stageHosts=s.getHosts();
+      boolean conflict=false;
+      for (      String host : stageHosts) {
+        if (affectedHosts.contains(host)) {
+          conflict=true;
+          break;
+        }
+      }
+      if (conflict) {
+        continue;
+      }
+ else {
+        affectedHosts.addAll(stageHosts);
+      }
       List<ExecutionCommand> commandsToSchedule=new ArrayList<ExecutionCommand>();
       Map<String,RoleStats> roleStats=processInProgressStage(s,commandsToSchedule);
       boolean failed=false;
@@ -35,23 +59,7 @@
       }
       for (      ExecutionCommand cmd : commandsToSchedule) {
         if (Role.valueOf(cmd.getRole()).equals(Role.AMBARI_SERVER_ACTION)) {
-          try {
-            long now=System.currentTimeMillis();
-            String hostName=cmd.getHostname();
-            String roleName=cmd.getRole();
-            s.setStartTime(hostName,roleName,now);
-            s.setLastAttemptTime(hostName,roleName,now);
-            s.incrementAttemptCount(hostName,roleName);
-            s.setHostRoleStatus(hostName,roleName,HostRoleStatus.QUEUED);
-            db.hostRoleScheduled(s,hostName,roleName);
-            String actionName=cmd.getRoleParams().get(ServerAction.ACTION_NAME);
-            this.serverActionManager.executeAction(actionName,cmd.getCommandParams());
-            reportServerActionSuccess(s,cmd);
-          }
- catch (          AmbariException e) {
-            LOG.warn("Could not execute server action " + cmd.toString(),e);
-            reportServerActionFailure(s,cmd,e.getMessage());
-          }
+          executeServerAction(s,cmd);
         }
  else {
           try {
@@ -63,15 +71,7 @@
           }
         }
       }
-      boolean goToNextStage=true;
-      for (      String role : roleStats.keySet()) {
-        RoleStats stats=roleStats.get(role);
-        if (!stats.isSuccessFactorMet()) {
-          goToNextStage=false;
-          break;
-        }
-      }
-      if (!goToNextStage) {
+      if (!configuration.getParallelStageExecution()) {
         return;
       }
     }
