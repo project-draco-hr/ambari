@@ -2,10 +2,12 @@
   ExecutionScheduleManager scheduleManagerMock=createMock(ExecutionScheduleManager.class);
   BatchRequestJob batchRequestJob=new BatchRequestJob(scheduleManagerMock,100L);
   String clusterName="mycluster";
-  Long requestId=11L;
+  long requestId=11L;
+  long executionId=31L;
+  long batchId=1L;
   Map<String,Object> properties=new HashMap<String,Object>();
-  properties.put(BatchRequestJob.BATCH_REQUEST_EXECUTION_ID_KEY,1L);
-  properties.put(BatchRequestJob.BATCH_REQUEST_BATCH_ID_KEY,1L);
+  properties.put(BatchRequestJob.BATCH_REQUEST_EXECUTION_ID_KEY,executionId);
+  properties.put(BatchRequestJob.BATCH_REQUEST_BATCH_ID_KEY,batchId);
   properties.put(BatchRequestJob.BATCH_REQUEST_CLUSTER_NAME_KEY,clusterName);
   BatchRequestResponse pendingResponse=new BatchRequestResponse();
   pendingResponse.setStatus(HostRoleStatus.PENDING.toString());
@@ -19,8 +21,13 @@
   expect(scheduleManagerMock.executeBatchRequest(captureLong(executionIdCapture),captureLong(batchIdCapture),capture(clusterNameCapture))).andReturn(requestId);
   expect(scheduleManagerMock.getBatchRequestResponse(requestId,clusterName)).andReturn(pendingResponse).times(2);
   expect(scheduleManagerMock.getBatchRequestResponse(requestId,clusterName)).andReturn(inProgressResponse).times(4);
-  expect(scheduleManagerMock.getBatchRequestResponse(requestId,clusterName)).andReturn(completedResponse).atLeastOnce();
+  expect(scheduleManagerMock.getBatchRequestResponse(requestId,clusterName)).andReturn(completedResponse).once();
+  scheduleManagerMock.updateBatchRequest(eq(executionId),eq(batchId),eq(clusterName),anyObject(BatchRequestResponse.class),eq(true));
+  expectLastCall().anyTimes();
   replay(scheduleManagerMock);
   batchRequestJob.doWork(properties);
   verify(scheduleManagerMock);
+  Assert.assertEquals(executionId,executionIdCapture.getValue().longValue());
+  Assert.assertEquals(batchId,batchIdCapture.getValue().longValue());
+  Assert.assertEquals(clusterName,clusterNameCapture.getValue());
 }
