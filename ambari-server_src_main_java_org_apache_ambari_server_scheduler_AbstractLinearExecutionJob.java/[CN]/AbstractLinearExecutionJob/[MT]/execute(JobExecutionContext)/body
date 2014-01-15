@@ -4,8 +4,9 @@
   if (!executionScheduleManager.continueOnMisfire(context)) {
     throw new JobExecutionException("Canceled execution based on misfire" + " toleration threshold, job: " + jobKey + ", scheduleTime = "+ context.getScheduledFireTime());
   }
+  Map<String,Object> properties=context.getMergedJobDataMap().getWrappedMap();
   try {
-    doWork(context.getMergedJobDataMap().getWrappedMap());
+    doWork(properties);
   }
  catch (  AmbariException e) {
     LOG.error("Exception caught on job execution. Exiting linear chain...",e);
@@ -17,6 +18,12 @@
   String nextJobGroup=jobDataMap.getString(NEXT_EXECUTION_JOB_GROUP_KEY);
   if (nextJobName == null || nextJobName.isEmpty()) {
     LOG.debug("End of linear job chain. Returning with success.");
+    try {
+      finalizeExecution(properties);
+    }
+ catch (    AmbariException e) {
+      LOG.warn("Unable to finalize execution for job: " + jobKey);
+    }
     return;
   }
   int separationSeconds=jobDataMap.getIntValue(NEXT_EXECUTION_SEPARATION_SECONDS);

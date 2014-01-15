@@ -1,0 +1,55 @@
+{
+  Cluster cluster=clusters.getCluster(clusterName);
+  RequestExecution requestExecution=cluster.getAllRequestExecutions().get(executionId);
+  if (requestExecution == null) {
+    throw new AmbariException("Unable to find request schedule with id = " + executionId);
+  }
+  Batch batch=requestExecution.getBatch();
+  BatchRequest firstBatchRequest=null;
+  if (batch != null) {
+    List<BatchRequest> batchRequests=batch.getBatchRequests();
+    if (batchRequests != null && batchRequests.size() > 0) {
+      Collections.sort(batchRequests);
+      firstBatchRequest=batchRequests.get(0);
+    }
+  }
+  boolean markCompleted=false;
+  if (firstBatchRequest != null) {
+    String jobName=getJobName(executionId,firstBatchRequest.getOrderId());
+    JobKey jobKey=JobKey.jobKey(jobName,ExecutionJob.LINEAR_EXECUTION_JOB_GROUP);
+    JobDetail jobDetail;
+    try {
+      jobDetail=executionScheduler.getJobDetail(jobKey);
+    }
+ catch (    SchedulerException e) {
+      LOG.warn("Unable to retrieve job details from scheduler. job: " + jobKey);
+      e.printStackTrace();
+      return;
+    }
+    if (jobDetail != null) {
+      try {
+        List<? extends Trigger> triggers=executionScheduler.getTriggersForJob(jobKey);
+        if (triggers != null && triggers.size() > 0) {
+          if (triggers.size() > 1) {
+            throw new AmbariException("Too many triggers defined for job. " + "job: " + jobKey);
+          }
+          Trigger trigger=triggers.get(0);
+          if (!trigger.mayFireAgain() || (trigger.getFinalFireTime() != null && !DateUtils.isFutureTime(trigger.getFinalFireTime()))) {
+            markCompleted=true;
+          }
+        }
+ else {
+          markCompleted=true;
+        }
+      }
+ catch (      SchedulerException e) {
+        LOG.warn("Unable to retrieve triggers for job: " + jobKey);
+        e.printStackTrace();
+        return;
+      }
+    }
+  }
+  if (markCompleted) {
+    requestExecution.updateStatus(RequestExecution.Status.COMPLETED);
+  }
+}
