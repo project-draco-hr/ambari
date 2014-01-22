@@ -1,0 +1,40 @@
+{
+  if (customActionDefinitionRoot == null || !customActionDefinitionRoot.exists() || !customActionDefinitionRoot.canRead()) {
+    LOG.warn("Cannot read custom action definitions. " + customActionDefinitionRoot == null ? "" : "Check path " + customActionDefinitionRoot.getAbsolutePath());
+  }
+  File[] customActionDefinitionFiles=customActionDefinitionRoot.listFiles(AmbariMetaInfo.FILENAME_FILTER);
+  if (customActionDefinitionFiles != null) {
+    for (    File definitionFile : customActionDefinitionFiles) {
+      ActionDefinitionXml adx=null;
+      try {
+        adx=unmarshal(ActionDefinitionXml.class,definitionFile);
+      }
+ catch (      UnmarshalException uex) {
+        LOG.warn("Encountered badly formed action definition file - " + definitionFile.getAbsolutePath());
+        continue;
+      }
+      for (      ActionDefinitionSpec ad : adx.actionDefinitions()) {
+        LOG.debug("Read action definition = " + ad.toString());
+        StringBuilder errorReason=new StringBuilder("Error while parsing action definition. ").append(ad.toString()).append(" --- ");
+        TargetHostType targetType=safeValueOf(TargetHostType.class,ad.getTargetType(),errorReason);
+        ActionType actionType=safeValueOf(ActionType.class,ad.getActionType(),errorReason);
+        Short defaultTimeout=MIN_TIMEOUT;
+        if (ad.getDefaultTimeout() != null && !ad.getDefaultTimeout().isEmpty()) {
+          defaultTimeout=Short.parseShort(ad.getDefaultTimeout());
+        }
+        if (isValidActionDefinition(ad,actionType,defaultTimeout,errorReason)) {
+          String actionName=ad.getActionName();
+          if (actionDefinitionMap.containsKey(actionName)) {
+            LOG.warn("Ignoring action definition as a different definition by that name already exists. " + ad.toString());
+            continue;
+          }
+          actionDefinitionMap.put(ad.getActionName(),new ActionDefinition(ad.getActionName(),actionType,ad.getInputs(),ad.getTargetService(),ad.getTargetComponent(),ad.getDescription(),targetType,defaultTimeout));
+          LOG.info("Added custom action definition for " + ad.getActionName());
+        }
+ else {
+          LOG.warn(errorReason.toString());
+        }
+      }
+    }
+  }
+}
