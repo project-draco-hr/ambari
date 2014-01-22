@@ -1,18 +1,20 @@
 {
+  String stackRootAbsPath=stackRoot.getAbsolutePath();
   if (LOG.isDebugEnabled()) {
-    LOG.debug("Loading stack information" + ", stackRoot = " + stackRoot.getAbsolutePath());
+    LOG.debug("Loading stack information" + ", stackRoot = " + stackRootAbsPath);
   }
-  if (!stackRoot.isDirectory() && !stackRoot.exists())   throw new IOException("" + Configuration.METADETA_DIR_PATH + " should be a directory with stack"+ ", stackRoot = "+ stackRoot.getAbsolutePath());
+  if (!stackRoot.isDirectory() && !stackRoot.exists())   throw new IOException("" + Configuration.METADETA_DIR_PATH + " should be a directory with stack"+ ", stackRoot = "+ stackRootAbsPath);
   StackExtensionHelper stackExtensionHelper=new StackExtensionHelper(stackRoot);
   stackExtensionHelper.fillInfo();
   List<StackInfo> stacks=stackExtensionHelper.getAllAvailableStacks();
   if (stacks.isEmpty()) {
-    throw new AmbariException("Unable to find stack definitions under " + "stackRoot = " + stackRoot.getAbsolutePath());
+    throw new AmbariException("Unable to find stack definitions under " + "stackRoot = " + stackRootAbsPath);
   }
   for (  StackInfo stack : stacks) {
     LOG.debug("Adding new stack to known stacks" + ", stackName = " + stack.getName() + ", stackVersion = "+ stack.getVersion());
     stacksResult.add(stack);
-    File repositoryFolder=new File(stackRoot.getAbsolutePath() + File.separator + stack.getName()+ File.separator+ stack.getVersion()+ File.separator+ REPOSITORY_FOLDER_NAME+ File.separator+ REPOSITORY_FILE_NAME);
+    String stackPath=stackRootAbsPath + File.separator + stack.getName()+ File.separator+ stack.getVersion();
+    File repositoryFolder=new File(stackPath + File.separator + REPOSITORY_FOLDER_NAME+ File.separator+ REPOSITORY_FILE_NAME);
     if (repositoryFolder.exists()) {
       LOG.debug("Adding repositories to stack" + ", stackName=" + stack.getName() + ", stackVersion="+ stack.getVersion()+ ", repoFolder="+ repositoryFolder.getPath());
       List<RepositoryInfo> repositoryInfoList=getRepository(repositoryFolder,stack.getVersion());
@@ -23,5 +25,7 @@
     }
     List<ServiceInfo> services=stackExtensionHelper.getAllApplicableServices(stack);
     stack.setServices(services);
+    String stackHooksToUse=stackExtensionHelper.resolveHooksFolder(stack);
+    stack.setStackHooksFolder(stackHooksToUse);
   }
 }
