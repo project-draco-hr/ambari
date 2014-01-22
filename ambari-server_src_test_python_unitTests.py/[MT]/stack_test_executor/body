@@ -1,0 +1,24 @@
+def stack_test_executor(base_folder, stack, service, custom_tests, executor_result):
+    '\n  Stack tests executor. Must be executed in separate process to prevent module\n  name conflicts in different stacks.\n  '
+    if custom_tests:
+        test_mask = CUSTOM_TEST_MASK
+    else:
+        test_mask = TEST_MASK
+    server_src_dir = get_parent_path(base_folder, 'src')
+    base_stack_folder = os.path.join(server_src_dir, 'main/resources/stacks/HDP/{0}'.format(stack))
+    script_folders = set()
+    for (root, subFolders, files) in os.walk(base_stack_folder):
+        if ((os.path.split(root)[(-1)] == 'scripts') and (service in root)):
+            script_folders.add(root)
+    sys.path.extend(script_folders)
+    tests = get_test_files(base_folder, mask=test_mask)
+    shuffle(tests)
+    modules = [os.path.basename(s)[:(-3)] for s in tests]
+    suites = [unittest.defaultTestLoader.loadTestsFromName(name) for name in modules]
+    testSuite = unittest.TestSuite(suites)
+    textRunner = unittest.TextTestRunner(verbosity=2).run(testSuite)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    exit_code = (0 if textRunner.wasSuccessful() else 1)
+    executor_result.put({'exit_code': exit_code, 'tests_run': textRunner.testsRun, 'errors': [(str(item[0]), str(item[1]), 'ERROR') for item in textRunner.errors], 'failures': [(str(item[0]), str(item[1]), 'FAIL') for item in textRunner.failures], 'skipped': [(str(item[0]), str(item[1]), 'SKIPPED') for item in textRunner.skipped], })
+    (executor_result.put(0) if textRunner.wasSuccessful() else executor_result.put(1))
