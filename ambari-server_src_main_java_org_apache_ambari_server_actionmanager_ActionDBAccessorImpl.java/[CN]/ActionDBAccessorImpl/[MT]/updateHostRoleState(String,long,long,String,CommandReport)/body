@@ -1,4 +1,5 @@
 {
+  boolean checkRequest=false;
   if (LOG.isDebugEnabled()) {
     LOG.debug("Update HostRoleState: " + "HostName " + hostname + " requestId "+ requestId+ " stageId "+ stageId+ " role "+ role+ " report "+ report);
   }
@@ -9,10 +10,16 @@
     command.setStdOut(report.getStdOut().getBytes());
     command.setStdError(report.getStdErr().getBytes());
     command.setStructuredOut(report.getStructuredOut() == null ? null : report.getStructuredOut().getBytes());
-    if (command.getStatus() == HostRoleStatus.COMPLETED || command.getStatus() == HostRoleStatus.ABORTED || command.getStatus() == HostRoleStatus.FAILED) {
+    if (HostRoleStatus.getCompletedStates().contains(command.getStatus())) {
       command.setEndTime(now);
+      if (requestDAO.getLastStageId(requestId).equals(stageId)) {
+        checkRequest=true;
+      }
     }
     command.setExitcode(report.getExitCode());
-    hostRoleCommandDAO.merge(command);
+  }
+  hostRoleCommandDAO.mergeAll(commands);
+  if (checkRequest) {
+    endRequestIfCompleted(requestId);
   }
 }

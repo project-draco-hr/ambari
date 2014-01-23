@@ -1,0 +1,31 @@
+{
+  Map<Long,CommandReport> taskReports=new HashMap<Long,CommandReport>();
+  for (  CommandReport report : reports) {
+    taskReports.put(report.getTaskId(),report);
+  }
+  long now=System.currentTimeMillis();
+  List<Long> requestsToCheck=new ArrayList<Long>();
+  List<HostRoleCommandEntity> commandEntities=hostRoleCommandDAO.findByPKs(taskReports.keySet());
+  for (  HostRoleCommandEntity commandEntity : commandEntities) {
+    CommandReport report=taskReports.get(commandEntity.getTaskId());
+    commandEntity.setStatus(HostRoleStatus.valueOf(report.getStatus()));
+    commandEntity.setStdOut(report.getStdOut().getBytes());
+    commandEntity.setStdError(report.getStdErr().getBytes());
+    commandEntity.setStructuredOut(report.getStructuredOut() == null ? null : report.getStructuredOut().getBytes());
+    commandEntity.setExitcode(report.getExitCode());
+    if (HostRoleStatus.getCompletedStates().contains(commandEntity.getStatus())) {
+      commandEntity.setEndTime(now);
+      String actionId=report.getActionId();
+      long[] requestStageIds=StageUtils.getRequestStage(actionId);
+      long requestId=requestStageIds[0];
+      long stageId=requestStageIds[1];
+      if (requestDAO.getLastStageId(requestId).equals(stageId)) {
+        requestsToCheck.add(requestId);
+      }
+    }
+  }
+  hostRoleCommandDAO.mergeAll(commandEntities);
+  for (  Long requestId : requestsToCheck) {
+    endRequestIfCompleted(requestId);
+  }
+}
