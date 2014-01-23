@@ -1,0 +1,26 @@
+{
+  ExecutionScheduleManager scheduleManagerMock=createMock(ExecutionScheduleManager.class);
+  AbstractLinearExecutionJob executionJob=createMockBuilder(AbstractLinearExecutionJob.class).addMockedMethods("finalizeExecution","doWork").withConstructor(scheduleManagerMock).createMock();
+  JobExecutionContext context=createMock(JobExecutionContext.class);
+  JobDetail jobDetail=createMock(JobDetail.class);
+  JobDataMap jobDataMap=createMock(JobDataMap.class);
+  expect(context.getJobDetail()).andReturn(jobDetail).anyTimes();
+  expect(context.getMergedJobDataMap()).andReturn(jobDataMap).anyTimes();
+  expect(jobDetail.getKey()).andReturn(new JobKey("TestJob"));
+  expect(jobDataMap.getWrappedMap()).andReturn(new HashMap<String,Object>());
+  expect(scheduleManagerMock.continueOnMisfire(context)).andReturn(true);
+  executionJob.doWork((Map<String,Object>)anyObject());
+  expectLastCall().andThrow(new AmbariException("Test Exception")).anyTimes();
+  executionJob.finalizeExecution((Map<String,Object>)anyObject());
+  expectLastCall().once();
+  replay(scheduleManagerMock,executionJob,context,jobDataMap,jobDetail);
+  try {
+    executionJob.execute(context);
+  }
+ catch (  Exception ae) {
+    assertThat(ae,instanceOf(JobExecutionException.class));
+    JobExecutionException je=(JobExecutionException)ae;
+    Assert.assertEquals("Test Exception",je.getUnderlyingException().getMessage());
+  }
+  verify(scheduleManagerMock,executionJob,context,jobDataMap,jobDetail);
+}
