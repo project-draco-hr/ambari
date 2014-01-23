@@ -1,0 +1,28 @@
+{
+  Server server=new Server(0);
+  ServletContextHandler root=new ServletContextHandler(server,"/",ServletContextHandler.SECURITY | ServletContextHandler.SESSIONS);
+  root.addServlet(HelloServlet.class,"/hello");
+  root.addServlet(DefaultServlet.class,"/");
+  root.setErrorHandler(new AmbariErrorHandler(gson));
+  server.start();
+  int localPort=server.getConnectors()[0].getLocalPort();
+  Client client=new Client();
+  WebResource resource=client.resource("http://localhost:" + localPort + "/");
+  ClientResponse successResponse=resource.path("hello").get(ClientResponse.class);
+  assertEquals(HttpServletResponse.SC_OK,successResponse.getStatus());
+  ClientResponse failResponse=resource.path("fail").get(ClientResponse.class);
+  assertEquals(HttpServletResponse.SC_NOT_FOUND,failResponse.getStatus());
+  try {
+    String response=failResponse.getEntity(String.class);
+    System.out.println(response);
+    Map map;
+    map=gson.fromJson(response,Map.class);
+    System.out.println(map);
+    assertNotNull("Incorrect response status",map.get("status"));
+    assertNotNull("Incorrect response message",map.get("message"));
+  }
+ catch (  JsonSyntaxException e1) {
+    fail("Incorrect response");
+  }
+  server.stop();
+}
