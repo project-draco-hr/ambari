@@ -1,0 +1,94 @@
+{
+  String clusterName="c1";
+  createCluster(clusterName);
+  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-0.1"));
+  String serviceName="HDFS";
+  createService(clusterName,serviceName,null);
+  String componentName1="NAMENODE";
+  String componentName2="DATANODE";
+  String componentName3="HDFS_CLIENT";
+  createServiceComponent(clusterName,serviceName,componentName1,State.INIT);
+  createServiceComponent(clusterName,serviceName,componentName2,State.INIT);
+  createServiceComponent(clusterName,serviceName,componentName3,State.INIT);
+  String host1="h1";
+  clusters.addHost(host1);
+  clusters.getHost("h1").setOsType("centos5");
+  clusters.getHost("h1").setState(HostState.HEALTHY);
+  clusters.getHost("h1").persist();
+  String host2="h2";
+  clusters.addHost(host2);
+  clusters.getHost("h2").setOsType("centos5");
+  clusters.getHost("h2").setState(HostState.HEALTHY);
+  clusters.getHost("h2").persist();
+  clusters.mapHostToCluster(host1,clusterName);
+  clusters.mapHostToCluster(host2,clusterName);
+  createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName2,host2,null);
+  Map<String,String> requestProperties=new HashMap<String,String>();
+  requestProperties.put("context","Called from a test");
+  Cluster cluster=clusters.getCluster(clusterName);
+  Service service=cluster.getService(serviceName);
+  Map<String,Host> hosts=clusters.getHostsForCluster(clusterName);
+  ServiceRequest sr=new ServiceRequest(clusterName,serviceName,null);
+  sr.setPassiveState(PassiveState.PASSIVE.name());
+  ServiceResourceProviderTest.updateServices(controller,Collections.singleton(sr),requestProperties,false,false);
+  Assert.assertEquals(PassiveState.PASSIVE,service.getPassiveState());
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(PassiveState.IMPLIED,controller.getEffectivePassiveState(cluster,service,sch));
+      Assert.assertEquals(PassiveState.ACTIVE,sch.getPassiveState());
+    }
+  }
+  sr.setPassiveState(PassiveState.ACTIVE.name());
+  ServiceResourceProviderTest.updateServices(controller,Collections.singleton(sr),requestProperties,false,false);
+  Assert.assertEquals(PassiveState.ACTIVE,service.getPassiveState());
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(PassiveState.ACTIVE,controller.getEffectivePassiveState(cluster,service,sch));
+      Assert.assertEquals(PassiveState.ACTIVE,sch.getPassiveState());
+    }
+  }
+  HostRequest hr=new HostRequest(host1,clusterName,requestProperties);
+  hr.setPassiveState(PassiveState.PASSIVE.name());
+  HostResourceProviderTest.updateHosts(controller,Collections.singleton(hr));
+  Host host=hosts.get(host1);
+  Assert.assertEquals(PassiveState.PASSIVE,host.getPassiveState(cluster.getClusterId()));
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      PassiveState implied=controller.getEffectivePassiveState(cluster,service,sch);
+      if (sch.getHostName().equals(host1)) {
+        Assert.assertEquals(PassiveState.IMPLIED,implied);
+      }
+ else {
+        Assert.assertEquals(PassiveState.ACTIVE,implied);
+      }
+      Assert.assertEquals(PassiveState.ACTIVE,sch.getPassiveState());
+    }
+  }
+  hr.setPassiveState(PassiveState.ACTIVE.name());
+  HostResourceProviderTest.updateHosts(controller,Collections.singleton(hr));
+  host=hosts.get(host1);
+  Assert.assertEquals(PassiveState.ACTIVE,host.getPassiveState(cluster.getClusterId()));
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(PassiveState.ACTIVE,controller.getEffectivePassiveState(cluster,service,sch));
+      Assert.assertEquals(PassiveState.ACTIVE,sch.getPassiveState());
+    }
+  }
+  ServiceComponentHost targetSch=service.getServiceComponent(componentName2).getServiceComponentHosts().get(host2);
+  Assert.assertNotNull(targetSch);
+  targetSch.setPassiveState(PassiveState.PASSIVE);
+  Assert.assertEquals(PassiveState.PASSIVE,controller.getEffectivePassiveState(cluster,service,targetSch));
+  service.setPassiveState(PassiveState.PASSIVE);
+  Assert.assertEquals(PassiveState.PASSIVE,controller.getEffectivePassiveState(cluster,service,targetSch));
+  targetSch.setPassiveState(PassiveState.ACTIVE);
+  Assert.assertEquals(PassiveState.IMPLIED,controller.getEffectivePassiveState(cluster,service,targetSch));
+  service.setPassiveState(PassiveState.ACTIVE);
+  Assert.assertEquals(PassiveState.ACTIVE,controller.getEffectivePassiveState(cluster,service,targetSch));
+  host=hosts.get(host2);
+  host.setPassiveState(cluster.getClusterId(),PassiveState.PASSIVE);
+  Assert.assertEquals(PassiveState.IMPLIED,controller.getEffectivePassiveState(cluster,service,targetSch));
+  targetSch.setPassiveState(PassiveState.PASSIVE);
+  Assert.assertEquals(PassiveState.PASSIVE,controller.getEffectivePassiveState(cluster,service,targetSch));
+}

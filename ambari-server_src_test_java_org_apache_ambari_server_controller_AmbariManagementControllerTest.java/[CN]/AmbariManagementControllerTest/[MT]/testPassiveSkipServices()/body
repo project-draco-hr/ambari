@@ -1,0 +1,77 @@
+{
+  String clusterName="c1";
+  createCluster(clusterName);
+  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-0.1"));
+  String serviceName1="HDFS";
+  String serviceName2="MAPREDUCE";
+  createService(clusterName,serviceName1,null);
+  createService(clusterName,serviceName2,null);
+  String componentName1_1="NAMENODE";
+  String componentName1_2="DATANODE";
+  String componentName1_3="HDFS_CLIENT";
+  createServiceComponent(clusterName,serviceName1,componentName1_1,State.INIT);
+  createServiceComponent(clusterName,serviceName1,componentName1_2,State.INIT);
+  createServiceComponent(clusterName,serviceName1,componentName1_3,State.INIT);
+  String componentName2_1="JOBTRACKER";
+  String componentName2_2="TASKTRACKER";
+  createServiceComponent(clusterName,serviceName2,componentName2_1,State.INIT);
+  createServiceComponent(clusterName,serviceName2,componentName2_2,State.INIT);
+  String host1="h1";
+  clusters.addHost(host1);
+  clusters.getHost("h1").setOsType("centos5");
+  clusters.getHost("h1").setState(HostState.HEALTHY);
+  clusters.getHost("h1").persist();
+  String host2="h2";
+  clusters.addHost(host2);
+  clusters.getHost("h2").setOsType("centos5");
+  clusters.getHost("h2").setState(HostState.HEALTHY);
+  clusters.getHost("h2").persist();
+  clusters.mapHostToCluster(host1,clusterName);
+  clusters.mapHostToCluster(host2,clusterName);
+  createServiceComponentHost(clusterName,serviceName1,componentName1_1,host1,null);
+  createServiceComponentHost(clusterName,serviceName1,componentName1_2,host1,null);
+  createServiceComponentHost(clusterName,serviceName1,componentName1_2,host2,null);
+  createServiceComponentHost(clusterName,serviceName2,componentName2_1,host1,null);
+  createServiceComponentHost(clusterName,serviceName2,componentName2_2,host2,null);
+  installService(clusterName,serviceName1,false,false);
+  installService(clusterName,serviceName2,false,false);
+  startService(clusterName,serviceName1,false,false);
+  startService(clusterName,serviceName2,false,false);
+  Map<String,String> requestProperties=new HashMap<String,String>();
+  requestProperties.put("context","Called from a test");
+  Cluster cluster=clusters.getCluster(clusterName);
+  for (  Service service : cluster.getServices().values()) {
+    Assert.assertEquals(State.STARTED,service.getDesiredState());
+  }
+  Service service2=cluster.getService(serviceName2);
+  service2.setPassiveState(PassiveState.PASSIVE);
+  Set<ServiceRequest> srs=new HashSet<ServiceRequest>();
+  srs.add(new ServiceRequest(clusterName,serviceName1,State.INSTALLED.name()));
+  srs.add(new ServiceRequest(clusterName,serviceName2,State.INSTALLED.name()));
+  RequestStatusResponse rsr=ServiceResourceProviderTest.updateServices(controller,srs,requestProperties,false,false);
+  for (  ShortTaskStatus sts : rsr.getTasks()) {
+    String role=sts.getRole();
+    Assert.assertFalse(role.equals(componentName2_1));
+    Assert.assertFalse(role.equals(componentName2_2));
+  }
+  for (  Service service : cluster.getServices().values()) {
+    if (service.getName().equals(serviceName2))     Assert.assertEquals(State.STARTED,service.getDesiredState());
+ else     Assert.assertEquals(State.INSTALLED,service.getDesiredState());
+  }
+  service2.setPassiveState(PassiveState.ACTIVE);
+  ServiceResourceProviderTest.updateServices(controller,srs,requestProperties,false,false);
+  for (  Service service : cluster.getServices().values()) {
+    Assert.assertEquals(State.INSTALLED,service.getDesiredState());
+  }
+  startService(clusterName,serviceName1,false,false);
+  startService(clusterName,serviceName2,false,false);
+  Host h1=clusters.getHost(host1);
+  h1.setPassiveState(cluster.getClusterId(),PassiveState.PASSIVE);
+  srs=new HashSet<ServiceRequest>();
+  srs.add(new ServiceRequest(clusterName,serviceName1,State.INSTALLED.name()));
+  srs.add(new ServiceRequest(clusterName,serviceName2,State.INSTALLED.name()));
+  rsr=ServiceResourceProviderTest.updateServices(controller,srs,requestProperties,false,false);
+  for (  ShortTaskStatus sts : rsr.getTasks()) {
+    Assert.assertFalse(sts.getHostName().equals(host1));
+  }
+}

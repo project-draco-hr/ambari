@@ -39,10 +39,25 @@
         throw new IllegalArgumentException("Invalid arguments, invalid" + " desired state, desiredState=" + newState);
       }
     }
+    if (null != request.getPassiveState()) {
+      PassiveState newPassive=PassiveState.valueOf(request.getPassiveState());
+      if (newPassive != s.getPassiveState()) {
+        if (newPassive.equals(PassiveState.IMPLIED)) {
+          throw new IllegalArgumentException("Invalid arguments, can only set " + "passive state to one of " + EnumSet.of(PassiveState.ACTIVE,PassiveState.PASSIVE));
+        }
+ else {
+          s.setPassiveState(newPassive);
+        }
+      }
+    }
     if (newState == null) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Nothing to do for new updateService request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", newDesiredState=null");
       }
+      continue;
+    }
+    if (requests.size() > 1 && PassiveState.ACTIVE != s.getPassiveState()) {
+      LOG.info("Operations cannot be applied to service " + s.getName() + " in the passive state of "+ s.getPassiveState());
       continue;
     }
     seenNewStates.add(newState);
@@ -84,6 +99,14 @@
           ignoredScHosts.add(sch);
           if (LOG.isDebugEnabled()) {
             LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+          }
+          continue;
+        }
+        PassiveState schPassive=controller.getEffectivePassiveState(cluster,s,sch);
+        if (PassiveState.ACTIVE != schPassive) {
+          ignoredScHosts.add(sch);
+          if (LOG.isDebugEnabled()) {
+            LOG.debug("Ignoring " + schPassive + " ServiceComponentHost"+ ", clusterName="+ request.getClusterName()+ ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName());
           }
           continue;
         }
