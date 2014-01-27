@@ -1,0 +1,27 @@
+{
+  URLStreamProvider urlStreamProvider=new URLStreamProvider(REPO_URL_CONNECT_TIMEOUT,REPO_URL_READ_TIMEOUT,null,null,null);
+  List<String> urlsToForward=ui.getQueryParameters().get(QUERY_PARAMETER_URL);
+  if (!urlsToForward.isEmpty()) {
+    String url=urlsToForward.get(0);
+    try {
+      HttpURLConnection connection=urlStreamProvider.processURL(url,requestType,body);
+      int responseCode=connection.getResponseCode();
+      if (responseCode >= HTTP_ERROR_RANGE_START) {
+        throw new WebApplicationException(connection.getResponseCode());
+      }
+      String contentType=connection.getContentType();
+      Response.ResponseBuilder rb=Response.status(responseCode);
+      if (contentType.indexOf(APPLICATION_JSON) != -1) {
+        rb.entity(new Gson().fromJson(new InputStreamReader(connection.getInputStream()),Map.class));
+      }
+ else {
+        rb.entity(connection.getInputStream());
+      }
+      return rb.type(contentType).build();
+    }
+ catch (    IOException e) {
+      LOG.error(ERROR_PROCESSING_URL + url,e);
+    }
+  }
+  return null;
+}
