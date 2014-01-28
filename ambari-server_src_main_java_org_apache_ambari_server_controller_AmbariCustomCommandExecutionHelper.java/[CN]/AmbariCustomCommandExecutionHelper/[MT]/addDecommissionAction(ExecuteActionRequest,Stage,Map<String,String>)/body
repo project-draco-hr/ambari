@@ -40,9 +40,11 @@
       throw new AmbariException("Component " + slaveCompType + " on host "+ sch.getHostName()+ " cannot be "+ "decommissioned as its not in STARTED state. Aborting the whole request.");
     }
   }
+  List<String> listOfExcludedHosts=new ArrayList<String>();
   for (  ServiceComponentHost sch : svcComponents.get(slaveCompType).getServiceComponentHosts().values()) {
     if (excludedHosts.contains(sch.getHostName())) {
       sch.setComponentAdminState(HostComponentAdminState.DECOMMISSIONED);
+      listOfExcludedHosts.add(sch.getHostName());
       LOG.info("Adding " + slaveCompType + " host to decommissioned list : "+ sch.getHostName());
     }
     if (includedHosts.contains(sch.getHostName())) {
@@ -54,5 +56,16 @@
   ExecuteActionRequest commandRequest=new ExecuteActionRequest(request.getClusterName(),request.getCommandName(),request.getActionName(),request.getServiceName(),masterComponent.getName(),new ArrayList<String>(masterHosts),null);
   String clusterHostInfoJson=StageUtils.getGson().toJson(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster));
   stage.setClusterHostInfo(clusterHostInfoJson);
-  addCustomCommandAction(commandRequest,stage,hostLevelParams);
+  Map<String,String> commandParams=null;
+  if (serviceName.equals(Service.Type.HBASE.name()) && listOfExcludedHosts.size() > 0) {
+    commandParams=new HashMap<String,String>();
+    commandParams.put(DECOM_EXCLUDED_HOSTS,StringUtils.join(listOfExcludedHosts,','));
+    String isDrainOnlyRequest=request.getParameters().get(HBASE_MARK_DRAINING_ONLY);
+    if (isDrainOnlyRequest != null) {
+      if (isDrainOnlyRequest.equals("true") || isDrainOnlyRequest.equals("false")) {
+        commandParams.put(HBASE_MARK_DRAINING_ONLY,isDrainOnlyRequest);
+      }
+    }
+  }
+  addCustomCommandAction(commandRequest,stage,hostLevelParams,commandParams);
 }
