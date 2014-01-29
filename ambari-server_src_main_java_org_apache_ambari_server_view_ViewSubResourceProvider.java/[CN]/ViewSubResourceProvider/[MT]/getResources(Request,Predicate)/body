@@ -1,0 +1,52 @@
+{
+  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  Set<ViewInstanceDefinition> instanceDefinitions=new HashSet<ViewInstanceDefinition>();
+  try {
+    Set<Map<String,Object>> propertyMaps=getPropertyMaps(predicate);
+    int size=propertyMaps.size();
+    Collection<ViewInstanceDefinition> viewInstanceDefinitions=viewDefinition.getInstanceDefinitions();
+    if (size == 0) {
+      instanceDefinitions.addAll(viewInstanceDefinitions);
+    }
+ else {
+      for (      Map<String,Object> propertyMap : propertyMaps) {
+        String instanceName=(String)propertyMap.get(INSTANCE_NAME_PROPERTY_ID);
+        if (size == 1 && instanceName != null) {
+          String resourceId=(String)propertyMap.get(pkField);
+          if (resourceId != null) {
+            Object bean=getResourceProvider(instanceName).getResource(resourceId,requestedIds);
+            return Collections.singleton(getResource(bean,viewDefinition.getName(),instanceName,requestedIds));
+          }
+        }
+        if (instanceName == null) {
+          instanceDefinitions.addAll(viewInstanceDefinitions);
+          break;
+        }
+ else {
+          instanceDefinitions.add(viewDefinition.getInstanceDefinition(instanceName));
+        }
+      }
+    }
+    Set<Resource> results=new HashSet<Resource>();
+    ReadRequest readRequest=new ViewReadRequest(requestedIds,predicate == null ? "" : predicate.toString());
+    for (    ViewInstanceDefinition instanceDefinition : instanceDefinitions) {
+      Set<?> beans=instanceDefinition.getResourceProvider(type).getResources(readRequest);
+      for (      Object bean : beans) {
+        Resource resource=getResource(bean,viewDefinition.getName(),instanceDefinition.getName(),requestedIds);
+        if (predicate.evaluate(resource)) {
+          results.add(resource);
+        }
+      }
+    }
+    return results;
+  }
+ catch (  org.apache.ambari.view.NoSuchResourceException e) {
+    throw new NoSuchParentResourceException(e.getMessage(),e);
+  }
+catch (  org.apache.ambari.view.UnsupportedPropertyException e) {
+    throw new UnsupportedPropertyException(getResourceType(e),e.getPropertyIds());
+  }
+catch (  Exception e) {
+    throw new SystemException(e.getMessage(),e);
+  }
+}

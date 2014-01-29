@@ -1,0 +1,32 @@
+{
+  ViewInstanceDefinition viewInstanceDefinition=new ViewInstanceDefinition(viewDefinition,instanceConfig);
+  List<PropertyConfig> propertyConfigs=instanceConfig.getProperties();
+  for (  PropertyConfig propertyConfig : propertyConfigs) {
+    viewInstanceDefinition.addProperty(propertyConfig.getKey(),propertyConfig.getValue());
+  }
+  ViewContext viewInstanceContext=new ViewContextImpl(viewInstanceDefinition);
+  Map<Resource.Type,ResourceConfig> resourceConfigurations=viewDefinition.getResourceConfigurations();
+  for (  Map.Entry<Resource.Type,ResourceConfig> entry : resourceConfigurations.entrySet()) {
+    Resource.Type type=entry.getKey();
+    ResourceConfig configuration=entry.getValue();
+    ViewResourceHandler viewResourceService=new ViewSubResourceService(type,viewDefinition.getName(),instanceConfig.getName());
+    viewInstanceDefinition.addService(viewDefinition.getResourceDefinition(type).getPluralName(),getService(configuration.getServiceClass(cl),viewResourceService,viewInstanceContext));
+    viewInstanceDefinition.addResourceProvider(type,getProvider(configuration.getProviderClass(cl),viewInstanceContext));
+  }
+  ViewConfig viewConfig=viewDefinition.getConfiguration();
+  Map<String,Class<? extends HttpServlet>> servletPathMap=viewConfig.getServletPathMap(cl);
+  Map<String,String> servletURLPatternMap=viewConfig.getServletURLPatternMap();
+  for (  Map.Entry<String,Class<? extends HttpServlet>> entry : servletPathMap.entrySet()) {
+    HttpServlet servlet=getServlet(entry.getValue(),viewInstanceContext);
+    ServletHolder sh=new ServletHolder(servlet);
+    String servletName=entry.getKey();
+    String pathSpec="/views/" + viewDefinition.getName() + "/"+ viewInstanceDefinition.getName()+ servletURLPatternMap.get(servletName);
+    root.addServlet(sh,pathSpec);
+    viewInstanceDefinition.addServletMapping(servletName,pathSpec);
+    if (configs.getApiAuthentication()) {
+      root.addFilter(new FilterHolder(springSecurityFilter),pathSpec,1);
+    }
+  }
+  viewDefinition.addInstanceDefinition(viewInstanceDefinition);
+  ViewRegistry.getInstance().addInstanceDefinition(viewDefinition,viewInstanceDefinition);
+}
