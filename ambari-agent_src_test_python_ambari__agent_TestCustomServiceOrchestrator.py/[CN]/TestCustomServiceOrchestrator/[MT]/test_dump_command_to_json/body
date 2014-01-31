@@ -2,14 +2,17 @@
 @patch('hostname.public_hostname')
 @patch('os.path.isfile')
 @patch('os.unlink')
-def test_dump_command_to_json(self, unlink_mock, isfile_mock, hostname_mock, decompress_cluster_host_info_mock):
+@patch.object(FileCache, '__init__')
+def test_dump_command_to_json(self, FileCache_mock, unlink_mock, isfile_mock, hostname_mock, decompress_cluster_host_info_mock):
+    FileCache_mock.return_value = None
     hostname_mock.return_value = 'test.hst'
     command = {'commandType': 'EXECUTION_COMMAND', 'role': u'DATANODE', 'roleCommand': u'INSTALL', 'commandId': '1-1', 'taskId': 3, 'clusterName': u'cc', 'serviceName': u'HDFS', 'configurations': {'global': {}, }, 'configurationTags': {'global': {'tag': 'v1', }, }, 'clusterHostInfo': {'namenode_host': ['1'], 'slave_hosts': ['0', '1'], 'all_hosts': ['h1.hortonworks.com', 'h2.hortonworks.com'], 'all_ping_ports': ['8670:0,1'], }, }
     decompress_cluster_host_info_mock.return_value = {'namenode_host': ['h2.hortonworks.com'], 'slave_hosts': ['h1.hortonworks.com', 'h2.hortonworks.com'], 'all_hosts': ['h1.hortonworks.com', 'h2.hortonworks.com'], 'all_ping_ports': ['8670', '8670'], }
     config = AmbariConfig().getConfig()
     tempdir = tempfile.gettempdir()
     config.set('agent', 'prefix', tempdir)
-    orchestrator = CustomServiceOrchestrator(config)
+    dummy_controller = MagicMock()
+    orchestrator = CustomServiceOrchestrator(config, dummy_controller)
     isfile_mock.return_value = True
     json_file = orchestrator.dump_command_to_json(command)
     self.assertTrue(os.path.exists(json_file))

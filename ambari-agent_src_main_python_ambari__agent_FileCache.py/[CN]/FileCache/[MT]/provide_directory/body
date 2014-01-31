@@ -1,0 +1,25 @@
+def provide_directory(self, cache_path, subdirectory, server_url_prefix):
+    '\n    Ensures that directory at cache is up-to-date. Throws a CachingException\n    if any problems occur\n    Parameters;\n      cache_path: full path to cache directory\n      subdirectory: subpath inside cache\n      server_url_prefix: url of "resources" folder at the server\n    '
+    full_path = os.path.join(cache_path, subdirectory)
+    logger.debug('Trying to provide directory {0}'.format(subdirectory))
+    try:
+        if (full_path not in self.uptodate_paths):
+            logger.debug('Checking if update is available for directory {0}'.format(full_path))
+            remote_url = self.build_download_url(server_url_prefix, subdirectory, self.HASH_SUM_FILE)
+            memory_buffer = self.fetch_url(remote_url)
+            remote_hash = memory_buffer.getvalue().strip()
+            local_hash = self.read_hash_sum(full_path)
+            if ((not local_hash) or (local_hash != remote_hash)):
+                logger.debug('Updating directory {0}'.format(full_path))
+                download_url = self.build_download_url(server_url_prefix, subdirectory, self.ARCHIVE_NAME)
+                membuffer = self.fetch_url(download_url)
+                self.invalidate_directory(full_path)
+                self.unpack_archive(membuffer, full_path)
+                self.write_hash_sum(full_path, remote_hash)
+            self.uptodate_paths.append(full_path)
+    except CachingException as e:
+        if self.tolerate_download_failures:
+            logger.warn('Error occured during cache update. Error tolerate setting is set to true, so ignoring this error and continuing with current cache. Error details: {0}'.format(str(e)))
+        else:
+            raise
+    return full_path
