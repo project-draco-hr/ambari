@@ -5,13 +5,21 @@
     viewInstanceDefinition.addProperty(propertyConfig.getKey(),propertyConfig.getValue());
   }
   ViewContext viewInstanceContext=new ViewContextImpl(viewInstanceDefinition);
-  Map<Resource.Type,ResourceConfig> resourceConfigurations=viewDefinition.getResourceConfigurations();
-  for (  Map.Entry<Resource.Type,ResourceConfig> entry : resourceConfigurations.entrySet()) {
-    Resource.Type type=entry.getKey();
-    ResourceConfig configuration=entry.getValue();
+  ViewExternalSubResourceService externalSubResourceService=new ViewExternalSubResourceService(viewDefinition.getExternalResourceType(),viewInstanceDefinition);
+  viewInstanceDefinition.addService(ResourceConfig.EXTERNAL_RESOURCE_PLURAL_NAME,externalSubResourceService);
+  Collection<ViewSubResourceDefinition> resourceDefinitions=viewDefinition.getResourceDefinitions().values();
+  for (  ViewSubResourceDefinition resourceDefinition : resourceDefinitions) {
+    Resource.Type type=resourceDefinition.getType();
+    ResourceConfig resourceConfig=resourceDefinition.getResourceConfiguration();
     ViewResourceHandler viewResourceService=new ViewSubResourceService(type,viewDefinition.getName(),instanceConfig.getName());
-    viewInstanceDefinition.addService(viewDefinition.getResourceDefinition(type).getPluralName(),getService(configuration.getServiceClass(cl),viewResourceService,viewInstanceContext));
-    viewInstanceDefinition.addResourceProvider(type,getProvider(configuration.getProviderClass(cl),viewInstanceContext));
+    Object service=getService(resourceConfig.getServiceClass(cl),viewResourceService,viewInstanceContext);
+    if (resourceConfig.isExternal()) {
+      externalSubResourceService.addResourceService(resourceConfig.getName(),service);
+    }
+ else {
+      viewInstanceDefinition.addService(viewDefinition.getResourceDefinition(type).getPluralName(),service);
+      viewInstanceDefinition.addResourceProvider(type,getProvider(resourceConfig.getProviderClass(cl),viewInstanceContext));
+    }
   }
   ViewConfig viewConfig=viewDefinition.getConfiguration();
   Map<String,Class<? extends HttpServlet>> servletPathMap=viewConfig.getServletPathMap(cl);
