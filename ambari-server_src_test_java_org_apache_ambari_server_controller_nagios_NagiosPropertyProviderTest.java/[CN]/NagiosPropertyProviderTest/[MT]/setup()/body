@@ -1,15 +1,17 @@
 {
-  module=new InMemoryDefaultTestModule();
+  module=new GuiceModule();
   injector=Guice.createInjector(module);
-  injector.getInstance(GuiceJpaInitializer.class);
   NagiosPropertyProvider.init(injector);
   clusters=injector.getInstance(Clusters.class);
-  clusters.addCluster("c1");
-  Cluster cluster=clusters.getCluster("c1");
-  cluster.setDesiredStackVersion(new StackId("HDP-2.0.5"));
-  clusters.addHost(HOST);
-  Host host=clusters.getHost(HOST);
-  host.setOsType("centos5");
-  host.persist();
-  clusters.mapHostToCluster(HOST,"c1");
+  Cluster cluster=createMock(Cluster.class);
+  expect(clusters.getCluster("c1")).andReturn(cluster).anyTimes();
+  Service nagiosService=createMock(Service.class);
+  expect(cluster.getService("NAGIOS")).andReturn(nagiosService).anyTimes();
+  ServiceComponent nagiosServiceComponent=createMock(ServiceComponent.class);
+  expect(nagiosService.getServiceComponent("NAGIOS_SERVER")).andReturn(nagiosServiceComponent).anyTimes();
+  ServiceComponentHost nagiosScHost=createMock(ServiceComponentHost.class);
+  Map<String,ServiceComponentHost> map1=new HashMap<String,ServiceComponentHost>();
+  map1.put(HOST,nagiosScHost);
+  expect(nagiosServiceComponent.getServiceComponentHosts()).andReturn(map1).anyTimes();
+  replay(clusters,cluster,nagiosService,nagiosServiceComponent);
 }
