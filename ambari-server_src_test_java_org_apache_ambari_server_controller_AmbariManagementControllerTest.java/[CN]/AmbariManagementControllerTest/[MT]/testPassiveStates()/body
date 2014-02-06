@@ -91,4 +91,23 @@
   Assert.assertEquals(PassiveState.IMPLIED,controller.getEffectivePassiveState(cluster,service,targetSch));
   targetSch.setPassiveState(PassiveState.PASSIVE);
   Assert.assertEquals(PassiveState.PASSIVE,controller.getEffectivePassiveState(cluster,service,targetSch));
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(State.INIT,sch.getState());
+    }
+  }
+  ServiceComponentRequest scr=new ServiceComponentRequest(clusterName,serviceName,componentName2,State.INSTALLED.name());
+  RequestStatusResponse rsr=ComponentResourceProviderTest.updateComponents(controller,Collections.singleton(scr),requestProperties,false);
+  if (rsr != null) {
+    List<HostRoleCommand> commands=actionDB.getRequestTasks(rsr.getRequestId());
+    for (    HostRoleCommand cmd : commands) {
+      clusters.getCluster(clusterName).getService(serviceName).getServiceComponent(cmd.getRole().name()).getServiceComponentHost(cmd.getHostName()).setState(State.INSTALLED);
+    }
+  }
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    if (!sc.getName().equals(componentName2))     continue;
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(sch == targetSch ? State.INIT : State.INSTALLED,sch.getState());
+    }
+  }
 }
