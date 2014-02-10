@@ -58,19 +58,37 @@
       LOG.info("Recommissioning " + slaveCompType + " and marking it ACTIVE on "+ sch.getHostName());
     }
   }
-  Set<String> masterHosts=masterComponent.getServiceComponentHosts().keySet();
-  ExecuteActionRequest commandRequest=new ExecuteActionRequest(request.getClusterName(),request.getCommandName(),request.getActionName(),request.getServiceName(),masterComponent.getName(),new ArrayList<String>(masterHosts),null);
-  String clusterHostInfoJson=StageUtils.getGson().toJson(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster));
-  stage.setClusterHostInfo(clusterHostInfoJson);
-  Map<String,String> commandParams=null;
-  if (serviceName.equals(Service.Type.HBASE.name()) && listOfExcludedHosts.size() > 0) {
-    commandParams=new HashMap<String,String>();
-    commandParams.put(DECOM_EXCLUDED_HOSTS,StringUtils.join(listOfExcludedHosts,','));
-    if (isDrainOnlyRequest != null) {
-      if (isDrainOnlyRequest.equals("true") || isDrainOnlyRequest.equals("false")) {
-        commandParams.put(HBASE_MARK_DRAINING_ONLY,isDrainOnlyRequest);
+  Map<String,ServiceComponentHost> masterSchs=masterComponent.getServiceComponentHosts();
+  String primaryCandidate=null;
+  for (  String hostName : masterSchs.keySet()) {
+    if (primaryCandidate == null) {
+      primaryCandidate=hostName;
+    }
+ else {
+      ServiceComponentHost sch=masterSchs.get(hostName);
+      if (sch.getState() == State.STARTED) {
+        primaryCandidate=hostName;
       }
     }
   }
-  addCustomCommandAction(commandRequest,stage,hostLevelParams,commandParams);
+  StringBuilder commandDetail=getReadableDecommissionCommandDetail(request,includedHosts,listOfExcludedHosts);
+  for (  String hostName : masterSchs.keySet()) {
+    ExecuteActionRequest commandRequest=new ExecuteActionRequest(request.getClusterName(),request.getCommandName(),request.getActionName(),request.getServiceName(),masterComponent.getName(),Collections.singletonList(hostName),null);
+    String clusterHostInfoJson=StageUtils.getGson().toJson(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster));
+    stage.setClusterHostInfo(clusterHostInfoJson);
+    Map<String,String> commandParams=new HashMap<String,String>();
+    if (serviceName.equals(Service.Type.HBASE.name())) {
+      commandParams.put(DECOM_EXCLUDED_HOSTS,StringUtils.join(listOfExcludedHosts,','));
+      if ((isDrainOnlyRequest != null) && isDrainOnlyRequest.equals("true")) {
+        commandParams.put(HBASE_MARK_DRAINING_ONLY,isDrainOnlyRequest);
+      }
+ else {
+        commandParams.put(HBASE_MARK_DRAINING_ONLY,"false");
+      }
+    }
+    if (!serviceName.equals(Service.Type.HBASE.name()) || hostName.equals(primaryCandidate)) {
+      commandParams.put(UPDATE_EXCLUDE_FILE_ONLY,"false");
+      addCustomCommandAction(commandRequest,stage,hostLevelParams,commandParams,commandDetail.toString());
+    }
+  }
 }

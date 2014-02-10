@@ -21,6 +21,7 @@
   clusters.mapHostToCluster(host1,clusterName);
   clusters.mapHostToCluster(host2,clusterName);
   createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName1,host2,null);
   createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
   createServiceComponentHost(clusterName,serviceName,componentName2,host2,null);
   installService(clusterName,serviceName,false,false);
@@ -47,6 +48,11 @@
   Assert.assertEquals(HostComponentAdminState.DECOMMISSIONED,scHost.getComponentAdminState());
   Assert.assertEquals(PassiveState.PASSIVE,scHost.getPassiveState());
   HostRoleCommand command=storedTasks.get(0);
+  Assert.assertTrue("DECOMMISSION, Excluded: h2".equals(command.getCommandDetail()));
+  Assert.assertTrue("DECOMMISSION".equals(command.getCustomCommandName()));
+  Map<String,String> cmdParams=command.getExecutionCommandWrapper().getExecutionCommand().getCommandParams();
+  Assert.assertTrue(cmdParams.containsKey("mark_draining_only"));
+  Assert.assertEquals("false",cmdParams.get("mark_draining_only"));
   Assert.assertEquals(Role.HBASE_MASTER,command.getRole());
   Assert.assertEquals(RoleCommand.CUSTOM_COMMAND,command.getRoleCommand());
   Map<String,Set<String>> cInfo=execCmd.getClusterHostInfo();
@@ -73,5 +79,38 @@
   Assert.assertEquals(PassiveState.PASSIVE,scHost.getPassiveState());
   cInfo=execCmd.getClusterHostInfo();
   Assert.assertTrue(cInfo.containsKey("decom_hbase_rs_hosts"));
+  command=storedTasks.get(0);
+  Assert.assertEquals("DECOMMISSION",execCmd.getHostLevelParams().get("custom_command"));
+  Assert.assertTrue("DECOMMISSION, Excluded: h2".equals(command.getCommandDetail()));
+  Assert.assertTrue("DECOMMISSION".equals(command.getCustomCommandName()));
+  cmdParams=command.getExecutionCommandWrapper().getExecutionCommand().getCommandParams();
+  Assert.assertTrue(cmdParams.containsKey("mark_draining_only"));
+  Assert.assertEquals("true",cmdParams.get("mark_draining_only"));
+  params=new HashMap<String,String>(){
+{
+      put("included_hosts","h2");
+    }
+  }
+;
+  request=new ExecuteActionRequest(clusterName,"DECOMMISSION",null,"HBASE","HBASE_MASTER",null,params);
+  response=controller.createAction(request,requestProperties);
+  storedTasks=actionDB.getRequestTasks(response.getRequestId());
+  execCmd=storedTasks.get(0).getExecutionCommandWrapper().getExecutionCommand();
+  Assert.assertNotNull(storedTasks);
+  Assert.assertEquals(1,storedTasks.size());
+  Assert.assertEquals(HostComponentAdminState.INSERVICE,scHost.getComponentAdminState());
+  Assert.assertEquals(PassiveState.ACTIVE,scHost.getPassiveState());
+  command=storedTasks.get(0);
+  Assert.assertTrue("DECOMMISSION, Included: h2".equals(command.getCommandDetail()));
+  Assert.assertTrue("DECOMMISSION".equals(command.getCustomCommandName()));
+  cmdParams=command.getExecutionCommandWrapper().getExecutionCommand().getCommandParams();
+  Assert.assertTrue(cmdParams.containsKey("mark_draining_only"));
+  Assert.assertEquals("false",cmdParams.get("mark_draining_only"));
+  Assert.assertTrue(cmdParams.containsKey("excluded_hosts"));
+  Assert.assertEquals("",cmdParams.get("excluded_hosts"));
+  Assert.assertEquals(Role.HBASE_MASTER,command.getRole());
+  Assert.assertEquals(RoleCommand.CUSTOM_COMMAND,command.getRoleCommand());
+  cInfo=execCmd.getClusterHostInfo();
+  Assert.assertFalse(cInfo.containsKey("decom_hbase_rs_hosts"));
   Assert.assertEquals("DECOMMISSION",execCmd.getHostLevelParams().get("custom_command"));
 }

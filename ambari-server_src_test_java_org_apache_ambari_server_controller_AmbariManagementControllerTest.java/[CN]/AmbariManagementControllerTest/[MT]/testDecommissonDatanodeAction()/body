@@ -78,6 +78,9 @@
   response=controller.createAction(request,requestProperties);
   storedTasks=actionDB.getRequestTasks(response.getRequestId());
   execCmd=storedTasks.get(0).getExecutionCommandWrapper().getExecutionCommand();
+  Map<String,String> cmdParams=execCmd.getCommandParams();
+  Assert.assertTrue(cmdParams.containsKey("update_exclude_file_only"));
+  Assert.assertTrue(cmdParams.get("update_exclude_file_only").equals("false"));
   Assert.assertNotNull(storedTasks);
   Assert.assertEquals(1,storedTasks.size());
   Assert.assertEquals(HostComponentAdminState.DECOMMISSIONED,scHost.getComponentAdminState());
@@ -116,6 +119,16 @@
   Assert.assertEquals(2,storedTasks.size());
   cInfo=execCmd.getClusterHostInfo();
   Assert.assertFalse(cInfo.containsKey("decom_dn_hosts"));
+  int countRefresh=0;
+  for (  HostRoleCommand hrc : storedTasks) {
+    Assert.assertTrue("DECOMMISSION, Included: h1,h2".equals(hrc.getCommandDetail()));
+    Assert.assertTrue("DECOMMISSION".equals(hrc.getCustomCommandName()));
+    cmdParams=hrc.getExecutionCommandWrapper().getExecutionCommand().getCommandParams();
+    if (!cmdParams.containsKey("update_exclude_file_only") || !cmdParams.get("update_exclude_file_only").equals("true")) {
+      countRefresh++;
+    }
+  }
+  Assert.assertEquals(2,countRefresh);
   scHost.setComponentAdminState(null);
   Assert.assertEquals(HostComponentAdminState.INSERVICE,scHost.getComponentAdminState());
   Assert.assertEquals(PassiveState.ACTIVE,scHost.getPassiveState());
