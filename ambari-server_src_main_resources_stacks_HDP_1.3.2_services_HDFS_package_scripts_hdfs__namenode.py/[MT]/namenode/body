@@ -1,14 +1,17 @@
-def namenode(action=None, format=True):
+def namenode(action=None, do_format=True):
     import params
     if (action == 'configure'):
         create_name_dirs(params.dfs_name_dir)
     if (action == 'start'):
-        if format:
+        if do_format:
             format_namenode()
             pass
         service(action='start', name='namenode', user=params.hdfs_user, keytab=params.dfs_namenode_keytab_file, create_pid_dir=True, create_log_dir=True, principal=params.dfs_namenode_kerberos_principal)
-        create_app_directories()
-        create_user_directories()
+        namenode_safe_mode_off = format("su - {hdfs_user} -c 'hadoop dfsadmin -safemode get' | grep 'Safe mode is OFF'")
+        if params.security_enabled:
+            Execute(format('{kinit_path_local} -kt {hdfs_user_keytab} {hdfs_user}'), user=params.hdfs_user)
+        Execute(namenode_safe_mode_off, tries=40, try_sleep=10)
+        create_hdfs_directories()
     if (action == 'stop'):
         service(action='stop', name='namenode', user=params.hdfs_user, keytab=params.dfs_namenode_keytab_file, principal=params.dfs_namenode_kerberos_principal)
     if (action == 'decommission'):
