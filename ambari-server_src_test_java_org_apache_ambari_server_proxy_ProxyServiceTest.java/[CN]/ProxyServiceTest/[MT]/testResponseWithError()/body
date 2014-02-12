@@ -3,12 +3,21 @@
   URLStreamProvider streamProviderMock=PowerMock.createNiceMock(URLStreamProvider.class);
   HttpURLConnection urlConnectionMock=createMock(HttpURLConnection.class);
   MultivaluedMap<String,String> queryParams=new MultivaluedMapImpl();
+  MultivaluedMap<String,String> headerParams=new MultivaluedMapImpl();
+  Map<String,List<String>> headerParamsToForward=new HashMap<String,List<String>>();
   queryParams.add("url","testurl");
+  headerParams.add("AmbariProxy-User-Remote","testuser");
+  headerParams.add("Content-Type","testtype");
+  List<String> userRemoteParams=new LinkedList<String>();
+  userRemoteParams.add("testuser");
+  headerParamsToForward.put("User-Remote",userRemoteParams);
+  expect(getHttpHeaders().getRequestHeaders()).andReturn(headerParams);
+  expect(getHttpHeaders().getRequestHeader("AmbariProxy-User-Remote")).andReturn(userRemoteParams);
   expect(getUriInfo().getQueryParameters()).andReturn(queryParams);
-  expect(streamProviderMock.processURL("testurl","GET",null,APPLICATION_FORM_URLENCODED)).andReturn(urlConnectionMock);
+  expect(streamProviderMock.processURL("testurl","GET",null,headerParamsToForward)).andReturn(urlConnectionMock);
   expect(urlConnectionMock.getResponseCode()).andReturn(405).times(2);
   PowerMock.expectNew(URLStreamProvider.class,3000,1000,null,null,null).andReturn(streamProviderMock);
   PowerMock.replay(streamProviderMock,URLStreamProvider.class);
-  replay(getUriInfo(),urlConnectionMock);
+  replay(getUriInfo(),urlConnectionMock,getHttpHeaders());
   ps.processGetRequestForwarding(getHttpHeaders(),getUriInfo());
 }
