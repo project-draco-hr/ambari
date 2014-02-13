@@ -1,0 +1,27 @@
+{
+  File viewDir=configuration.getViewsDir();
+  File[] files=viewDir.listFiles();
+  Set<ViewInstanceDefinition> instanceDefinitions=new HashSet<ViewInstanceDefinition>();
+  if (files != null) {
+    for (    final File fileEntry : files) {
+      if (!fileEntry.isDirectory()) {
+        try {
+          ClassLoader cl=URLClassLoader.newInstance(new URL[]{fileEntry.toURI().toURL()});
+          InputStream configStream=cl.getResourceAsStream(VIEW_XML);
+          JAXBContext jaxbContext=JAXBContext.newInstance(ViewConfig.class);
+          Unmarshaller jaxbUnmarshaller=jaxbContext.createUnmarshaller();
+          ViewConfig viewConfig=(ViewConfig)jaxbUnmarshaller.unmarshal(configStream);
+          ViewDefinition viewDefinition=installView(viewConfig,configuration,cl,fileEntry.getAbsolutePath());
+          List<InstanceConfig> instances=viewConfig.getInstances();
+          for (          InstanceConfig instanceConfig : instances) {
+            instanceDefinitions.add(installViewInstance(viewDefinition,instanceConfig));
+          }
+        }
+ catch (        Exception e) {
+          LOG.error("Caught exception loading view from " + fileEntry.getAbsolutePath(),e);
+        }
+      }
+    }
+  }
+  return instanceDefinitions;
+}
