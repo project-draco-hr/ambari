@@ -13,6 +13,7 @@
   StackInfo stackInfo=ambariMetaInfo.getStackInfo(stackId.getStackName(),stackId.getStackVersion());
   long nowTimestamp=System.currentTimeMillis();
   for (  String hostName : actionRequest.getHosts()) {
+    Host host=clusters.getHost(hostName);
     stage.addHostRoleExecutionCommand(hostName,Role.valueOf(componentName),RoleCommand.CUSTOM_COMMAND,new ServiceComponentHostOpInProgressEvent(componentName,hostName,nowTimestamp),cluster.getClusterName(),serviceName);
     Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
     Map<String,Map<String,String>> configTags=amc.findConfigurationTagsWithOverrides(cluster,hostName);
@@ -26,6 +27,7 @@
     execCmd.setConfigurationTags(configTags);
     execCmd.setClusterHostInfo(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(clusterName),cluster));
     hostLevelParams.put(CUSTOM_COMMAND,commandName);
+    hostLevelParams.put(REPO_INFO,getRepoInfo(cluster,host));
     execCmd.setHostLevelParams(hostLevelParams);
     Map<String,String> commandParams=new TreeMap<String,String>();
     commandParams.put(SCHEMA_VERSION,serviceInfo.getSchemaVersion());
@@ -35,8 +37,8 @@
       }
     }
     String commandTimeout=configs.getDefaultAgentTaskTimeout();
+    ComponentInfo componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
     if (serviceInfo.getSchemaVersion().equals(AmbariMetaInfo.SCHEMA_VERSION_2)) {
-      ComponentInfo componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
       CommandScriptDefinition script=componentInfo.getCommandScript();
       if (script != null) {
         commandParams.put(SCRIPT,script.getScript());
@@ -54,5 +56,11 @@
     commandParams.put(SERVICE_PACKAGE_FOLDER,serviceInfo.getServicePackageFolder());
     commandParams.put(HOOKS_FOLDER,stackInfo.getStackHooksFolder());
     execCmd.setCommandParams(commandParams);
+    Map<String,String> roleParams=execCmd.getRoleParams();
+    if (roleParams == null) {
+      roleParams=new TreeMap<String,String>();
+    }
+    roleParams.put(COMPONENT_CATEGORY,componentInfo.getCategory());
+    execCmd.setRoleParams(roleParams);
   }
 }
