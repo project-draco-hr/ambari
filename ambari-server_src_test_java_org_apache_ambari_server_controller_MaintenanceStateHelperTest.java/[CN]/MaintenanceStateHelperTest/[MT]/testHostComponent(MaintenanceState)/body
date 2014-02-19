@@ -1,0 +1,30 @@
+{
+  AmbariManagementController amc=createMock(AmbariManagementController.class);
+  Capture<ExecuteActionRequest> earCapture=new Capture<ExecuteActionRequest>();
+  Capture<Map<String,String>> rpCapture=new Capture<Map<String,String>>();
+  expect(amc.createAction(capture(earCapture),capture(rpCapture))).andReturn(null);
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  expect(amc.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getClusterById(1L)).andReturn(cluster);
+  expect(cluster.getClusterName()).andReturn("c1").anyTimes();
+  ServiceComponentHost sch=createMock(ServiceComponentHost.class);
+  expect(sch.getClusterName()).andReturn("c1");
+  expect(sch.getClusterId()).andReturn(1L);
+  expect(sch.getMaintenanceState()).andReturn(state);
+  expect(sch.getServiceName()).andReturn("HDFS");
+  expect(sch.getServiceComponentName()).andReturn("NAMENODE").anyTimes();
+  expect(sch.getHostName()).andReturn("h1");
+  replay(amc,clusters,cluster,sch);
+  Map<String,String> map=new HashMap<String,String>();
+  map.put("context","abc");
+  MaintenanceStateHelper.createRequests(amc,map,Collections.singleton(sch.getClusterName()));
+  ExecuteActionRequest ear=earCapture.getValue();
+  map=rpCapture.getValue();
+  Assert.assertEquals("nagios_update_ignore",ear.getActionName());
+  Assert.assertEquals("ACTIONEXECUTE",ear.getCommandName());
+  Assert.assertEquals("NAGIOS",ear.getServiceName());
+  Assert.assertEquals("NAGIOS_SERVER",ear.getComponentName());
+  Assert.assertEquals("c1",ear.getClusterName());
+  Assert.assertTrue(map.containsKey("context"));
+}

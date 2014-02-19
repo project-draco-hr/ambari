@@ -1,0 +1,139 @@
+{
+  String clusterName="c1";
+  createCluster(clusterName);
+  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-0.1"));
+  String serviceName="HDFS";
+  createService(clusterName,serviceName,null);
+  String componentName1="NAMENODE";
+  String componentName2="DATANODE";
+  String componentName3="HDFS_CLIENT";
+  createServiceComponent(clusterName,serviceName,componentName1,State.INIT);
+  createServiceComponent(clusterName,serviceName,componentName2,State.INIT);
+  createServiceComponent(clusterName,serviceName,componentName3,State.INIT);
+  String host1="h1";
+  clusters.addHost(host1);
+  clusters.getHost("h1").setOsType("centos5");
+  clusters.getHost("h1").setState(HostState.HEALTHY);
+  clusters.getHost("h1").persist();
+  String host2="h2";
+  clusters.addHost(host2);
+  clusters.getHost("h2").setOsType("centos5");
+  clusters.getHost("h2").setState(HostState.HEALTHY);
+  clusters.getHost("h2").persist();
+  clusters.mapHostToCluster(host1,clusterName);
+  clusters.mapHostToCluster(host2,clusterName);
+  createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName2,host2,null);
+  Map<String,String> requestProperties=new HashMap<String,String>();
+  requestProperties.put("context","Called from a test");
+  Cluster cluster=clusters.getCluster(clusterName);
+  Service service=cluster.getService(serviceName);
+  Map<String,Host> hosts=clusters.getHostsForCluster(clusterName);
+  ServiceRequest sr=new ServiceRequest(clusterName,serviceName,null);
+  sr.setMaintenanceState(MaintenanceState.ON.name());
+  ServiceResourceProviderTest.updateServices(controller,Collections.singleton(sr),requestProperties,false,false);
+  Assert.assertEquals(MaintenanceState.ON,service.getMaintenanceState());
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(MaintenanceState.IMPLIED,controller.getEffectiveMaintenanceState(sch));
+      Assert.assertEquals(MaintenanceState.OFF,sch.getMaintenanceState());
+    }
+  }
+  sr.setMaintenanceState(MaintenanceState.OFF.name());
+  ServiceResourceProviderTest.updateServices(controller,Collections.singleton(sr),requestProperties,false,false);
+  Assert.assertEquals(MaintenanceState.OFF,service.getMaintenanceState());
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(MaintenanceState.OFF,controller.getEffectiveMaintenanceState(sch));
+      Assert.assertEquals(MaintenanceState.OFF,sch.getMaintenanceState());
+    }
+  }
+  HostRequest hr=new HostRequest(host1,clusterName,requestProperties);
+  hr.setMaintenanceState(MaintenanceState.ON.name());
+  HostResourceProviderTest.updateHosts(controller,Collections.singleton(hr),new HashMap<String,String>());
+  Host host=hosts.get(host1);
+  Assert.assertEquals(MaintenanceState.ON,host.getMaintenanceState(cluster.getClusterId()));
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      MaintenanceState implied=controller.getEffectiveMaintenanceState(sch);
+      if (sch.getHostName().equals(host1)) {
+        Assert.assertEquals(MaintenanceState.IMPLIED,implied);
+      }
+ else {
+        Assert.assertEquals(MaintenanceState.OFF,implied);
+      }
+      Assert.assertEquals(MaintenanceState.OFF,sch.getMaintenanceState());
+    }
+  }
+  hr.setMaintenanceState(MaintenanceState.OFF.name());
+  HostResourceProviderTest.updateHosts(controller,Collections.singleton(hr),new HashMap<String,String>());
+  host=hosts.get(host1);
+  Assert.assertEquals(MaintenanceState.OFF,host.getMaintenanceState(cluster.getClusterId()));
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(MaintenanceState.OFF,controller.getEffectiveMaintenanceState(sch));
+      Assert.assertEquals(MaintenanceState.OFF,sch.getMaintenanceState());
+    }
+  }
+  HostRequest hr1=new HostRequest(host1,clusterName,requestProperties);
+  hr1.setMaintenanceState(MaintenanceState.ON.name());
+  HostRequest hr2=new HostRequest(host2,clusterName,requestProperties);
+  hr2.setMaintenanceState(MaintenanceState.ON.name());
+  Set<HostRequest> set=new HashSet<HostRequest>();
+  set.add(hr1);
+  set.add(hr2);
+  HostResourceProviderTest.updateHosts(controller,set,new HashMap<String,String>());
+  host=hosts.get(host1);
+  Assert.assertEquals(MaintenanceState.ON,host.getMaintenanceState(cluster.getClusterId()));
+  host=hosts.get(host2);
+  Assert.assertEquals(MaintenanceState.ON,host.getMaintenanceState(cluster.getClusterId()));
+  hr1=new HostRequest(host1,clusterName,requestProperties);
+  hr1.setMaintenanceState(MaintenanceState.OFF.name());
+  hr2=new HostRequest(host2,clusterName,requestProperties);
+  hr2.setMaintenanceState(MaintenanceState.OFF.name());
+  set=new HashSet<HostRequest>();
+  set.add(hr1);
+  set.add(hr2);
+  HostResourceProviderTest.updateHosts(controller,set,new HashMap<String,String>());
+  host=hosts.get(host1);
+  Assert.assertEquals(MaintenanceState.OFF,host.getMaintenanceState(cluster.getClusterId()));
+  host=hosts.get(host2);
+  Assert.assertEquals(MaintenanceState.OFF,host.getMaintenanceState(cluster.getClusterId()));
+  ServiceComponentHost targetSch=service.getServiceComponent(componentName2).getServiceComponentHosts().get(host2);
+  Assert.assertNotNull(targetSch);
+  targetSch.setMaintenanceState(MaintenanceState.ON);
+  Assert.assertEquals(MaintenanceState.ON,controller.getEffectiveMaintenanceState(targetSch));
+  service.setMaintenanceState(MaintenanceState.ON);
+  Assert.assertEquals(MaintenanceState.ON,controller.getEffectiveMaintenanceState(targetSch));
+  targetSch.setMaintenanceState(MaintenanceState.OFF);
+  Assert.assertEquals(MaintenanceState.IMPLIED,controller.getEffectiveMaintenanceState(targetSch));
+  service.setMaintenanceState(MaintenanceState.OFF);
+  Assert.assertEquals(MaintenanceState.OFF,controller.getEffectiveMaintenanceState(targetSch));
+  host=hosts.get(host2);
+  host.setMaintenanceState(cluster.getClusterId(),MaintenanceState.ON);
+  Assert.assertEquals(MaintenanceState.IMPLIED,controller.getEffectiveMaintenanceState(targetSch));
+  targetSch.setMaintenanceState(MaintenanceState.ON);
+  Assert.assertEquals(MaintenanceState.ON,controller.getEffectiveMaintenanceState(targetSch));
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(State.INIT,sch.getState());
+    }
+  }
+  ServiceComponentRequest scr=new ServiceComponentRequest(clusterName,serviceName,componentName2,State.INSTALLED.name());
+  RequestStatusResponse rsr=ComponentResourceProviderTest.updateComponents(controller,Collections.singleton(scr),requestProperties,false);
+  if (rsr != null) {
+    List<HostRoleCommand> commands=actionDB.getRequestTasks(rsr.getRequestId());
+    for (    HostRoleCommand cmd : commands) {
+      Assert.assertNotNull(cmd.getExecutionCommandWrapper().getExecutionCommand().getPassiveInfo());
+      Assert.assertEquals(Integer.valueOf(1),Integer.valueOf(cmd.getExecutionCommandWrapper().getExecutionCommand().getPassiveInfo().size()));
+      clusters.getCluster(clusterName).getService(serviceName).getServiceComponent(cmd.getRole().name()).getServiceComponentHost(cmd.getHostName()).setState(State.INSTALLED);
+    }
+  }
+  for (  ServiceComponent sc : service.getServiceComponents().values()) {
+    if (!sc.getName().equals(componentName2))     continue;
+    for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+      Assert.assertEquals(sch == targetSch ? State.INIT : State.INSTALLED,sch.getState());
+    }
+  }
+}
