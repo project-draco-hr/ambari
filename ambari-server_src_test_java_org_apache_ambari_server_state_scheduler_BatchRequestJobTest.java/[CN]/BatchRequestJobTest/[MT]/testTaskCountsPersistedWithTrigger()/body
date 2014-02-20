@@ -1,0 +1,28 @@
+{
+  ExecutionScheduleManager scheduleManagerMock=createNiceMock(ExecutionScheduleManager.class);
+  BatchRequestJob batchRequestJobMock=createMockBuilder(BatchRequestJob.class).withConstructor(scheduleManagerMock,100L).addMockedMethods("doWork").createMock();
+  JobExecutionContext executionContext=createNiceMock(JobExecutionContext.class);
+  JobDataMap jobDataMap=createNiceMock(JobDataMap.class);
+  JobDetail jobDetail=createNiceMock(JobDetail.class);
+  Map<String,Object> properties=new HashMap<String,Object>();
+  properties.put(BatchRequestJob.BATCH_REQUEST_FAILED_TASKS_KEY,10);
+  properties.put(BatchRequestJob.BATCH_REQUEST_TOTAL_TASKS_KEY,20);
+  expect(scheduleManagerMock.continueOnMisfire(executionContext)).andReturn(true);
+  expect(executionContext.getMergedJobDataMap()).andReturn(jobDataMap);
+  expect(executionContext.getJobDetail()).andReturn(jobDetail);
+  expect(jobDetail.getKey()).andReturn(JobKey.jobKey("testJob","testGroup"));
+  expect(jobDataMap.getWrappedMap()).andReturn(properties);
+  expect(jobDataMap.getString((String)anyObject())).andReturn("testJob").anyTimes();
+  Capture<Trigger> triggerCapture=new Capture<Trigger>();
+  scheduleManagerMock.scheduleJob(capture(triggerCapture));
+  expectLastCall().once();
+  replay(scheduleManagerMock,executionContext,jobDataMap,jobDetail);
+  batchRequestJobMock.execute(executionContext);
+  verify(scheduleManagerMock,executionContext,jobDataMap,jobDetail);
+  Trigger trigger=triggerCapture.getValue();
+  Assert.assertNotNull(trigger);
+  JobDataMap savedMap=trigger.getJobDataMap();
+  Assert.assertNotNull(savedMap);
+  Assert.assertEquals(10,savedMap.getIntValue(BatchRequestJob.BATCH_REQUEST_FAILED_TASKS_KEY));
+  Assert.assertEquals(20,savedMap.getIntValue(BatchRequestJob.BATCH_REQUEST_TOTAL_TASKS_KEY));
+}
