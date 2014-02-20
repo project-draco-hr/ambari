@@ -9,6 +9,7 @@
   Map<String,Map<String,Map<String,Set<String>>>> hostComponentNames=new HashMap<String,Map<String,Map<String,Set<String>>>>();
   Set<State> seenNewStates=new HashSet<State>();
   Map<ServiceComponentHost,State> directTransitionScHosts=new HashMap<ServiceComponentHost,State>();
+  Set<String> maintenanceClusters=new HashSet<String>();
   for (  ServiceComponentHostRequest request : requests) {
     validateServiceComponentHostRequest(request);
     Cluster cluster=clusters.getCluster(request.getClusterName());
@@ -57,12 +58,7 @@
         }
  else {
           sch.setPassiveState(newPassive);
-          try {
-            PassiveStateHelper.createRequest(this,sch.getClusterName(),requestProperties);
-          }
- catch (          AmbariException e) {
-            LOG.warn("Could not send passive status to Nagios (" + e.getMessage() + ")");
-          }
+          maintenanceClusters.add(sch.getClusterName());
         }
       }
     }
@@ -130,6 +126,14 @@ componentHost.handleEvent(event);
 }
  catch (InvalidStateTransitionException e) {
 throw new AmbariException("Internal error - not supported transition",e);
+}
+}
+if (maintenanceClusters.size() > 0) {
+try {
+PassiveStateHelper.createRequests(this,requestProperties,maintenanceClusters);
+}
+ catch (Exception e) {
+LOG.warn("Could not send passive status to Nagios (" + e.getMessage() + ")");
 }
 }
 Cluster cluster=clusters.getCluster(clusterNames.iterator().next());

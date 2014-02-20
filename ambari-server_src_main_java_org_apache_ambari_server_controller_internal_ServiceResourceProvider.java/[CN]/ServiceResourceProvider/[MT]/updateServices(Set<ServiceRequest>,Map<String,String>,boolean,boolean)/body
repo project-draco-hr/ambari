@@ -13,6 +13,7 @@
   Set<State> seenNewStates=new HashSet<State>();
   Clusters clusters=controller.getClusters();
   AmbariMetaInfo ambariMetaInfo=controller.getAmbariMetaInfo();
+  Set<String> maintenanceClusters=new HashSet<String>();
   for (  ServiceRequest request : requests) {
     if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getServiceName() == null || request.getServiceName().isEmpty()) {
       throw new IllegalArgumentException("Invalid arguments, cluster name" + " and service name should be provided to update services");
@@ -47,12 +48,7 @@
         }
  else {
           s.setPassiveState(newPassive);
-          try {
-            PassiveStateHelper.createRequest(controller,cluster.getClusterName(),requestProperties);
-          }
- catch (          Exception e) {
-            LOG.warn("Could not send passive status to Nagios (" + e.getMessage() + ")");
-          }
+          maintenanceClusters.add(cluster.getClusterName());
         }
       }
     }
@@ -145,6 +141,14 @@
   }
   if (seenNewStates.size() > 1) {
     throw new IllegalArgumentException("Cannot handle different desired state" + " changes for a set of services at the same time");
+  }
+  if (maintenanceClusters.size() > -0) {
+    try {
+      PassiveStateHelper.createRequests(controller,requestProperties,maintenanceClusters);
+    }
+ catch (    Exception e) {
+      LOG.warn("Could not send passive status to Nagios (" + e.getMessage() + ")");
+    }
   }
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
   return controller.createStages(cluster,requestProperties,null,changedServices,changedComps,changedScHosts,ignoredScHosts,runSmokeTest,reconfigureClients);
