@@ -1,0 +1,15 @@
+@patch.object(System, 'os_family', new='redhat')
+@patch('resource_management.libraries.providers.repository.File')
+def test_create_repo_redhat(self, file_mock):
+    with Environment('/') as env:
+        Repository('hadoop', base_url='http://download.base_url.org/rpm/', mirror_list='https://mirrors.base_url.org/?repo=Repository&arch=$basearch', repo_file_name='Repository')
+        self.assertTrue(('hadoop' in env.resources['Repository']))
+        defined_arguments = env.resources['Repository']['hadoop'].arguments
+        expected_arguments = {'base_url': 'http://download.base_url.org/rpm/', 'mirror_list': 'https://mirrors.base_url.org/?repo=Repository&arch=$basearch', 'repo_file_name': 'Repository', }
+        self.assertEqual(defined_arguments, expected_arguments)
+        self.assertEqual(file_mock.call_args[0][0], '/etc/yum.repos.d/Repository.repo')
+        template_item = file_mock.call_args[1]['content']
+        template = str(template_item.name)
+        expected_arguments.update({'repo_id': 'hadoop', })
+        self.assertEqual(expected_arguments, template_item.context._dict)
+        self.assertEqual('[{{repo_id}}]\nname={{repo_file_name}}\n{% if mirror_list %}mirrorlist={{mirror_list}}{% else %}baseurl={{base_url}}{% endif %}\npath=/\nenabled=1\ngpgcheck=0', template)
