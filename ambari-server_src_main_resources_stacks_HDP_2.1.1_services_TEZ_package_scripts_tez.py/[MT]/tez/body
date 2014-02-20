@@ -1,5 +1,35 @@
 def tez():
     import params
-    Directory(params.conf_dir, owner=params.tez_user, group=params.user_group, recursive=True)
-    XmlConfig('tez-site.xml', conf_dir=params.conf_dir, configurations=params.config['configurations']['tez-site'], owner=params.tez_user, group=params.user_group, mode=436)
+    Directory(params.config_dir, owner=params.tez_user, group=params.user_group, recursive=True)
+    XmlConfig('tez-site.xml', conf_dir=params.config_dir, configurations=params.config['configurations']['tez-site'], owner=params.tez_user, group=params.user_group, mode=436)
     tez_TemplateConfig(['tez-env.sh'])
+    destination_hdfs_dirs = get_tez_hdfs_dir_paths(params.tez_lib_uris)
+    if destination_hdfs_dirs:
+        for hdfs_dir in destination_hdfs_dirs:
+            params.HdfsDirectory(hdfs_dir, action='create_delayed', owner=params.tez_user, mode=493)
+        pass
+        params.HdfsDirectory(None, action='create')
+        if params.security_enabled:
+            kinit_if_needed = format('{kinit_path_local} -kt {hdfs_user_keytab} {hdfs_user};')
+        else:
+            kinit_if_needed = ''
+        if kinit_if_needed:
+            Execute(kinit_if_needed, user=params.tez_user, path='/bin')
+        app_dir_path = None
+        lib_dir_path = None
+        if (len(destination_hdfs_dirs) > 1):
+            for path in destination_hdfs_dirs:
+                if ('lib' in path):
+                    lib_dir_path = path
+                else:
+                    app_dir_path = path
+                pass
+            pass
+        pass
+        if app_dir_path:
+            copyFromLocal(path=params.tez_local_api_jars, mode=429, owner=params.tez_user, dest_dir=app_dir_path, kinnit_if_needed=kinit_if_needed, stub_path=params.stub_path)
+        pass
+        if lib_dir_path:
+            copyFromLocal(path=params.tez_local_lib_jars, mode=429, owner=params.tez_user, dest_dir=lib_dir_path, kinnit_if_needed=kinit_if_needed, stub_path=params.stub_path)
+        pass
+        ExecuteHadoop(format('dfs -touchz {stub_path}'), user=params.tez_user, conf_dir=params.hadoop_conf_dir)
