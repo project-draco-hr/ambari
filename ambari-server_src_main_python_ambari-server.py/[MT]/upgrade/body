@@ -23,44 +23,15 @@ def upgrade(args):
             print_error_msg(('Could not write ambari config file "%s": %s' % (conf_file, e)))
             return (-1)
     parse_properties_file(args)
-    if (args.persistence_type == 'remote'):
-        client_desc = ((DATABASE_NAMES[DATABASE_INDEX] + ' ') + DATABASE_CLI_TOOLS_DESC[DATABASE_INDEX])
-        client_usage_cmd = DATABASE_CLI_TOOLS_USAGE[DATABASE_INDEX].format(DATABASE_UPGRADE_SCRIPTS[DATABASE_INDEX], args.database_username, BLIND_PASSWORD, args.database_name)
-        if (not (args.database in ['oracle', 'mysql'])):
-            raise FatalException((-20), 'Upgrade for remote database only supports Oracle.')
-        if get_db_cli_tool(args):
-            (retcode, out, err) = execute_remote_script(args, DATABASE_UPGRADE_SCRIPTS[DATABASE_INDEX])
-            if (not (retcode == 0)):
-                raise NonFatalException(err)
-        else:
-            command = prepare_schema_upgrade_command(args)
-            err = (((((('Cannot find ' + client_desc) + ' client in the path to upgrade the Ambari ') + 'Server schema. To upgrade Ambari Server schema ') + 'you must run the following command:') + os.linesep) + command)
-            args.warnings.append(err)
-        pass
-    else:
-        print 'Checking PostgreSQL...'
-        retcode = check_postgre_up()
-        if (not (retcode == 0)):
-            err = 'PostgreSQL server not running. Exiting'
-            raise FatalException(retcode, err)
-        file = args.upgrade_script_file
-        print 'Upgrading database...'
-        retcode = execute_db_script(args, file)
-        if (not (retcode == 0)):
-            err = 'Database upgrade script has failed. Exiting.'
-            raise FatalException(retcode, err)
-        print 'Checking database integrity...'
-        check_file = ((file[:(-3)] + 'Check') + file[(-4):])
-        retcode = check_db_consistency(args, check_file)
-        if (not (retcode == 0)):
-            print 'Found inconsistency. Trying to fix...'
-            fix_file = ((file[:(-3)] + 'Fix') + file[(-4):])
-            retcode = execute_db_script(args, fix_file)
-            if (not (retcode == 0)):
-                err = 'Database cannot be fixed. Exiting.'
-                raise FatalException(retcode, err)
-        else:
-            print 'Database is consistent.'
+    server_version = None
+    if args.server_version_file_path:
+        with open(args.server_version_file_path, 'r') as f:
+            server_version = f.read()
+    if (not server_version):
+        raise FatalException(('Cannot determine server version from version file %s' % args.server_version_file_path))
+    retcode = run_schema_upgrade(server_version.strip())
+    if (not (retcode == 0)):
+        raise FatalException('Scehma upgrade failed.')
     user = read_ambari_user()
     if (user is None):
         warn = ('Can not determine custom ambari user.\n' + SETUP_OR_UPGRADE_MSG)

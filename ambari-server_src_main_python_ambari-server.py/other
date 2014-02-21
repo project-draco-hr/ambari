@@ -21,6 +21,7 @@ import tempfile
 import random
 import pwd
 from ambari_server.resourceFilesKeeper import ResourceFilesKeeper, KeeperException
+import json
 VERBOSE = False
 SILENT = False
 SERVER_START_DEBUG = False
@@ -87,6 +88,8 @@ SERVER_START_CMD_DEBUG = (((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -s
 SECURITY_PROVIDER_GET_CMD = ((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider GET {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
 SECURITY_PROVIDER_PUT_CMD = ((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider PUT {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
 SECURITY_PROVIDER_KEY_CMD = ((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.MasterKeyServiceImpl {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
+SCHEMA_UPGRADE_HELPER_CMD = (((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.upgrade.SchemaUpgradeHelper') + ' {3}')
+STACK_UPGRADE_HELPER_CMD = (((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.upgrade.StackUpgradeHelper') + ' {3} {4}')
 SECURITY_KEYS_DIR = 'security.server.keys_dir'
 SECURITY_MASTER_KEY_LOCATION = 'security.master.key.location'
 SECURITY_KEY_IS_PERSISTED = 'security.master.key.ispersisted'
@@ -147,6 +150,7 @@ PG_HBA_RELOAD_CMD = ('%s %s reload' % (SERVICE_CMD, PG_SERVICE_NAME))
 PG_HBA_CONF_FILE = os.path.join(PG_HBA_DIR, 'pg_hba.conf')
 PG_HBA_CONF_FILE_BACKUP = os.path.join(PG_HBA_DIR, 'pg_hba_bak.conf.old')
 POSTGRESQL_CONF_FILE = os.path.join(PG_HBA_DIR, 'postgresql.conf')
+SERVER_VERSION_FILE_PATH = 'server.version.file'
 JDBC_DATABASE_PROPERTY = 'server.jdbc.database'
 JDBC_HOSTNAME_PROPERTY = 'server.jdbc.hostname'
 JDBC_PORT_PROPERTY = 'server.jdbc.port'
@@ -191,8 +195,6 @@ DATABASE_CLI_TOOLS_USAGE = ['su -postgres --command=psql -f {0} -v username=\'"{
 MYSQL_INIT_SCRIPT = '/var/lib/ambari-server/resources/Ambari-DDL-MySQL-CREATE.sql'
 DATABASE_INIT_SCRIPTS = ['/var/lib/ambari-server/resources/Ambari-DDL-Postgres-REMOTE-CREATE.sql', '/var/lib/ambari-server/resources/Ambari-DDL-Oracle-CREATE.sql', MYSQL_INIT_SCRIPT]
 DATABASE_DROP_SCRIPTS = ['/var/lib/ambari-server/resources/Ambari-DDL-Postgres-REMOTE-DROP.sql', '/var/lib/ambari-server/resources/Ambari-DDL-Oracle-DROP.sql', '/var/lib/ambari-server/resources/Ambari-DDL-MySQL-DROP.sql']
-DATABASE_UPGRADE_SCRIPTS = ['/var/lib/ambari-server/resources/upgrade/ddl/Ambari-DDL-Postgres-REMOTE-UPGRADE.sql', '/var/lib/ambari-server/resources/upgrade/ddl/Ambari-DDL-Oracle-UPGRADE.sql', '/var/lib/ambari-server/resources/upgrade/ddl/Ambari-DDL-MySQL-UPGRADE.sql']
-DATABASE_STACK_UPGRADE_SCRIPTS = ['/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-Postgres-REMOTE-UPGRADE_STACK.sql', '/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-Oracle-UPGRADE_STACK.sql', '/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-MySQL-UPGRADE_STACK.sql']
 JDBC_PROPERTIES_PREFIX = 'server.jdbc.properties.'
 DATABASE_JDBC_PROPERTIES = [[], [['oracle.net.CONNECT_TIMEOUT', '2000'], ['oracle.net.READ_TIMEOUT', '2000'], ['oracle.jdbc.ReadTimeout', '8000']], []]
 REGEX_IP_ADDRESS = '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
@@ -233,10 +235,6 @@ JCE_MIN_FILESIZE = 5000
 DEFAULT_DB_NAME = 'ambari'
 STACK_LOCATION_KEY = 'metadata.path'
 STACK_LOCATION_DEFAULT = '/var/lib/ambari-server/resources/stacks'
-DATABASE_INSERT_METAINFO_SCRIPTS = ['/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-Postgres-INSERT_METAINFO.sql', '/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-Oracle-INSERT_METAINFO.sql', '/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-MySQL-INSERT_METAINFO.sql']
-DATABASE_FIX_LOCAL_REPO_SCRIPTS = ['/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-Postgres-FIX_LOCAL_REPO.sql', '/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-Oracle-FIX_LOCAL_REPO.sql', '/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-MySQL-FIX_LOCAL_REPO.sql']
-INSERT_METAINFO_CMD = ['su', 'postgres', '--command=psql -f {0} -v metainfo_key="\'{1}\'" -v metainfo_value="\'{2}\'" -v dbname="{3}"']
-FIX_LOCAL_REPO_CMD = ['su', 'postgres', '--command=psql -f {0} -v dbname="{1}"']
 ASF_LICENSE_HEADER = '\n# Copyright 2011 The Apache Software Foundation\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# "License"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an "AS IS" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n'
 if (OS == OS_UBUNTU):
     PG_HBA_DIR = '/etc/postgresql/8.4/main'

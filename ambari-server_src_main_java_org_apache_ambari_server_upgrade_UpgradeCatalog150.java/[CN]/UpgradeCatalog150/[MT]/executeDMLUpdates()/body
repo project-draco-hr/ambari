@@ -1,0 +1,105 @@
+{
+  String tableName="serviceconfigmapping";
+  String dbType=getDbType();
+  EntityManager em=getEntityManagerProvider().get();
+  if (dbAccessor.tableExists(tableName) && dbAccessor.tableHasData(tableName) && dbAccessor.tableExists("clusterconfigmapping")) {
+    if (dbType.equals(Configuration.POSTGRES_DB_NAME)) {
+      dbAccessor.executeQuery(getPostgresServiceConfigMappingQuery());
+      dbAccessor.truncateTable(tableName);
+    }
+ else {
+      LOG.warn("Unsupported database for service config mapping query. " + "database = " + dbType);
+    }
+  }
+  tableName="request";
+  if (dbAccessor.tableExists(tableName) && !dbAccessor.tableHasData(tableName)) {
+    String query;
+    if (dbType.equals(Configuration.POSTGRES_DB_NAME)) {
+      query=getPostgresRequestUpgradeQuery();
+    }
+ else     if (dbType.equals(Configuration.ORACLE_DB_NAME)) {
+      query=getOracleRequestUpgradeQuery();
+    }
+ else {
+      query=getMysqlRequestUpgradeQuery();
+    }
+    dbAccessor.executeQuery(query);
+  }
+  if (dbAccessor.tableExists("ambari_sequences")) {
+    if (dbType.equals(Configuration.POSTGRES_DB_NAME)) {
+      try {
+        dbAccessor.executeQuery(getPostgresSequenceUpgradeQuery());
+        dbAccessor.dropSequence("host_role_command_task_id_seq");
+        dbAccessor.dropSequence("users_user_id_seq");
+        dbAccessor.dropSequence("clusters_cluster_id_seq");
+      }
+ catch (      SQLException sql) {
+        LOG.warn("Sequence update threw exception. ",sql);
+      }
+    }
+  }
+  ((JpaEntityManager)em.getDelegate()).getServerSession().getIdentityMapAccessor().invalidateAll();
+  CriteriaBuilder cb=em.getCriteriaBuilder();
+  CriteriaQuery<HostComponentStateEntity> c1=cb.createQuery(HostComponentStateEntity.class);
+  Root<HostComponentStateEntity> hsc=c1.from(HostComponentStateEntity.class);
+  Expression<String> exp=hsc.get("current_state");
+  List<String> statuses=new ArrayList<String>(){
+{
+      add("STOP_FAILED");
+      add("START_FAILED");
+    }
+  }
+;
+  Predicate predicate=exp.in(statuses);
+  c1.select(hsc).where(predicate);
+  TypedQuery<HostComponentStateEntity> q1=em.createQuery(c1);
+  List<HostComponentStateEntity> r1=q1.getResultList();
+  HostComponentStateDAO hostComponentStateDAO=injector.getInstance(HostComponentStateDAO.class);
+  if (r1 != null && !r1.isEmpty()) {
+    for (    HostComponentStateEntity entity : r1) {
+      entity.setCurrentState(State.INSTALLED);
+      hostComponentStateDAO.merge(entity);
+    }
+  }
+  CriteriaQuery<HostRoleCommandEntity> c2=cb.createQuery(HostRoleCommandEntity.class);
+  Root<HostRoleCommandEntity> hrc=c2.from(HostRoleCommandEntity.class);
+  statuses=new ArrayList<String>(){
+{
+      add("PENDING");
+      add("QUEUED");
+      add("IN_PROGRESS");
+    }
+  }
+;
+  exp=hrc.get("status");
+  predicate=exp.in(statuses);
+  c2.select(hrc).where(predicate);
+  TypedQuery<HostRoleCommandEntity> q2=em.createQuery(c2);
+  List<HostRoleCommandEntity> r2=q2.getResultList();
+  HostRoleCommandDAO hostRoleCommandDAO=injector.getInstance(HostRoleCommandDAO.class);
+  if (r2 != null && !r2.isEmpty()) {
+    for (    HostRoleCommandEntity entity : r2) {
+      entity.setStatus(HostRoleStatus.ABORTED);
+      hostRoleCommandDAO.merge(entity);
+    }
+  }
+  stackUpgradeUtil.updateStackDetails("HDP",null);
+  executeInTransaction(new Runnable(){
+    @Override public void run(){
+      ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+      ClusterStateDAO clusterStateDAO=injector.getInstance(ClusterStateDAO.class);
+      List<ClusterEntity> clusterEntities=clusterDAO.findAll();
+      for (      ClusterEntity clusterEntity : clusterEntities) {
+        if (clusterStateDAO.findByPK(clusterEntity.getClusterId()) == null) {
+          ClusterStateEntity clusterStateEntity=new ClusterStateEntity();
+          clusterStateEntity.setClusterEntity(clusterEntity);
+          clusterStateEntity.setCurrentStackVersion(clusterEntity.getDesiredStackVersion());
+          clusterStateDAO.create(clusterStateEntity);
+          clusterEntity.setClusterStateEntity(clusterStateEntity);
+          clusterDAO.merge(clusterEntity);
+        }
+      }
+    }
+  }
+);
+}

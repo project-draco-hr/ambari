@@ -1,0 +1,19 @@
+{
+  if (args.length == 0) {
+    throw new InputMismatchException("Need to provide target version.");
+  }
+  String targetVersion=args[0];
+  LOG.info("Upgrading schema to target version = " + targetVersion);
+  UpgradeCatalog targetUpgradeCatalog=AbstractUpgradeCatalog.getUpgradeCatalog(targetVersion);
+  LOG.debug("Target upgrade catalog. " + targetUpgradeCatalog);
+  Injector injector=Guice.createInjector(new UpgradeHelperModule());
+  SchemaUpgradeHelper schemaUpgradeHelper=injector.getInstance(SchemaUpgradeHelper.class);
+  String sourceVersion=schemaUpgradeHelper.readSourceVersion();
+  LOG.info("Upgrading schema from source version = " + sourceVersion);
+  List<UpgradeCatalog> upgradeCatalogs=schemaUpgradeHelper.getUpgradePath(sourceVersion,targetVersion);
+  schemaUpgradeHelper.executeUpgrade(upgradeCatalogs);
+  schemaUpgradeHelper.startPersistenceService();
+  schemaUpgradeHelper.executeDMLUpdates(upgradeCatalogs);
+  LOG.info("Upgrade successful.");
+  schemaUpgradeHelper.stopPersistenceService();
+}
