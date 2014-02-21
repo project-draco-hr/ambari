@@ -2,6 +2,7 @@
   HttpHeaders headers=createNiceMock(HttpHeaders.class);
   String uriString="http://localhost.com:8080/api/v1/clusters/c1";
   URI uri=new URI(URLEncoder.encode(uriString,"UTF-8"));
+  @SuppressWarnings("unchecked") MultivaluedMap<String,String> queryParams=createMock(MultivaluedMap.class);
   PredicateCompiler compiler=createStrictMock(PredicateCompiler.class);
   Predicate predicate=createNiceMock(Predicate.class);
   UriInfo uriInfo=createMock(UriInfo.class);
@@ -10,7 +11,15 @@
   ResultStatus resultStatus=createMock(ResultStatus.class);
   ResultPostProcessor processor=createStrictMock(ResultPostProcessor.class);
   RequestBody body=createNiceMock(RequestBody.class);
-  Request request=getTestRequest(headers,body,uriInfo,compiler,handler,processor,null);
+  ResourceInstance resource=createNiceMock(ResourceInstance.class);
+  ResourceDefinition resourceDefinition=createNiceMock(ResourceDefinition.class);
+  Renderer renderer=new DefaultRenderer();
+  Request request=getTestRequest(headers,body,uriInfo,compiler,handler,processor,resource);
+  expect(uriInfo.getQueryParameters()).andReturn(queryParams).anyTimes();
+  expect(queryParams.getFirst(QueryLexer.QUERY_MINIMAL)).andReturn(null);
+  expect(queryParams.getFirst(QueryLexer.QUERY_FORMAT)).andReturn(null);
+  expect(resource.getResourceDefinition()).andReturn(resourceDefinition);
+  expect(resourceDefinition.getRenderer(null)).andReturn(renderer);
   expect(uriInfo.getRequestUri()).andReturn(uri).anyTimes();
   expect(body.getQueryString()).andReturn("foo=bar");
   expect(compiler.compile("foo=bar")).andReturn(predicate);
@@ -18,9 +27,9 @@
   expect(result.getStatus()).andReturn(resultStatus).anyTimes();
   expect(resultStatus.isErrorState()).andReturn(false).anyTimes();
   processor.process(result);
-  replay(headers,compiler,uriInfo,handler,result,resultStatus,processor,predicate,body);
+  replay(headers,compiler,uriInfo,handler,queryParams,resource,resourceDefinition,result,resultStatus,processor,predicate,body);
   Result processResult=request.process();
-  verify(headers,compiler,uriInfo,handler,result,resultStatus,processor,predicate,body);
+  verify(headers,compiler,uriInfo,handler,queryParams,resource,resourceDefinition,result,resultStatus,processor,predicate,body);
   assertSame(processResult,result);
   assertSame(predicate,request.getQueryPredicate());
 }

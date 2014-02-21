@@ -1,0 +1,49 @@
+{
+  SchemaFactory schemaFactory=createNiceMock(SchemaFactory.class);
+  Schema clusterSchema=createNiceMock(Schema.class);
+  Schema hostSchema=createNiceMock(Schema.class);
+  Schema hostComponentSchema=createNiceMock(Schema.class);
+  expect(schemaFactory.getSchema(Resource.Type.Cluster)).andReturn(clusterSchema).anyTimes();
+  expect(schemaFactory.getSchema(Resource.Type.Host)).andReturn(hostSchema).anyTimes();
+  expect(schemaFactory.getSchema(Resource.Type.HostComponent)).andReturn(hostComponentSchema).anyTimes();
+  expect(clusterSchema.getKeyPropertyId(Resource.Type.Cluster)).andReturn("Clusters/cluster_name").anyTimes();
+  expect(hostSchema.getKeyPropertyId(Resource.Type.Cluster)).andReturn("Hosts/cluster_name").anyTimes();
+  expect(hostSchema.getKeyPropertyId(Resource.Type.Host)).andReturn("Hosts/host_name").anyTimes();
+  expect(hostComponentSchema.getKeyPropertyId(Resource.Type.Cluster)).andReturn("HostRoles/cluster_name").anyTimes();
+  expect(hostComponentSchema.getKeyPropertyId(Resource.Type.Host)).andReturn("HostRoles/host_name").anyTimes();
+  expect(hostComponentSchema.getKeyPropertyId(Resource.Type.HostComponent)).andReturn("HostRoles/component_name").anyTimes();
+  replay(schemaFactory,clusterSchema,hostSchema,hostComponentSchema);
+  Result result=new ResultImpl(true);
+  createResultTree(result.getResultTree());
+  MinimalRenderer renderer=new MinimalRenderer();
+  renderer.init(schemaFactory);
+  renderer.finalizeProperties(createPropertyTree(),false);
+  TreeNode<Resource> resultTree=renderer.finalizeResult(result).getResultTree();
+  assertNull(resultTree.getProperty("isCollection"));
+  assertEquals(1,resultTree.getChildren().size());
+  TreeNode<Resource> clusterNode=resultTree.getChildren().iterator().next();
+  Resource clusterResource=clusterNode.getObject();
+  Map<String,Map<String,Object>> clusterProperties=clusterResource.getPropertiesMap();
+  assertEquals(2,clusterProperties.size());
+  assertEquals(3,clusterProperties.get("Clusters").size());
+  assertEquals("testCluster",clusterProperties.get("Clusters").get("cluster_name"));
+  assertEquals("HDP-1.3.3",clusterProperties.get("Clusters").get("version"));
+  assertEquals("value1",clusterProperties.get("Clusters").get("prop1"));
+  assertEquals(1,clusterProperties.get("").size());
+  assertEquals("bar",clusterProperties.get("").get("foo"));
+  TreeNode<Resource> hosts=clusterNode.getChildren().iterator().next();
+  for (  TreeNode<Resource> hostNode : hosts.getChildren()) {
+    Resource hostResource=hostNode.getObject();
+    Map<String,Map<String,Object>> hostProperties=hostResource.getPropertiesMap();
+    assertEquals(1,hostProperties.size());
+    assertEquals(1,hostProperties.get("Hosts").size());
+    assertTrue(hostProperties.get("Hosts").containsKey("host_name"));
+    for (    TreeNode<Resource> componentNode : hostNode.getChildren().iterator().next().getChildren()) {
+      Resource componentResource=componentNode.getObject();
+      Map<String,Map<String,Object>> componentProperties=componentResource.getPropertiesMap();
+      assertEquals(1,componentProperties.size());
+      assertEquals(1,componentProperties.get("HostRoles").size());
+      assertTrue(componentProperties.get("HostRoles").containsKey("component_name"));
+    }
+  }
+}

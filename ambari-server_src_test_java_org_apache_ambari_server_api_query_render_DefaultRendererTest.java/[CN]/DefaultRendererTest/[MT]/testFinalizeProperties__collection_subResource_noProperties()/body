@@ -1,0 +1,29 @@
+{
+  SchemaFactory schemaFactory=createNiceMock(SchemaFactory.class);
+  Schema serviceSchema=createNiceMock(Schema.class);
+  Schema componentSchema=createNiceMock(Schema.class);
+  expect(schemaFactory.getSchema(Resource.Type.Service)).andReturn(serviceSchema).anyTimes();
+  expect(serviceSchema.getKeyPropertyId(Resource.Type.Service)).andReturn("ServiceInfo/service_name").anyTimes();
+  expect(serviceSchema.getKeyPropertyId(Resource.Type.Cluster)).andReturn("ServiceInfo/cluster_name").anyTimes();
+  expect(schemaFactory.getSchema(Resource.Type.Component)).andReturn(componentSchema).anyTimes();
+  expect(componentSchema.getKeyPropertyId(Resource.Type.Service)).andReturn("ServiceComponentInfo/service_name").anyTimes();
+  expect(componentSchema.getKeyPropertyId(Resource.Type.Component)).andReturn("ServiceComponentInfo/component_name").anyTimes();
+  replay(schemaFactory,serviceSchema,componentSchema);
+  HashSet<String> serviceProperties=new HashSet<String>();
+  QueryInfo rootQuery=new QueryInfo(new ServiceResourceDefinition(),serviceProperties);
+  TreeNode<QueryInfo> queryTree=new TreeNodeImpl<QueryInfo>(null,rootQuery,"Service");
+  queryTree.addChild(new QueryInfo(new ComponentResourceDefinition(),new HashSet<String>()),"Component");
+  DefaultRenderer renderer=new DefaultRenderer();
+  renderer.init(schemaFactory);
+  TreeNode<Set<String>> propertyTree=renderer.finalizeProperties(queryTree,true);
+  assertEquals(1,propertyTree.getChildren().size());
+  assertEquals(2,propertyTree.getObject().size());
+  assertTrue(propertyTree.getObject().contains("ServiceInfo/service_name"));
+  assertTrue(propertyTree.getObject().contains("ServiceInfo/cluster_name"));
+  TreeNode<Set<String>> componentNode=propertyTree.getChild("Component");
+  assertEquals(0,componentNode.getChildren().size());
+  assertEquals(2,componentNode.getObject().size());
+  assertTrue(componentNode.getObject().contains("ServiceComponentInfo/service_name"));
+  assertTrue(componentNode.getObject().contains("ServiceComponentInfo/component_name"));
+  verify(schemaFactory,serviceSchema,componentSchema);
+}
