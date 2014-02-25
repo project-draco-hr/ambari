@@ -8,27 +8,46 @@
         StackId stackId=cluster.getDesiredStackVersion();
         ServiceComponentHostRequest request=new ServiceComponentHostRequest(clusterName,serviceName,null,null,null);
         Set<ServiceComponentHostResponse> hostComponentResponses=controller.getHostComponents(Collections.singleton(request));
+        State serviceState=null;
+        boolean hasDisabled=false;
+        boolean hasMaster=false;
+        boolean hasOther=false;
+        boolean hasClient=false;
         for (        ServiceComponentHostResponse hostComponentResponse : hostComponentResponses) {
           ComponentInfo componentInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),hostComponentResponse.getServiceName(),hostComponentResponse.getComponentName());
           if (componentInfo != null) {
-            if (componentInfo.isMaster()) {
-              State state=getHostComponentState(hostComponentResponse);
-switch (state) {
-case STARTED:
-case DISABLED:
-                break;
-default :
-              return state;
+            State state=getHostComponentState(hostComponentResponse);
+            if (state.equals(State.DISABLED)) {
+              hasDisabled=true;
+            }
+ else {
+              if (componentInfo.isMaster()) {
+                hasMaster=true;
+                if (!state.equals(State.STARTED) && (serviceState == null || state.ordinal() > serviceState.ordinal())) {
+                  serviceState=state;
+                }
+              }
+ else               if (componentInfo.isClient()) {
+                hasClient=true;
+                if (!(hasMaster || hasOther) && !state.equals(State.INSTALLED) && (serviceState == null || state.ordinal() > serviceState.ordinal())) {
+                  serviceState=state;
+                }
+              }
+ else {
+                hasOther=true;
+                if (!hasMaster && (serviceState == null || state.ordinal() > serviceState.ordinal())) {
+                  serviceState=state;
+                }
+              }
+            }
           }
         }
+        return hasMaster ? serviceState == null ? State.STARTED : serviceState : hasOther ? serviceState : hasClient ? serviceState == null ? State.INSTALLED : serviceState : hasDisabled ? State.DISABLED : State.UNKNOWN;
       }
     }
-    return State.STARTED;
+ catch (    AmbariException e) {
+      LOG.error("Can't determine service state.",e);
+    }
   }
-}
- catch (AmbariException e) {
-  LOG.error("Can't determine service state.",e);
-}
-}
-return State.UNKNOWN;
+  return State.UNKNOWN;
 }
