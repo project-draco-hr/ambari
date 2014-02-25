@@ -1,0 +1,82 @@
+{
+  String actionName=actionContext.getActionName();
+  String clusterName=actionContext.getClusterName();
+  String serviceName=actionContext.getServiceName();
+  String componentName=actionContext.getComponentName();
+  Set<String> candidateHosts=new HashSet<String>();
+  if (!serviceName.isEmpty()) {
+    if (!componentName.isEmpty()) {
+      Map<String,ServiceComponentHost> componentHosts=clusters.getCluster(clusterName).getService(serviceName).getServiceComponent(componentName).getServiceComponentHosts();
+      candidateHosts.addAll(componentHosts.keySet());
+    }
+ else {
+      for (      String component : clusters.getCluster(clusterName).getService(serviceName).getServiceComponents().keySet()) {
+        Map<String,ServiceComponentHost> componentHosts=clusters.getCluster(clusterName).getService(serviceName).getServiceComponent(component).getServiceComponentHosts();
+        candidateHosts.addAll(componentHosts.keySet());
+      }
+    }
+  }
+ else {
+    candidateHosts.addAll(amcImpl.getClusters().getHostsForCluster(clusterName).keySet());
+  }
+  if (actionContext.getHosts().isEmpty() && candidateHosts.isEmpty()) {
+    throw new AmbariException("Suitable hosts not found, component=" + componentName + ", service="+ serviceName+ ", cluster="+ clusterName+ ", actionName="+ actionName);
+  }
+  if (!actionContext.getHosts().isEmpty() && !candidateHosts.isEmpty()) {
+    for (    String hostname : actionContext.getHosts()) {
+      if (!candidateHosts.contains(hostname)) {
+        throw new AmbariException("Request specifies host " + hostname + " but its not a valid host based on the "+ "target service="+ serviceName+ " and component="+ componentName);
+      }
+    }
+  }
+  if (actionContext.getHosts().isEmpty()) {
+    TargetHostType hostType=actionContext.getTargetType();
+switch (hostType) {
+case ALL:
+      actionContext.getHosts().addAll(candidateHosts);
+    break;
+case ANY:
+  actionContext.getHosts().add(amcImpl.getHealthyHost(candidateHosts));
+break;
+case MAJORITY:
+for (int i=0; i < (candidateHosts.size() / 2) + 1; i++) {
+String hostname=amcImpl.getHealthyHost(candidateHosts);
+actionContext.getHosts().add(hostname);
+candidateHosts.remove(hostname);
+}
+break;
+default :
+throw new AmbariException("Unsupported target type=" + hostType);
+}
+}
+for (String hostName : actionContext.getHosts()) {
+stage.addHostRoleExecutionCommand(hostName,Role.valueOf(actionContext.getActionName()),RoleCommand.ACTIONEXECUTE,new ServiceComponentHostOpInProgressEvent(actionContext.getActionName(),hostName,System.currentTimeMillis()),clusterName,actionContext.getServiceName());
+Cluster cluster=clusters.getCluster(clusterName);
+Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
+Map<String,Map<String,String>> configTags=null;
+if (!actionContext.getServiceName().isEmpty()) {
+configTags=amcImpl.findConfigurationTagsWithOverrides(cluster,hostName);
+}
+Map<String,String> commandParams=actionContext.getParameters();
+commandParams.put(COMMAND_TIMEOUT,actionContext.getTimeout().toString());
+commandParams.put(SCRIPT,actionName + ".py");
+commandParams.put(SCRIPT_TYPE,TYPE_PYTHON);
+commandParams.put(SCHEMA_VERSION,AmbariMetaInfo.SCHEMA_VERSION_2);
+ExecutionCommand execCmd=stage.getExecutionCommandWrapper(hostName,actionContext.getActionName()).getExecutionCommand();
+execCmd.setConfigurations(configurations);
+execCmd.setConfigurationTags(configTags);
+execCmd.setHostLevelParams(hostLevelParams);
+execCmd.setCommandParams(commandParams);
+execCmd.setServiceName(serviceName);
+execCmd.setComponentName(componentName);
+Map<String,String> roleParams=execCmd.getRoleParams();
+if (roleParams == null) {
+roleParams=new TreeMap<String,String>();
+}
+roleParams.putAll(actionContext.getParameters());
+roleParams.put(COMPONENT_CATEGORY,actionContext.getComponentCategory());
+execCmd.setRoleParams(roleParams);
+execCmd.setClusterHostInfo(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(clusterName),cluster));
+execCmd.setPassiveInfo(MaintenanceStateHelper.getMaintenanceHostCompoments(clusters,cluster));
+}
+}
