@@ -1,0 +1,53 @@
+{
+  ActionManager am=getMockActionManager();
+  Cluster cluster=getDummyCluster();
+  @SuppressWarnings("serial") Set<String> hostNames=new HashSet<String>(){
+{
+      add(DummyHostname1);
+    }
+  }
+;
+  clusters.mapHostsToCluster(hostNames,DummyCluster);
+  Service hdfs=cluster.addService(HDFS);
+  hdfs.persist();
+  hdfs.addServiceComponent(DATANODE).persist();
+  hdfs.getServiceComponent(DATANODE).addServiceComponentHost(DummyHostname1).persist();
+  hdfs.addServiceComponent(NAMENODE).persist();
+  hdfs.getServiceComponent(NAMENODE).addServiceComponentHost(DummyHostname1).persist();
+  hdfs.addServiceComponent(SECONDARY_NAMENODE).persist();
+  hdfs.getServiceComponent(SECONDARY_NAMENODE).addServiceComponentHost(DummyHostname1).persist();
+  ActionQueue aq=new ActionQueue();
+  HeartBeatHandler handler=getHeartBeatHandler(am,aq);
+  ServiceComponentHost serviceComponentHost1=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1);
+  serviceComponentHost1.setState(State.INSTALLING);
+  Stage s=new Stage(1,"/a/b","cluster1","action manager test","clusterHostInfo");
+  s.setStageId(1);
+  s.addHostRoleExecutionCommand(DummyHostname1,Role.DATANODE,RoleCommand.INSTALL,new ServiceComponentHostInstallEvent(Role.DATANODE.toString(),DummyHostname1,System.currentTimeMillis(),"HDP-1.3.0"),DummyCluster,"HDFS");
+  List<Stage> stages=new ArrayList<Stage>();
+  stages.add(s);
+  Request request=new Request(stages,clusters);
+  actionDBAccessor.persistActions(request);
+  actionDBAccessor.abortHostRole(DummyHostname1,1,1,Role.DATANODE.name());
+  HeartBeat hb=new HeartBeat();
+  hb.setTimestamp(System.currentTimeMillis());
+  hb.setResponseId(0);
+  hb.setHostname(DummyHostname1);
+  hb.setNodeStatus(new HostStatus(Status.HEALTHY,DummyHostStatus));
+  List<CommandReport> reports=new ArrayList<CommandReport>();
+  CommandReport cr=new CommandReport();
+  cr.setActionId(StageUtils.getActionId(1,1));
+  cr.setTaskId(1);
+  cr.setClusterName(DummyCluster);
+  cr.setServiceName(HDFS);
+  cr.setRole(DATANODE);
+  cr.setStatus("FAILED");
+  cr.setStdErr("none");
+  cr.setStdOut("dummy output");
+  cr.setExitCode(777);
+  reports.add(cr);
+  hb.setReports(reports);
+  hb.setComponentStatus(new ArrayList<ComponentStatus>());
+  handler.handleHeartBeat(hb);
+  State componentState1=serviceComponentHost1.getState();
+  assertEquals("Host state should still be installing",State.INSTALLING,componentState1);
+}
