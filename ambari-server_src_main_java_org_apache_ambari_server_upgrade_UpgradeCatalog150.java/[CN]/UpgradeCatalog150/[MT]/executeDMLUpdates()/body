@@ -38,51 +38,48 @@
       }
     }
   }
+  dbAccessor.executeQuery("INSERT INTO ambari_sequences(sequence_name, \"value\") " + "VALUES('configgroup_id_seq', 1)",true);
   ((JpaEntityManager)em.getDelegate()).getServerSession().getIdentityMapAccessor().invalidateAll();
-  CriteriaBuilder cb=em.getCriteriaBuilder();
-  CriteriaQuery<HostComponentStateEntity> c1=cb.createQuery(HostComponentStateEntity.class);
-  Root<HostComponentStateEntity> hsc=c1.from(HostComponentStateEntity.class);
-  Expression<String> exp=hsc.get("current_state");
-  List<String> statuses=new ArrayList<String>(){
+  executeInTransaction(new Runnable(){
+    @Override public void run(){
+      EntityManager em=getEntityManagerProvider().get();
+      Query nativeQuery=em.createNativeQuery("UPDATE hostcomponentstate SET current_state=?1 WHERE current_state in (?2, ?3)");
+      nativeQuery.setParameter(1,"INSTALLED");
+      nativeQuery.setParameter(2,"STOP_FAILED");
+      nativeQuery.setParameter(3,"START_FAILED");
+      nativeQuery.executeUpdate();
+    }
+  }
+);
+  executeInTransaction(new Runnable(){
+    @Override public void run(){
+      EntityManager em=getEntityManagerProvider().get();
+      CriteriaBuilder cb=em.getCriteriaBuilder();
+      CriteriaQuery<HostRoleCommandEntity> c2=cb.createQuery(HostRoleCommandEntity.class);
+      Root<HostRoleCommandEntity> hrc=c2.from(HostRoleCommandEntity.class);
+      List<HostRoleStatus> statuses=new ArrayList<HostRoleStatus>(){
 {
-      add("STOP_FAILED");
-      add("START_FAILED");
-    }
-  }
+          add(HostRoleStatus.PENDING);
+          add(HostRoleStatus.QUEUED);
+          add(HostRoleStatus.IN_PROGRESS);
+        }
+      }
 ;
-  Predicate predicate=exp.in(statuses);
-  c1.select(hsc).where(predicate);
-  TypedQuery<HostComponentStateEntity> q1=em.createQuery(c1);
-  List<HostComponentStateEntity> r1=q1.getResultList();
-  HostComponentStateDAO hostComponentStateDAO=injector.getInstance(HostComponentStateDAO.class);
-  if (r1 != null && !r1.isEmpty()) {
-    for (    HostComponentStateEntity entity : r1) {
-      entity.setCurrentState(State.INSTALLED);
-      hostComponentStateDAO.merge(entity);
+      Expression<String> exp=hrc.get("status");
+      Predicate predicate=exp.in(statuses);
+      c2.select(hrc).where(predicate);
+      TypedQuery<HostRoleCommandEntity> q2=em.createQuery(c2);
+      List<HostRoleCommandEntity> r2=q2.getResultList();
+      HostRoleCommandDAO hostRoleCommandDAO=injector.getInstance(HostRoleCommandDAO.class);
+      if (r2 != null && !r2.isEmpty()) {
+        for (        HostRoleCommandEntity entity : r2) {
+          entity.setStatus(HostRoleStatus.ABORTED);
+          hostRoleCommandDAO.merge(entity);
+        }
+      }
     }
   }
-  CriteriaQuery<HostRoleCommandEntity> c2=cb.createQuery(HostRoleCommandEntity.class);
-  Root<HostRoleCommandEntity> hrc=c2.from(HostRoleCommandEntity.class);
-  statuses=new ArrayList<String>(){
-{
-      add("PENDING");
-      add("QUEUED");
-      add("IN_PROGRESS");
-    }
-  }
-;
-  exp=hrc.get("status");
-  predicate=exp.in(statuses);
-  c2.select(hrc).where(predicate);
-  TypedQuery<HostRoleCommandEntity> q2=em.createQuery(c2);
-  List<HostRoleCommandEntity> r2=q2.getResultList();
-  HostRoleCommandDAO hostRoleCommandDAO=injector.getInstance(HostRoleCommandDAO.class);
-  if (r2 != null && !r2.isEmpty()) {
-    for (    HostRoleCommandEntity entity : r2) {
-      entity.setStatus(HostRoleStatus.ABORTED);
-      hostRoleCommandDAO.merge(entity);
-    }
-  }
+);
   stackUpgradeUtil.updateStackDetails("HDP",null);
   executeInTransaction(new Runnable(){
     @Override public void run(){
