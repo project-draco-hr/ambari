@@ -1,0 +1,91 @@
+{
+  setupClusterWithHosts("c1","HDP-2.0.6",new ArrayList<String>(){
+{
+      add("h1");
+      add("h2");
+      add("h3");
+    }
+  }
+,"centos6");
+  Cluster cluster=clusters.getCluster("c1");
+  cluster.setDesiredStackVersion(new StackId("HDP-2.0.6"));
+  cluster.setCurrentStackVersion(new StackId("HDP-2.0.6"));
+  ConfigFactory cf=injector.getInstance(ConfigFactory.class);
+  Config config1=cf.createNew(cluster,"global",new HashMap<String,String>(){
+{
+      put("key1","value1");
+    }
+  }
+);
+  config1.setVersionTag("version1");
+  Config config2=cf.createNew(cluster,"core-site",new HashMap<String,String>(){
+{
+      put("key1","value1");
+    }
+  }
+);
+  config2.setVersionTag("version1");
+  cluster.addConfig(config1);
+  cluster.addConfig(config2);
+  Service hdfs=cluster.addService("HDFS");
+  hdfs.persist();
+  Service mapred=cluster.addService("YARN");
+  mapred.persist();
+  hdfs.addServiceComponent(Role.HDFS_CLIENT.name()).persist();
+  hdfs.addServiceComponent(Role.NAMENODE.name()).persist();
+  hdfs.addServiceComponent(Role.DATANODE.name()).persist();
+  mapred.addServiceComponent(Role.RESOURCEMANAGER.name()).persist();
+  hdfs.getServiceComponent(Role.HDFS_CLIENT.name()).addServiceComponentHost("h1").persist();
+  hdfs.getServiceComponent(Role.NAMENODE.name()).addServiceComponentHost("h1").persist();
+  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h1").persist();
+  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h2").persist();
+  controller.getAmbariMetaInfo().addActionDefinition(new ActionDefinition("a1",ActionType.SYSTEM,"","HDFS","","Some custom action.",TargetHostType.ALL,Short.valueOf("100")));
+  Map<String,String> params=new HashMap<String,String>(){
+{
+      put("test","test");
+    }
+  }
+;
+  Map<String,String> requestProperties=new HashMap<String,String>();
+  requestProperties.put(REQUEST_CONTEXT_PROPERTY,"Called from a test");
+  List<RequestResourceFilter> resourceFilters=new ArrayList<RequestResourceFilter>();
+  ArrayList<String> hosts=new ArrayList<String>(){
+{
+      add("h2");
+    }
+  }
+;
+  RequestResourceFilter resourceFilter1=new RequestResourceFilter("HDFS","DATANODE",hosts);
+  hosts=new ArrayList<String>(){
+{
+      add("h1");
+    }
+  }
+;
+  RequestResourceFilter resourceFilter2=new RequestResourceFilter("HDFS","NAMENODE",hosts);
+  resourceFilters.add(resourceFilter1);
+  resourceFilters.add(resourceFilter2);
+  ExecuteActionRequest actionRequest=new ExecuteActionRequest("c1",null,"a1",resourceFilters,params);
+  RequestStatusResponse response=null;
+  try {
+    response=controller.createAction(actionRequest,requestProperties);
+  }
+ catch (  AmbariException ae) {
+    LOG.info("Expected exception.",ae);
+    Assert.assertTrue(ae.getMessage().contains("Custom action definition only " + "allows one resource filter to be specified"));
+  }
+  resourceFilters.remove(resourceFilter1);
+  actionRequest=new ExecuteActionRequest("c1",null,"a1",resourceFilters,params);
+  response=controller.createAction(actionRequest,requestProperties);
+  assertEquals(1,response.getTasks().size());
+  HostRoleCommand nnCommand=null;
+  for (  HostRoleCommand hrc : actionDB.getRequestTasks(response.getRequestId())) {
+    if (hrc.getHostName().equals("h1")) {
+      nnCommand=hrc;
+    }
+  }
+  Assert.assertNotNull(nnCommand);
+  ExecutionCommand cmd=nnCommand.getExecutionCommandWrapper().getExecutionCommand();
+  Assert.assertEquals("a1",cmd.getRole());
+  Assert.assertTrue(cmd.getCommandParams().containsKey("test"));
+}
