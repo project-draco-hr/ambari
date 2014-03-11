@@ -19,9 +19,7 @@
   columns.add(new DBColumnInfo("request_context",String.class,255,null,true));
   columns.add(new DBColumnInfo("request_type",String.class,255,null,true));
   columns.add(new DBColumnInfo("start_time",Long.class,null,null,false));
-  columns.add(new DBColumnInfo("target_component",String.class,255,null,true));
-  columns.add(new DBColumnInfo("target_hosts",String.class,null,null,false));
-  columns.add(new DBColumnInfo("target_service",String.class,255,null,true));
+  columns.add(new DBColumnInfo("status",String.class,255));
   dbAccessor.createTable("request",columns,"request_id");
   columns.clear();
   columns.add(new DBColumnInfo("schedule_id",Long.class,null,null,false));
@@ -145,6 +143,28 @@
     moveRCATableInMySQL("clusterEvent",dbName);
     dbAccessor.executeQuery("DROP DATABASE IF EXISTS ambarirca;");
   }
+  String tableName="request";
+  if (!dbAccessor.tableExists(tableName)) {
+    String msg=String.format("Table \"%s\" was not created during schema upgrade",tableName);
+    LOG.error(msg);
+    throw new AmbariException(msg);
+  }
+ else   if (!dbAccessor.tableHasData(tableName)) {
+    String query;
+    if (getDbType().equals(Configuration.POSTGRES_DB_NAME)) {
+      query=getPostgresRequestUpgradeQuery();
+    }
+ else     if (getDbType().equals(Configuration.ORACLE_DB_NAME)) {
+      query=getOracleRequestUpgradeQuery();
+    }
+ else {
+      query=getMysqlRequestUpgradeQuery();
+    }
+    dbAccessor.executeQuery(query);
+  }
+ else {
+    LOG.info("Table {} already filled",tableName);
+  }
   dbAccessor.addFKConstraint("stage","FK_stage_request_id","request_id","request","request_id",true);
   dbAccessor.addFKConstraint("request","FK_request_cluster_id","cluster_id","clusters","cluster_id",true);
   dbAccessor.addFKConstraint("request","FK_request_schedule_id","request_schedule_id","requestschedule","schedule_id",true);
@@ -158,5 +178,4 @@
   dbAccessor.addFKConstraint("configgrouphostmapping","FK_cghostm_host_name","host_name","hosts","host_name",true);
   dbAccessor.addFKConstraint("clusterconfigmapping","FK_clustercfgmap_cluster_id","cluster_id","clusters","cluster_id",true);
   dbAccessor.addFKConstraint("requestresourcefilter","FK_requestresourcefilter_req_id","request_id","request","request_id",true);
-  updateMetaInfoVersion(getTargetVersion());
 }
