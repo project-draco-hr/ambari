@@ -55,6 +55,7 @@
     }
     checkDesiredState=true;
   }
+  Map<String,Host> hosts=clusters.getHostsForCluster(cluster.getClusterName());
   for (  Service s : services) {
     Set<ServiceComponent> components=new HashSet<ServiceComponent>();
     if (request.getComponentName() != null) {
@@ -69,9 +70,13 @@
           continue;
         }
       }
+      Map<String,ServiceComponentHost> serviceComponentHostMap=sc.getServiceComponentHosts();
       if (request.getHostname() != null) {
         try {
-          ServiceComponentHost sch=sc.getServiceComponentHost(request.getHostname());
+          if (serviceComponentHostMap == null || !serviceComponentHostMap.containsKey(request.getHostname())) {
+            throw new ServiceComponentHostNotFoundException(cluster.getClusterName(),s.getName(),sc.getName(),request.getHostname());
+          }
+          ServiceComponentHost sch=serviceComponentHostMap.get(request.getHostname());
           if (checkDesiredState && (desiredStateToCheck != sch.getDesiredState())) {
             continue;
           }
@@ -85,7 +90,11 @@
           if (filterBasedConfigStaleness && r.isStaleConfig() != staleConfig) {
             continue;
           }
-          r.setMaintenanceState(getEffectiveMaintenanceState(sch).name());
+          Host host=hosts.get(sch.getHostName());
+          if (host == null) {
+            throw new HostNotFoundException(cluster.getClusterName(),sch.getHostName());
+          }
+          r.setMaintenanceState(maintenanceStateHelper.getEffectiveState(sch,host).name());
           response.add(r);
         }
  catch (        ServiceComponentHostNotFoundException e) {
@@ -97,7 +106,7 @@
         }
       }
  else {
-        for (        ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+        for (        ServiceComponentHost sch : serviceComponentHostMap.values()) {
           if (checkDesiredState && (desiredStateToCheck != sch.getDesiredState())) {
             continue;
           }
@@ -111,7 +120,11 @@
           if (filterBasedConfigStaleness && r.isStaleConfig() != staleConfig) {
             continue;
           }
-          r.setMaintenanceState(getEffectiveMaintenanceState(sch).name());
+          Host host=hosts.get(sch.getHostName());
+          if (host == null) {
+            throw new HostNotFoundException(cluster.getClusterName(),sch.getHostName());
+          }
+          r.setMaintenanceState(maintenanceStateHelper.getEffectiveState(sch,host).name());
           response.add(r);
         }
       }
