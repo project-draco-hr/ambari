@@ -1,0 +1,106 @@
+{
+  if ((changedServices == null || changedServices.isEmpty()) && (changedComps == null || changedComps.isEmpty()) && (changedScHosts == null || changedScHosts.isEmpty())) {
+    return null;
+  }
+  Set<String> smokeTestServices=getServicesForSmokeTests(cluster,changedServices,changedScHosts,runSmokeTest);
+  if (reconfigureClients) {
+    addClientSchForReinstall(cluster,changedServices,changedScHosts);
+  }
+  if (!changedScHosts.isEmpty() || !smokeTestServices.isEmpty()) {
+    long nowTimestamp=System.currentTimeMillis();
+    Map<String,Set<String>> clusterHostInfo=StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster);
+    String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
+    Stage stage=createNewStage(requestStages.getLastStageId() + 1,cluster,requestStages.getId(),requestContext,clusterHostInfoJson);
+    String jobtrackerHost=getJobTrackerHost(cluster);
+    for (    String compName : changedScHosts.keySet()) {
+      for (      State newState : changedScHosts.get(compName).keySet()) {
+        for (        ServiceComponentHost scHost : changedScHosts.get(compName).get(newState)) {
+          if (scHost.getHostState().equals(HostState.HEARTBEAT_LOST)) {
+            LOG.info("Command is not created for servicecomponenthost " + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", hostState="+ scHost.getHostState()+ ", targetNewState="+ newState);
+            continue;
+          }
+          RoleCommand roleCommand;
+          State oldSchState=scHost.getState();
+          ServiceComponentHostEvent event;
+switch (newState) {
+case INSTALLED:
+            if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED || oldSchState == State.INSTALLING || oldSchState == State.UNKNOWN || oldSchState == State.INSTALL_FAILED) {
+              roleCommand=RoleCommand.INSTALL;
+              event=new ServiceComponentHostInstallEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp,scHost.getDesiredStackVersion().getStackId());
+            }
+ else             if (oldSchState == State.STARTED || oldSchState == State.INSTALLED || oldSchState == State.STOPPING) {
+              roleCommand=RoleCommand.STOP;
+              event=new ServiceComponentHostStopEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+            }
+ else             if (oldSchState == State.UPGRADING) {
+              roleCommand=RoleCommand.UPGRADE;
+              event=new ServiceComponentHostUpgradeEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp,scHost.getDesiredStackVersion().getStackId());
+            }
+ else {
+              throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+            }
+          break;
+case STARTED:
+        StackId stackId=scHost.getDesiredStackVersion();
+      ComponentInfo compInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),scHost.getServiceName(),scHost.getServiceComponentName());
+    if (oldSchState == State.INSTALLED || oldSchState == State.STARTING || requestStages.getProjectedState(scHost.getHostName(),scHost.getServiceComponentName()) == State.INSTALLED) {
+      roleCommand=RoleCommand.START;
+      event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+    }
+ else {
+      String error="Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState;
+      if (compInfo.isMaster()) {
+        throw new AmbariException(error);
+      }
+ else {
+        LOG.info("Ignoring: " + error);
+        continue;
+      }
+    }
+  break;
+case UNINSTALLED:
+if (oldSchState == State.INSTALLED || oldSchState == State.UNINSTALLING) {
+  roleCommand=RoleCommand.UNINSTALL;
+  event=new ServiceComponentHostStartEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp);
+}
+ else {
+  throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+}
+break;
+case INIT:
+throw new AmbariException("Unsupported transition to INIT for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ scHost.getServiceName()+ ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+default :
+throw new AmbariException("Unsupported state change operation" + ", newState=" + newState.toString());
+}
+if (LOG.isDebugEnabled()) {
+LOG.debug("Create a new host action" + ", requestId=" + requestStages.getId() + ", componentName="+ scHost.getServiceComponentName()+ ", hostname="+ scHost.getHostName()+ ", roleCommand="+ roleCommand.name());
+}
+Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
+Host host=clusters.getHost(scHost.getHostName());
+Map<String,Map<String,String>> configTags=findConfigurationTagsWithOverrides(cluster,host.getHostName());
+if (!scHost.getHostName().equals(jobtrackerHost)) {
+if (configTags.get(Configuration.GLOBAL_CONFIG_TAG) != null) {
+configHelper.applyCustomConfig(configurations,Configuration.GLOBAL_CONFIG_TAG,Configuration.RCA_ENABLED_PROPERTY,"false",false);
+}
+}
+createHostAction(cluster,stage,scHost,configurations,configTags,roleCommand,requestParameters,event);
+}
+}
+}
+for (String serviceName : smokeTestServices) {
+Service s=cluster.getService(serviceName);
+String clientHost=getClientHostForRunningAction(cluster,s);
+String smokeTestRole=actionMetadata.getServiceCheckAction(serviceName);
+if (clientHost == null || smokeTestRole == null) {
+LOG.info("Nothing to do for service check as could not find role or" + " or host to run check on" + ", clusterName=" + cluster.getClusterName() + ", serviceName="+ serviceName+ ", clientHost="+ clientHost+ ", serviceCheckRole="+ smokeTestRole);
+continue;
+}
+customCommandExecutionHelper.addServiceCheckAction(stage,clientHost,smokeTestRole,nowTimestamp,serviceName,null,null,createDefaultHostParams(cluster));
+}
+RoleCommandOrder rco=getRoleCommandOrder(cluster);
+RoleGraph rg=new RoleGraph(rco);
+rg.build(stage);
+return rg.getStages();
+}
+return null;
+}

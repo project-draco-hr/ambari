@@ -6,6 +6,8 @@
   Service service0=createNiceMock(Service.class);
   ServiceResponse serviceResponse0=createNiceMock(ServiceResponse.class);
   AmbariMetaInfo ambariMetaInfo=createNiceMock(AmbariMetaInfo.class);
+  RequestStageContainer requestStages1=createNiceMock(RequestStageContainer.class);
+  RequestStageContainer requestStages2=createNiceMock(RequestStageContainer.class);
   RequestStatusResponse response1=createNiceMock(RequestStatusResponse.class);
   RequestStatusResponse response2=createNiceMock(RequestStatusResponse.class);
   Map<String,String> mapRequestProps=new HashMap<String,String>();
@@ -30,9 +32,13 @@
   Capture<Map<String,String>> requestParametersCapture=new Capture<Map<String,String>>();
   Capture<Collection<ServiceComponentHost>> ignoredScHostsCapture=new Capture<Collection<ServiceComponentHost>>();
   Capture<Cluster> clusterCapture=new Capture<Cluster>();
-  expect(managementController1.createStages(capture(clusterCapture),capture(requestPropertiesCapture),capture(requestParametersCapture),capture(changedServicesCapture),capture(changedCompsCapture),capture(changedScHostsCapture),capture(ignoredScHostsCapture),anyBoolean(),anyBoolean())).andReturn(response1);
-  expect(managementController2.createStages(capture(clusterCapture),capture(requestPropertiesCapture),capture(requestParametersCapture),capture(changedServicesCapture),capture(changedCompsCapture),capture(changedScHostsCapture),capture(ignoredScHostsCapture),anyBoolean(),anyBoolean())).andReturn(response2);
-  replay(managementController1,response1,managementController2,response2,clusters,cluster,service0,serviceResponse0,ambariMetaInfo);
+  expect(managementController1.addStages((RequestStageContainer)isNull(),capture(clusterCapture),capture(requestPropertiesCapture),capture(requestParametersCapture),capture(changedServicesCapture),capture(changedCompsCapture),capture(changedScHostsCapture),capture(ignoredScHostsCapture),anyBoolean(),anyBoolean())).andReturn(requestStages1);
+  expect(managementController2.addStages((RequestStageContainer)isNull(),capture(clusterCapture),capture(requestPropertiesCapture),capture(requestParametersCapture),capture(changedServicesCapture),capture(changedCompsCapture),capture(changedScHostsCapture),capture(ignoredScHostsCapture),anyBoolean(),anyBoolean())).andReturn(requestStages2);
+  requestStages1.persist();
+  expect(requestStages1.getRequestStatusResponse()).andReturn(response1);
+  requestStages2.persist();
+  expect(requestStages2.getRequestStatusResponse()).andReturn(response2);
+  replay(managementController1,response1,managementController2,requestStages1,requestStages2,response2,clusters,cluster,service0,serviceResponse0,ambariMetaInfo);
   ResourceProvider provider1=getServiceProvider(managementController1);
   ResourceProvider provider2=getServiceProvider(managementController2);
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
@@ -42,5 +48,5 @@
   Predicate predicate2=new PredicateBuilder().property(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID).equals("Service102").and().property("params/reconfigure_client").equals("false").toPredicate();
   provider1.updateResources(request,predicate1);
   provider2.updateResources(request,predicate2);
-  verify(managementController1,response1,managementController2,response2,clusters,cluster,service0,serviceResponse0,ambariMetaInfo);
+  verify(managementController1,response1,managementController2,requestStages1,requestStages2,response2,clusters,cluster,service0,serviceResponse0,ambariMetaInfo);
 }

@@ -5,6 +5,7 @@
   Service service0=createNiceMock(Service.class);
   ServiceFactory serviceFactory=createNiceMock(ServiceFactory.class);
   AmbariMetaInfo ambariMetaInfo=createNiceMock(AmbariMetaInfo.class);
+  RequestStageContainer requestStages=createNiceMock(RequestStageContainer.class);
   RequestStatusResponse requestStatusResponse=createNiceMock(RequestStatusResponse.class);
   Map<String,String> mapRequestProps=new HashMap<String,String>();
   mapRequestProps.put("context","Called from a test");
@@ -22,13 +23,15 @@
   Capture<Map<String,String>> requestParametersCapture=new Capture<Map<String,String>>();
   Capture<Collection<ServiceComponentHost>> ignoredScHostsCapture=new Capture<Collection<ServiceComponentHost>>();
   Capture<Cluster> clusterCapture=new Capture<Cluster>();
-  expect(managementController.createStages(capture(clusterCapture),capture(requestPropertiesCapture),capture(requestParametersCapture),capture(changedServicesCapture),capture(changedCompsCapture),capture(changedScHostsCapture),capture(ignoredScHostsCapture),anyBoolean(),anyBoolean())).andReturn(requestStatusResponse);
-  replay(managementController,clusters,cluster,service0,serviceFactory,ambariMetaInfo,requestStatusResponse);
+  expect(managementController.addStages((RequestStageContainer)isNull(),capture(clusterCapture),capture(requestPropertiesCapture),capture(requestParametersCapture),capture(changedServicesCapture),capture(changedCompsCapture),capture(changedScHostsCapture),capture(ignoredScHostsCapture),anyBoolean(),anyBoolean())).andReturn(requestStages);
+  requestStages.persist();
+  expect(requestStages.getRequestStatusResponse()).andReturn(requestStatusResponse);
+  replay(managementController,clusters,cluster,service0,serviceFactory,ambariMetaInfo,requestStages,requestStatusResponse);
   ResourceProvider provider=getServiceProvider(managementController);
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
   properties.put(ServiceResourceProvider.SERVICE_SERVICE_STATE_PROPERTY_ID,"STARTED");
   Request request=PropertyHelper.getUpdateRequest(properties,mapRequestProps);
   Predicate predicate=new PredicateBuilder().property(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID).equals("Service102").toPredicate();
   provider.updateResources(request,predicate);
-  verify(managementController,clusters,cluster,service0,serviceFactory,ambariMetaInfo,requestStatusResponse);
+  verify(managementController,clusters,cluster,service0,serviceFactory,ambariMetaInfo,requestStages,requestStatusResponse);
 }
