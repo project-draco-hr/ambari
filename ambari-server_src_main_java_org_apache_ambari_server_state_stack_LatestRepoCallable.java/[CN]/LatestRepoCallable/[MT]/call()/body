@@ -1,0 +1,45 @@
+{
+  Type type=new TypeToken<Map<String,Map<String,Object>>>(){
+  }
+.getType();
+  Gson gson=new Gson();
+  Map<String,Map<String,Object>> latestUrlMap=null;
+  try {
+    if (sourceUri.startsWith("http")) {
+      URLStreamProvider streamProvider=new URLStreamProvider(LOOKUP_CONNECTION_TIMEOUT,LOOKUP_READ_TIMEOUT,null,null,null);
+      LOG.info("Loading latest URL info from " + sourceUri);
+      latestUrlMap=gson.fromJson(new InputStreamReader(streamProvider.readFrom(sourceUri)),type);
+    }
+ else {
+      File jsonFile=null;
+      if (sourceUri.charAt(0) == '.') {
+        jsonFile=new File(stackRepoFolder,sourceUri);
+      }
+ else {
+        jsonFile=new File(sourceUri);
+      }
+      if (jsonFile.exists()) {
+        LOG.info("Loading latest URL info from " + jsonFile);
+        latestUrlMap=gson.fromJson(new FileReader(jsonFile),type);
+      }
+    }
+  }
+ catch (  Exception e) {
+    LOG.error("Could not load the URI " + sourceUri + " ("+ e.getMessage()+ ")");
+    throw e;
+  }
+  if (null != latestUrlMap) {
+    for (    RepositoryInfo ri : stack.getRepositories()) {
+      if (latestUrlMap.containsKey(ri.getRepoId())) {
+        Map<String,Object> valueMap=latestUrlMap.get(ri.getRepoId());
+        if (valueMap.containsKey("latest")) {
+          @SuppressWarnings("unchecked") Map<String,String> osMap=(Map<String,String>)valueMap.get("latest");
+          if (osMap.containsKey(ri.getOsType())) {
+            ri.setLatestBaseUrl(osMap.get(ri.getOsType()));
+          }
+        }
+      }
+    }
+  }
+  return null;
+}

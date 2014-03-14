@@ -10,6 +10,13 @@
   if (stacks.isEmpty()) {
     throw new AmbariException("Unable to find stack definitions under " + "stackRoot = " + stackRootAbsPath);
   }
+  ExecutorService es=Executors.newSingleThreadExecutor(new ThreadFactory(){
+    @Override public Thread newThread(    Runnable r){
+      return new Thread(r,"Stack Version Loading Thread");
+    }
+  }
+);
+  List<LatestRepoCallable> lookupList=new ArrayList<LatestRepoCallable>();
   for (  StackInfo stack : stacks) {
     LOG.debug("Adding new stack to known stacks" + ", stackName = " + stack.getName() + ", stackVersion = "+ stack.getVersion());
     stacksResult.add(stack);
@@ -17,7 +24,7 @@
     File repositoryFolder=new File(stackPath + File.separator + REPOSITORY_FOLDER_NAME+ File.separator+ REPOSITORY_FILE_NAME);
     if (repositoryFolder.exists()) {
       LOG.debug("Adding repositories to stack" + ", stackName=" + stack.getName() + ", stackVersion="+ stack.getVersion()+ ", repoFolder="+ repositoryFolder.getPath());
-      List<RepositoryInfo> repositoryInfoList=getRepository(repositoryFolder,stack.getVersion());
+      List<RepositoryInfo> repositoryInfoList=getRepository(repositoryFolder,stack,lookupList);
       stack.getRepositories().addAll(repositoryInfoList);
     }
  else {
@@ -28,4 +35,6 @@
     String stackHooksToUse=stackExtensionHelper.resolveHooksFolder(stack);
     stack.setStackHooksFolder(stackHooksToUse);
   }
+  es.invokeAll(lookupList);
+  es.shutdown();
 }
