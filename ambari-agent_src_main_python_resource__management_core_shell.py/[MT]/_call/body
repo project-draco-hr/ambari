@@ -1,4 +1,4 @@
-def _call(command, logoutput=False, throw_on_failure=True, cwd=None, env=None, preexec_fn=None, user=None, wait_for_finish=True):
+def _call(command, logoutput=False, throw_on_failure=True, cwd=None, env=None, preexec_fn=None, user=None, wait_for_finish=True, timeout=None):
     "\n  Execute shell command\n  \n  @param command: list/tuple of arguments (recommended as more safe - don't need to escape) \n  or string of the command to execute\n  @param logoutput: boolean, whether command output should be logged of not\n  @param throw_on_failure: if true, when return code is not zero exception is thrown\n  \n  @return: retrun_code, stdout\n  "
     if isinstance(command, (list, tuple)):
         command = ' '.join((pipes.quote(x) for x in command))
@@ -9,7 +9,11 @@ def _call(command, logoutput=False, throw_on_failure=True, cwd=None, env=None, p
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd, env=env, shell=False, preexec_fn=preexec_fn)
     if (not wait_for_finish):
         return (None, None)
-    out = proc.communicate()[0].strip('\n')
+    try:
+        out = proc.communicate(timeout=timeout)[0].strip('\n')
+    except TimeoutExpired as ex:
+        proc.terminate()
+        raise ex
     code = proc.returncode
     if (logoutput and out):
         Logger.info(out)
