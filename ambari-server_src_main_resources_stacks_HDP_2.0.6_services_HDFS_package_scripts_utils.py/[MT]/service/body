@@ -3,6 +3,7 @@ def service(action=None, name=None, user=None, create_pid_dir=False, create_log_
     pid_dir = format('{hadoop_pid_dir_prefix}/{user}')
     pid_file = format('{pid_dir}/hadoop-{user}-{name}.pid')
     log_dir = format('{hdfs_log_dir_prefix}/{user}')
+    check_process = format('ls {pid_file} >/dev/null 2>&1 && ps `cat {pid_file}` >/dev/null 2>&1')
     hadoop_daemon = format('{ulimit_cmd} export HADOOP_LIBEXEC_DIR={hadoop_libexec_dir} && {hadoop_bin}/hadoop-daemon.sh')
     cmd = format('{hadoop_daemon} --config {hadoop_conf_dir}')
     if create_pid_dir:
@@ -13,7 +14,8 @@ def service(action=None, name=None, user=None, create_pid_dir=False, create_log_
         user = 'root'
         pid_file = format('{hadoop_pid_dir_prefix}/{hdfs_user}/hadoop-{hdfs_user}-{name}.pid')
     daemon_cmd = format('{cmd} {action} {name}')
-    service_is_up = (format('ls {pid_file} >/dev/null 2>&1 && ps `cat {pid_file}` >/dev/null 2>&1') if (action == 'start') else None)
+    service_is_up = (check_process if (action == 'start') else None)
+    File(pid_file, action='delete', not_if=check_process, ignore_failures=True)
     Execute(daemon_cmd, user=user, not_if=service_is_up)
     if (action == 'stop'):
         File(pid_file, action='delete', ignore_failures=True)
