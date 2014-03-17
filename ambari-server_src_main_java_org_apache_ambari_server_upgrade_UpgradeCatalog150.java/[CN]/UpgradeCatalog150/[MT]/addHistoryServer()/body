@@ -1,0 +1,41 @@
+{
+  ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  ClusterServiceDAO clusterServiceDAO=injector.getInstance(ClusterServiceDAO.class);
+  ServiceComponentDesiredStateDAO serviceComponentDesiredStateDAO=injector.getInstance(ServiceComponentDesiredStateDAO.class);
+  List<ClusterEntity> clusterEntities=clusterDAO.findAll();
+  for (  final ClusterEntity clusterEntity : clusterEntities) {
+    ServiceComponentDesiredStateEntityPK pkHS=new ServiceComponentDesiredStateEntityPK();
+    pkHS.setComponentName("HISTORYSERVER");
+    pkHS.setClusterId(clusterEntity.getClusterId());
+    pkHS.setServiceName("MAPREDUCE");
+    ServiceComponentDesiredStateEntity serviceComponentDesiredStateEntityHS=serviceComponentDesiredStateDAO.findByPK(pkHS);
+    if (serviceComponentDesiredStateEntityHS != null)     continue;
+    ServiceComponentDesiredStateEntityPK pkJT=new ServiceComponentDesiredStateEntityPK();
+    pkJT.setComponentName("JOBTRACKER");
+    pkJT.setClusterId(clusterEntity.getClusterId());
+    pkJT.setServiceName("MAPREDUCE");
+    ServiceComponentDesiredStateEntity serviceComponentDesiredStateEntityJT=serviceComponentDesiredStateDAO.findByPK(pkJT);
+    if (serviceComponentDesiredStateEntityJT == null)     continue;
+    HostComponentStateEntity jtHostComponentStateEntity=serviceComponentDesiredStateEntityJT.getHostComponentStateEntities().iterator().next();
+    String jtHostname=jtHostComponentStateEntity.getHostName();
+    State jtCurrState=jtHostComponentStateEntity.getCurrentState();
+    ClusterServiceEntityPK pk=new ClusterServiceEntityPK();
+    pk.setClusterId(clusterEntity.getClusterId());
+    pk.setServiceName("MAPREDUCE");
+    ClusterServiceEntity clusterServiceEntity=clusterServiceDAO.findByPK(pk);
+    final ServiceComponentDesiredStateEntity serviceComponentDesiredStateEntity=new ServiceComponentDesiredStateEntity();
+    serviceComponentDesiredStateEntity.setComponentName("HISTORYSERVER");
+    serviceComponentDesiredStateEntity.setDesiredStackVersion(clusterEntity.getDesiredStackVersion());
+    serviceComponentDesiredStateEntity.setDesiredState(State.STARTED);
+    serviceComponentDesiredStateEntity.setClusterServiceEntity(clusterServiceEntity);
+    serviceComponentDesiredStateEntity.setHostComponentDesiredStateEntities(new ArrayList<HostComponentDesiredStateEntity>());
+    final HostComponentStateEntity stateEntity=new HostComponentStateEntity();
+    stateEntity.setHostName(jtHostname);
+    stateEntity.setCurrentState(jtCurrState);
+    stateEntity.setCurrentStackVersion(clusterEntity.getDesiredStackVersion());
+    final HostComponentDesiredStateEntity desiredStateEntity=new HostComponentDesiredStateEntity();
+    desiredStateEntity.setDesiredState(State.STARTED);
+    desiredStateEntity.setDesiredStackVersion(clusterEntity.getDesiredStackVersion());
+    persistComponentEntities(stateEntity,desiredStateEntity,serviceComponentDesiredStateEntity);
+  }
+}
