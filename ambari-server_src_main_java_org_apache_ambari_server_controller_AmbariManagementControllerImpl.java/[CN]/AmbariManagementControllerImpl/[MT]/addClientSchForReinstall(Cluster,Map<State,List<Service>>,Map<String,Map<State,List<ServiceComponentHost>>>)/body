@@ -15,8 +15,10 @@
   List<ServiceComponentHost> serviceComponentHosts=new ArrayList<ServiceComponentHost>();
   if (changedScHosts != null && !changedScHosts.isEmpty()) {
     for (    String sc : changedScHosts.keySet()) {
-      for (      State state : changedScHosts.get(sc).keySet())       if (state == State.STARTED) {
-        serviceComponentHosts.addAll(changedScHosts.get(sc).get(state));
+      for (      State state : changedScHosts.get(sc).keySet()) {
+        if (state == State.STARTED) {
+          serviceComponentHosts.addAll(changedScHosts.get(sc).get(state));
+        }
       }
     }
   }
@@ -25,7 +27,9 @@
       services.add(sch.getServiceName());
     }
   }
-  if (services.isEmpty())   return;
+  if (services.isEmpty()) {
+    return;
+  }
   Map<String,List<ServiceComponentHost>> clientSchs=new HashMap<String,List<ServiceComponentHost>>();
   for (  String serviceName : services) {
     Service s=cluster.getService(serviceName);
@@ -34,7 +38,8 @@
       ServiceComponent sc=s.getServiceComponents().get(component);
       if (sc.isClientComponent()) {
         for (        ServiceComponentHost potentialSch : sc.getServiceComponentHosts().values()) {
-          if (!potentialSch.getHostState().equals(HostState.HEARTBEAT_LOST)) {
+          Host host=clusters.getHost(potentialSch.getHostName());
+          if (!potentialSch.getHostState().equals(HostState.HEARTBEAT_LOST) && potentialSch.getMaintenanceState() != MaintenanceState.ON && host.getMaintenanceState(cluster.getClusterId()) == MaintenanceState.OFF) {
             potentialHosts.add(potentialSch);
           }
         }
