@@ -1,0 +1,39 @@
+{
+  if (!emProvider.isWorking()) {
+    emProvider.begin();
+    didWeStartWork.set(true);
+  }
+  Transactional transactional=readTransactionMetadata(methodInvocation);
+  EntityManager em=this.emProvider.get();
+  if (em.getTransaction().isActive()) {
+    return methodInvocation.proceed();
+  }
+  final EntityTransaction txn=em.getTransaction();
+  txn.begin();
+  Object result;
+  try {
+    result=methodInvocation.proceed();
+  }
+ catch (  Exception e) {
+    if (rollbackIfNecessary(transactional,e,txn)) {
+      txn.commit();
+    }
+    throw e;
+  }
+ finally {
+    if (null != didWeStartWork.get() && !txn.isActive()) {
+      didWeStartWork.remove();
+      unitOfWork.end();
+    }
+  }
+  try {
+    txn.commit();
+  }
+  finally {
+    if (null != didWeStartWork.get()) {
+      didWeStartWork.remove();
+      unitOfWork.end();
+    }
+  }
+  return result;
+}

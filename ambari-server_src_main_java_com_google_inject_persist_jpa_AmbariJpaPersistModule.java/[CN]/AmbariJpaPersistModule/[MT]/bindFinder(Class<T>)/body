@@ -1,0 +1,35 @@
+{
+  if (!isDynamicFinderValid(iface)) {
+    return;
+  }
+  InvocationHandler finderInvoker=new InvocationHandler(){
+    @Inject JpaFinderProxy finderProxy;
+    public Object invoke(    final Object thisObject,    final Method method,    final Object[] args) throws Throwable {
+      if (!method.isAnnotationPresent(Finder.class)) {
+        return method.invoke(this,args);
+      }
+      return finderProxy.invoke(new MethodInvocation(){
+        public Method getMethod(){
+          return method;
+        }
+        public Object[] getArguments(){
+          return null == args ? new Object[0] : args;
+        }
+        public Object proceed() throws Throwable {
+          return method.invoke(thisObject,args);
+        }
+        public Object getThis(){
+          throw new UnsupportedOperationException("Bottomless proxies don't expose a this.");
+        }
+        public AccessibleObject getStaticPart(){
+          throw new UnsupportedOperationException();
+        }
+      }
+);
+    }
+  }
+;
+  requestInjection(finderInvoker);
+  @SuppressWarnings("unchecked") T proxy=(T)Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(),new Class<?>[]{iface},finderInvoker);
+  bind(iface).toInstance(proxy);
+}

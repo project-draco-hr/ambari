@@ -1,21 +1,27 @@
 {
+  LOG.debug("Processing request {}",request);
   if (request.getClusterName() == null || request.getClusterName().isEmpty()) {
-    throw new IllegalArgumentException("Invalid arguments, cluster name should not be null");
+    IllegalArgumentException e=new IllegalArgumentException("Invalid arguments, cluster name should not be null");
+    LOG.debug("Cluster not specified in request",e);
+    throw e;
   }
   final Cluster cluster;
   try {
     cluster=clusters.getCluster(request.getClusterName());
   }
  catch (  ClusterNotFoundException e) {
+    LOG.error("Cluster not found ",e);
     throw new ParentObjectNotFoundException("Parent Cluster resource doesn't exist",e);
   }
   if (request.getHostname() != null) {
     try {
       if (!clusters.getClustersForHost(request.getHostname()).contains(cluster)) {
+        LOG.error("Host doesn't belong to cluster");
         throw new ParentObjectNotFoundException("Parent Host resource doesn't exist",new HostNotFoundException(request.getClusterName(),request.getHostname()));
       }
     }
  catch (    HostNotFoundException e) {
+      LOG.error("Host not found",e);
       throw new ParentObjectNotFoundException("Parent Host resource doesn't exist",new HostNotFoundException(request.getClusterName(),request.getHostname()));
     }
   }
@@ -27,6 +33,7 @@
         LOG.debug("Looking up service name for component" + ", componentName=" + request.getComponentName() + ", serviceName="+ serviceName+ ", stackInfo="+ stackId.getStackId());
       }
       if (serviceName == null || serviceName.isEmpty()) {
+        LOG.error("Unable to find service for component {}",request.getComponentName());
         throw new ServiceComponentHostNotFoundException(cluster.getClusterName(),null,request.getComponentName(),request.getHostname());
       }
       request.setServiceName(serviceName);
@@ -74,7 +81,8 @@
       if (request.getHostname() != null) {
         try {
           if (serviceComponentHostMap == null || !serviceComponentHostMap.containsKey(request.getHostname())) {
-            throw new ServiceComponentHostNotFoundException(cluster.getClusterName(),s.getName(),sc.getName(),request.getHostname());
+            ServiceComponentHostNotFoundException e=new ServiceComponentHostNotFoundException(cluster.getClusterName(),s.getName(),sc.getName(),request.getHostname());
+            throw e;
           }
           ServiceComponentHost sch=serviceComponentHostMap.get(request.getHostname());
           if (checkDesiredState && (desiredStateToCheck != sch.getDesiredState())) {
@@ -99,9 +107,11 @@
         }
  catch (        ServiceComponentHostNotFoundException e) {
           if (request.getServiceName() != null && request.getComponentName() != null) {
+            LOG.error("ServiceComponentHost not found ",e);
             throw new ServiceComponentHostNotFoundException(cluster.getClusterName(),request.getServiceName(),request.getComponentName(),request.getHostname());
           }
  else {
+            LOG.debug("Ignoring not specified host_component ",e);
           }
         }
       }
