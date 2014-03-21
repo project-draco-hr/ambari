@@ -1,0 +1,61 @@
+{
+  ActionQueue aq=new ActionQueue();
+  Properties properties=new Properties();
+  Configuration conf=new Configuration(properties);
+  Clusters fsm=mock(Clusters.class);
+  Cluster oneClusterMock=mock(Cluster.class);
+  Service serviceObj=mock(Service.class);
+  ServiceComponent scomp=mock(ServiceComponent.class);
+  ServiceComponent scWithDeletedSCH=mock(ServiceComponent.class);
+  ServiceComponentHost sch1=mock(ServiceComponentHost.class);
+  String hostname1="host1";
+  Host host1=mock(Host.class);
+  when(fsm.getHost(hostname1)).thenReturn(host1);
+  when(host1.getState()).thenReturn(HostState.HEALTHY);
+  when(host1.getHostName()).thenReturn(hostname1);
+  when(scomp.getServiceComponentHost(hostname1)).thenReturn(sch1);
+  HashMap<String,ServiceComponentHost> hosts=new HashMap<String,ServiceComponentHost>();
+  hosts.put(hostname1,sch1);
+  when(scomp.getServiceComponentHosts()).thenReturn(hosts);
+  UnitOfWork unitOfWork=mock(UnitOfWork.class);
+  when(fsm.getCluster(anyString())).thenReturn(oneClusterMock);
+  when(oneClusterMock.getService(anyString())).thenReturn(serviceObj);
+  when(serviceObj.getServiceComponent(Role.HBASE_MASTER.toString())).thenReturn(scWithDeletedSCH);
+  when(serviceObj.getServiceComponent(Role.HBASE_REGIONSERVER.toString())).thenReturn(scomp);
+  when(scWithDeletedSCH.getServiceComponentHost(anyString())).thenThrow(new ServiceComponentHostNotFoundException("dummyCluster","dummyService","dummyComponent","dummyHostname"));
+  when(serviceObj.getCluster()).thenReturn(oneClusterMock);
+  final List<Stage> stages=new ArrayList<Stage>();
+  Stage stage1=new Stage(1,"/tmp","cluster1","stageWith2Tasks",CLUSTER_HOST_INFO);
+  addInstallTaskToStage(stage1,hostname1,"cluster1",Role.HBASE_MASTER,RoleCommand.INSTALL,Service.Type.HBASE,1);
+  addInstallTaskToStage(stage1,hostname1,"cluster1",Role.HBASE_REGIONSERVER,RoleCommand.INSTALL,Service.Type.HBASE,2);
+  stages.add(stage1);
+  ActionDBAccessor db=mock(ActionDBAccessor.class);
+  when(db.getStagesInProgress()).thenReturn(stages);
+  ActionScheduler scheduler=new ActionScheduler(100,50000,db,aq,fsm,3,new HostsMap((String)null),null,unitOfWork,conf);
+  final CountDownLatch abortCalls=new CountDownLatch(2);
+  doAnswer(new Answer<Object>(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      Long requestId=(Long)invocation.getArguments()[0];
+      for (      Stage stage : stages) {
+        if (requestId.equals(stage.getRequestId())) {
+          for (          HostRoleCommand command : stage.getOrderedHostRoleCommands()) {
+            if (command.getStatus() == HostRoleStatus.QUEUED || command.getStatus() == HostRoleStatus.IN_PROGRESS || command.getStatus() == HostRoleStatus.PENDING) {
+              command.setStatus(HostRoleStatus.ABORTED);
+            }
+          }
+        }
+      }
+      abortCalls.countDown();
+      return null;
+    }
+  }
+).when(db).abortOperation(anyLong());
+  scheduler.setTaskTimeoutAdjustment(false);
+  scheduler.start();
+  long timeout=60;
+  abortCalls.await(timeout,TimeUnit.SECONDS);
+  Assert.assertEquals(HostRoleStatus.ABORTED,stages.get(0).getHostRoleStatus(hostname1,"HBASE_MASTER"));
+  Assert.assertEquals(HostRoleStatus.ABORTED,stages.get(0).getHostRoleStatus(hostname1,"HBASE_REGIONSERVER"));
+  verify(db,times(2)).abortOperation(anyLong());
+  scheduler.stop();
+}
