@@ -5,17 +5,27 @@
     if (null == matchValue)     continue;
     Object clusterPropertyValue=res.getPropertyValue(clusterNameProperty);
     if (null == clusterPropertyValue)     continue;
-    String clusterName=clusterPropertyValue.toString();
+    final String clusterName=clusterPropertyValue.toString();
     if (null == clusterName)     continue;
     if (!CLUSTER_ALERTS.containsKey(clusterName)) {
-      CLUSTER_ALERTS.put(clusterName,new AlertState(populateAlerts(clusterName)));
+      Future<List<NagiosAlert>> f=scheduler.submit(new Callable<List<NagiosAlert>>(){
+        @Override public List<NagiosAlert> call() throws Exception {
+          return populateAlerts(clusterName);
+        }
+      }
+);
+      try {
+        CLUSTER_ALERTS.put(clusterName,f.get());
+      }
+ catch (      Exception e) {
+        LOG.error("Could not load metrics - Executor exception" + " (" + e.getMessage() + ")");
+      }
     }
- else     if (CLUSTER_ALERTS.get(clusterName).isReloadNeeded().get()) {
-      LOG.debug("Alerts are stale for cluster " + clusterName);
-      CLUSTER_ALERTS.get(clusterName).setAlerts(populateAlerts(clusterName));
-      CLUSTER_ALERTS.get(clusterName).isReloadNeeded().set(false);
+    CLUSTER_NAMES.add(clusterName);
+    List<NagiosAlert> alerts=CLUSTER_ALERTS.get(clusterName);
+    if (null != alerts) {
+      updateAlerts(res,matchValue,alerts,propertyIds);
     }
-    updateAlerts(res,matchValue,CLUSTER_ALERTS.get(clusterName).getAlerts(),propertyIds);
   }
   return resources;
 }
