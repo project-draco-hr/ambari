@@ -18,6 +18,7 @@
   StackConfigurationResponse stackConfigurationResponse1=createNiceMock(StackConfigurationResponse.class);
   StackConfigurationResponse stackConfigurationResponse2=createNiceMock(StackConfigurationResponse.class);
   StackConfigurationResponse stackConfigurationResponse3=createNiceMock(StackConfigurationResponse.class);
+  StackConfigurationResponse stackConfigurationResponse4=createNiceMock(StackConfigurationResponse.class);
   Capture<Set<StackConfigurationRequest>> serviceConfigurationRequestCapture1=new Capture<Set<StackConfigurationRequest>>();
   Capture<Set<StackConfigurationRequest>> serviceConfigurationRequestCapture2=new Capture<Set<StackConfigurationRequest>>();
   HostGroupEntity hostGroup=createNiceMock(HostGroupEntity.class);
@@ -54,6 +55,7 @@
   Set<StackConfigurationResponse> stackConfigurationResponses2=new LinkedHashSet<StackConfigurationResponse>();
   stackConfigurationResponses2.add(stackConfigurationResponse2);
   stackConfigurationResponses2.add(stackConfigurationResponse3);
+  stackConfigurationResponses2.add(stackConfigurationResponse4);
   Collection<HostGroupComponentEntity> hostGroupComponents=new LinkedHashSet<HostGroupComponentEntity>();
   hostGroupComponents.add(hostGroupComponent1);
   hostGroupComponents.add(hostGroupComponent2);
@@ -94,9 +96,12 @@
   expect(stackConfigurationResponse2.getType()).andReturn("hdfs-site.xml");
   expect(stackConfigurationResponse2.getPropertyName()).andReturn("property2");
   expect(stackConfigurationResponse2.getPropertyValue()).andReturn("value2");
-  expect(stackConfigurationResponse3.getType()).andReturn("core-site.xml");
-  expect(stackConfigurationResponse3.getPropertyName()).andReturn("property3");
-  expect(stackConfigurationResponse3.getPropertyValue()).andReturn("value3");
+  expect(stackConfigurationResponse3.getType()).andReturn("global.xml");
+  expect(stackConfigurationResponse3.getPropertyName()).andReturn("oozie_user");
+  expect(stackConfigurationResponse3.getPropertyValue()).andReturn("oozie");
+  expect(stackConfigurationResponse4.getType()).andReturn("core-site.xml");
+  expect(stackConfigurationResponse4.getPropertyName()).andReturn("property3");
+  expect(stackConfigurationResponse4.getPropertyValue()).andReturn("value3");
   expect(blueprint.getHostGroups()).andReturn(Collections.singleton(hostGroup));
   expect(hostGroup.getName()).andReturn("group1");
   expect(hostGroup.getComponents()).andReturn(hostGroupComponents);
@@ -114,7 +119,7 @@
   expect(hostComponentResourceProvider.createResources(capture(hostComponentRequestCapture))).andReturn(null);
   expect(serviceResourceProvider.installAndStart("c1")).andReturn(response);
   persistKeyValue.put("CLUSTER_CURRENT_STATUS","{\"clusterState\":\"CLUSTER_STARTED_5\"}");
-  replay(blueprintDAO,managementController,request,response,blueprint,stackServiceResponse1,stackServiceResponse2,stackServiceComponentResponse1,stackServiceComponentResponse2,stackServiceComponentResponse3,stackConfigurationResponse1,stackConfigurationResponse2,stackConfigurationResponse3,hostGroup,hostGroupComponent1,hostGroupComponent2,hostGroupComponent3,serviceResourceProvider,componentResourceProvider,hostResourceProvider,hostComponentResourceProvider,persistKeyValue);
+  replay(blueprintDAO,managementController,request,response,blueprint,stackServiceResponse1,stackServiceResponse2,stackServiceComponentResponse1,stackServiceComponentResponse2,stackServiceComponentResponse3,stackConfigurationResponse1,stackConfigurationResponse2,stackConfigurationResponse3,stackConfigurationResponse4,hostGroup,hostGroupComponent1,hostGroupComponent2,hostGroupComponent3,serviceResourceProvider,componentResourceProvider,hostResourceProvider,hostComponentResourceProvider,persistKeyValue);
   ClusterResourceProvider.injectBlueprintDAO(blueprintDAO);
   PersistKeyValueService.init(persistKeyValue);
   ResourceProvider provider=new TestClusterResourceProvider(managementController,serviceResourceProvider,componentResourceProvider,hostResourceProvider,hostComponentResourceProvider);
@@ -181,18 +186,21 @@
   mapConfigRequests.put(cr3.getType(),cr3);
   assertEquals(3,mapConfigRequests.size());
   ConfigurationRequest globalConfigRequest=mapConfigRequests.get("global");
-  assertEquals(4,globalConfigRequest.getProperties().size());
+  assertEquals(5,globalConfigRequest.getProperties().size());
   assertEquals("hadoop",globalConfigRequest.getProperties().get("user_group"));
   assertEquals("ambari-qa",globalConfigRequest.getProperties().get("smokeuser"));
   assertEquals("default@REPLACEME.NOWHERE",globalConfigRequest.getProperties().get("nagios_contact"));
   assertEquals("admin",globalConfigRequest.getProperties().get("nagios_web_password"));
+  assertEquals("oozie",globalConfigRequest.getProperties().get("oozie_user"));
   ConfigurationRequest hdfsConfigRequest=mapConfigRequests.get("hdfs-site");
   assertEquals(1,hdfsConfigRequest.getProperties().size());
   assertEquals("value2",hdfsConfigRequest.getProperties().get("property2"));
   ConfigurationRequest coreConfigRequest=mapConfigRequests.get("core-site");
-  assertEquals(2,coreConfigRequest.getProperties().size());
+  assertEquals(4,coreConfigRequest.getProperties().size());
   assertEquals("value1",coreConfigRequest.getProperties().get("property1"));
   assertEquals("value3",coreConfigRequest.getProperties().get("property3"));
+  assertEquals("*",coreConfigRequest.getProperties().get("hadoop.proxyuser.oozie.hosts"));
+  assertEquals("users",coreConfigRequest.getProperties().get("hadoop.proxyuser.oozie.groups"));
   assertNull(updateClusterPropertyMapCapture.getValue());
   assertNull(updateClusterPropertyMapCapture2.getValue());
   assertNull(updateClusterPropertyMapCapture3.getValue());
@@ -228,5 +236,5 @@
     componentNames.add((String)hostComponentProperties.get("HostRoles/component_name"));
   }
   assertTrue(componentNames.contains("component1") && componentNames.contains("component2") && componentNames.contains("component3"));
-  verify(blueprintDAO,managementController,request,response,blueprint,stackServiceResponse1,stackServiceResponse2,stackServiceComponentResponse1,stackServiceComponentResponse2,stackServiceComponentResponse3,stackConfigurationResponse1,stackConfigurationResponse2,stackConfigurationResponse3,hostGroup,hostGroupComponent1,hostGroupComponent2,hostGroupComponent3,serviceResourceProvider,componentResourceProvider,hostResourceProvider,hostComponentResourceProvider,persistKeyValue);
+  verify(blueprintDAO,managementController,request,response,blueprint,stackServiceResponse1,stackServiceResponse2,stackServiceComponentResponse1,stackServiceComponentResponse2,stackServiceComponentResponse3,stackConfigurationResponse1,stackConfigurationResponse2,stackConfigurationResponse3,stackConfigurationResponse4,hostGroup,hostGroupComponent1,hostGroupComponent2,hostGroupComponent3,serviceResourceProvider,componentResourceProvider,hostResourceProvider,hostComponentResourceProvider,persistKeyValue);
 }
