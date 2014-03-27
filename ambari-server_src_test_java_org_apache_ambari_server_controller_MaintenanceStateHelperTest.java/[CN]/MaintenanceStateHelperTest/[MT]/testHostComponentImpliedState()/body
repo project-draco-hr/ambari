@@ -1,0 +1,43 @@
+{
+  Injector injector=createStrictMock(Injector.class);
+  MaintenanceStateHelper maintenanceStateHelper=createMockBuilder(MaintenanceStateHelper.class).withConstructor(injector).createNiceMock();
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  ServiceComponentHost sch=createMock(ServiceComponentHost.class);
+  Service service=createNiceMock(Service.class);
+  final Host host=createNiceMock(Host.class);
+  expect(sch.getClusterName()).andReturn("c1").anyTimes();
+  expect(clusters.getCluster("c1")).andReturn(cluster).anyTimes();
+  expect(cluster.getClusterName()).andReturn("c1").anyTimes();
+  expect(cluster.getClusterId()).andReturn(1L).anyTimes();
+  expect(clusters.getHostsForCluster("c1")).andReturn(new HashMap<String,Host>(){
+{
+      put("h1",host);
+    }
+  }
+).anyTimes();
+  expect(sch.getHostName()).andReturn("h1").anyTimes();
+  expect(sch.getServiceName()).andReturn("HDFS").anyTimes();
+  expect(cluster.getService("HDFS")).andReturn(service).anyTimes();
+  expect(sch.getMaintenanceState()).andReturn(MaintenanceState.ON).times(1).andReturn(MaintenanceState.OFF).anyTimes();
+  expect(service.getMaintenanceState()).andReturn(MaintenanceState.ON);
+  expect(host.getMaintenanceState(1L)).andReturn(MaintenanceState.ON);
+  expect(service.getMaintenanceState()).andReturn(MaintenanceState.ON);
+  expect(host.getMaintenanceState(1L)).andReturn(MaintenanceState.OFF);
+  expect(service.getMaintenanceState()).andReturn(MaintenanceState.OFF);
+  expect(host.getMaintenanceState(1L)).andReturn(MaintenanceState.ON);
+  Class<?> maintenanceHelperClass=MaintenanceStateHelper.class;
+  Field f=maintenanceHelperClass.getDeclaredField("clusters");
+  f.setAccessible(true);
+  f.set(maintenanceStateHelper,clusters);
+  replay(maintenanceStateHelper,clusters,cluster,sch,host,service);
+  MaintenanceState state=maintenanceStateHelper.getEffectiveState(sch);
+  Assert.assertEquals(MaintenanceState.ON,state);
+  state=maintenanceStateHelper.getEffectiveState(sch);
+  Assert.assertEquals(MaintenanceState.IMPLIED_FROM_SERVICE_AND_HOST,state);
+  state=maintenanceStateHelper.getEffectiveState(sch);
+  Assert.assertEquals(MaintenanceState.IMPLIED_FROM_SERVICE,state);
+  state=maintenanceStateHelper.getEffectiveState(sch);
+  Assert.assertEquals(MaintenanceState.IMPLIED_FROM_HOST,state);
+  verify(maintenanceStateHelper,clusters,cluster,sch,host,service);
+}
