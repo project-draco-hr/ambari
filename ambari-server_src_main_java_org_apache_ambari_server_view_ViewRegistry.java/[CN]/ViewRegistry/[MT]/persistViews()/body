@@ -1,0 +1,32 @@
+{
+  Set<ViewInstanceEntity> instanceDefinitions=new HashSet<ViewInstanceEntity>();
+  Set<String> persistedViews=new HashSet<String>();
+  for (  ViewEntity viewEntity : viewDAO.findAll()) {
+    String name=viewEntity.getName();
+    if (!ViewRegistry.getInstance().viewDefinitions.containsKey(name)) {
+      System.out.println("removing view " + name);
+      viewDAO.remove(viewEntity);
+    }
+ else {
+      persistedViews.add(name);
+      ViewEntity viewDefinition=ViewRegistry.getInstance().viewDefinitions.get(name);
+      for (      ViewInstanceEntity viewInstanceEntity : viewEntity.getInstances()) {
+        if (viewDefinition.getInstanceDefinition(viewInstanceEntity.getName()) == null) {
+          viewInstanceEntity.setViewEntity(viewDefinition);
+          _installViewInstance(viewDefinition,viewInstanceEntity);
+          instanceDefinitions.add(viewInstanceEntity);
+        }
+      }
+    }
+  }
+  for (  ViewEntity definition : viewDefinitions.values()) {
+    String viewName=definition.getName();
+    if (!persistedViews.contains(viewName)) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Creating View " + viewName + ".");
+      }
+      viewDAO.create(definition);
+    }
+  }
+  return instanceDefinitions;
+}

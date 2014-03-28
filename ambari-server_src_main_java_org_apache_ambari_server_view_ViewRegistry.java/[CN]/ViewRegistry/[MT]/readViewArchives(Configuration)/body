@@ -1,7 +1,7 @@
 {
   File viewDir=configuration.getViewsDir();
   File[] files=viewDir.listFiles();
-  Set<ViewInstanceDefinition> instanceDefinitions=new HashSet<ViewInstanceDefinition>();
+  Set<ViewInstanceEntity> instanceDefinitions=new HashSet<ViewInstanceEntity>();
   if (files != null) {
     for (    final File fileEntry : files) {
       if (!fileEntry.isDirectory()) {
@@ -11,16 +11,26 @@
           JAXBContext jaxbContext=JAXBContext.newInstance(ViewConfig.class);
           Unmarshaller jaxbUnmarshaller=jaxbContext.createUnmarshaller();
           ViewConfig viewConfig=(ViewConfig)jaxbUnmarshaller.unmarshal(configStream);
-          ViewDefinition viewDefinition=installView(viewConfig,configuration,cl,fileEntry.getAbsolutePath());
-          List<InstanceConfig> instances=viewConfig.getInstances();
-          for (          InstanceConfig instanceConfig : instances) {
-            instanceDefinitions.add(installViewInstance(viewDefinition,instanceConfig));
+          ViewEntity viewDefinition=installView(viewConfig,configuration,cl,fileEntry.getAbsolutePath());
+          for (          InstanceConfig instanceConfig : viewConfig.getInstances()) {
+            ViewInstanceEntity viewInstanceDefinition=new ViewInstanceEntity(viewDefinition,instanceConfig);
+            for (            PropertyConfig propertyConfig : instanceConfig.getProperties()) {
+              viewInstanceDefinition.putProperty(propertyConfig.getKey(),propertyConfig.getValue());
+            }
+            _installViewInstance(viewDefinition,viewInstanceDefinition);
+            instanceDefinitions.add(viewInstanceDefinition);
           }
         }
  catch (        Exception e) {
           LOG.error("Caught exception loading view from " + fileEntry.getAbsolutePath(),e);
         }
       }
+    }
+    try {
+      instanceDefinitions.addAll(persistViews());
+    }
+ catch (    ClassNotFoundException e) {
+      LOG.error("Caught exception persisting views.",e);
     }
   }
   return instanceDefinitions;
