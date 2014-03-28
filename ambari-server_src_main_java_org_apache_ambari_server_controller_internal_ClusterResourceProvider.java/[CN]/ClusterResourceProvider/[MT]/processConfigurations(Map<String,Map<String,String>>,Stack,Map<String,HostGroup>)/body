@@ -1,32 +1,21 @@
 {
-  Set<String> services=getServicesToDeploy(stack,blueprintHostGroups);
-  for (  String service : services) {
-    Collection<String> configTypes=stack.getConfigurationTypes(service);
-    for (    String type : configTypes) {
-      Map<String,String> properties=stack.getConfigurationProperties(service,type);
-      for (      Map.Entry<String,String> entry : properties.entrySet()) {
-        String propName=entry.getKey();
-        String value=entry.getValue();
-        if (type.endsWith(".xml")) {
-          type=type.substring(0,type.length() - 4);
-        }
-        Map<String,String> blueprintTypeConfig=blueprintConfigurations.get(type);
-        if (blueprintTypeConfig != null && blueprintTypeConfig.containsKey(propName)) {
-          System.out.println("Overwriting property: " + propName + " for configuration "+ type);
-          value=blueprintTypeConfig.get(propName);
-        }
-        Map<String,String> typeProps=mapClusterConfigurations.get(type);
-        if (typeProps == null) {
-          typeProps=new HashMap<String,String>();
-          mapClusterConfigurations.put(type,typeProps);
-        }
-        if (!typeProps.containsKey(propName)) {
-          PropertyUpdater propertyUpdater=propertyUpdaters.get(propName);
-          if (propertyUpdater != null) {
-            value=propertyUpdater.update(blueprintHostGroups,entry.getValue());
-          }
-          typeProps.put(propName,value);
-        }
+  for (  String service : getServicesToDeploy(stack,blueprintHostGroups)) {
+    for (    String type : stack.getConfigurationTypes(service)) {
+      Map<String,String> typeProps=mapClusterConfigurations.get(type);
+      if (typeProps == null) {
+        typeProps=new HashMap<String,String>();
+        mapClusterConfigurations.put(type,typeProps);
+      }
+      typeProps.putAll(stack.getConfigurationProperties(service,type));
+    }
+  }
+  processBlueprintClusterConfigurations(blueprintConfigurations);
+  for (  Map.Entry<String,Map<String,String>> entry : mapClusterConfigurations.entrySet()) {
+    for (    Map.Entry<String,String> propertyEntry : entry.getValue().entrySet()) {
+      String propName=propertyEntry.getKey();
+      PropertyUpdater propertyUpdater=propertyUpdaters.get(propName);
+      if (propertyUpdater != null) {
+        propertyEntry.setValue(propertyUpdater.update(blueprintHostGroups,propertyEntry.getValue()));
       }
     }
   }
