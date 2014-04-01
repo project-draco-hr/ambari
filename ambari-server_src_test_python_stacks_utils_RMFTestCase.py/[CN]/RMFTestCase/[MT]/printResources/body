@@ -1,12 +1,29 @@
-def printResources(self):
+def printResources(self, intendation=4):
+    print 
     for resource in RMFTestCase.env.resource_list:
-        print "'{0}', {1},".format(resource.__class__.__name__, self._ppformat(resource.name))
+        s = "'{0}', {1},".format(resource.__class__.__name__, self._ppformat(resource.name))
+        has_arguments = False
         for (k, v) in resource.arguments.iteritems():
+            has_arguments = True
             if ((k == 'mode') and isinstance(v, int)):
                 val = oct(v)
             elif isinstance(v, UnknownConfiguration):
                 val = 'UnknownConfigurationMock()'
             else:
                 val = self._ppformat(v)
-            print '  {0} = {1},'.format(k, val)
-        print 
+            if ('\n' in val):
+                lines = val.splitlines()
+                firstLine = lines[0]
+                nextlines = '\n'.join(lines[1:])
+                nextlines = self.reindent(nextlines, 2)
+                val = '\n'.join([firstLine, nextlines])
+            param_str = '{0} = {1},'.format(k, val)
+            s += ('\n' + self.reindent(param_str, intendation))
+        if has_arguments:
+            before_bracket = '\n'
+        else:
+            before_bracket = ''
+        s = 'self.assertResourceCalled({0}{1})'.format(s, before_bracket)
+        s = self.reindent(s, intendation)
+        print s
+    print self.reindent('self.assertNoMoreResources()', intendation)
