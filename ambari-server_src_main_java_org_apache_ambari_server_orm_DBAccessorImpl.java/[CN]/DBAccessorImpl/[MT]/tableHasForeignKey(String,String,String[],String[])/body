@@ -1,0 +1,45 @@
+{
+  DatabaseMetaData metaData=getDatabaseMetaData();
+  String schemaFilter=null;
+  if (getDbType().equals(Configuration.ORACLE_DB_NAME)) {
+    schemaFilter=configuration.getDatabaseUser();
+  }
+  ResultSet rs=metaData.getCrossReference(null,convertObjectName(schemaFilter),convertObjectName(referenceTableName),null,convertObjectName(schemaFilter),convertObjectName(tableName));
+  List<String> pkColumns=new ArrayList<String>(referenceColumns.length);
+  for (  String referenceColumn : referenceColumns) {
+    pkColumns.add(convertObjectName(referenceColumn));
+  }
+  List<String> fkColumns=new ArrayList<String>(keyColumns.length);
+  for (  String keyColumn : keyColumns) {
+    fkColumns.add(convertObjectName(keyColumn));
+  }
+  if (rs != null) {
+    try {
+      while (rs.next()) {
+        String pkColumn=rs.getString("PKCOLUMN_NAME");
+        String fkColumn=rs.getString("FKCOLUMN_NAME");
+        int pkIndex=pkColumns.indexOf(pkColumn);
+        int fkIndex=fkColumns.indexOf(fkColumn);
+        if (pkIndex != -1 && fkIndex != -1) {
+          if (pkIndex != fkIndex) {
+            LOG.warn("Columns for FK constraint should be provided in exact order");
+          }
+ else {
+            pkColumns.remove(pkIndex);
+            fkColumns.remove(fkIndex);
+          }
+        }
+ else {
+          LOG.debug("pkCol={}, fkCol={} not found in provided column names, skipping",pkColumn,fkColumn);
+        }
+      }
+      if (pkColumns.isEmpty() && fkColumns.isEmpty()) {
+        return true;
+      }
+    }
+  finally {
+      rs.close();
+    }
+  }
+  return false;
+}
