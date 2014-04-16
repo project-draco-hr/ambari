@@ -38,7 +38,18 @@
     sch.setState(State.UNKNOWN);
   }
   ServiceComponentHostRequest schr=new ServiceComponentHostRequest(clusterName,"HDFS","DATANODE",host2,"INSTALLED");
-  controller.updateHostComponents(Collections.singleton(schr),new HashMap<String,String>(),false);
+  Map<String,String> requestProps=new HashMap<String,String>();
+  requestProps.put("datanode","dn_value");
+  requestProps.put("namenode","nn_value");
+  RequestStatusResponse rsr=controller.updateHostComponents(Collections.singleton(schr),requestProps,false);
+  List<Stage> stages=actionDB.getAllStages(rsr.getRequestId());
+  Assert.assertEquals(1,stages.size());
+  Stage stage=stages.iterator().next();
+  List<ExecutionCommandWrapper> execWrappers=stage.getExecutionCommands(host2);
+  Assert.assertEquals(1,execWrappers.size());
+  ExecutionCommandWrapper execWrapper=execWrappers.iterator().next();
+  Assert.assertTrue(execWrapper.getExecutionCommand().getCommandParams().containsKey("datanode"));
+  Assert.assertFalse(execWrapper.getExecutionCommand().getCommandParams().containsKey("namendode"));
   for (  ServiceComponentHost sch : clusters.getCluster(clusterName).getServiceComponentHosts(host2)) {
     Assert.assertEquals(State.UNKNOWN,sch.getState());
   }
