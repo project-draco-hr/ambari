@@ -2,7 +2,7 @@
   List<CommandReport> reports=heartbeat.getReports();
   for (  CommandReport report : reports) {
     LOG.debug("Received command report: " + report);
-    if (RoleCommand.ACTIONEXECUTE.toString().equals(report.getRoleCommand()) || RoleCommand.CUSTOM_COMMAND.toString().equals(report.getRoleCommand())) {
+    if (RoleCommand.ACTIONEXECUTE.toString().equals(report.getRoleCommand()) || (RoleCommand.CUSTOM_COMMAND.toString().equals(report.getRoleCommand()) && !("RESTART".equals(report.getCustomCommand()) || "START".equals(report.getCustomCommand()) || "STOP".equals(report.getCustomCommand())))) {
       continue;
     }
     Cluster cl=clusterFsm.getCluster(report.getClusterName());
@@ -24,14 +24,17 @@
           if (scHost.getState().equals(State.UPGRADING)) {
             scHost.setStackVersion(scHost.getDesiredStackVersion());
           }
- else           if (report.getRoleCommand().equals(RoleCommand.START.toString()) && null != report.getConfigurationTags() && !report.getConfigurationTags().isEmpty()) {
+ else           if ((report.getRoleCommand().equals(RoleCommand.START.toString()) || (report.getRoleCommand().equals(RoleCommand.CUSTOM_COMMAND.toString()) && ("START".equals(report.getCustomCommand()) || "RESTART".equals(report.getCustomCommand())))) && null != report.getConfigurationTags() && !report.getConfigurationTags().isEmpty()) {
             LOG.info("Updating applied config on service " + scHost.getServiceName() + ", component "+ scHost.getServiceComponentName()+ ", host "+ scHost.getHostName());
             scHost.updateActualConfigs(report.getConfigurationTags());
           }
-          if (RoleCommand.START.toString().equals(report.getRoleCommand())) {
+          if (RoleCommand.CUSTOM_COMMAND.toString().equals(report.getRoleCommand()) && !("START".equals(report.getCustomCommand()) || "STOP".equals(report.getCustomCommand()))) {
+            continue;
+          }
+          if (RoleCommand.START.toString().equals(report.getRoleCommand()) || (RoleCommand.CUSTOM_COMMAND.toString().equals(report.getRoleCommand()) && "START".equals(report.getCustomCommand()))) {
             scHost.handleEvent(new ServiceComponentHostStartedEvent(schName,hostname,now));
           }
- else           if (RoleCommand.STOP.toString().equals(report.getRoleCommand())) {
+ else           if (RoleCommand.STOP.toString().equals(report.getRoleCommand()) || (RoleCommand.CUSTOM_COMMAND.toString().equals(report.getRoleCommand()) && "STOP".equals(report.getCustomCommand()))) {
             scHost.handleEvent(new ServiceComponentHostStoppedEvent(schName,hostname,now));
           }
  else {
