@@ -1,0 +1,27 @@
+{
+  ClusterDefinition clusterDefinitionMock=createStrictMock(ClusterDefinition.class);
+  StaxDriver staxDriver=PowerMock.createStrictMock(StaxDriver.class);
+  XStream xstream=PowerMock.createStrictMock(XStream.class);
+  PowerMock.mockStatic(ClassLoader.class);
+  InputStream mockInputStream=createMock(InputStream.class);
+  PowerMock.expectNew(StaxDriver.class).andReturn(staxDriver);
+  PowerMock.expectNew(XStream.class,staxDriver).andReturn(xstream);
+  xstream.alias("configuration",Map.class);
+  expectLastCall();
+  xstream.registerConverter(anyObject(ConfigurationProvider.ScomConfigConverter.class));
+  expectLastCall();
+  expect(ClassLoader.getSystemResourceAsStream(anyObject(String.class))).andReturn(mockInputStream).times(5);
+  expect(xstream.fromXML(mockInputStream)).andReturn(new HashMap<String,String>(){
+{
+      put("property_key","propery_value");
+    }
+  }
+).times(5);
+  expect(clusterDefinitionMock.getClusterName()).andReturn("ambari");
+  PowerMock.replay(staxDriver,StaxDriver.class,xstream,XStream.class,ClassLoader.class);
+  replay(clusterDefinitionMock,mockInputStream);
+  ConfigurationProvider configurationProvider=new ConfigurationProvider(clusterDefinitionMock);
+  PowerMock.verify(staxDriver,StaxDriver.class,xstream,XStream.class,ClassLoader.class);
+  verify(clusterDefinitionMock,mockInputStream);
+  Assert.assertEquals(5,configurationProvider.getResources().size());
+}
