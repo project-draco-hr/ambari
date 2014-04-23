@@ -1,0 +1,55 @@
+def main():
+    parser = optparse.OptionParser(usage='usage: %prog [options]')
+    parser.set_description('This python program is a Ambari thin client and supports import/export of Ambari managed clusters using a cluster blueprint.')
+    parser.add_option('-v', '--verbose', dest='verbose', action='store_true', default=False, help='output verbosity.')
+    parser.add_option('-a', '--action', dest='action', default='import', help='Script action. (import/export) [default: import]')
+    parser.add_option('-f', '--blueprint', dest='blueprint', metavar='FILE', help='File Path. (import/export) file path.')
+    parser.add_option('-o', '--hosts', dest='hosts', metavar='FILE', help='Host Assignments. Import only.')
+    parser.add_option('-c', '--cluster', dest='cluster', help='Target cluster.')
+    parser.add_option('-d', '--arguments', dest='arguments', help='Inline arguments for masters and slaves. master=X,Y&slaves=A,B&gateway=G')
+    parser.add_option('-s', '--silent', dest='silent', default=False, action='store_true', help='Run silently. Appropriate accompanying arguments required.')
+    parser.add_option('-r', '--port', dest='port', default='8080', help='Ambari server port, when running silently. [default: 8080]')
+    parser.add_option('-u', '--user', dest='user', default='admin', help='Ambari server username, when running silently. [default: admin]')
+    parser.add_option('-p', '--password', dest='password', default='admin', help='Ambari server password, when running silently. [default: admin]')
+    parser.add_option('-h', '--host', dest='hostname', default='localhost', help='Ambari server host, when running silently. [default: localhost]')
+    (options, args) = parser.parse_args()
+    global ACTION
+    ACTION = options.action
+    global SILENT
+    SILENT = options.silent
+    global INLINE_ARGUMENTS
+    INLINE_ARGUMENTS = options.arguments
+    if (options.cluster is None):
+        raise Exception("Cluster name is required. '-c' option not provided.")
+    if options.silent:
+        if (options.blueprint is None):
+            raise Exception("Destination file path required. '-f' option not provided.")
+        elif ((options.action == 'import') and (options.hosts is None) and (options.arguments is None)):
+            raise Exception("Host assignment file path required. '-o' option not provided.")
+    pass
+    global logger
+    if options.verbose:
+        logger.setLevel(level=logging.DEBUG)
+    else:
+        logger.setLevel(level=logging.INFO)
+    pass
+    ch = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    global PORT
+    PORT = options.port
+    global USERNAME
+    USERNAME = options.user
+    global PASSWORD
+    PASSWORD = options.password
+    global HOSTNAME
+    HOSTNAME = options.hostname
+    ambariBlueprint = AmbariBlueprint()
+    if (options.action == 'import'):
+        ambariBlueprint.importBlueprint(options.blueprint, options.hosts, options.cluster)
+    elif (options.action == 'export'):
+        ambariBlueprint.exportBlueprint(options.cluster, options.blueprint)
+    else:
+        raise Exception(('Unsupported action %s' % options.action))
+    pass

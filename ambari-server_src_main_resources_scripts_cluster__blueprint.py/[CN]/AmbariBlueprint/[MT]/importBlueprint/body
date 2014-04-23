@@ -1,0 +1,53 @@
+def importBlueprint(self, blueprintLocation, hostsLocation, clusterName):
+    get_server_info(SILENT)
+    isDefaultJson = False
+    if (os.path.split(blueprintLocation)[1].find(DEFAULT_MULTINODE_JSON) != (-1)):
+        isDefaultJson = True
+    pass
+    with open(blueprintLocation, 'r') as file:
+        blueprint = file.read()
+    blueprint_json = json.loads(blueprint)
+    logger.debug(('blueprint json: %s' % blueprint_json))
+    blueprintInfo = blueprint_json.get('Blueprints')
+    if (not blueprintInfo):
+        raise Exception(('Cannot read blueprint info from blueprint at %s' % blueprintLocation))
+    blueprint_name = blueprintInfo.get('blueprint_name')
+    if (not blueprint_name):
+        raise Exception(('blueprint_name required inside Blueprints %s' % blueprintInfo))
+    hosts_json = None
+    if (isDefaultJson and INLINE_ARGUMENTS):
+        (masters, slaves, gateway) = self.parseHostData()
+        expectedMasterCount = self.parseDefaultJsonData(blueprint_json, slaves.split(','))
+        if (expectedMasterCount != len(masters.split(','))):
+            logger.info('Mismatch in cardinality. Inferring host assignment for masters...')
+        pass
+        hosts_json = self.buildHostAssignments(blueprint_name, blueprint_json, masters.split(','), slaves.split(','), gateway)
+    pass
+    if ((not isDefaultJson) and INLINE_ARGUMENTS):
+        raise Exception('Unsupported operation, please provide explict host assignments with -o option.')
+    pass
+    if ((not hosts_json) and hostsLocation):
+        with open(hostsLocation, 'r') as file:
+            hosts_json = file.read()
+            hostAssignments = json.loads(hosts_json)
+        pass
+    pass
+    logger.debug(('host assignments json: %s' % hosts_json))
+    blueprintCreateUrl = getUrl(BLUEPRINT_CREATE_URL.format(blueprint_name))
+    retCode = self.performPostOperation(blueprintCreateUrl, blueprint)
+    if (retCode == '201'):
+        logger.info('Blueprint created successfully.')
+    elif (retCode == '409'):
+        logger.info(('Blueprint %s already exists, proceeding with host assignments.' % blueprint_name))
+    else:
+        logger.error(('Unable to create blueprint from location %s' % blueprintLocation))
+        sys.exit(1)
+    pass
+    clusterCreateUrl = getUrl(BLUEPRINT_CLUSTER_CREATE_URL.format(clusterName))
+    retCode = self.performPostOperation(clusterCreateUrl, hosts_json)
+    if (retCode == '202'):
+        logger.info('Host assignments successful.')
+    else:
+        logger.error('Error assigning hosts to hostgroups. Please check server logs.')
+        sys.exit(1)
+    pass

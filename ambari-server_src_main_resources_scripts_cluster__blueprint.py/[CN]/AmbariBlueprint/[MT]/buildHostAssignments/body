@@ -1,0 +1,50 @@
+def buildHostAssignments(self, blueprintName, blueprintJson, masters, slaves, gateway=None):
+    hostAssignments = '{{"blueprint":"{0}","host-groups":[{1}]}}'
+    hostGroupHosts = '{{"name":"{0}","hosts":[{1}]}}'
+    hosts = '{{"fqdn":"{0}"}},'
+    logger.debug('Blueprint: {0}, Masters: {1}, Slaves: {2}'.format(blueprintName, masters, slaves))
+    mastersUsed = 0
+    slavesUsed = 0
+    hostGroupsJson = ''
+    hostGroups = blueprintJson.get('host_groups')
+    for hostGroup in hostGroups:
+        if (hostGroup.get('name').find('master') != (-1)):
+            masterHosts = ''
+            cardinality = int(hostGroup.get('cardinality'))
+            hostList = self.getHostListMatchingCardinality(cardinality, masters, mastersUsed)
+            mastersUsed = len(hostList)
+            for host in hostList:
+                masterHosts += hosts.format(host.strip())
+            pass
+            masterHosts = masterHosts.rstrip(',')
+            masterHostsGroup = hostGroupHosts.format(hostGroup.get('name'), masterHosts)
+            hostGroupsJson += (masterHostsGroup + ',')
+        pass
+        if (hostGroup.get('name').find('slave') != (-1)):
+            slaveHosts = ''
+            cardinality = int(hostGroup.get('cardinality'))
+            hostList = self.getHostListMatchingCardinality(cardinality, slaves, slavesUsed)
+            slavesUsed = len(hostList)
+            for host in hostList:
+                slaveHosts += hosts.format(host.strip())
+            pass
+            slaveHosts = slaveHosts.rstrip(',')
+            slaveHostsGroup = hostGroupHosts.format(hostGroup.get('name'), slaveHosts)
+            hostGroupsJson += (slaveHostsGroup + ',')
+        pass
+        if (hostGroup.get('name').find('gateway') != (-1)):
+            gatewayHosts = ''
+            cardinality = int(hostGroup.get('cardinality'))
+            if gateway:
+                hostList = [gateway]
+            else:
+                hostList = self.getHostListMatchingCardinality(cardinality, masters, mastersUsed)
+                mastersUsed = len(hostList)
+            pass
+            gatewayHosts += hosts.format(hostList[0].strip())
+            gatewayHostGroup = hostGroupHosts.format(hostGroup.get('name'), gatewayHosts)
+            hostGroupsJson += (gatewayHostGroup + ',')
+        pass
+    pass
+    hostGroupsJson = (hostGroupsJson.rstrip(',') if hostGroupsJson.endswith(',') else hostGroupsJson)
+    return hostAssignments.format(blueprintName, hostGroupsJson)
