@@ -1,0 +1,25 @@
+{
+  DynamicClassLoader classLoader=new DynamicClassLoader(DataStoreImplTest.class.getClassLoader());
+  EntityManagerFactory entityManagerFactory=createMock(EntityManagerFactory.class);
+  EntityManager entityManager=createMock(EntityManager.class);
+  JPADynamicHelper jpaDynamicHelper=createNiceMock(JPADynamicHelper.class);
+  SchemaManager schemaManager=createNiceMock(SchemaManager.class);
+  EntityTransaction transaction=createMock(EntityTransaction.class);
+  DynamicEntity dynamicEntity=createMock(DynamicEntity.class);
+  Capture<DynamicType> typeCapture=new Capture<DynamicType>();
+  jpaDynamicHelper.addTypes(eq(true),eq(true),capture(typeCapture));
+  expect(entityManagerFactory.createEntityManager()).andReturn(entityManager);
+  expect(entityManager.getTransaction()).andReturn(transaction).anyTimes();
+  Capture<Class> entityClassCapture=new Capture<Class>();
+  expect(entityManager.find(capture(entityClassCapture),eq(99))).andReturn(dynamicEntity);
+  entityManager.close();
+  expect(dynamicEntity.set("id",99)).andReturn(dynamicEntity);
+  expect(dynamicEntity.set("name","foo")).andReturn(dynamicEntity);
+  transaction.begin();
+  transaction.commit();
+  replay(entityManagerFactory,entityManager,jpaDynamicHelper,transaction,schemaManager,dynamicEntity);
+  DataStoreImpl dataStore=getDataStore(entityManagerFactory,jpaDynamicHelper,classLoader,schemaManager);
+  dataStore.store(new TestEntity(99,"foo"));
+  Assert.assertEquals(entityClassCapture.getValue(),typeCapture.getValue().getJavaClass());
+  verify(entityManagerFactory,entityManager,jpaDynamicHelper,transaction,schemaManager,dynamicEntity);
+}

@@ -1,0 +1,51 @@
+{
+  DynamicEntity dynamicEntity=null;
+  Class clazz=entity.getClass();
+  String id=getIdFieldName(clazz);
+  Map<String,Object> properties=getEntityProperties(entity);
+  DynamicType type=getDynamicEntityType(clazz);
+  if (type != null) {
+    dynamicEntity=em.find(type.getJavaClass(),properties.get(id));
+    boolean create=dynamicEntity == null;
+    if (create) {
+      dynamicEntity=type.newDynamicEntity();
+    }
+    if (persistSet.contains(dynamicEntity)) {
+      return dynamicEntity;
+    }
+    persistSet.add(dynamicEntity);
+    for (    String propertyName : type.getPropertiesNames()) {
+      if (properties.containsKey(propertyName)) {
+        Object value=properties.get(propertyName);
+        if (value != null) {
+          Class<?> valueClass=value.getClass();
+          if (Collection.class.isAssignableFrom(valueClass)) {
+            Class<?> typeClass=getParameterizedTypeClass(clazz,propertyName);
+            Collection<Object> collection=dynamicEntity.get(propertyName);
+            collection.clear();
+            for (            Object collectionValue : (Collection)value) {
+              if (getDynamicEntityType(typeClass) != null) {
+                collectionValue=persistEntity(collectionValue,em,persistSet);
+              }
+              if (collectionValue != null) {
+                collection.add(collectionValue);
+              }
+            }
+          }
+ else {
+            if (getDynamicEntityType(valueClass) != null) {
+              value=persistEntity(value,em,persistSet);
+            }
+            if (value != null) {
+              dynamicEntity.set(propertyName,value);
+            }
+          }
+        }
+      }
+    }
+    if (create) {
+      em.persist(dynamicEntity);
+    }
+  }
+  return dynamicEntity;
+}

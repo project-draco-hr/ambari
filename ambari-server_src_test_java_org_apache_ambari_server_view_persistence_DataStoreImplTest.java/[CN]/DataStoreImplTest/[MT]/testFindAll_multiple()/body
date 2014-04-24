@@ -1,0 +1,35 @@
+{
+  DynamicClassLoader classLoader=new DynamicClassLoader(DataStoreImplTest.class.getClassLoader());
+  EntityManagerFactory entityManagerFactory=createMock(EntityManagerFactory.class);
+  EntityManager entityManager=createMock(EntityManager.class);
+  JPADynamicHelper jpaDynamicHelper=createNiceMock(JPADynamicHelper.class);
+  SchemaManager schemaManager=createNiceMock(SchemaManager.class);
+  DynamicEntity dynamicEntity1=createMock(DynamicEntity.class);
+  DynamicEntity dynamicEntity2=createMock(DynamicEntity.class);
+  DynamicEntity dynamicEntity3=createMock(DynamicEntity.class);
+  Query query=createMock(Query.class);
+  Capture<DynamicType> typeCapture=new Capture<DynamicType>();
+  jpaDynamicHelper.addTypes(eq(true),eq(true),capture(typeCapture));
+  expect(entityManagerFactory.createEntityManager()).andReturn(entityManager);
+  expect(entityManager.createQuery("SELECT e FROM DataStoreImplTest$TestEntity1 e WHERE e.name='foo'")).andReturn(query);
+  entityManager.close();
+  List<DynamicEntity> entityList=new LinkedList<DynamicEntity>();
+  entityList.add(dynamicEntity1);
+  entityList.add(dynamicEntity2);
+  entityList.add(dynamicEntity3);
+  expect(query.getResultList()).andReturn(entityList);
+  expect(dynamicEntity1.get("id")).andReturn(99);
+  expect(dynamicEntity1.get("name")).andReturn("foo");
+  expect(dynamicEntity2.get("id")).andReturn(100);
+  expect(dynamicEntity2.get("name")).andReturn("foo");
+  expect(dynamicEntity3.get("id")).andReturn(101);
+  expect(dynamicEntity3.get("name")).andReturn("foo");
+  replay(entityManagerFactory,entityManager,jpaDynamicHelper,dynamicEntity1,dynamicEntity2,dynamicEntity3,query,schemaManager);
+  DataStoreImpl dataStore=getDataStore(entityManagerFactory,jpaDynamicHelper,classLoader,schemaManager);
+  Collection<TestEntity> entities=dataStore.findAll(TestEntity.class,"name='foo'");
+  Assert.assertEquals(3,entities.size());
+  for (  TestEntity entity : entities) {
+    Assert.assertEquals("foo",entity.getName());
+  }
+  verify(entityManagerFactory,entityManager,jpaDynamicHelper,dynamicEntity1,dynamicEntity2,dynamicEntity3,query,schemaManager);
+}

@@ -1,0 +1,66 @@
+{
+  for (  Map.Entry<Class,String> entry : entityClassMap.entrySet()) {
+    String entityName=entry.getValue();
+    Class<?> javaType=dcl.createDynamicClass(entityName);
+    String tableName=getTableName(entityMap.get(entityName));
+    JPADynamicTypeBuilder typeBuilder=new JPADynamicTypeBuilder(javaType,null,tableName);
+    typeBuilderMap.put(entityName,typeBuilder);
+  }
+  for (  Map.Entry<Class,String> entry : entityClassMap.entrySet()) {
+    Class clazz=entry.getKey();
+    String entityName=entry.getValue();
+    JPADynamicTypeBuilder typeBuilder=typeBuilderMap.get(entityName);
+    Map<String,PropertyDescriptor> descriptorMap=getDescriptorMap(clazz);
+    for (    Map.Entry<String,PropertyDescriptor> descriptorEntry : descriptorMap.entrySet()) {
+      String propertyName=descriptorEntry.getKey();
+      PropertyDescriptor descriptor=descriptorEntry.getValue();
+      if (propertyName.equals(entityMap.get(entityName).getIdProperty())) {
+        typeBuilder.setPrimaryKeyFields(propertyName);
+      }
+      Class<?> propertyType=descriptor.getPropertyType();
+      if (isDirectMappingType(propertyType)) {
+        typeBuilder.addDirectMapping(propertyName,propertyType,propertyName);
+      }
+    }
+  }
+  for (  Map.Entry<Class,String> entry : entityClassMap.entrySet()) {
+    Class clazz=entry.getKey();
+    String entityName=entry.getValue();
+    JPADynamicTypeBuilder typeBuilder=typeBuilderMap.get(entityName);
+    Map<String,PropertyDescriptor> descriptorMap=getDescriptorMap(clazz);
+    for (    Map.Entry<String,PropertyDescriptor> descriptorEntry : descriptorMap.entrySet()) {
+      String propertyName=descriptorEntry.getKey();
+      PropertyDescriptor descriptor=descriptorEntry.getValue();
+      if (propertyName.equals(entityMap.get(entityName).getIdProperty())) {
+        typeBuilder.setPrimaryKeyFields(propertyName);
+      }
+      Class<?> propertyType=descriptor.getPropertyType();
+      String refEntityName=entityClassMap.get(propertyType);
+      if (refEntityName == null) {
+        if (Collection.class.isAssignableFrom(propertyType)) {
+          String tableName=getTableName(entityMap.get(entityName)) + "_" + propertyName;
+          Class<?> parameterizedTypeClass=getParameterizedTypeClass(clazz,propertyName);
+          refEntityName=entityClassMap.get(parameterizedTypeClass);
+          if (refEntityName == null) {
+            typeBuilder.addDirectCollectionMapping(propertyName,tableName,propertyName,parameterizedTypeClass,entityMap.get(entityName).getIdProperty());
+          }
+ else {
+            DynamicType refType=typeBuilderMap.get(refEntityName).getType();
+            typeBuilder.addManyToManyMapping(propertyName,refType,tableName);
+          }
+        }
+      }
+ else {
+        DynamicType refType=typeBuilderMap.get(refEntityName).getType();
+        typeBuilder.addOneToOneMapping(propertyName,refType,propertyName);
+      }
+    }
+  }
+  DynamicType[] types=new DynamicType[typeBuilderMap.size()];
+  int i=typeBuilderMap.size() - 1;
+  for (  JPADynamicTypeBuilder typeBuilder : typeBuilderMap.values()) {
+    types[i--]=typeBuilder.getType();
+  }
+  helper.addTypes(true,true,types);
+  schemaManagerFactory.getSchemaManager(helper.getSession()).extendDefaultTables(true);
+}
