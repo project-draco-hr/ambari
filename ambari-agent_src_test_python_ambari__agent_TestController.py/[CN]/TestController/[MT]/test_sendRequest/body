@@ -2,12 +2,22 @@
 @patch.object(Controller, 'security')
 def test_sendRequest(self, security_mock, requestMock):
     conMock = MagicMock()
-    conMock.request.return_value = 'response'
     security_mock.CachedHTTPSConnection.return_value = conMock
     url = 'url'
     data = 'data'
     requestMock.return_value = 'request'
     self.controller.cachedconnect = None
-    self.assertEqual('response', self.controller.sendRequest(url, data))
+    conMock.request.return_value = '{"valid_object": true}'
+    actual = self.controller.sendRequest(url, data)
+    expected = json.loads('{"valid_object": true}')
+    self.assertEqual(actual, expected)
     security_mock.CachedHTTPSConnection.assert_called_once_with(self.controller.config)
     requestMock.called_once_with(url, data, {'Content-Type': 'application/json', })
+    conMock.request.return_value = '{invalid_object}'
+    actual = self.controller.sendRequest(url, data)
+    expected = {'exitstatus': 1, 'log': (('Response parsing failed! Request data: ' + data) + '; Response: {invalid_object}'), }
+    self.assertEqual(actual, expected)
+    conMock.request.side_effect = Exception()
+    actual = self.controller.sendRequest(url, data)
+    expected = {'exitstatus': 1, 'log': ('Request failed! Data: ' + data), }
+    self.assertEqual(actual, expected)
