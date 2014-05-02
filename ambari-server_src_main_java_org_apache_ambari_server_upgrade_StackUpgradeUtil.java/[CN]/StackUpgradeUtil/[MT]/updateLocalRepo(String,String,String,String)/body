@@ -1,19 +1,46 @@
 {
   if (null == repoUrl || repoUrl.isEmpty() || !repoUrl.startsWith("http"))   return;
-  String server=repoUrl;
   String[] oses=new String[0];
   if (null != repoUrlOs) {
     oses=repoUrlOs.split(",");
   }
   AmbariMetaInfo ami=injector.getInstance(AmbariMetaInfo.class);
+  MetainfoDAO metaDao=injector.getInstance(MetainfoDAO.class);
+  String stackRepoId=stackName + "-" + stackVersion;
   if (0 == oses.length) {
     for (    OperatingSystemInfo osi : ami.getOperatingSystems(stackName,stackVersion)) {
-      ami.updateRepoBaseURL(stackName,stackVersion,osi.getOsType(),stackName + "-" + stackVersion,server);
+      ami.updateRepoBaseURL(stackName,stackVersion,osi.getOsType(),stackRepoId,repoUrl);
     }
   }
  else {
     for (    String os : oses) {
-      ami.updateRepoBaseURL(stackName,stackVersion,os,stackName + "-" + stackVersion,server);
+      OsFamily family=OsFamily.find(os);
+      if (null != family) {
+        String key=ami.generateRepoMetaKey(stackName,stackVersion,os,stackName + "-" + stackVersion,AmbariMetaInfo.REPOSITORY_XML_PROPERTY_BASEURL);
+        String familyKey=ami.generateRepoMetaKey(stackName,stackVersion,family.name().toLowerCase(),stackRepoId,AmbariMetaInfo.REPOSITORY_XML_PROPERTY_BASEURL);
+        MetainfoEntity entity=metaDao.findByKey(key);
+        if (null == entity) {
+          entity=new MetainfoEntity();
+          entity.setMetainfoName(key);
+          entity.setMetainfoValue(repoUrl);
+          metaDao.merge(entity);
+        }
+ else {
+          entity.setMetainfoValue(repoUrl);
+          metaDao.merge(entity);
+        }
+        entity=metaDao.findByKey(familyKey);
+        if (null == entity) {
+          entity=new MetainfoEntity();
+          entity.setMetainfoName(familyKey);
+          entity.setMetainfoValue(repoUrl);
+          metaDao.merge(entity);
+        }
+ else {
+          entity.setMetainfoValue(repoUrl);
+          metaDao.merge(entity);
+        }
+      }
     }
   }
 }
