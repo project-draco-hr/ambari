@@ -1,0 +1,51 @@
+{
+  AmbariManagementController controller=injector.getInstance(AmbariManagementController.class);
+  ClusterRequest r=new ClusterRequest(null,"c1","HDP-0.1",null);
+  controller.createCluster(r);
+  Clusters clusters=injector.getInstance(Clusters.class);
+  Cluster cluster=clusters.getCluster("c1");
+  Assert.assertNotNull(cluster);
+  Map<String,String> properties=new HashMap<String,String>(){
+{
+      put("a","b");
+    }
+  }
+;
+  final ClusterRequest cl=new ClusterRequest(cluster.getClusterId(),cluster.getClusterName(),cluster.getDesiredStackVersion().getStackVersion(),null);
+  ConfigurationRequest cr=new ConfigurationRequest();
+  cr.setClusterName(cluster.getClusterName());
+  cr.setType("global");
+  cr.setVersionTag("version1");
+  cr.setProperties(properties);
+  cl.setDesiredConfig(cr);
+  controller.updateClusters(new HashSet<ClusterRequest>(){
+{
+      add(cl);
+    }
+  }
+,null);
+  Config config=cluster.getConfig("global","version1");
+  Assert.assertNotNull(config);
+  Assert.assertEquals(properties,config.getProperties());
+  UpgradeCatalog149 testCatalog=injector.getInstance(UpgradeCatalog149.class);
+  testCatalog.updateConfigurationProperties("global",Collections.singletonMap("x","y"),false);
+  config=cluster.getDesiredConfigByType("global");
+  String version=config.getVersionTag();
+  Assert.assertNotNull(config);
+  Assert.assertNotSame("version1",version);
+  Assert.assertTrue(config.getProperties().containsKey("x"));
+  Assert.assertEquals("y",config.getProperties().get("x"));
+  testCatalog.updateConfigurationProperties("global",Collections.singletonMap("x","z"),true);
+  config=cluster.getDesiredConfigByType("global");
+  Assert.assertNotNull(config);
+  Assert.assertNotSame(version,config.getVersionTag());
+  Assert.assertTrue(config.getProperties().containsKey("x"));
+  Assert.assertEquals("z",config.getProperties().get("x"));
+  version=config.getVersionTag();
+  testCatalog.updateConfigurationProperties("global",Collections.singletonMap("x","y"),false);
+  config=cluster.getDesiredConfigByType("global");
+  Assert.assertNotNull(config);
+  Assert.assertNotSame(version,config.getVersionTag());
+  Assert.assertTrue(config.getProperties().containsKey("x"));
+  Assert.assertEquals("z",config.getProperties().get("x"));
+}
