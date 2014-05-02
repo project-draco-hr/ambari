@@ -1,0 +1,28 @@
+{
+  LOG.debug("Polling job status " + job.getJobId() + " #"+ job.getId());
+  try {
+    job=getResourceManager().read(job.getId());
+  }
+ catch (  ItemNotFound itemNotFound) {
+    LOG.error("Job " + job.getJobId() + " does not exist! Polling canceled");
+    thisFuture.cancel(false);
+    return;
+  }
+  getResourceManager().retrieveJobStatus(job);
+  Long time=System.currentTimeMillis() / 1000L;
+  if (time - job.getDateStarted() > LONG_JOB_THRESHOLD) {
+    LOG.debug("Job becomes long.. Rescheduling polling to longer period");
+    thisFuture.cancel(false);
+    scheduleJobPolling(true);
+  }
+switch (job.getStatus()) {
+case SUBMIT_FAILED:
+case COMPLETED:
+case FAILED:
+case KILLED:
+    LOG.debug("Job finished. Polling canceled");
+  thisFuture.cancel(false);
+break;
+default :
+}
+}
