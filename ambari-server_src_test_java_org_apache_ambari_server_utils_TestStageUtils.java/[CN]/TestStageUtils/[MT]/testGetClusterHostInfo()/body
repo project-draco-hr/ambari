@@ -1,7 +1,8 @@
 {
   Clusters fsm=injector.getInstance(Clusters.class);
+  String h1="h1";
   List<String> hostList=new ArrayList<String>();
-  hostList.add("h1");
+  hostList.add(h1);
   hostList.add("h2");
   hostList.add("h3");
   hostList.add("h4");
@@ -11,6 +12,9 @@
   hostList.add("h8");
   hostList.add("h9");
   hostList.add("h10");
+  mockStaticPartial(StageUtils.class,"getHostName");
+  expect(StageUtils.getHostName()).andReturn(h1).anyTimes();
+  replayAll();
   List<Integer> pingPorts=Arrays.asList(StageUtils.DEFAULT_PING_PORT,StageUtils.DEFAULT_PING_PORT,StageUtils.DEFAULT_PING_PORT,8671,8671,null,8672,8672,null,8673);
   fsm.addCluster("c1");
   fsm.getCluster("c1").setDesiredStackVersion(new StackId(STACK_ID));
@@ -50,9 +54,11 @@
   fsm.getCluster("c1").getService("MAPREDUCE").getServiceComponent("TASKTRACKER").getServiceComponentHost("h2").setComponentAdminState(HostComponentAdminState.DECOMMISSIONED);
   fsm.getCluster("c1").getService("MAPREDUCE").getServiceComponent("TASKTRACKER").getServiceComponentHost("h3").setComponentAdminState(HostComponentAdminState.DECOMMISSIONED);
   Map<String,Set<String>> info=StageUtils.getClusterHostInfo(fsm.getHostsForCluster("c1"),fsm.getCluster("c1"));
-  assertEquals(fsm.getHosts().size(),info.get(HOSTS_LIST).size());
+  Set<String> allHosts=info.get(HOSTS_LIST);
+  ArrayList<String> allHostsList=new ArrayList<String>(allHosts);
+  assertEquals(fsm.getHosts().size(),allHosts.size());
   for (  Host host : fsm.getHosts()) {
-    assertTrue(info.get(HOSTS_LIST).contains(host.getHostName()));
+    assertTrue(allHosts.contains(host.getHostName()));
   }
   Map<String,String> hdfsMapping=new HashMap<String,String>();
   hdfsMapping.put("DATANODE","slave_hosts");
@@ -71,7 +77,7 @@
   if (pingPorts.contains(null))   assertEquals(new HashSet<Integer>(pingPorts).size(),actualPingPorts.size() + 1);
  else   assertEquals(new HashSet<Integer>(pingPorts).size(),actualPingPorts.size());
   List<Integer> pingPortsActual=getRangeMappedDecompressedSet(actualPingPorts);
-  List<Integer> reindexedPorts=getReindexedList(pingPortsActual,new ArrayList<String>(info.get(HOSTS_LIST)),hostList);
+  List<Integer> reindexedPorts=getReindexedList(pingPortsActual,new ArrayList<String>(allHosts),hostList);
   while (pingPorts.contains(null)) {
     int indexOfNull=pingPorts.indexOf(null);
     pingPorts.set(indexOfNull,StageUtils.DEFAULT_PING_PORT);
@@ -81,4 +87,9 @@
   assertTrue(info.containsKey("decom_tt_hosts"));
   Set<String> decommissionedHosts=info.get("decom_tt_hosts");
   assertEquals(2,decommissionedHosts.toString().split(",").length);
+  assertTrue(info.containsKey(StageUtils.AMBARI_SERVER_HOST));
+  Set<String> serverHost=info.get(StageUtils.AMBARI_SERVER_HOST);
+  assertEquals(1,serverHost.toArray().length);
+  int serverHostIndex=Integer.valueOf(serverHost.iterator().next());
+  assertEquals(h1,allHostsList.get(serverHostIndex));
 }
