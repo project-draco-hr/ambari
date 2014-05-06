@@ -1,0 +1,52 @@
+{
+  String stackName=getStackName();
+  String stackVersion=getStackVersion();
+  Map<String,Map<String,Collection<String>>> missingProperties=new HashMap<String,Map<String,Collection<String>>>();
+  Map<String,Map<String,String>> clusterConfigurations=getConfigurationAsMap(getConfigurations());
+  for (  HostGroupEntity hostGroup : getHostGroups()) {
+    Collection<String> processedServices=new HashSet<String>();
+    Map<String,Collection<String>> allRequiredProperties=new HashMap<String,Collection<String>>();
+    Map<String,Map<String,String>> operationalConfiguration=new HashMap<String,Map<String,String>>(clusterConfigurations);
+    operationalConfiguration.putAll(getConfigurationAsMap(hostGroup.getConfigurations()));
+    for (    HostGroupComponentEntity component : hostGroup.getComponents()) {
+      if (!component.getName().equals("AMBARI_SERVER")) {
+        String service;
+        try {
+          service=stackInfo.getComponentToService(stackName,stackVersion,component.getName());
+        }
+ catch (        AmbariException e) {
+          throw new IllegalArgumentException("Unable to determine the service associated with the" + " component: " + component.getName());
+        }
+        if (processedServices.add(service)) {
+          Map<String,PropertyInfo> serviceRequirements=stackInfo.getRequiredProperties(stackName,stackVersion,service);
+          for (          PropertyInfo propertyInfo : serviceRequirements.values()) {
+            if (propertyInfo.getType() == type) {
+              String configCategory=propertyInfo.getFilename();
+              if (configCategory.endsWith(".xml")) {
+                configCategory=configCategory.substring(0,configCategory.indexOf(".xml"));
+              }
+              Collection<String> typeRequirements=allRequiredProperties.get(configCategory);
+              if (typeRequirements == null) {
+                typeRequirements=new HashSet<String>();
+                allRequiredProperties.put(configCategory,typeRequirements);
+              }
+              typeRequirements.add(propertyInfo.getName());
+            }
+          }
+        }
+      }
+    }
+    for (    Map.Entry<String,Collection<String>> requiredTypeProperties : allRequiredProperties.entrySet()) {
+      String requiredCategory=requiredTypeProperties.getKey();
+      Collection<String> requiredProperties=requiredTypeProperties.getValue();
+      Collection<String> operationalTypeProps=operationalConfiguration.containsKey(requiredCategory) ? operationalConfiguration.get(requiredCategory).keySet() : Collections.<String>emptyList();
+      requiredProperties.removeAll(operationalTypeProps);
+      if (!requiredProperties.isEmpty()) {
+        Map<String,Collection<String>> hostGroupMissingProps=new HashMap<String,Collection<String>>();
+        hostGroupMissingProps.put(requiredCategory,requiredProperties);
+        missingProperties.put(hostGroup.getName(),hostGroupMissingProps);
+      }
+    }
+  }
+  return missingProperties;
+}

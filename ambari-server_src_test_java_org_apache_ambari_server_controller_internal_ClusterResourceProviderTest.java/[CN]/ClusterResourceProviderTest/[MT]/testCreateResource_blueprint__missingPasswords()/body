@@ -4,6 +4,7 @@
   String stackVersion="1.23";
   String clusterName="c1";
   BlueprintDAO blueprintDAO=createStrictMock(BlueprintDAO.class);
+  AmbariMetaInfo metaInfo=createMock(AmbariMetaInfo.class);
   AmbariManagementController managementController=createStrictMock(AmbariManagementController.class);
   Request request=createNiceMock(Request.class);
   RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
@@ -33,19 +34,7 @@
   ResourceProvider hostResourceProvider=createStrictMock(ResourceProvider.class);
   ResourceProvider hostComponentResourceProvider=createStrictMock(ResourceProvider.class);
   ConfigGroupResourceProvider configGroupResourceProvider=createStrictMock(ConfigGroupResourceProvider.class);
-  Capture<ClusterRequest> createClusterRequestCapture=new Capture<ClusterRequest>();
-  Capture<Set<ClusterRequest>> updateClusterRequestCapture=new Capture<Set<ClusterRequest>>();
-  Capture<Map<String,String>> updateClusterPropertyMapCapture=new Capture<Map<String,String>>();
-  Capture<Set<ClusterRequest>> updateClusterRequestCapture2=new Capture<Set<ClusterRequest>>();
-  Capture<Map<String,String>> updateClusterPropertyMapCapture2=new Capture<Map<String,String>>();
-  Capture<Set<ClusterRequest>> updateClusterRequestCapture3=new Capture<Set<ClusterRequest>>();
-  Capture<Map<String,String>> updateClusterPropertyMapCapture3=new Capture<Map<String,String>>();
-  Capture<Request> serviceRequestCapture=new Capture<Request>();
-  Capture<Request> componentRequestCapture=new Capture<Request>();
-  Capture<Request> componentRequestCapture2=new Capture<Request>();
-  Capture<Request> hostRequestCapture=new Capture<Request>();
-  Capture<Request> hostComponentRequestCapture=new Capture<Request>();
-  Capture<Set<ConfigGroupRequest>> configGroupRequestCapture=new Capture<Set<ConfigGroupRequest>>();
+  PersistKeyValueImpl persistKeyValue=createNiceMock(PersistKeyValueImpl.class);
   Set<StackServiceResponse> stackServiceResponses=new LinkedHashSet<StackServiceResponse>();
   stackServiceResponses.add(stackServiceResponse1);
   stackServiceResponses.add(stackServiceResponse2);
@@ -70,15 +59,11 @@
   properties.put(ClusterResourceProvider.BLUEPRINT_PROPERTY_ID,blueprintName);
   propertySet.add(properties);
   Collection<Map<String,Object>> hostGroups=new ArrayList<Map<String,Object>>();
-  Map<String,Object> hostGroupProperties1=new HashMap<String,Object>();
-  Map<String,Object> hostGroupProperties2=new HashMap<String,Object>();
-  hostGroups.add(hostGroupProperties1);
-  hostGroups.add(hostGroupProperties2);
-  hostGroupProperties1.put("name","group1");
-  hostGroupProperties2.put("name","group2");
+  Map<String,Object> hostGroupProperties=new HashMap<String,Object>();
+  hostGroups.add(hostGroupProperties);
+  hostGroupProperties.put("name","group1");
   Collection<Map<String,String>> hostGroupHosts=new ArrayList<Map<String,String>>();
-  hostGroupProperties1.put("hosts",hostGroupHosts);
-  hostGroupProperties2.put("hosts",hostGroupHosts);
+  hostGroupProperties.put("hosts",hostGroupHosts);
   Map<String,String> hostGroupHostProperties=new HashMap<String,String>();
   hostGroupHostProperties.put("fqdn","host.domain");
   hostGroupHosts.add(hostGroupHostProperties);
@@ -88,11 +73,18 @@
   Map<String,String> blueprintConfigProperties=new HashMap<String,String>();
   blueprintConfigProperties.put("property1","value2");
   blueprintConfigProperties.put("new.property","new.property.value");
+  Map<String,Map<String,Collection<String>>> allMissingPasswords=new HashMap<String,Map<String,Collection<String>>>();
+  Map<String,Collection<String>> missingHGPasswords=new HashMap<String,Collection<String>>();
+  Collection<String> missingPasswords=new ArrayList<String>();
+  missingPasswords.add("my.missing.password");
+  missingHGPasswords.put("core-site",missingPasswords);
+  allMissingPasswords.put("group1",missingHGPasswords);
   expect(request.getProperties()).andReturn(propertySet).anyTimes();
   expect(blueprintDAO.findByName(blueprintName)).andReturn(blueprint);
   expect(blueprint.getStackName()).andReturn(stackName);
   expect(blueprint.getStackVersion()).andReturn(stackVersion);
   expect(blueprint.getConfigurations()).andReturn(Collections.<BlueprintConfigEntity>singletonList(blueprintConfig));
+  expect(blueprint.validateConfigurations(metaInfo,PropertyInfo.PropertyType.PASSWORD)).andReturn(allMissingPasswords);
   expect(managementController.getStackServices(capture(stackServiceRequestCapture))).andReturn(stackServiceResponses);
   expect(stackServiceResponse1.getServiceName()).andReturn("service1");
   expect(stackServiceResponse2.getServiceName()).andReturn("service2");
@@ -127,24 +119,14 @@
   expect(hostGroup.getConfigurations()).andReturn(Collections.<HostGroupConfigEntity>singleton(hostGroupConfig)).anyTimes();
   expect(hostGroupConfig.getType()).andReturn("core-site").anyTimes();
   expect(hostGroupConfig.getConfigData()).andReturn(new Gson().toJson(mapGroupConfigProperties)).anyTimes();
-  managementController.createCluster(capture(createClusterRequestCapture));
-  expect(managementController.updateClusters(capture(updateClusterRequestCapture),capture(updateClusterPropertyMapCapture))).andReturn(null);
-  expect(managementController.updateClusters(capture(updateClusterRequestCapture2),capture(updateClusterPropertyMapCapture2))).andReturn(null);
-  expect(managementController.updateClusters(capture(updateClusterRequestCapture3),capture(updateClusterPropertyMapCapture3))).andReturn(null);
-  expect(serviceResourceProvider.createResources(capture(serviceRequestCapture))).andReturn(null);
-  expect(componentResourceProvider.createResources(capture(componentRequestCapture))).andReturn(null);
-  expect(componentResourceProvider.createResources(capture(componentRequestCapture2))).andReturn(null);
-  expect(hostResourceProvider.createResources(capture(hostRequestCapture))).andReturn(null);
-  expect(hostComponentResourceProvider.createResources(capture(hostComponentRequestCapture))).andReturn(null);
-  expect(serviceResourceProvider.installAndStart(clusterName)).andReturn(response);
-  expect(configGroupResourceProvider.createResources(capture(configGroupRequestCapture))).andReturn(null);
-  replay(blueprintDAO,managementController,request,response,blueprint,stackServiceResponse1,stackServiceResponse2,stackServiceComponentResponse1,stackServiceComponentResponse2,stackServiceComponentResponse3,stackConfigurationResponse1,stackConfigurationResponse2,stackConfigurationResponse3,stackConfigurationResponse4,blueprintConfig,hostGroup,hostGroupComponent1,hostGroupComponent2,hostGroupComponent3,hostGroupConfig,serviceResourceProvider,componentResourceProvider,hostResourceProvider,hostComponentResourceProvider,configGroupResourceProvider);
-  ClusterResourceProvider.init(blueprintDAO,null);
+  replay(blueprintDAO,managementController,request,response,blueprint,stackServiceResponse1,stackServiceResponse2,stackServiceComponentResponse1,stackServiceComponentResponse2,stackServiceComponentResponse3,stackConfigurationResponse1,stackConfigurationResponse2,stackConfigurationResponse3,stackConfigurationResponse4,blueprintConfig,hostGroup,hostGroupComponent1,hostGroupComponent2,hostGroupComponent3,hostGroupConfig,serviceResourceProvider,componentResourceProvider,hostResourceProvider,hostComponentResourceProvider,configGroupResourceProvider,persistKeyValue,metaInfo);
+  ClusterResourceProvider.init(blueprintDAO,metaInfo);
   ResourceProvider provider=new TestClusterResourceProvider(managementController,serviceResourceProvider,componentResourceProvider,hostResourceProvider,hostComponentResourceProvider,configGroupResourceProvider);
   try {
     provider.createResources(request);
-    fail("Exception excepted");
+    fail("Expected exception for missing password property");
   }
  catch (  IllegalArgumentException e) {
   }
+  verify(blueprintDAO,managementController,request,response,blueprint,stackServiceResponse1,stackServiceResponse2,stackServiceComponentResponse1,stackServiceComponentResponse2,stackServiceComponentResponse3,stackConfigurationResponse1,stackConfigurationResponse2,stackConfigurationResponse3,stackConfigurationResponse4,blueprintConfig,hostGroup,hostGroupComponent1,hostGroupComponent2,hostGroupComponent3,hostGroupConfig,serviceResourceProvider,componentResourceProvider,hostResourceProvider,hostComponentResourceProvider,configGroupResourceProvider,persistKeyValue);
 }
