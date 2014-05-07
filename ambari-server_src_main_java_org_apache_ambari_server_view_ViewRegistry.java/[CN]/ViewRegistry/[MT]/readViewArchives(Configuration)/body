@@ -1,37 +1,39 @@
 {
-  File viewDir=configuration.getViewsDir();
-  File[] files=viewDir.listFiles();
-  Set<ViewInstanceEntity> instanceDefinitions=new HashSet<ViewInstanceEntity>();
-  if (files != null) {
-    for (    final File fileEntry : files) {
-      if (!fileEntry.isDirectory()) {
-        try {
-          ClassLoader cl=URLClassLoader.newInstance(new URL[]{fileEntry.toURI().toURL()});
-          InputStream configStream=cl.getResourceAsStream(VIEW_XML);
-          JAXBContext jaxbContext=JAXBContext.newInstance(ViewConfig.class);
-          Unmarshaller jaxbUnmarshaller=jaxbContext.createUnmarshaller();
-          ViewConfig viewConfig=(ViewConfig)jaxbUnmarshaller.unmarshal(configStream);
-          ViewEntity viewDefinition=installView(viewConfig,configuration,cl,fileEntry.getAbsolutePath());
-          for (          InstanceConfig instanceConfig : viewConfig.getInstances()) {
-            ViewInstanceEntity viewInstanceDefinition=new ViewInstanceEntity(viewDefinition,instanceConfig);
-            for (            PropertyConfig propertyConfig : instanceConfig.getProperties()) {
-              viewInstanceDefinition.putProperty(propertyConfig.getKey(),propertyConfig.getValue());
+  try {
+    File viewDir=configuration.getViewsDir();
+    Set<ViewInstanceEntity> instanceDefinitions=new HashSet<ViewInstanceEntity>();
+    String extractedArchivesPath=viewDir.getAbsolutePath() + File.separator + EXTRACTED_ARCHIVES_DIR;
+    if (ensureExtractedArchiveDirectory(extractedArchivesPath)) {
+      File[] files=viewDir.listFiles();
+      if (files != null) {
+        for (        File archiveFile : files) {
+          if (!archiveFile.isDirectory()) {
+            try {
+              ViewConfig viewConfig=helper.getViewConfigFromArchive(archiveFile);
+              String viewName=ViewEntity.getViewName(viewConfig.getName(),viewConfig.getVersion());
+              String archivePath=extractedArchivesPath + File.separator + viewName;
+              ClassLoader cl=extractViewArchive(archiveFile,helper.getFile(archivePath));
+              ViewEntity viewDefinition=installView(viewConfig,configuration,cl,archivePath);
+              for (              InstanceConfig instanceConfig : viewConfig.getInstances()) {
+                ViewInstanceEntity viewInstanceDefinition=new ViewInstanceEntity(viewDefinition,instanceConfig);
+                for (                PropertyConfig propertyConfig : instanceConfig.getProperties()) {
+                  viewInstanceDefinition.putProperty(propertyConfig.getKey(),propertyConfig.getValue());
+                }
+                installViewInstance(viewDefinition,viewInstanceDefinition);
+                instanceDefinitions.add(viewInstanceDefinition);
+              }
             }
-            installViewInstance(viewDefinition,viewInstanceDefinition);
-            instanceDefinitions.add(viewInstanceDefinition);
+ catch (            Exception e) {
+              LOG.error("Caught exception loading view from " + archiveFile.getAbsolutePath(),e);
+            }
           }
         }
- catch (        Exception e) {
-          LOG.error("Caught exception loading view from " + fileEntry.getAbsolutePath(),e);
-        }
+        instanceDefinitions.addAll(persistViews());
       }
     }
-    try {
-      instanceDefinitions.addAll(persistViews());
-    }
- catch (    ClassNotFoundException e) {
-      LOG.error("Caught exception persisting views.",e);
-    }
+    return instanceDefinitions;
   }
-  return instanceDefinitions;
+ catch (  Exception e) {
+    throw new SystemException("Caught exception reading view archives.",e);
+  }
 }
