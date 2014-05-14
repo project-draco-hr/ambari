@@ -18,18 +18,18 @@ def test_execute_command(self, status_update_callback_mock, open_mock):
     dummy_controller = MagicMock()
     actionQueue = ActionQueue(config, dummy_controller)
     unfreeze_flag = threading.Event()
-    puppet_execution_result_dict = {'stdout': 'out', 'stderr': 'stderr', 'structuredOut': '', }
+    python_execution_result_dict = {'stdout': 'out', 'stderr': 'stderr', 'structuredOut': '', }
 
     def side_effect(command, tmpoutfile, tmperrfile):
         unfreeze_flag.wait()
-        return puppet_execution_result_dict
+        return python_execution_result_dict
 
     def patched_aq_execute_command(command):
-        with patch.object(PuppetExecutor, 'runCommand') as runCommand_mock:
+        with patch.object(CustomServiceOrchestrator, 'runCommand') as runCommand_mock:
             runCommand_mock.side_effect = side_effect
             actionQueue.execute_command(command)
-    puppet_execution_result_dict['status'] = 'COMPLETE'
-    puppet_execution_result_dict['exitcode'] = 0
+    python_execution_result_dict['status'] = 'COMPLETE'
+    python_execution_result_dict['exitcode'] = 0
     execution_thread = Thread(target=patched_aq_execute_command, args=(self.datanode_install_command,))
     execution_thread.start()
     while True:
@@ -52,8 +52,8 @@ def test_execute_command(self, status_update_callback_mock, open_mock):
     os.remove(configname)
     report = actionQueue.result()
     self.assertEqual(len(report['reports']), 0)
-    puppet_execution_result_dict['status'] = 'FAILED'
-    puppet_execution_result_dict['exitcode'] = 13
+    python_execution_result_dict['status'] = 'FAILED'
+    python_execution_result_dict['exitcode'] = 13
     execution_thread = Thread(target=patched_aq_execute_command, args=(self.datanode_install_command,))
     execution_thread.start()
     unfreeze_flag.set()
@@ -66,8 +66,8 @@ def test_execute_command(self, status_update_callback_mock, open_mock):
     self.assertEqual(report['reports'][0], expected)
     report = actionQueue.result()
     self.assertEqual(len(report['reports']), 0)
-    puppet_execution_result_dict['status'] = 'COMPLETE'
-    puppet_execution_result_dict['exitcode'] = 0
+    python_execution_result_dict['status'] = 'COMPLETE'
+    python_execution_result_dict['exitcode'] = 0
     execution_thread = Thread(target=patched_aq_execute_command, args=(self.datanode_upgrade_command,))
     execution_thread.start()
     unfreeze_flag.set()
