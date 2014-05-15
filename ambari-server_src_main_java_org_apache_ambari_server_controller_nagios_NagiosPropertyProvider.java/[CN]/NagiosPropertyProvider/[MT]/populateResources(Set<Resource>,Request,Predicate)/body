@@ -8,17 +8,20 @@
     final String clusterName=clusterPropertyValue.toString();
     if (null == clusterName)     continue;
     if (!CLUSTER_ALERTS.containsKey(clusterName)) {
+      CLUSTER_ALERTS.put(clusterName,Collections.<NagiosAlert>emptyList());
       Future<List<NagiosAlert>> f=scheduler.submit(new Callable<List<NagiosAlert>>(){
         @Override public List<NagiosAlert> call() throws Exception {
           return populateAlerts(clusterName);
         }
       }
 );
-      try {
-        CLUSTER_ALERTS.put(clusterName,f.get());
-      }
- catch (      Exception e) {
-        LOG.error("Could not load metrics - Executor exception" + " (" + e.getMessage() + ")");
+      if (waitOnFirstCall) {
+        try {
+          CLUSTER_ALERTS.put(clusterName,f.get());
+        }
+ catch (        Exception e) {
+          LOG.error("Could not load metrics - Executor exception" + " (" + e.getMessage() + ")");
+        }
       }
     }
     CLUSTER_NAMES.add(clusterName);
