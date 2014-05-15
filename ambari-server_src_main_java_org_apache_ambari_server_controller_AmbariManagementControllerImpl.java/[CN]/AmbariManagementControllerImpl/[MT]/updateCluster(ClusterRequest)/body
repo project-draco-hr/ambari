@@ -33,5 +33,22 @@
   if (requiresHostListUpdate) {
     clusters.mapHostsToCluster(request.getHostNames(),request.getClusterName());
   }
+  if (null != request.getProvisioningState()) {
+    State provisioningState;
+    State oldProvisioningState=cluster.getProvisioningState();
+    provisioningState=State.valueOf(request.getProvisioningState());
+    if (provisioningState != State.INIT && provisioningState != State.INSTALLED) {
+      LOG.warn("Invalid cluster provisioning state {} cannot be set on the cluster {}",provisioningState,request.getClusterName());
+      throw new IllegalArgumentException("Invalid cluster provisioning state " + provisioningState + " cannot be set on cluster "+ request.getClusterName());
+    }
+    if (provisioningState != oldProvisioningState) {
+      boolean isStateTransitionValid=State.isValidDesiredStateTransition(oldProvisioningState,provisioningState);
+      if (!isStateTransitionValid) {
+        LOG.warn("Invalid cluster provisioning state {} cannot be set on the cluster {} because the current state is {}",provisioningState,request.getClusterName(),oldProvisioningState);
+        throw new AmbariException("Invalid transition for" + " cluster provisioning state" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", currentProvisioningState="+ oldProvisioningState+ ", newProvisioningState="+ provisioningState);
+      }
+    }
+    cluster.setProvisioningState(provisioningState);
+  }
   return null;
 }
