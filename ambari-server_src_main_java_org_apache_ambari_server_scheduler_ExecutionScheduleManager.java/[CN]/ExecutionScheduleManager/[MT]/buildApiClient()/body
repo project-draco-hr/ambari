@@ -1,16 +1,37 @@
 {
-  Client client=Client.create();
-  this.ambariClient=client;
+  Client client;
   String pattern;
   String url;
   if (configuration.getApiSSLAuthentication()) {
     pattern="https://localhost:%s/";
     url=String.format(pattern,configuration.getClientSSLApiPort());
+    TrustManager[] trustAllCerts=new TrustManager[]{new X509TrustManager(){
+      @Override public void checkClientTrusted(      X509Certificate[] x509Certificates,      String s) throws CertificateException {
+      }
+      @Override public void checkServerTrusted(      X509Certificate[] x509Certificates,      String s) throws CertificateException {
+      }
+      public X509Certificate[] getAcceptedIssuers(){
+        return null;
+      }
+    }
+};
+    SSLContext sc=SSLContext.getInstance("TLS");
+    sc.init(null,trustAllCerts,new SecureRandom());
+    ClientConfig config=new DefaultClientConfig();
+    config.getProperties().put(HTTPSProperties.PROPERTY_HTTPS_PROPERTIES,new HTTPSProperties(new HostnameVerifier(){
+      @Override public boolean verify(      String s,      SSLSession sslSession){
+        return true;
+      }
+    }
+,sc));
+    client=Client.create(config);
   }
  else {
+    client=Client.create();
     pattern="http://localhost:%s/";
     url=String.format(pattern,configuration.getClientApiPort());
   }
+  this.ambariClient=client;
   this.ambariWebResource=client.resource(url);
   ClientFilter csrfFilter=new CsrfProtectionFilter("RequestSchedule");
   ClientFilter tokenFilter=new InternalTokenClientFilter(tokenStorage);
