@@ -1,0 +1,73 @@
+{
+  ViewStatus status=new ViewStatus();
+  List<String> viewErrors=new ArrayList<String>();
+  AmbariHttpClient client=getAmbariClient();
+  AmbariClusterInfo clusterInfo=client.getClusterInfo();
+  if (clusterInfo != null) {
+    AmbariCluster cluster=client.getCluster(clusterInfo);
+    List<String> services=cluster.getServices();
+    if (services != null && services.size() > 0) {
+      boolean zkFound=services.indexOf("ZOOKEEPER") > -1;
+      boolean hdfsFound=services.indexOf("HDFS") > -1;
+      boolean yarnFound=services.indexOf("YARN") > -1;
+      if (!hdfsFound) {
+        viewErrors.add("Slider applications view requires HDFS service");
+      }
+ else {
+        AmbariService service=client.getService(clusterInfo,"HDFS");
+        if (service != null) {
+          if (!service.isStarted()) {
+            viewErrors.add("Slider applications view requires HDFS service to be started");
+          }
+        }
+      }
+      if (!yarnFound) {
+        viewErrors.add("Slider applications view requires YARN service");
+      }
+ else {
+        AmbariService service=client.getService(clusterInfo,"YARN");
+        if (service != null) {
+          if (!service.isStarted()) {
+            viewErrors.add("Slider applications view requires YARN service to be started");
+          }
+        }
+      }
+      if (!zkFound) {
+        viewErrors.add("Slider applications view requires ZooKeeper service");
+      }
+ else {
+        AmbariService service=client.getService(clusterInfo,"ZOOKEEPER");
+        if (service != null) {
+          if (!service.isStarted()) {
+            viewErrors.add("Slider applications view requires ZooKeeper service to be started");
+          }
+        }
+      }
+    }
+ else {
+      viewErrors.add("Slider applications view is unable to locate any services");
+    }
+    if (cluster.getDesiredConfigs() != null && cluster.getDesiredConfigs().containsKey("global")) {
+      Map<String,String> globalConfig=client.getConfiguration(clusterInfo,"global",cluster.getDesiredConfigs().get("global"));
+      if (globalConfig != null && globalConfig.containsKey("security_enabled")) {
+        String securityValue=globalConfig.get("security_enabled");
+        if (Boolean.valueOf(securityValue)) {
+          viewErrors.add("Slider applications view cannot be rendered in secure mode");
+        }
+      }
+ else {
+        viewErrors.add("Slider applications view is unable to determine the security status of the cluster");
+      }
+    }
+ else {
+      viewErrors.add("Slider applications view is unable to determine the security status of the cluster");
+    }
+  }
+ else {
+    viewErrors.add("Slider applications view requires a cluster");
+  }
+  status.setVersion(SliderAppsConfiguration.INSTANCE.getVersion());
+  status.setViewEnabled(viewErrors.size() < 1);
+  status.setViewErrors(viewErrors);
+  return status;
+}

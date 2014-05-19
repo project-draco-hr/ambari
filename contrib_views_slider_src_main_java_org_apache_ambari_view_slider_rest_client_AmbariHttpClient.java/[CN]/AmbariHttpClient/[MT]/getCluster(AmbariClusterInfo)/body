@@ -1,0 +1,38 @@
+{
+  if (clusterInfo != null) {
+    try {
+      JsonElement jsonElement=doGetJson("/api/v1/clusters/" + clusterInfo.getName());
+      if (jsonElement != null) {
+        AmbariCluster cluster=new AmbariCluster();
+        Map<String,String> desiredConfigs=new HashMap<String,String>();
+        JsonObject desiredConfigsObj=jsonElement.getAsJsonObject().get("Clusters").getAsJsonObject().get("desired_configs").getAsJsonObject();
+        for (        Map.Entry<String,JsonElement> entry : desiredConfigsObj.entrySet()) {
+          desiredConfigs.put(entry.getKey(),entry.getValue().getAsJsonObject().get("tag").getAsString());
+        }
+        cluster.setDesiredConfigs(desiredConfigs);
+        List<String> services=new ArrayList<String>();
+        JsonArray servicesArray=jsonElement.getAsJsonObject().get("services").getAsJsonArray();
+        for (        JsonElement entry : servicesArray) {
+          services.add(entry.getAsJsonObject().get("ServiceInfo").getAsJsonObject().get("service_name").getAsString());
+        }
+        cluster.setServices(services);
+        List<String> hosts=new ArrayList<String>();
+        JsonArray hostsArray=jsonElement.getAsJsonObject().get("hosts").getAsJsonArray();
+        for (        JsonElement entry : hostsArray) {
+          hosts.add(entry.getAsJsonObject().get("Hosts").getAsJsonObject().get("host_name").getAsString());
+        }
+        cluster.setHosts(hosts);
+        return cluster;
+      }
+    }
+ catch (    HttpException e) {
+      logger.warn("Unable to determine Ambari cluster details - " + clusterInfo.getName(),e);
+      throw new RuntimeException(e.getMessage(),e);
+    }
+catch (    IOException e) {
+      logger.warn("Unable to determine Ambari cluster details - " + clusterInfo.getName(),e);
+      throw new RuntimeException(e.getMessage(),e);
+    }
+  }
+  return null;
+}
