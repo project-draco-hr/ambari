@@ -1,12 +1,21 @@
 {
   Configuration configuration=createNiceMock(Configuration.class);
   DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
-  Method m=AbstractUpgradeCatalog.class.getDeclaredMethod("updateConfigurationProperties",String.class,Map.class,boolean.class);
-  UpgradeCatalog160 upgradeCatalog=createMockBuilder(UpgradeCatalog160.class).addMockedMethod(m).createMock();
+  Injector injector=createStrictMock(Injector.class);
+  Provider provider=createStrictMock(Provider.class);
+  EntityManager em=createStrictMock(EntityManager.class);
+  EntityTransaction et=createMock(EntityTransaction.class);
+  TypedQuery query=createMock(TypedQuery.class);
+  UpgradeCatalog161 upgradeCatalog=createMockBuilder(UpgradeCatalog161.class).createMock();
   expect(configuration.getDatabaseUrl()).andReturn(Configuration.JDBC_IN_MEMORY_URL).anyTimes();
-  upgradeCatalog.updateConfigurationProperties("global",Collections.singletonMap("jobhistory_heapsize","900"),false);
-  expectLastCall();
-  replay(upgradeCatalog,dbAccessor,configuration);
+  expect(injector.getProvider(EntityManager.class)).andReturn(provider).anyTimes();
+  expect(provider.get()).andReturn(em).anyTimes();
+  expect(em.getTransaction()).andReturn(et);
+  expect(et.isActive()).andReturn(true);
+  expect(em.createQuery("UPDATE ClusterEntity SET provisioningState = " + ":provisioningState",ClusterEntity.class)).andReturn(query);
+  expect(query.setParameter("provisioningState",State.INSTALLED)).andReturn(null);
+  expect(query.executeUpdate()).andReturn(0);
+  replay(upgradeCatalog,dbAccessor,configuration,injector,provider,em,et,query);
   Class<?> c=AbstractUpgradeCatalog.class;
   Field f=c.getDeclaredField("configuration");
   f.setAccessible(true);
@@ -14,6 +23,9 @@
   f=c.getDeclaredField("dbAccessor");
   f.setAccessible(true);
   f.set(upgradeCatalog,dbAccessor);
+  f=c.getDeclaredField("injector");
+  f.setAccessible(true);
+  f.set(upgradeCatalog,injector);
   upgradeCatalog.executeDMLUpdates();
-  verify(upgradeCatalog,dbAccessor,configuration);
+  verify(upgradeCatalog,dbAccessor,configuration,injector,provider,em,et,query);
 }
