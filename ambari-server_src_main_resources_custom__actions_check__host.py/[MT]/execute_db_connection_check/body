@@ -1,0 +1,48 @@
+def execute_db_connection_check(config):
+    print 'DB connection check started.'
+    ambari_server_hostname = config['clusterHostInfo']['ambari_server_host']
+    check_db_connection_jar_name = 'DBConnectionVerification.jar'
+    jdk_location = config['hostLevelParams']['jdk_location']
+    java64_home = config['hostLevelParams']['java_home']
+    db_name = config['commandParams']['db_name']
+    if (db_name == DB_NAME_MYSQL):
+        jdbc_url = config['hostLevelParams']['mysql_jdbc_url']
+        jdbc_driver = JDBC_DRIVER_MYSQL
+    elif (db_name == DB_NAME_ORACLE):
+        jdbc_url = config['hostLevelParams']['oracle_jdbc_url']
+        jdbc_driver = JDBC_DRIVER_ORACLE
+    elif (db_name == DB_NAME_POSTGRESQL):
+        jdbc_url = config['hostLevelParams']['postgresql_jdbc_url']
+        jdbc_driver = JDBC_DRIVER_POSTGRESQL
+    (path, jdbc_name) = os.path.split(jdbc_url)
+    db_connection_url = config['commandParams']['db_connection_url']
+    user_name = config['commandParams']['user_name']
+    user_passwd = config['commandParams']['user_passwd']
+    environment = {'no_proxy': format('{ambari_server_hostname}'), }
+    try:
+        cmd = format("/bin/sh -c 'cd /usr/lib/ambari-agent/ && curl -kf --retry 5 {jdk_location}{check_db_connection_jar_name} -o {check_db_connection_jar_name}'")
+        Execute(cmd, not_if=format('[ -f /usr/lib/ambari-agent/{check_db_connection_jar_name}]'), environment=environment)
+    except Exception as e:
+        message = ('Error downloading DBConnectionVerification.jar from Ambari Server resources. Check network access to Ambari Server.\n' + str(e))
+        print message
+        db_connection_check_structured_output = {'exit_code': '1', 'message': message, }
+        return db_connection_check_structured_output
+    try:
+        cmd = format("/bin/sh -c 'cd /usr/lib/ambari-agent/ && curl -kf --retry 5 {jdbc_url} -o {jdbc_name}'")
+        Execute(cmd, not_if=format('[ -f /usr/lib/ambari-agent/{jdbc_name}]'), environment=environment)
+    except Exception as e:
+        message = ('Error downloading JDBC connector from Ambari Server resources. Check network access to Ambari Server.\n' + str(e))
+        print message
+        db_connection_check_structured_output = {'exit_code': '1', 'message': message, }
+        return db_connection_check_structured_output
+    db_connection_check_command = format('{java64_home}/bin/java -cp /usr/lib/ambari-agent/{check_db_connection_jar_name}:/usr/lib/ambari-agent/{jdbc_name} org.apache.ambari.server.DBConnectionVerification {db_connection_url} {user_name} {user_passwd!p} {jdbc_driver}')
+    process = subprocess.Popen(db_connection_check_command, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    (stdoutdata, stderrdata) = process.communicate()
+    print ('INFO stdoutdata: ' + stdoutdata)
+    print ('INFO stderrdata: ' + stderrdata)
+    print ('INFO returncode: ' + str(process.returncode))
+    if (process.returncode == 0):
+        db_connection_check_structured_output = {'exit_code': '0', 'message': 'DB connection check completed successfully!', }
+    else:
+        db_connection_check_structured_output = {'exit_code': '1', 'message': stdoutdata, }
+    return db_connection_check_structured_output
