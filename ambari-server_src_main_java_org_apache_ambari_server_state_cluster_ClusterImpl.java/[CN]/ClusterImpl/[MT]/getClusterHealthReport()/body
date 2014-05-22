@@ -1,0 +1,76 @@
+{
+  int staleConfigsHosts=0;
+  int maintenanceStateHosts=0;
+  int healthyStateHosts=0;
+  int unhealthyStateHosts=0;
+  int initStateHosts=0;
+  int healthyStatusHosts=0;
+  int unhealthyStatusHosts=0;
+  int unknownStatusHosts=0;
+  int alertStatusHosts=0;
+  int heartbeatLostStateHosts=0;
+  Set<String> hostnames;
+  try {
+    hostnames=clusters.getHostsForCluster(clusterEntity.getClusterName()).keySet();
+  }
+ catch (  AmbariException ignored) {
+    hostnames=Collections.emptySet();
+  }
+  for (  String hostname : hostnames) {
+    Host host=clusters.getHost(hostname);
+switch (host.getState()) {
+case HEALTHY:
+      healthyStateHosts++;
+    break;
+case UNHEALTHY:
+  unhealthyStateHosts++;
+break;
+case INIT:
+initStateHosts++;
+break;
+case HEARTBEAT_LOST:
+heartbeatLostStateHosts++;
+break;
+}
+switch (host.getHealthStatus().getHealthStatus()) {
+case HEALTHY:
+healthyStatusHosts++;
+break;
+case UNHEALTHY:
+unhealthyStatusHosts++;
+break;
+case UNKNOWN:
+unknownStatusHosts++;
+break;
+case ALERT:
+alertStatusHosts++;
+break;
+}
+boolean staleConfig=false;
+boolean maintenanceState=false;
+if (serviceComponentHostsByHost.containsKey(hostname)) {
+for (ServiceComponentHost sch : serviceComponentHostsByHost.get(hostname)) {
+staleConfig=configHelper.isStaleConfigs(sch) ? true : staleConfig;
+maintenanceState=maintenanceStateHelper.getEffectiveState(sch) == MaintenanceState.ON ? true : maintenanceState;
+}
+}
+if (staleConfig) {
+staleConfigsHosts++;
+}
+if (maintenanceState) {
+maintenanceStateHosts++;
+}
+}
+ClusterHealthReport chr=new ClusterHealthReport();
+chr.setAlertStatusHosts(alertStatusHosts);
+chr.setHealthyStateHosts(healthyStateHosts);
+chr.setUnknownStatusHosts(unknownStatusHosts);
+chr.setUnhealthyStatusHosts(unhealthyStatusHosts);
+chr.setUnhealthyStateHosts(unhealthyStateHosts);
+chr.setStaleConfigsHosts(staleConfigsHosts);
+chr.setMaintenanceStateHosts(maintenanceStateHosts);
+chr.setInitStateHosts(initStateHosts);
+chr.setHeartbeatLostStateHosts(heartbeatLostStateHosts);
+chr.setHealthyStatusHosts(healthyStatusHosts);
+return chr;
+}
