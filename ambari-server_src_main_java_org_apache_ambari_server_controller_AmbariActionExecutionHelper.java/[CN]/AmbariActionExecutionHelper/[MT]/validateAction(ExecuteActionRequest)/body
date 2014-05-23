@@ -1,8 +1,4 @@
 {
-  Cluster cluster=clusters.getCluster(actionRequest.getClusterName());
-  if (cluster == null) {
-    throw new AmbariException("Unable to find cluster. clusterName = " + actionRequest.getClusterName());
-  }
   if (actionRequest.getActionName() == null || actionRequest.getActionName().isEmpty()) {
     throw new AmbariException("Action name must be specified");
   }
@@ -25,18 +21,26 @@
       }
     }
   }
-  StackId stackId=cluster.getCurrentStackVersion();
-  String expectedService=actionDef.getTargetService() == null ? "" : actionDef.getTargetService();
   List<RequestResourceFilter> resourceFilters=actionRequest.getResourceFilters();
-  String targetService="";
-  String targetComponent="";
   RequestResourceFilter resourceFilter=null;
   if (resourceFilters != null && !resourceFilters.isEmpty()) {
     if (resourceFilters.size() > 1) {
       throw new AmbariException("Custom action definition only allows one " + "resource filter to be specified.");
     }
-    resourceFilter=resourceFilters.get(0);
-    String actualService=resourceFilter.getServiceName() == null ? "" : resourceFilter.getServiceName();
+ else {
+      resourceFilter=resourceFilters.get(0);
+    }
+  }
+  String targetService="";
+  String targetComponent="";
+  if (null != actionRequest.getClusterName()) {
+    Cluster cluster=clusters.getCluster(actionRequest.getClusterName());
+    if (cluster == null) {
+      throw new AmbariException("Unable to find cluster. clusterName = " + actionRequest.getClusterName());
+    }
+    StackId stackId=cluster.getCurrentStackVersion();
+    String expectedService=actionDef.getTargetService() == null ? "" : actionDef.getTargetService();
+    String actualService=resourceFilter == null || resourceFilter.getServiceName() == null ? "" : resourceFilter.getServiceName();
     if (!expectedService.isEmpty() && !actualService.isEmpty() && !expectedService.equals(actualService)) {
       throw new AmbariException("Action " + actionRequest.getActionName() + " targets service "+ actualService+ " that does not match with expected "+ expectedService);
     }
@@ -57,7 +61,7 @@
       }
     }
     String expectedComponent=actionDef.getTargetComponent() == null ? "" : actionDef.getTargetComponent();
-    String actualComponent=resourceFilter.getComponentName() == null ? "" : resourceFilter.getComponentName();
+    String actualComponent=resourceFilter == null || resourceFilter.getComponentName() == null ? "" : resourceFilter.getComponentName();
     if (!expectedComponent.isEmpty() && !actualComponent.isEmpty() && !expectedComponent.equals(actualComponent)) {
       throw new AmbariException("Action " + actionRequest.getActionName() + " targets component "+ actualComponent+ " that does not match with expected "+ expectedComponent);
     }

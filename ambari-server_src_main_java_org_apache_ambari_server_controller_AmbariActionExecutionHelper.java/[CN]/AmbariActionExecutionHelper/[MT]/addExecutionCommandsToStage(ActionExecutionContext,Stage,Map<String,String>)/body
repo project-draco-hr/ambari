@@ -1,7 +1,9 @@
 {
   String actionName=actionContext.getActionName();
   String clusterName=actionContext.getClusterName();
-  Cluster cluster=clusters.getCluster(clusterName);
+  Cluster cluster=null;
+  if (null != clusterName)   cluster=clusters.getCluster(clusterName);
+  ComponentInfo componentInfo=null;
   List<RequestResourceFilter> resourceFilters=actionContext.getResourceFilters();
   RequestResourceFilter resourceFilter=new RequestResourceFilter();
   if (resourceFilters != null && !resourceFilters.isEmpty()) {
@@ -10,26 +12,27 @@
   Set<String> candidateHosts=new HashSet<String>();
   String serviceName=actionContext.getExpectedServiceName();
   String componentName=actionContext.getExpectedComponentName();
-  StackId stackId=cluster.getCurrentStackVersion();
-  ComponentInfo componentInfo=null;
-  if (serviceName != null && !serviceName.isEmpty()) {
-    if (componentName != null && !componentName.isEmpty()) {
-      Map<String,ServiceComponentHost> componentHosts=cluster.getService(serviceName).getServiceComponent(componentName).getServiceComponentHosts();
-      candidateHosts.addAll(componentHosts.keySet());
-      componentInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
-    }
- else {
-      for (      String component : cluster.getService(serviceName).getServiceComponents().keySet()) {
-        Map<String,ServiceComponentHost> componentHosts=cluster.getService(serviceName).getServiceComponent(component).getServiceComponentHosts();
+  if (null != cluster) {
+    StackId stackId=cluster.getCurrentStackVersion();
+    if (serviceName != null && !serviceName.isEmpty()) {
+      if (componentName != null && !componentName.isEmpty()) {
+        Map<String,ServiceComponentHost> componentHosts=cluster.getService(serviceName).getServiceComponent(componentName).getServiceComponentHosts();
         candidateHosts.addAll(componentHosts.keySet());
+        componentInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
+      }
+ else {
+        for (        String component : cluster.getService(serviceName).getServiceComponents().keySet()) {
+          Map<String,ServiceComponentHost> componentHosts=cluster.getService(serviceName).getServiceComponent(component).getServiceComponentHosts();
+          candidateHosts.addAll(componentHosts.keySet());
+        }
       }
     }
-  }
  else {
-    candidateHosts.addAll(clusters.getHostsForCluster(cluster.getClusterName()).keySet());
+      candidateHosts.addAll(clusters.getHostsForCluster(cluster.getClusterName()).keySet());
+    }
   }
   if (resourceFilter.getHostNames().isEmpty() && candidateHosts.isEmpty()) {
-    throw new AmbariException("Suitable hosts not found, component=" + componentName + ", service="+ serviceName+ ", cluster="+ cluster.getClusterName()+ ", "+ "actionName="+ actionContext.getActionName());
+    throw new AmbariException("Suitable hosts not found, component=" + componentName + ", service="+ serviceName+ ((null == cluster) ? "" : ", cluster=" + cluster.getClusterName() + ", ")+ "actionName="+ actionContext.getActionName());
   }
   if (!resourceFilter.getHostNames().isEmpty() && !candidateHosts.isEmpty()) {
     for (    String hostname : resourceFilter.getHostNames()) {
@@ -59,12 +62,13 @@ default :
 throw new AmbariException("Unsupported target type = " + hostType);
 }
 }
-Set<Map<String,String>> maintenanceSCHs=maintenanceStateHelper.getMaintenanceHostComponents(clusters,cluster);
+Set<Map<String,String>> maintenanceSCHs=new HashSet<Map<String,String>>();
+if (null != cluster) maintenanceSCHs=maintenanceStateHelper.getMaintenanceHostComponents(clusters,cluster);
 for (String hostName : targetHosts) {
 stage.addHostRoleExecutionCommand(hostName,Role.valueOf(actionContext.getActionName()),RoleCommand.ACTIONEXECUTE,new ServiceComponentHostOpInProgressEvent(actionContext.getActionName(),hostName,System.currentTimeMillis()),clusterName,serviceName);
 Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
 Map<String,Map<String,String>> configTags=null;
-if (!serviceName.isEmpty()) {
+if (!serviceName.isEmpty() && null != cluster) {
 configTags=managementController.findConfigurationTagsWithOverrides(cluster,hostName);
 }
 Map<String,String> commandParams=actionContext.getParameters();
@@ -87,7 +91,7 @@ if (componentInfo != null) {
 roleParams.put(COMPONENT_CATEGORY,componentInfo.getCategory());
 }
 execCmd.setRoleParams(roleParams);
-execCmd.setClusterHostInfo(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(clusterName),cluster));
+if (null != cluster) execCmd.setClusterHostInfo(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(clusterName),cluster));
 execCmd.setPassiveInfo(maintenanceSCHs);
 }
 }
