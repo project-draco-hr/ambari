@@ -1,0 +1,90 @@
+{
+  if (yarnApp == null)   return null;
+  SliderApp app=new SliderApp();
+  app.setId(Long.toString(yarnApp.getApplicationId().getClusterTimestamp()) + "_" + Integer.toString(yarnApp.getApplicationId().getId()));
+  app.setName(yarnApp.getName());
+  app.setUser(yarnApp.getUser());
+  app.setState(yarnApp.getYarnApplicationState().name());
+  app.setDiagnostics(yarnApp.getDiagnostics());
+  app.setYarnId(yarnApp.getApplicationId().toString());
+  app.setType(yarnApp.getApplicationType());
+  app.setStartTime(yarnApp.getStartTime());
+  app.setEndTime(yarnApp.getFinishTime());
+  if (properties != null && !properties.isEmpty()) {
+    SliderAppMasterClient sliderAppClient=yarnApp.getTrackingUrl() == null ? null : new SliderAppMasterClient(yarnApp.getTrackingUrl());
+    SliderAppMasterData appMasterData=null;
+    Map<String,String> quickLinks=new HashMap<String,String>();
+    for (    String property : properties) {
+      if ("RUNNING".equals(app.getState())) {
+        if (sliderAppClient != null) {
+          if (appMasterData == null)           appMasterData=sliderAppClient.getAppMasterData();
+          if ("urls".equals(property.toLowerCase())) {
+            if (quickLinks.isEmpty())             quickLinks=sliderAppClient.getQuickLinks(appMasterData.publisherUrl);
+            app.setUrls(quickLinks);
+          }
+ else           if ("configs".equals(property.toLowerCase())) {
+            Map<String,Map<String,String>> configs=sliderAppClient.getConfigs(appMasterData.publisherUrl);
+            app.setConfigs(configs);
+          }
+ else           if ("jmx".equals(property.toLowerCase())) {
+            if (quickLinks.isEmpty())             quickLinks=sliderAppClient.getQuickLinks(appMasterData.publisherUrl);
+            if (quickLinks != null && quickLinks.containsKey("JMX")) {
+              String jmxUrl=quickLinks.get("JMX");
+              app.setJmx(sliderAppClient.getJmx(jmxUrl));
+            }
+            Map<String,Map<String,String>> configs=sliderAppClient.getConfigs(appMasterData.publisherUrl);
+            app.setConfigs(configs);
+          }
+ else           if ("components".equals(property.toLowerCase())) {
+            try {
+              System.setProperty(SliderKeys.HADOOP_USER_NAME,"yarn");
+              ClusterDescription description=sliderClient.getClusterDescription(yarnApp.getName());
+              if (description != null && description.status != null && !description.status.isEmpty()) {
+                Map<String,SliderAppComponent> componentTypeMap=new HashMap<String,SliderAppComponent>();
+                for (                Entry<String,Object> e : description.status.entrySet()) {
+                  @SuppressWarnings("unchecked") Map<String,Map<String,Map<String,Object>>> componentsObj=(Map<String,Map<String,Map<String,Object>>>)e.getValue();
+                  boolean isLive="live".equals(e.getKey());
+                  for (                  Entry<String,Map<String,Map<String,Object>>> componentEntry : componentsObj.entrySet()) {
+                    SliderAppComponent appComponent=componentTypeMap.get(componentEntry.getKey());
+                    if (appComponent == null) {
+                      appComponent=new SliderAppComponent();
+                      appComponent.setComponentName(componentEntry.getKey());
+                      appComponent.setActiveContainers(new HashMap<String,Map<String,String>>());
+                      appComponent.setCompletedContainers(new HashMap<String,Map<String,String>>());
+                      componentTypeMap.put(componentEntry.getKey(),appComponent);
+                    }
+                    for (                    Entry<String,Map<String,Object>> containerEntry : componentEntry.getValue().entrySet()) {
+                      Map<String,String> containerDataMap=new HashMap<String,String>();
+                      String containerId=containerEntry.getKey();
+                      Map<String,Object> containerValues=containerEntry.getValue();
+                      for (                      String containerProperty : containerValues.keySet()) {
+                        Object containerPropertyValue=containerValues.get(containerProperty);
+                        containerDataMap.put(containerProperty,containerPropertyValue.toString());
+                      }
+                      if (isLive)                       appComponent.getActiveContainers().put(containerId,containerDataMap);
+ else                       appComponent.getCompletedContainers().put(containerId,containerDataMap);
+                    }
+                    appComponent.setInstanceCount(appComponent.getActiveContainers().size() + appComponent.getCompletedContainers().size());
+                  }
+                }
+                app.setComponents(componentTypeMap);
+              }
+            }
+ catch (            UnknownApplicationInstanceException e) {
+              logger.warn("Unable to determine app components for " + yarnApp.getName(),e);
+            }
+catch (            YarnException e) {
+              logger.warn("Unable to determine app components for " + yarnApp.getName(),e);
+              throw new RuntimeException(e.getMessage(),e);
+            }
+catch (            IOException e) {
+              logger.warn("Unable to determine app components for " + yarnApp.getName(),e);
+              throw new RuntimeException(e.getMessage(),e);
+            }
+          }
+        }
+      }
+    }
+  }
+  return app;
+}
