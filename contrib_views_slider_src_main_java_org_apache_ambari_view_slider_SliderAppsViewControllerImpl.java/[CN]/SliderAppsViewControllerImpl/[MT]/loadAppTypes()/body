@@ -1,0 +1,62 @@
+{
+  List<SliderAppType> appTypes=null;
+  String appsFolderPath=getAppsFolderPath();
+  File appsFolder=new File(appsFolderPath);
+  if (appsFolder.exists()) {
+    File[] appZips=appsFolder.listFiles((FilenameFilter)new RegexFileFilter("^.*\\.zip$"));
+    if (appZips != null) {
+      appTypes=new ArrayList<SliderAppType>();
+      for (      File appZip : appZips) {
+        try {
+          ZipFile zipFile=new ZipFile(appZip);
+          Metainfo metainfo=new MetainfoParser().parse(zipFile.getInputStream(zipFile.getEntry("metainfo.xml")));
+          if (metainfo.getServices() != null && metainfo.getServices().size() > 0) {
+            Service service=metainfo.getServices().get(0);
+            String appConfigJsonString=IOUtils.toString(zipFile.getInputStream(zipFile.getEntry("appConfig.json")),"UTF-8");
+            String resourcesJsonString=IOUtils.toString(zipFile.getInputStream(zipFile.getEntry("resources.json")),"UTF-8");
+            JsonElement appConfigJson=new JsonParser().parse(appConfigJsonString);
+            JsonElement resourcesJson=new JsonParser().parse(resourcesJsonString);
+            SliderAppType appType=new SliderAppType();
+            appType.setId(service.getName());
+            appType.setTypeName(service.getName());
+            appType.setTypeDescription(service.getComment());
+            appType.setTypeVersion(service.getVersion());
+            appType.setTypePackageFileName(appZip.getName());
+            Map<String,String> configsMap=new HashMap<String,String>();
+            JsonObject appTypeGlobalJson=appConfigJson.getAsJsonObject().get("global").getAsJsonObject();
+            for (            Entry<String,JsonElement> e : appTypeGlobalJson.entrySet())             configsMap.put(e.getKey(),e.getValue().getAsString());
+            appType.setTypeConfigs(configsMap);
+            ArrayList<SliderAppTypeComponent> appTypeComponentList=new ArrayList<SliderAppTypeComponent>();
+            for (            Component component : service.getComponents()) {
+              SliderAppTypeComponent appTypeComponent=new SliderAppTypeComponent();
+              appTypeComponent.setDisplayName(component.getName());
+              appTypeComponent.setId(component.getName());
+              appTypeComponent.setName(component.getName());
+              appTypeComponent.setYarnMemory(1024);
+              appTypeComponent.setYarnCpuCores(1);
+              if (component.getMinInstanceCount() != null)               appTypeComponent.setInstanceCount(Integer.parseInt(component.getMinInstanceCount()));
+              if (component.getMaxInstanceCount() != null)               appTypeComponent.setMaxInstanceCount(Integer.parseInt(component.getMaxInstanceCount()));
+              if (resourcesJson != null) {
+                JsonElement componentJson=resourcesJson.getAsJsonObject().get("components").getAsJsonObject().get(component.getName());
+                if (componentJson != null && componentJson.getAsJsonObject().has("yarn.role.priority")) {
+                  appTypeComponent.setPriority(Integer.parseInt(componentJson.getAsJsonObject().get("yarn.role.priority").getAsString()));
+                }
+              }
+              appTypeComponent.setCategory(component.getCategory());
+              appTypeComponentList.add(appTypeComponent);
+            }
+            appType.setTypeComponents(appTypeComponentList);
+            appTypes.add(appType);
+          }
+        }
+ catch (        ZipException e) {
+          logger.warn("Unable to parse app " + appZip.getAbsolutePath(),e);
+        }
+catch (        IOException e) {
+          logger.warn("Unable to parse app " + appZip.getAbsolutePath(),e);
+        }
+      }
+    }
+  }
+  return appTypes;
+}
