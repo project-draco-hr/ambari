@@ -1,0 +1,48 @@
+{
+  Map<String,String> jmxProperties=new HashMap<String,String>();
+  if (appType == null) {
+    logger.info("AppType must be provided to extract jmx properties");
+    return jmxProperties;
+  }
+  try {
+    URLStreamProvider streamProvider=context.getURLStreamProvider();
+    InputStream jmxStream=null;
+    Map<String,String> headers=new HashMap<String,String>();
+    try {
+      jmxStream=streamProvider.readFrom(jmxUrl,"GET",null,headers);
+    }
+ catch (    IOException e) {
+      logger.error(String.format("Unable to access JMX endpoint at %s. Error %s",jmxUrl,e.getMessage()));
+    }
+    if (jmxStream != null) {
+      ObjectMapper jmxObjectMapper=new ObjectMapper();
+      jmxObjectMapper.configure(DeserializationConfig.Feature.USE_ANNOTATIONS,false);
+      ObjectReader jmxObjectReader=jmxObjectMapper.reader(JMXMetricHolder.class);
+      JMXMetricHolder metricHolder=null;
+      try {
+        metricHolder=jmxObjectReader.readValue(jmxStream);
+      }
+ catch (      IOException e) {
+        logger.error(String.format("Malformed jmx data from %s. Error %s",jmxUrl,e.getMessage()));
+      }
+      Map<String,Map<String,Object>> categories=new HashMap<String,Map<String,Object>>();
+      for (      Map<String,Object> bean : metricHolder.getBeans()) {
+        String category=getCategory(bean);
+        if (category != null) {
+          categories.put(category,bean);
+        }
+      }
+      List<String> components=new ArrayList<String>();
+      for (      SliderAppTypeComponent appTypeComponent : appType.getTypeComponents()) {
+        components.add(appTypeComponent.getName());
+      }
+      Map<String,Map<String,Map<String,Metric>>> metrics=appType.getJmxMetrics();
+      Map<String,Metric> relevantMetrics=getRelevantMetrics(metrics,components);
+      addJmxProperties(jmxProperties,categories,relevantMetrics);
+    }
+  }
+ catch (  Exception e) {
+    logger.info("Failed to extract jmx metrics. " + e.getMessage());
+  }
+  return jmxProperties;
+}
