@@ -1,0 +1,57 @@
+{
+  if (json.has("name") && json.has("typeConfigs") && json.has("typeComponents")) {
+    final String appName=json.get("name").getAsString();
+    JsonObject configs=json.get("typeConfigs").getAsJsonObject();
+    JsonArray componentsArray=json.get("typeComponents").getAsJsonArray();
+    String appsCreateFolderPath=getAppsCreateFolderPath();
+    File appsCreateFolder=new File(appsCreateFolderPath);
+    if (!appsCreateFolder.exists())     appsCreateFolder.mkdirs();
+    int appCount;
+synchronized (createAppCounter) {
+      if (createAppCounter < 0) {
+        createAppCounter=0;
+        String[] apps=appsCreateFolder.list();
+        for (        String app : apps) {
+          try {
+            int count=Integer.parseInt(app);
+            if (count > createAppCounter)             createAppCounter=count;
+          }
+ catch (          NumberFormatException e) {
+          }
+        }
+      }
+      appCount=++createAppCounter;
+    }
+    File appCreateFolder=new File(appsCreateFolder,Integer.toString(appCount));
+    appCreateFolder.mkdirs();
+    File appConfigJsonFile=new File(appCreateFolder,"appConfig.json");
+    File resourcesJsonFile=new File(appCreateFolder,"resources.json");
+    saveAppConfigs(configs,componentsArray,appConfigJsonFile);
+    saveAppResources(componentsArray,resourcesJsonFile);
+    AmbariClusterInfo clusterInfo=ambariClient.getClusterInfo();
+    AmbariCluster cluster=ambariClient.getCluster(clusterInfo);
+    Map<String,String> coreSiteConfigs=ambariClient.getConfiguration(clusterInfo,"core-site",cluster.getDesiredConfigs().get("core-site"));
+    String hdfsLocation=coreSiteConfigs.get("fs.defaultFS");
+    final ActionCreateArgs createArgs=new ActionCreateArgs();
+    createArgs.template=appConfigJsonFile;
+    createArgs.resources=resourcesJsonFile;
+    createArgs.image=new Path(hdfsLocation + "/slider/agent/slider-agent.tar.gz");
+    ClassLoader currentClassLoader=Thread.currentThread().getContextClassLoader();
+    Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
+    try {
+      ApplicationId applicationId=UserGroupInformation.getBestUGI(null,"yarn").doAs(new PrivilegedExceptionAction<ApplicationId>(){
+        public ApplicationId run() throws IOException, YarnException {
+          SliderClient sliderClient=getSliderClient();
+          sliderClient.actionCreate(appName,createArgs);
+          return sliderClient.applicationId;
+        }
+      }
+);
+      if (applicationId != null)       return getApplicationIdString(applicationId);
+    }
+  finally {
+      Thread.currentThread().setContextClassLoader(currentClassLoader);
+    }
+  }
+  return null;
+}
