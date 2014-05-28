@@ -38,3 +38,21 @@ def upgrade(args):
     else:
         adjust_directory_permissions(user)
     upgrade_local_repo(args)
+    properties = get_ambari_properties()
+    if (properties == (-1)):
+        err = 'Error getting ambari properties'
+        print_error_msg(err)
+        raise FatalException((-1), err)
+    conf_file = properties.fileName
+    try:
+        resources_dir = properties[RESOURCES_DIR_PROPERTY]
+    except KeyError as e:
+        err = ((('Property ' + str(e)) + ' is not defined at ') + conf_file)
+        raise FatalException(1, err)
+    for db_name in list(JDBC_DB_DEFAULT_DRIVER):
+        if os.path.isfile(os.path.join(resources_dir, JDBC_DB_DEFAULT_DRIVER[db_name])):
+            symlink_name = (db_name + '-jdbc-driver.jar')
+            jdbc_symlink = os.path.join(resources_dir, symlink_name)
+            if os.path.lexists(jdbc_symlink):
+                os.remove(jdbc_symlink)
+            os.symlink(os.path.join(resources_dir, JDBC_DB_DEFAULT_DRIVER[db_name]), jdbc_symlink)

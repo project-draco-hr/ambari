@@ -1,0 +1,72 @@
+@patch('os.path.isfile')
+@patch.object(ambari_server, 'get_ambari_properties')
+@patch('os.path.lexists')
+@patch('os.remove')
+@patch('os.symlink')
+@patch('shutil.copy')
+def test_proceedJDBCProperties(self, copy_mock, os_symlink_mock, os_remove_mock, lexists_mock, get_ambari_properties_mock, isfile_mock):
+    args = MagicMock()
+    isfile_mock.return_value = False
+    args.jdbc_driver = 'test jdbc'
+    fail = False
+    try:
+        ambari_server.proceedJDBCProperties(args)
+    except FatalException as e:
+        self.assertEquals('File test jdbc does not exist!', e.reason)
+        fail = True
+    self.assertTrue(fail)
+    isfile_mock.return_value = True
+    args.jdbc_db = 'incorrect db'
+    fail = False
+    try:
+        ambari_server.proceedJDBCProperties(args)
+    except FatalException as e:
+        self.assertEquals('Unsupported database name incorrect db. Please see help for more information.', e.reason)
+        fail = True
+    self.assertTrue(fail)
+    args.jdbc_db = 'mysql'
+    get_ambari_properties_mock.return_value = (-1)
+    fail = False
+    try:
+        ambari_server.proceedJDBCProperties(args)
+    except FatalException as e:
+        self.assertEquals('Error getting ambari properties', e.reason)
+        fail = True
+    self.assertTrue(fail)
+    args.jdbc_db = 'oracle'
+    p = MagicMock()
+    get_ambari_properties_mock.return_value = p
+    p.__getitem__.side_effect = KeyError('test exception')
+    fail = False
+    try:
+        ambari_server.proceedJDBCProperties(args)
+    except FatalException as e:
+        fail = True
+    self.assertTrue(fail)
+    lexists_mock.return_value = True
+    args.jdbc_db = 'postgresql'
+    get_ambari_properties_mock.return_value = MagicMock()
+    fail = False
+
+    def side_effect():
+        raise Exception((-1), 'Failed to copy!')
+    copy_mock.side_effect = side_effect
+    try:
+        ambari_server.proceedJDBCProperties(args)
+    except FatalException as e:
+        fail = True
+    self.assertTrue(fail)
+    self.assertTrue(os_remove_mock.called)
+    get_ambari_properties_mock.reset_mock()
+    os_remove_mock.reset_mock()
+    p = MagicMock()
+    get_ambari_properties_mock.return_value = p
+    p.__getitem__.side_effect = None
+    p.__getitem__.return_value = 'somewhere'
+    copy_mock.reset_mock()
+    copy_mock.side_effect = None
+    ambari_server.proceedJDBCProperties(args)
+    self.assertTrue(os_remove_mock.called)
+    self.assertTrue(os_symlink_mock.called)
+    self.assertEquals(os_symlink_mock.call_args_list[0][0][0], os.path.join('somewhere', 'test jdbc'))
+    self.assertEquals(os_symlink_mock.call_args_list[0][0][1], os.path.join('somewhere', 'postgresql-jdbc-driver.jar'))
