@@ -1,7 +1,18 @@
 {
   Map<String,String> jmxProperties=new HashMap<String,String>();
-  if (appType == null) {
-    logger.info("AppType must be provided to extract jmx properties");
+  if (appType == null || appType.getJmxMetrics() == null) {
+    logger.info("AppType must be provided and it must contain jmx_metrics.json to extract jmx properties");
+    return jmxProperties;
+  }
+  List<String> components=new ArrayList<String>();
+  for (  SliderAppTypeComponent appTypeComponent : appType.getTypeComponents()) {
+    components.add(appTypeComponent.getName());
+  }
+  Map<String,Map<String,Map<String,Metric>>> metrics=appType.getJmxMetrics();
+  Map<String,Metric> relevantMetrics=getRelevantMetrics(metrics,components);
+  SliderAppJmxHelper.JMXTypes jmxType=SliderAppJmxHelper.jmxTypeExpected(relevantMetrics);
+  if (jmxType == null) {
+    logger.info("jmx_metrics.json is malformed. It may have mixed metric key types of unsupported metric key types.");
     return jmxProperties;
   }
   try {
@@ -15,34 +26,23 @@
       logger.error(String.format("Unable to access JMX endpoint at %s. Error %s",jmxUrl,e.getMessage()));
     }
     if (jmxStream != null) {
-      ObjectMapper jmxObjectMapper=new ObjectMapper();
-      jmxObjectMapper.configure(DeserializationConfig.Feature.USE_ANNOTATIONS,false);
-      ObjectReader jmxObjectReader=jmxObjectMapper.reader(JMXMetricHolder.class);
-      JMXMetricHolder metricHolder=null;
-      try {
-        metricHolder=jmxObjectReader.readValue(jmxStream);
-      }
- catch (      IOException e) {
-        logger.error(String.format("Malformed jmx data from %s. Error %s",jmxUrl,e.getMessage()));
-      }
-      Map<String,Map<String,Object>> categories=new HashMap<String,Map<String,Object>>();
-      for (      Map<String,Object> bean : metricHolder.getBeans()) {
-        String category=getCategory(bean);
-        if (category != null) {
-          categories.put(category,bean);
-        }
-      }
-      List<String> components=new ArrayList<String>();
-      for (      SliderAppTypeComponent appTypeComponent : appType.getTypeComponents()) {
-        components.add(appTypeComponent.getName());
-      }
-      Map<String,Map<String,Map<String,Metric>>> metrics=appType.getJmxMetrics();
-      Map<String,Metric> relevantMetrics=getRelevantMetrics(metrics,components);
-      addJmxProperties(jmxProperties,categories,relevantMetrics);
-    }
-  }
- catch (  Exception e) {
-    logger.info("Failed to extract jmx metrics. " + e.getMessage());
-  }
-  return jmxProperties;
+switch (jmxType) {
+case JMX_BEAN:
+        SliderAppJmxHelper.extractMetricsFromJmxBean(jmxStream,jmxUrl,jmxProperties,relevantMetrics);
+      break;
+case JSON:
+    SliderAppJmxHelper.extractMetricsFromJmxJson(jmxStream,jmxUrl,jmxProperties,relevantMetrics);
+  break;
+case XML:
+SliderAppJmxHelper.extractMetricsFromJmxXML(jmxStream,jmxUrl,jmxProperties,relevantMetrics);
+break;
+default :
+logger.info("Unsupported jmx type.");
+}
+}
+}
+ catch (Exception e) {
+logger.info("Failed to extract jmx metrics. " + e.getMessage());
+}
+return jmxProperties;
 }
