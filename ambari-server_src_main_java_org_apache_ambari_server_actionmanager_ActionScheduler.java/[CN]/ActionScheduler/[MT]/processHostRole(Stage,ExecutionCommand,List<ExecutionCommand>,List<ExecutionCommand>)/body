@@ -1,0 +1,24 @@
+{
+  long now=System.currentTimeMillis();
+  String roleStr=cmd.getRole();
+  String hostname=cmd.getHostname();
+  if (s.getStartTime(hostname,roleStr) < 0) {
+    commandsToStart.add(cmd);
+    s.setStartTime(hostname,roleStr,now);
+    s.setHostRoleStatus(hostname,roleStr,HostRoleStatus.QUEUED);
+  }
+  s.setLastAttemptTime(hostname,roleStr,now);
+  s.incrementAttemptCount(hostname,roleStr);
+  cmd.setHostname(hostsMap.getHostMap(hostname));
+  String stagePk=s.getStageId() + "-" + s.getRequestId();
+  Map<String,Set<String>> clusterHostInfo=clusterHostInfoCache.getIfPresent(stagePk);
+  if (clusterHostInfo == null) {
+    Type type=new TypeToken<Map<String,Set<String>>>(){
+    }
+.getType();
+    clusterHostInfo=StageUtils.getGson().fromJson(s.getClusterHostInfo(),type);
+    clusterHostInfoCache.put(stagePk,clusterHostInfo);
+  }
+  cmd.setClusterHostInfo(clusterHostInfo);
+  commandsToUpdate.add(cmd);
+}

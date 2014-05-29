@@ -1,4 +1,5 @@
 {
+  LOG.debug("==> Collecting commands to schedule...");
   Map<String,RoleStats> roleStats=initRoleStats(s);
   long now=System.currentTimeMillis();
   long taskTimeout=actionTimeout;
@@ -12,10 +13,16 @@
   for (  String host : s.getHosts()) {
     List<ExecutionCommandWrapper> commandWrappers=s.getExecutionCommands(host);
     Host hostObj=fsmObject.getHost(host);
+    int i_my=0;
+    LOG.trace("===>host=" + host);
     for (    ExecutionCommandWrapper wrapper : commandWrappers) {
       ExecutionCommand c=wrapper.getExecutionCommand();
       String roleStr=c.getRole();
       HostRoleStatus status=s.getHostRoleStatus(host,roleStr);
+      i_my++;
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("Host task " + i_my + ") id = "+ c.getTaskId()+ " status = "+ status.toString()+ " (role="+ roleStr+ "), roleCommand = "+ c.getRoleCommand());
+      }
       boolean hostDeleted=false;
       if (null != cluster) {
         Service svc=null;
@@ -55,17 +62,21 @@
           if (null != cluster) {
             transitionToFailedState(cluster.getClusterName(),c.getServiceName(),roleStr,host,now,false);
           }
+          LOG.info("Removing command from queue, host={}, commandId={} ",host,c.getCommandId());
           actionQueue.dequeue(host,c.getCommandId());
         }
  else {
           commandsToSchedule.add(c);
+          LOG.trace("===> commandsToSchedule(reschedule)=" + commandsToSchedule.size());
         }
       }
  else       if (status.equals(HostRoleStatus.PENDING)) {
         commandsToSchedule.add(c);
+        LOG.trace("===>commandsToSchedule(first_time)=" + commandsToSchedule.size());
       }
       this.updateRoleStats(status,roleStats.get(roleStr));
     }
   }
+  LOG.debug("Collected {} commands to schedule in this wakeup.",commandsToSchedule.size());
   return roleStats;
 }

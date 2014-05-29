@@ -1,0 +1,28 @@
+{
+  List<ServiceComponentHostEvent> failedEvents=new ArrayList<ServiceComponentHostEvent>();
+  clusterGlobalLock.readLock().lock();
+  try {
+    for (    Entry<String,ServiceComponentHostEvent> entry : eventMap.entries()) {
+      String serviceName=entry.getKey();
+      ServiceComponentHostEvent event=entry.getValue();
+      try {
+        Service service=getService(serviceName);
+        ServiceComponent serviceComponent=service.getServiceComponent(event.getServiceComponentName());
+        ServiceComponentHost serviceComponentHost=serviceComponent.getServiceComponentHost(event.getHostName());
+        serviceComponentHost.handleEvent(event);
+      }
+ catch (      AmbariException e) {
+        LOG.error("ServiceComponentHost lookup exception ",e);
+        failedEvents.add(event);
+      }
+catch (      InvalidStateTransitionException e) {
+        LOG.error("Invalid transition ",e);
+        failedEvents.add(event);
+      }
+    }
+  }
+  finally {
+    clusterGlobalLock.readLock().unlock();
+  }
+  return failedEvents;
+}
