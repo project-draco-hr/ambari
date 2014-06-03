@@ -2,17 +2,26 @@
   return new Command<Void>(){
     @Override public Void invoke() throws AmbariException {
       BlueprintEntity blueprint=toBlueprintEntity(properties);
-      if (dao.findByName(blueprint.getBlueprintName()) != null) {
+      if (blueprintDAO.findByName(blueprint.getBlueprintName()) != null) {
         throw new DuplicateResourceException("Attempted to create a Blueprint which already exists, blueprint_name=" + blueprint.getBlueprintName());
       }
       Map<String,Map<String,Collection<String>>> missingProperties=blueprint.validateConfigurations(stackInfo,PropertyInfo.PropertyType.DEFAULT);
       if (!missingProperties.isEmpty()) {
         throw new IllegalArgumentException("Required configurations are missing from the specified host groups: " + missingProperties);
       }
+      String validateTopology=(String)properties.get("validate_topology");
+      if (validateTopology == null || !validateTopology.equalsIgnoreCase("false")) {
+        validateTopology(blueprint);
+      }
       if (LOG.isDebugEnabled()) {
         LOG.debug("Creating Blueprint, name=" + blueprint.getBlueprintName());
       }
-      dao.create(blueprint);
+      try {
+        blueprintDAO.create(blueprint);
+      }
+ catch (      Exception e) {
+        throw new RuntimeException(e);
+      }
       return null;
     }
   }

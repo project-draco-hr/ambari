@@ -1,6 +1,8 @@
 {
   Set<Map<String,Object>> setProperties=getTestProperties();
   setConfigurationProperties(setProperties);
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Capture<Set<StackServiceRequest>> stackServiceRequestCapture=new Capture<Set<StackServiceRequest>>();
   Request request=createMock(Request.class);
   Map<String,ServiceInfo> services=new HashMap<String,ServiceInfo>();
   ServiceInfo service=new ServiceInfo();
@@ -14,6 +16,7 @@
   serviceComponents.add(component1);
   serviceComponents.add(component2);
   Capture<BlueprintEntity> entityCapture=new Capture<BlueprintEntity>();
+  expect(managementController.getStackServices(capture(stackServiceRequestCapture))).andReturn(Collections.<StackServiceResponse>emptySet());
   expect(request.getProperties()).andReturn(setProperties);
   expect(dao.findByName(BLUEPRINT_NAME)).andReturn(null);
   expect(metaInfo.getServices("test-stack-name","test-stack-version")).andReturn(services).anyTimes();
@@ -22,8 +25,8 @@
   expect(metaInfo.getComponentToService("test-stack-name","test-stack-version","component2")).andReturn("test-service").anyTimes();
   expect(metaInfo.getRequiredProperties("test-stack-name","test-stack-version","test-service")).andReturn(Collections.<String,org.apache.ambari.server.state.PropertyInfo>emptyMap()).anyTimes();
   dao.create(capture(entityCapture));
-  replay(dao,metaInfo,request);
-  ResourceProvider provider=createProvider();
+  replay(dao,metaInfo,request,managementController);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(Resource.Type.Blueprint,PropertyHelper.getPropertyIds(Resource.Type.Blueprint),PropertyHelper.getKeyPropertyIds(Resource.Type.Blueprint),managementController);
   AbstractResourceProviderTest.TestObserver observer=new AbstractResourceProviderTest.TestObserver();
   ((ObservableResourceProvider)provider).addObserver(observer);
   provider.createResources(request);
@@ -34,5 +37,5 @@
   assertEquals(request,lastEvent.getRequest());
   assertNull(lastEvent.getPredicate());
   validateEntity(entityCapture.getValue(),true);
-  verify(dao,metaInfo,request);
+  verify(dao,metaInfo,request,managementController);
 }
