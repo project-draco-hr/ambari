@@ -1,7 +1,8 @@
+@patch.object(ambari_server, 'run_in_shell')
 @patch.object(ambari_server, 'is_root')
 @patch.object(ambari_server, 'check_database_name_property')
 @patch.object(ambari_server, 'run_stack_upgrade')
-def test_upgrade_stack(self, run_stack_upgrade_mock, check_database_name_property_mock, is_root_mock):
+def test_upgrade_stack(self, run_stack_upgrade_mock, check_database_name_property_mock, is_root_mock, run_in_shell_mock):
     args = MagicMock()
     args.persistence_type = 'local'
     is_root_mock.return_value = False
@@ -11,8 +12,35 @@ def test_upgrade_stack(self, run_stack_upgrade_mock, check_database_name_propert
     except FatalException as fe:
         self.assertTrue(('root-level' in fe.reason))
         pass
+    run_in_shell_mock.return_value = (0, 'existed!', '')
     is_root_mock.return_value = True
-    run_stack_upgrade_mock.return_value = 0
+    run_stack_upgrade_mock.return_value = (0, '', '')
     ambari_server.upgrade_stack(args, 'HDP-2.0')
     self.assertTrue(run_stack_upgrade_mock.called)
     run_stack_upgrade_mock.assert_called_with('HDP', '2.0', None, None)
+    run_stack_upgrade_mock.reset_mock()
+    run_in_shell_mock.return_value = (1, '', '')
+    is_root_mock.return_value = True
+    try:
+        ambari_server.upgrade_stack(args, 'HDP-2.0')
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertTrue(('Repository for HDP-2.0 is not existed' in fe.reason))
+        pass
+    run_stack_upgrade_mock.reset_mock()
+    run_in_shell_mock.return_value = (0, 'existed!', '')
+    is_root_mock.return_value = True
+    run_stack_upgrade_mock.return_value = (0, '', '')
+    ambari_server.upgrade_stack(args, 'HDP-2.0', 'URL')
+    self.assertTrue(run_stack_upgrade_mock.called)
+    run_stack_upgrade_mock.assert_called_with('HDP', '2.0', 'URL', None)
+    run_stack_upgrade_mock.reset_mock()
+    run_in_shell_mock.return_value = (0, '', '')
+    is_root_mock.return_value = True
+    run_stack_upgrade_mock.return_value = (2, '', '')
+    try:
+        ambari_server.upgrade_stack(args, 'HDP-2.0', 'URL')
+        self.fail('Should throw exception')
+    except FatalException as fe:
+        self.assertTrue(('Error executing stack upgrade.' in fe.reason))
+        pass
