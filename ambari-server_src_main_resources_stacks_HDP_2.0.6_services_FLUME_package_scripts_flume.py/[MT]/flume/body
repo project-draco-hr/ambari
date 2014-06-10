@@ -1,26 +1,25 @@
 def flume(action=None):
     import params
-    flume_agents = {}
-    if (params.flume_conf_content is not None):
-        flume_agents = build_flume_topology(params.flume_conf_content)
-    agent_names = flume_agents.keys()
-    if (len(params.flume_command_targets) > 0):
-        agent_names = params.flume_command_targets
     if (action == 'config'):
+        for n in find_expected_agent_names():
+            os.unlink(os.path.join(params.flume_conf_dir, n, 'ambari-meta.json'))
         Directory(params.flume_conf_dir)
         Directory(params.flume_log_dir, owner=params.flume_user)
+        flume_agents = {}
+        if (params.flume_conf_content is not None):
+            flume_agents = build_flume_topology(params.flume_conf_content)
         for agent in flume_agents.keys():
-            flume_agent_conf_dir = ((params.flume_conf_dir + os.sep) + agent)
-            flume_agent_conf_file = ((flume_agent_conf_dir + os.sep) + 'flume.conf')
-            flume_agent_meta_file = ((flume_agent_conf_dir + os.sep) + 'ambari-meta.json')
-            flume_agent_log4j_file = ((flume_agent_conf_dir + os.sep) + 'log4j.properties')
+            flume_agent_conf_dir = os.path.join(params.flume_conf_dir, agent)
+            flume_agent_conf_file = os.path.join(flume_agent_conf_dir, 'flume.conf')
+            flume_agent_meta_file = os.path.join(flume_agent_conf_dir, 'ambari-meta.json')
+            flume_agent_log4j_file = os.path.join(flume_agent_conf_dir, 'log4j.properties')
             Directory(flume_agent_conf_dir)
             PropertiesFile(flume_agent_conf_file, properties=flume_agents[agent], mode=420)
             File(flume_agent_log4j_file, content=Template('log4j.properties.j2', agent_name=agent), mode=420)
             File(flume_agent_meta_file, content=json.dumps(ambari_meta(agent, flume_agents[agent])), mode=420)
     elif (action == 'start'):
         flume_base = format('env JAVA_HOME={java_home} /usr/bin/flume-ng agent --name {{0}} --conf {{1}} --conf-file {{2}} {{3}}')
-        for agent in agent_names:
+        for agent in cmd_target_names():
             flume_agent_conf_dir = ((params.flume_conf_dir + os.sep) + agent)
             flume_agent_conf_file = ((flume_agent_conf_dir + os.sep) + 'flume.conf')
             flume_agent_pid_file = (((params.flume_run_dir + os.sep) + agent) + '.pid')
@@ -40,6 +39,7 @@ def flume(action=None):
         pid_files = glob.glob(((params.flume_run_dir + os.sep) + '*.pid'))
         if (0 == len(pid_files)):
             return
+        agent_names = cmd_target_names()
         if (len(agent_names) > 0):
             for agent in agent_names:
                 pid_file = (((params.flume_run_dir + os.sep) + agent) + '.pid')
