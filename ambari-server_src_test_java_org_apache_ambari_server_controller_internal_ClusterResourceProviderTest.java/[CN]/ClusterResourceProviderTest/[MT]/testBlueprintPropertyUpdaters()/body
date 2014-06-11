@@ -4,6 +4,7 @@
   final Map<String,String> multiHostProperty1=Collections.singletonMap("hbase.zookeeper.quorum","localhost");
   final Map<String,String> multiHostProperty2=Collections.singletonMap("storm.zookeeper.servers","['localhost']");
   final Map<String,String> mProperty=Collections.singletonMap("namenode_heapsize","1025");
+  final Map<String,String> databaseProperty=Collections.singletonMap("javax.jdo.option.ConnectionURL","localhost:12345");
   final HostGroup hostGroup1=createNiceMock(HostGroup.class);
   final HostGroup hostGroup2=createNiceMock(HostGroup.class);
   expect(hostGroup1.getComponents()).andReturn(new ArrayList<String>(){
@@ -28,6 +29,10 @@
   AmbariManagementController managementController=createNiceMock(AmbariManagementController.class);
   ClusterResourceProvider resourceProvider=createMockBuilder(ClusterResourceProvider.class).withConstructor(Set.class,Map.class,AmbariManagementController.class).withArgs(new HashSet<String>(),new HashMap<Resource.Type,String>(),managementController).createMock();
   replay(managementController,resourceProvider,hostGroup1,hostGroup2);
+  Map<String,Map<String,String>> mapConfigurations;
+  Field configField=ClusterResourceProvider.class.getDeclaredField("mapClusterConfigurations");
+  configField.setAccessible(true);
+  mapConfigurations=(Map<String,Map<String,String>>)configField.get(resourceProvider);
   Map<String,PropertyUpdater> propertyUpdaterMap;
   Field f=ClusterResourceProvider.class.getDeclaredField("propertyUpdaters");
   f.setAccessible(true);
@@ -49,5 +54,11 @@
   entry=mProperty.entrySet().iterator().next();
   newValue=propertyUpdaterMap.get(entry.getKey()).update(hostGroups,entry.getValue());
   Assert.assertEquals("1025m",newValue);
+  Map<String,String> configs=new HashMap<String,String>();
+  configs.put("hive_database","External MySQL Database");
+  mapConfigurations.put("global",configs);
+  entry=databaseProperty.entrySet().iterator().next();
+  newValue=propertyUpdaterMap.get(entry.getKey()).update(hostGroups,entry.getValue());
+  Assert.assertEquals("localhost:12345",newValue);
   verify(managementController,resourceProvider,hostGroup1,hostGroup2);
 }
