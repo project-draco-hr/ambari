@@ -1,0 +1,49 @@
+{
+  if (sch.isRestartRequired()) {
+    return true;
+  }
+  Map<String,HostConfig> actual=sch.getActualConfigs();
+  if (null == actual || actual.isEmpty())   return false;
+  Cluster cluster=clusters.getClusterById(sch.getClusterId());
+  StackId stackId=cluster.getDesiredStackVersion();
+  Map<String,Map<String,String>> desired=getEffectiveDesiredTags(cluster,sch.getHostName());
+  ServiceInfo serviceInfo=ambariMetaInfo.getService(stackId.getStackName(),stackId.getStackVersion(),sch.getServiceName());
+  boolean stale=false;
+  Iterator<Entry<String,Map<String,String>>> it=desired.entrySet().iterator();
+  while (it.hasNext() && !stale) {
+    Entry<String,Map<String,String>> desiredEntry=it.next();
+    String type=desiredEntry.getKey();
+    Map<String,String> tags=desiredEntry.getValue();
+    if (!actual.containsKey(type)) {
+      if (!serviceInfo.hasConfigType(type)) {
+        stale=false;
+      }
+ else       if (type.equals(Configuration.GLOBAL_CONFIG_TAG)) {
+        Collection<String> keys=mergeKeyNames(cluster,type,tags.values());
+        if (serviceInfo.hasPropertyFor(type,keys) || !hasPropertyFor(stackId,type,keys)) {
+          stale=true;
+        }
+      }
+ else {
+        stale=true;
+      }
+    }
+ else {
+      HostConfig hc=actual.get(type);
+      Map<String,String> actualTags=buildTags(hc);
+      if (!isTagChanged(tags,actualTags)) {
+        stale=false;
+      }
+ else       if (type.equals(Configuration.GLOBAL_CONFIG_TAG)) {
+        Collection<String> changed=findChangedKeys(cluster,type,tags.values(),actualTags.values());
+        if (serviceInfo.hasPropertyFor(type,changed)) {
+          stale=true;
+        }
+      }
+ else {
+        stale=serviceInfo.hasConfigType(type);
+      }
+    }
+  }
+  return stale;
+}
