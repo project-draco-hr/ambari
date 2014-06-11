@@ -1,9 +1,15 @@
+@patch('subprocess.Popen')
 @patch.object(socket.socket, 'bind')
 @patch.object(socket.socket, 'listen')
-@patch.object(socket.socket, '__init__')
-@patch.object(sys, 'exit')
-def test_init_warn(self, sys_exit_mock, socketInitMock, socketListenMock, socketBindMock):
+def test_init_warn(self, socketListenMock, socketBindMock, popen_mock):
+    procObj = MagicMock()
+    procObj.communicate = MagicMock()
+    procObj.communicate.return_value = {'mine.py': 0, 'log': 'log', }
+    popen_mock.return_value = procObj
     PingPortListener.logger.reset_mock()
-    allive_daemon = PingPortListener.PingPortListener(self.config)
-    self.assertTrue(socketInitMock.called)
-    self.assertTrue(sys_exit_mock.called)
+    try:
+        PingPortListener.PingPortListener(self.config)
+        self.fail('Should throw exception')
+    except Exception as fe:
+        self.assertTrue(('port already used' in str(fe)))
+        pass
