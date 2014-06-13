@@ -1,0 +1,16 @@
+{
+  final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
+  Configuration configuration=createNiceMock(Configuration.class);
+  Capture<DBAccessor.DBColumnInfo> restartRequiredColumnCapture=new Capture<DBAccessor.DBColumnInfo>();
+  expect(configuration.getDatabaseUrl()).andReturn(Configuration.POSTGRES_DB_NAME).anyTimes();
+  dbAccessor.addColumn(eq("hostcomponentdesiredstate"),capture(restartRequiredColumnCapture));
+  replay(dbAccessor,configuration);
+  AbstractUpgradeCatalog upgradeCatalog=getUpgradeCatalog(dbAccessor);
+  Class<?> c=AbstractUpgradeCatalog.class;
+  Field f=c.getDeclaredField("configuration");
+  f.setAccessible(true);
+  f.set(upgradeCatalog,configuration);
+  upgradeCatalog.executeDDLUpdates();
+  verify(dbAccessor,configuration);
+  assertRestartRequiredColumnPostgres(restartRequiredColumnCapture);
+}
