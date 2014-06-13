@@ -1,15 +1,23 @@
 {
-  LOG.debug("Creating file " + request.file.getFilePath());
   try {
-    FSDataOutputStream output=getHdfsApi().create(request.file.getFilePath(),false);
-    if (request.file.getFileContent() != null) {
-      output.writeBytes(request.file.getFileContent());
+    LOG.debug("Creating file " + request.file.getFilePath());
+    try {
+      FSDataOutputStream output=getHdfsApi().create(request.file.getFilePath(),false);
+      if (request.file.getFileContent() != null) {
+        output.writeBytes(request.file.getFileContent());
+      }
+      output.close();
     }
-    output.close();
+ catch (    FileAlreadyExistsException ex) {
+      throw new ServiceFormattedException(ex.getMessage(),ex,400);
+    }
+    response.setHeader("Location",String.format("%s/%s",ui.getAbsolutePath().toString(),request.file.getFilePath()));
+    return Response.status(204).build();
   }
- catch (  FileAlreadyExistsException e) {
-    return badRequestResponse(e.toString());
+ catch (  WebApplicationException ex) {
+    throw ex;
   }
-  response.setHeader("Location",String.format("%s/%s",ui.getAbsolutePath().toString(),request.file.getFilePath()));
-  return Response.status(204).build();
+catch (  Exception ex) {
+    throw new ServiceFormattedException(ex.getMessage(),ex);
+  }
 }

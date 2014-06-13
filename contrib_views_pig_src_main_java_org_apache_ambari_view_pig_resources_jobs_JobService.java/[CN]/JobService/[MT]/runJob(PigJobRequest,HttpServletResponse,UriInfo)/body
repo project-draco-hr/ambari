@@ -1,25 +1,26 @@
 {
-  if (!request.validatePOST()) {
-    return badRequestResponse(request.explainPOST());
-  }
   try {
+    request.validatePOST();
     getResourceManager().create(request.job);
+    PigJob job=null;
+    try {
+      job=getResourceManager().read(request.job.getId());
+    }
+ catch (    ItemNotFound itemNotFound) {
+      throw new NotFoundFormattedException("Job not found",null);
+    }
+    response.setHeader("Location",String.format("%s/%s",ui.getAbsolutePath().toString(),request.job.getId()));
+    JSONObject object=new JSONObject();
+    object.put("job",job);
+    return Response.ok(object).status(201).build();
   }
- catch (  IllegalArgumentException e) {
-    return badRequestResponse(e.getMessage());
+ catch (  WebApplicationException ex) {
+    throw ex;
   }
-catch (  WebServiceException e) {
-    return serverErrorResponse(e.getMessage());
+catch (  IllegalArgumentException ex) {
+    throw new BadRequestFormattedException(ex.getMessage(),ex);
   }
-  PigJob job=null;
-  try {
-    job=getResourceManager().read(request.job.getId());
+catch (  Exception ex) {
+    throw new ServiceFormattedException(ex.getMessage(),ex);
   }
- catch (  ItemNotFound itemNotFound) {
-    return Response.status(404).build();
-  }
-  response.setHeader("Location",String.format("%s/%s",ui.getAbsolutePath().toString(),request.job.getId()));
-  JSONObject object=new JSONObject();
-  object.put("job",job);
-  return Response.ok(object).status(201).build();
 }
