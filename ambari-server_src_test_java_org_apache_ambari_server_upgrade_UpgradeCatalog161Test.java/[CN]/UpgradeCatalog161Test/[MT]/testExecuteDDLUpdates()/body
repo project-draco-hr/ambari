@@ -1,6 +1,7 @@
 {
   final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
   Configuration configuration=createNiceMock(Configuration.class);
+  ResultSet resultSet=createNiceMock(ResultSet.class);
   expect(configuration.getDatabaseUrl()).andReturn(Configuration.JDBC_IN_MEMORY_URL).anyTimes();
   Capture<DBAccessor.DBColumnInfo> provisioningStateColumnCapture=new Capture<DBAccessor.DBColumnInfo>();
   Capture<List<DBAccessor.DBColumnInfo>> operationLevelEntityColumnCapture=new Capture<List<DBAccessor.DBColumnInfo>>();
@@ -14,15 +15,22 @@
   setClustersConfigExpectations(dbAccessor,provisioningStateColumnCapture);
   setOperationLevelEntityConfigExpectations(dbAccessor,operationLevelEntityColumnCapture);
   setViewExpectations(dbAccessor,viewIconColumnCapture,viewIcon64ColumnCapture);
+  dbAccessor.addColumn(eq("viewinstance"),anyObject(DBAccessor.DBColumnInfo.class));
   setViewInstanceExpectations(dbAccessor,labelColumnCapture,descriptionColumnCapture,visibleColumnCapture,instanceIconColumnCapture,instanceIcon64ColumnCapture);
-  replay(dbAccessor,configuration);
+  dbAccessor.executeSelect(anyObject(String.class));
+  expectLastCall().andReturn(resultSet).anyTimes();
+  resultSet.next();
+  expectLastCall().andReturn(false).anyTimes();
+  resultSet.close();
+  expectLastCall().anyTimes();
+  replay(dbAccessor,configuration,resultSet);
   AbstractUpgradeCatalog upgradeCatalog=getUpgradeCatalog(dbAccessor);
   Class<?> c=AbstractUpgradeCatalog.class;
   Field f=c.getDeclaredField("configuration");
   f.setAccessible(true);
   f.set(upgradeCatalog,configuration);
   upgradeCatalog.executeDDLUpdates();
-  verify(dbAccessor,configuration);
+  verify(dbAccessor,configuration,resultSet);
   assertClusterColumns(provisioningStateColumnCapture);
   assertOperationLevelEntityColumns(operationLevelEntityColumnCapture);
   assertViewColumns(viewIconColumnCapture,viewIcon64ColumnCapture);
