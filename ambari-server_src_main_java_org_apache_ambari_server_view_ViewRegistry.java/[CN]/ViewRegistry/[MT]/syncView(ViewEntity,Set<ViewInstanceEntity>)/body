@@ -6,31 +6,36 @@
       LOG.debug("Creating View " + viewName + ".");
     }
     viewDAO.merge(view);
+    persistedView=viewDAO.findByName(viewName);
+    if (persistedView == null) {
+      String message="View  " + persistedView.getViewName() + " can not be found.";
+      LOG.error(message);
+      throw new IllegalStateException(message);
+    }
   }
- else {
-    Map<String,ViewInstanceEntity> instanceEntityMap=new HashMap<String,ViewInstanceEntity>();
-    for (    ViewInstanceEntity instance : view.getInstances()) {
-      instanceEntityMap.put(instance.getName(),instance);
+  Map<String,ViewInstanceEntity> instanceEntityMap=new HashMap<String,ViewInstanceEntity>();
+  for (  ViewInstanceEntity instance : view.getInstances()) {
+    instanceEntityMap.put(instance.getName(),instance);
+  }
+  for (  ViewInstanceEntity persistedInstance : persistedView.getInstances()) {
+    String instanceName=persistedInstance.getName();
+    ViewInstanceEntity instance=view.getInstanceDefinition(instanceName);
+    instanceEntityMap.remove(instanceName);
+    if (instance == null) {
+      instance=new ViewInstanceEntity(view,instanceName);
+      bindViewInstance(view,instance);
+      instanceDefinitions.add(instance);
     }
-    for (    ViewInstanceEntity persistedInstance : persistedView.getInstances()) {
-      String instanceName=persistedInstance.getName();
-      ViewInstanceEntity instance=view.getInstanceDefinition(instanceName);
-      instanceEntityMap.remove(instanceName);
-      if (instance == null) {
-        instance=new ViewInstanceEntity(view,instanceName);
-        bindViewInstance(view,instance);
-        instanceDefinitions.add(instance);
-      }
-      instance.setLabel(persistedInstance.getLabel());
-      instance.setDescription(persistedInstance.getDescription());
-      instance.setVisible(persistedInstance.isVisible());
-      instance.setData(persistedInstance.getData());
-      instance.setProperties(persistedInstance.getProperties());
-      instance.setEntities(persistedInstance.getEntities());
-    }
-    for (    ViewInstanceEntity instance : instanceEntityMap.values()) {
-      view.removeInstanceDefinition(instance.getName());
-      instanceDefinitions.remove(instance);
-    }
+    instance.setViewInstanceId(persistedInstance.getViewInstanceId());
+    instance.setLabel(persistedInstance.getLabel());
+    instance.setDescription(persistedInstance.getDescription());
+    instance.setVisible(persistedInstance.isVisible());
+    instance.setData(persistedInstance.getData());
+    instance.setProperties(persistedInstance.getProperties());
+    instance.setEntities(persistedInstance.getEntities());
+  }
+  for (  ViewInstanceEntity instance : instanceEntityMap.values()) {
+    view.removeInstanceDefinition(instance.getName());
+    instanceDefinitions.remove(instance);
   }
 }
