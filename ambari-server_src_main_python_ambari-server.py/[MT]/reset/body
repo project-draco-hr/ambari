@@ -19,9 +19,15 @@ def reset(args):
     check_database_name_property()
     parse_properties_file(args)
     if (args.persistence_type == 'remote'):
-        client_usage_cmd_drop = DATABASE_CLI_TOOLS_USAGE[DATABASE_INDEX].format(DATABASE_DROP_SCRIPTS[DATABASE_INDEX], args.database_username, BLIND_PASSWORD, args.database_name)
-        client_usage_cmd_init = DATABASE_CLI_TOOLS_USAGE[DATABASE_INDEX].format(DATABASE_INIT_SCRIPTS[DATABASE_INDEX], args.database_username, BLIND_PASSWORD, args.database_name)
+        client_usage_cmd_drop = get_remote_script_line(args, DATABASE_DROP_SCRIPTS[DATABASE_INDEX])
+        client_usage_cmd_init = get_remote_script_line(args, DATABASE_INIT_SCRIPTS[DATABASE_INDEX])
+        if ((not client_usage_cmd_drop) or (not client_usage_cmd_init)):
+            raise NonFatalException('Could`t create command lines for {0} DB'.format(args.dbms))
         print_warning_msg((((((((((('To reset Ambari Server schema ' + 'you must run the following DDL against the database to ') + 'drop the schema:') + os.linesep) + client_usage_cmd_drop) + os.linesep) + 'Then you must run the following DDL ') + 'against the database to create the schema: ') + os.linesep) + client_usage_cmd_init) + os.linesep))
+        if (args.dbms == 'postgres'):
+            raise NonFatalException('Please set DB password to PGPASSWORD env variable before running DDL`s!')
+        else:
+            raise NonFatalException("Please replace '*' symbols with password before running DDL`s!")
     else:
         okToRun = get_YN_input('Confirm server reset [yes/no]({0})? '.format(default), SILENT)
         if (not okToRun):

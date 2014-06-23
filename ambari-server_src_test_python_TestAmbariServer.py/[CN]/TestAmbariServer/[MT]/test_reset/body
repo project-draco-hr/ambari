@@ -1,3 +1,4 @@
+@patch.object(ambari_server, 'get_remote_script_line')
 @patch.object(ambari_server, 'is_server_runing')
 @patch.object(ambari_server, 'get_YN_input')
 @patch.object(ambari_server, 'setup_db')
@@ -7,7 +8,7 @@
 @patch.object(ambari_server, 'parse_properties_file')
 @patch.object(ambari_server, 'is_root')
 @patch.object(ambari_server, 'check_database_name_property')
-def test_reset(self, check_database_name_property_mock, is_root_mock, parse_properties_file_mock, configure_database_username_password_mock, run_os_command_mock, print_info_msg_mock, setup_db_mock, get_YN_inputMock, is_server_running_mock):
+def test_reset(self, check_database_name_property_mock, is_root_mock, parse_properties_file_mock, configure_database_username_password_mock, run_os_command_mock, print_info_msg_mock, setup_db_mock, get_YN_inputMock, is_server_running_mock, get_remote_script_line_mock):
     parse_properties_file_mock.return_value = 0
     args = MagicMock()
     args.persistence_type = 'local'
@@ -38,7 +39,7 @@ def test_reset(self, check_database_name_property_mock, is_root_mock, parse_prop
     run_os_command_mock.return_value = (0, None, None)
     ambari_server.reset(args)
     self.assertTrue(setup_db_mock.called)
-    is_server_running_mock.side_effect = [(True, 123), (False, 0), (False, 0)]
+    is_server_running_mock.side_effect = [(True, 123), (False, 0), (False, 0), (False, 0), (False, 0)]
     try:
         ambari_server.reset(args)
         self.fail('Should throw exception')
@@ -49,6 +50,19 @@ def test_reset(self, check_database_name_property_mock, is_root_mock, parse_prop
         self.fail('Should throw exception')
     except NonFatalException:
         pass
-    args.persistence_type = 'remote'
-    rcode = ambari_server.reset(args)
-    self.assertEqual(None, rcode)
+    get_remote_script_line_mock.return_value = None
+    try:
+        args.persistence_type = 'remote'
+        ambari_server.reset(args)
+        self.fail('Should throw exception')
+    except NonFatalException:
+        pass
+    get_remote_script_line_mock.reset_mock()
+    get_remote_script_line_mock.side_effect = ['drop', 'create']
+    try:
+        args.persistence_type = 'remote'
+        rcode = ambari_server.reset(args)
+        self.fail('Should throw exception')
+    except NonFatalException:
+        self.assertTrue(get_remote_script_line_mock.called)
+        pass

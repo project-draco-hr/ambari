@@ -1,0 +1,19 @@
+def get_remote_script_line(args, scriptPath, forPrint=True):
+    tool = get_db_cli_tool(args)
+    if (not tool):
+        if (VERBOSE or (args.persistence_type == 'remote')):
+            print_warning_msg('{0} not found'.format(DATABASE_CLI_TOOLS[DATABASE_INDEX]))
+        return None
+    if (args.dbms == 'postgres'):
+        os.environ['PGPASSWORD'] = args.database_password
+        return '{0} {1}'.format(tool, POSTGRES_EXEC_ARGS.format(args.database_host, args.database_port, args.database_name, args.database_username, scriptPath))
+    elif (args.dbms == 'oracle'):
+        sid_or_sname = 'sid'
+        if ((hasattr(args, 'sid_or_sname') and (args.sid_or_sname == 'sname')) or (hasattr(args, 'jdbc_url') and args.jdbc_url and re.match(ORACLE_SNAME_PATTERN, args.jdbc_url))):
+            print_info_msg('using SERVICE_NAME instead of SID for Oracle')
+            sid_or_sname = 'service_name'
+        return '{0} {1}'.format(tool, ORACLE_EXEC_ARGS.format(args.database_username, (args.database_password if (not forPrint) else BLIND_PASSWORD), args.database_host, args.database_port, args.database_name, scriptPath, sid_or_sname))
+    elif (args.dbms == 'mysql'):
+        MYSQL_EXEC_ARGS = (MYSQL_EXEC_ARGS_WO_USER_VARS if (MYSQL_INIT_SCRIPT == scriptPath) else MYSQL_EXEC_ARGS_WITH_USER_VARS)
+        return '{0} {1}'.format(tool, MYSQL_EXEC_ARGS.format(args.database_host, args.database_port, args.database_username, (args.database_password if (not forPrint) else BLIND_PASSWORD), args.database_name, scriptPath))
+    return None
