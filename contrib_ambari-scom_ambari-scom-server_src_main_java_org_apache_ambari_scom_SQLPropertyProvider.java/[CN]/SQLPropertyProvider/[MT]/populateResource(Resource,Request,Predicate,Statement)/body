@@ -12,6 +12,7 @@
   if (hostName == null) {
     throw new SystemException("Unable to get metrics.  No host name for " + componentName,null);
   }
+  Set<MetricDefinition> metricsDefinitionSet=new HashSet<MetricDefinition>();
   for (  String id : ids) {
     Map<String,PropertyInfo> propertyInfoMap=getPropertyInfoMap(componentName,id);
     for (    Map.Entry<String,PropertyInfo> entry : propertyInfoMap.entrySet()) {
@@ -34,28 +35,34 @@
         String[] parts=propertyId.split("\\.");
         int size=parts.length;
         if (size >= 3) {
-          List<DataPoint> dataPoints=getMetric(startTime,endTime,parts[size - 3],parts[size - 2],parts[size - 1],componentName.toLowerCase(),hostName,preparedStatement);
-          if (dataPoints != null) {
-            if (temporalInfo == null) {
-              int length=dataPoints.size();
-              Serializable value=length > 0 ? dataPoints.get(length - 1).getValue() : 0;
-              resource.setProperty(propertyKey,value);
-            }
- else {
-              Number[][] dp=new Number[dataPoints.size()][2];
-              for (int i=0; i < dp.length; i++) {
-                dp[i][0]=dataPoints.get(i).getValue();
-                dp[i][1]=dataPoints.get(i).getTimestamp();
-              }
-              resource.setProperty(propertyKey,dp);
-            }
-          }
+          metricsDefinitionSet.add(new MetricDefinition(startTime,endTime,parts[size - 3],parts[size - 2],parts[size - 1],componentName.toLowerCase(),hostName,propertyKey,temporalInfo));
         }
  else {
           if (LOG.isWarnEnabled()) {
             LOG.warn("Can't get metrics for " + id + " : "+ propertyId);
           }
         }
+      }
+    }
+  }
+  Map<MetricDefinition,List<DataPoint>> results=getMetric(metricsDefinitionSet,statement);
+  for (  MetricDefinition metricDefinition : metricsDefinitionSet) {
+    List<DataPoint> dataPoints=results.containsKey(metricDefinition) ? results.get(metricDefinition) : new ArrayList<DataPoint>();
+    TemporalInfo temporalInfo=metricDefinition.getTemporalInfo();
+    String propertyKey=metricDefinition.getPropertyKey();
+    if (dataPoints != null) {
+      if (temporalInfo == null) {
+        int length=dataPoints.size();
+        Serializable value=length > 0 ? dataPoints.get(length - 1).getValue() : 0;
+        resource.setProperty(propertyKey,value);
+      }
+ else {
+        Number[][] dp=new Number[dataPoints.size()][2];
+        for (int i=0; i < dp.length; i++) {
+          dp[i][0]=dataPoints.get(i).getValue();
+          dp[i][1]=dataPoints.get(i).getTimestamp();
+        }
+        resource.setProperty(propertyKey,dp);
       }
     }
   }
