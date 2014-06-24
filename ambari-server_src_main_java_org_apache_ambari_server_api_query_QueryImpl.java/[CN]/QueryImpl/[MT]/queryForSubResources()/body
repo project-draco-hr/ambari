@@ -6,18 +6,19 @@
     Set<Resource> providerResourceSet=new HashSet<Resource>();
     for (    QueryResult queryResult : queryResults.values()) {
       for (      Resource resource : queryResult.getProviderResourceSet()) {
-        Map<Resource.Type,String> map=getKeyValueMap(resource,queryResult.getKeyValueMap());
-        Predicate queryPredicate=subResource.createPredicate(map,subResource.processedPredicate);
-        Set<Resource> resourceSet=new LinkedHashSet<Resource>();
-        try {
-          for (          Resource queryResource : subResource.doQuery(resourceType,request,queryPredicate)) {
-            providerResourceSet.add(queryResource);
-            resourceSet.add(queryResource);
+        if (resource.getPopulateRequiredFlag()) {
+          Map<Resource.Type,String> map=getKeyValueMap(resource,queryResult.getKeyValueMap());
+          Predicate queryPredicate=subResource.createPredicate(map,subResource.processedPredicate);
+          Set<Resource> resourceSet=new LinkedHashSet<Resource>();
+          try {
+            Set<Resource> queryResources=subResource.doQuery(resourceType,request,queryPredicate,null,null);
+            providerResourceSet.addAll(queryResources);
+            resourceSet.addAll(queryResources);
           }
+ catch (          NoSuchResourceException e) {
+          }
+          subResource.queryResults.put(resource,new QueryResult(request,queryPredicate,subResourcePredicate,map,resourceSet));
         }
- catch (        NoSuchResourceException e) {
-        }
-        subResource.queryResults.put(resource,new QueryResult(request,queryPredicate,subResourcePredicate,map,resourceSet));
       }
     }
     clusterController.populateResources(resourceType,providerResourceSet,request,null);
