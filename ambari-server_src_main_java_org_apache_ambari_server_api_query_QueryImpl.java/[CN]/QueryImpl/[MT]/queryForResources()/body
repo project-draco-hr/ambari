@@ -5,11 +5,20 @@
   finalizeProperties();
   Request request=createRequest();
   Set<Resource> resourceSet=new LinkedHashSet<Resource>();
-  for (  Resource queryResource : doQuery(resourceType,request,queryPredicate)) {
-    providerResourceSet.add(queryResource);
-    resourceSet.add(queryResource);
+  Set<Resource> queryResources=doQuery(resourceType,request,queryPredicate);
+  if ((pageRequest != null || sortRequest != null) && userPredicate == null) {
+    PageResponse pageResponse=clusterController.getPage(resourceType,queryResources,request,queryPredicate,pageRequest,sortRequest);
+    for (    Resource r : pageResponse.getIterable()) {
+      resourceSet.add(r);
+      providerResourceSet.add(r);
+    }
   }
-  queryResults.put(null,new QueryResult(request,queryPredicate,userPredicate,getKeyValueMap(),resourceSet));
+ else {
+    resourceSet.addAll(queryResources);
+    providerResourceSet.addAll(queryResources);
+  }
+  populatedQueryResults.put(null,new QueryResult(request,queryPredicate,userPredicate,getKeyValueMap(),resourceSet));
+  queryResults.put(null,new QueryResult(request,queryPredicate,userPredicate,getKeyValueMap(),queryResources));
   clusterController.populateResources(resourceType,providerResourceSet,request,queryPredicate);
   queryForSubResources();
 }
