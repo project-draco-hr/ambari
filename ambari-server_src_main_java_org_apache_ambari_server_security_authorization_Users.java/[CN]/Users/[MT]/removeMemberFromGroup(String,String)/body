@@ -1,0 +1,30 @@
+{
+  final GroupEntity groupEntity=groupDAO.findGroupByName(groupName);
+  if (groupEntity == null) {
+    throw new AmbariException("Group " + groupName + " doesn't exist");
+  }
+  UserEntity userEntity=userDAO.findLocalUserByName(userName);
+  if (userEntity == null) {
+    userEntity=userDAO.findLdapUserByName(userName);
+    if (userEntity == null) {
+      throw new AmbariException("User " + userName + " doesn't exist");
+    }
+  }
+  if (isUserInGroup(userEntity,groupEntity)) {
+    MemberEntity memberEntity=null;
+    for (    MemberEntity entity : userEntity.getMemberEntities()) {
+      if (entity.getGroup().equals(groupEntity)) {
+        memberEntity=entity;
+        break;
+      }
+    }
+    userEntity.getMemberEntities().remove(memberEntity);
+    groupEntity.getMemberEntities().remove(memberEntity);
+    userDAO.merge(userEntity);
+    groupDAO.merge(groupEntity);
+    memberDAO.remove(memberEntity);
+  }
+ else {
+    throw new AmbariException("User " + userName + " is not present in group "+ groupName);
+  }
+}
