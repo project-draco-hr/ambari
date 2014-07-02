@@ -1,0 +1,47 @@
+def main():
+    parser = argparse.ArgumentParser(description='Ambari CLI')
+    parser.add_argument('-H', '--host', action='store', dest='host')
+    parser.add_argument('-p', '--port', action='store', dest='port', type=int, default=8080)
+    parser.add_argument('-u', '--user', action='store', dest='user', default='admin')
+    parser.add_argument('-c', '--clustername', action='store', dest='clustername')
+    parser.add_argument('--password', action='store', dest='password', default='admin')
+    parser.add_argument('-d', '--display_type', action='store', dest='display_type', default='table')
+    parser.add_argument('-r', '--run', action='store', dest='run')
+    args = parser.parse_args()
+    if (not args.host):
+        args.host = raw_input('Enter Ambari Server host: ')
+    if args.host:
+        SHELL_CONFIG['hostname'] = args.host
+    if args.clustername:
+        SHELL_CONFIG['clustername'] = args.clustername
+    if args.display_type:
+        SHELL_CONFIG['display_type'] = args.display_type
+    headers_dict = {'X-Requested-By': 'mycompany', }
+    client = AmbariClient(SHELL_CONFIG['hostname'], SHELL_CONFIG['port'], SHELL_CONFIG['username'], SHELL_CONFIG['password'], version=1, http_header=headers_dict)
+    SHELL_CONFIG['client'] = client
+    config = resolve_config()
+    logPath = getLogPath(config)
+    loglevel = getLogLevel(config)
+    cliplugin_path = getPluginPath(config)
+    dpath = getDefaultPluginPath(config)
+    setup_logging(loglevel, logPath)
+    utils.osutils.doclearScreen()
+    shell = AmbariShell()
+    logging.info('cliplugin_folder =  %s', getPluginPath(config))
+    logging.info('SHELL_CONFIG =  %s', str(SHELL_CONFIG))
+    commands_dictt = getCommandsDict(dpath, cliplugin_path)
+    for (k, v) in commands_dictt.items():
+        setattr(AmbariShell, str(k), v)
+    shell.setConfig(config)
+    if args.run:
+        print args.run
+        for command in args.run.split(';'):
+            shell.onecmd(command)
+            sys.exit(0)
+    else:
+        try:
+            shell.cmdloop()
+        except KeyboardInterrupt:
+            sys.stdout.write('\n')
+            sys.exit(0)
+    logging.info('finished')
