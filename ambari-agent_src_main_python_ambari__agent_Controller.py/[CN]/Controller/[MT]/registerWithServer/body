@@ -7,20 +7,24 @@ def registerWithServer(self):
     while (not self.isRegistered):
         try:
             data = json.dumps(self.register.build(id))
-            logger.info(('Registering with the server ' + pprint.pformat(data)))
+            prettyData = pprint.pformat(data)
+            try:
+                server_ip = socket.gethostbyname(self.hostname)
+                logger.info('Registering with %s (%s) (agent=%s)', self.hostname, server_ip, prettyData)
+            except socket.error:
+                logger.warn("Unable to determine the IP address of '%s', agent registration may fail (agent=%s)", self.hostname, prettyData)
             ret = self.sendRequest(self.registerUrl, data)
             exitstatus = 0
             if ('exitstatus' in ret.keys()):
                 exitstatus = int(ret['exitstatus'])
-            if ('log' in ret.keys()):
-                log = ret['log']
             if (exitstatus == 1):
+                if ('log' in ret.keys()):
+                    log = ret['log']
                 logger.error(log)
                 self.isRegistered = False
                 self.repeatRegistration = False
                 return ret
-            logger.info(('Registered with the server with ' + pprint.pformat(ret)))
-            print 'Registered with the server'
+            logger.info('Registration Successful (response=%s)', pprint.pformat(ret))
             self.responseId = int(ret['responseId'])
             self.isRegistered = True
             if ('statusCommands' in ret.keys()):
@@ -34,9 +38,9 @@ def registerWithServer(self):
             self.repeatRegistration = False
             self.isRegistered = False
             return
-        except Exception as err:
+        except Exception:
             delay = randint(0, self.range)
-            logger.info(('Unable to connect to: ' + self.registerUrl), exc_info=True)
+            logger.error(('Unable to connect to: ' + self.registerUrl), exc_info=True)
             ' Sleeping for {0} seconds and then retrying again '.format(delay)
             time.sleep(delay)
             pass
