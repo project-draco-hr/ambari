@@ -1,5 +1,6 @@
 {
   Resource.Type type=Resource.Type.Component;
+  MaintenanceStateHelper maintenanceStateHelper=createNiceMock(MaintenanceStateHelper.class);
   AmbariManagementController managementController=createMock(AmbariManagementController.class);
   Clusters clusters=createNiceMock(Clusters.class);
   Cluster cluster=createNiceMock(Cluster.class);
@@ -37,6 +38,7 @@
   expect(serviceComponent1.getServiceComponentHosts()).andReturn(serviceComponentHosts).anyTimes();
   expect(serviceComponent2.getServiceComponentHosts()).andReturn(serviceComponentHosts).anyTimes();
   expect(serviceComponent3.getServiceComponentHosts()).andReturn(serviceComponentHosts).anyTimes();
+  expect(maintenanceStateHelper.isOperationAllowed(anyObject(Resource.Type.class),anyObject(Service.class))).andReturn(true).anyTimes();
   Capture<Map<String,String>> requestPropertiesCapture=new Capture<Map<String,String>>();
   Capture<Map<State,List<Service>>> changedServicesCapture=new Capture<Map<State,List<Service>>>();
   Capture<Map<State,List<ServiceComponent>>> changedCompsCapture=new Capture<Map<State,List<ServiceComponent>>>();
@@ -47,13 +49,13 @@
   expect(managementController.createAndPersistStages(capture(clusterCapture),capture(requestPropertiesCapture),capture(requestParametersCapture),capture(changedServicesCapture),capture(changedCompsCapture),capture(changedScHostsCapture),capture(ignoredScHostsCapture),anyBoolean(),anyBoolean())).andReturn(requestStatusResponse);
   Map<String,String> mapRequestProps=new HashMap<String,String>();
   mapRequestProps.put("context","Called from a test");
-  replay(managementController,clusters,cluster,ambariMetaInfo,service,serviceComponent1,serviceComponent2,serviceComponent3,serviceComponentHost,requestStatusResponse,stackId);
-  ResourceProvider provider=new ComponentResourceProvider(PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  replay(managementController,clusters,cluster,ambariMetaInfo,service,serviceComponent1,serviceComponent2,serviceComponent3,serviceComponentHost,requestStatusResponse,stackId,maintenanceStateHelper);
+  ResourceProvider provider=new ComponentResourceProvider(PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController,maintenanceStateHelper);
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
   properties.put(ComponentResourceProvider.COMPONENT_STATE_PROPERTY_ID,"STARTED");
   properties.put(ComponentResourceProvider.COMPONENT_CLUSTER_NAME_PROPERTY_ID,"Cluster100");
   Request request=PropertyHelper.getUpdateRequest(properties,mapRequestProps);
   Predicate predicate=new PredicateBuilder().property(ComponentResourceProvider.COMPONENT_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").toPredicate();
   provider.updateResources(request,predicate);
-  verify(managementController,clusters,cluster,ambariMetaInfo,service,serviceComponent1,serviceComponent2,serviceComponent3,serviceComponentHost,requestStatusResponse,stackId);
+  verify(managementController,clusters,cluster,ambariMetaInfo,service,serviceComponent1,serviceComponent2,serviceComponent3,serviceComponentHost,requestStatusResponse,stackId,maintenanceStateHelper);
 }

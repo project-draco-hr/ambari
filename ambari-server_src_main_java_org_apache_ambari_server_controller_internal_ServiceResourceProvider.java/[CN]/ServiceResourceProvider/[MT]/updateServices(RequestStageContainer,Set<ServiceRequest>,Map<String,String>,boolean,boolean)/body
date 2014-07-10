@@ -11,6 +11,16 @@
   Set<String> clusterNames=new HashSet<String>();
   Map<String,Set<String>> serviceNames=new HashMap<String,Set<String>>();
   Set<State> seenNewStates=new HashSet<State>();
+  Resource.Type reqOpLvl;
+  if (requestProperties.containsKey(RequestOperationLevel.OPERATION_LEVEL_ID)) {
+    RequestOperationLevel operationLevel=new RequestOperationLevel(requestProperties);
+    reqOpLvl=operationLevel.getLevel();
+  }
+ else {
+    String message="Can not determine request operation level. " + "Operation level property should " + "be specified for this request.";
+    LOG.warn(message);
+    reqOpLvl=Resource.Type.Cluster;
+  }
   Clusters clusters=controller.getClusters();
   AmbariMetaInfo ambariMetaInfo=controller.getAmbariMetaInfo();
   Set<String> maintenanceClusters=new HashSet<String>();
@@ -58,7 +68,7 @@
       }
       continue;
     }
-    if (requests.size() > 1 && MaintenanceState.OFF != s.getMaintenanceState()) {
+    if (!maintenanceStateHelper.isOperationAllowed(reqOpLvl,s)) {
       LOG.info("Operations cannot be applied to service " + s.getName() + " in the maintenance state of "+ s.getMaintenanceState());
       continue;
     }
@@ -104,18 +114,11 @@
           }
           continue;
         }
-        MaintenanceState schMaint=controller.getEffectiveMaintenanceState(sch);
-        if (MaintenanceState.ON == schMaint || (requests.size() > 1 && MaintenanceState.OFF != schMaint)) {
+        if (!maintenanceStateHelper.isOperationAllowed(reqOpLvl,sch)) {
           ignoredScHosts.add(sch);
           if (LOG.isDebugEnabled()) {
-            LOG.debug("Ignoring " + schMaint + " ServiceComponentHost"+ ", clusterName="+ request.getClusterName()+ ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName());
+            LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName());
           }
-          continue;
-        }
-        Host host=clusters.getHost(sch.getHostName());
-        if (schMaint == MaintenanceState.IMPLIED_FROM_HOST && host != null && host.getMaintenanceState(cluster.getClusterId()) != MaintenanceState.OFF) {
-          ignoredScHosts.add(sch);
-          LOG.info("Ignoring ServiceComponentHost since " + "the host is in passive mode" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName());
           continue;
         }
         if (sc.isClientComponent() && !newState.isValidClientComponentState()) {

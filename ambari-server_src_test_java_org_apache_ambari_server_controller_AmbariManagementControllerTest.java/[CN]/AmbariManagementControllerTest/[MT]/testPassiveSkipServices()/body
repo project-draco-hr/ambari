@@ -25,10 +25,11 @@
   createServiceComponentHost(clusterName,serviceName1,componentName1_2,host2,null);
   createServiceComponentHost(clusterName,serviceName2,componentName2_1,host1,null);
   createServiceComponentHost(clusterName,serviceName2,componentName2_2,host2,null);
-  installService(clusterName,serviceName1,false,false);
-  installService(clusterName,serviceName2,false,false);
-  startService(clusterName,serviceName1,false,false);
-  startService(clusterName,serviceName2,false,false);
+  MaintenanceStateHelper maintenanceStateHelper=MaintenanceStateHelperTest.getMaintenanceStateHelperInstance(clusters);
+  installService(clusterName,serviceName1,false,false,maintenanceStateHelper);
+  installService(clusterName,serviceName2,false,false,maintenanceStateHelper);
+  startService(clusterName,serviceName1,false,false,maintenanceStateHelper);
+  startService(clusterName,serviceName2,false,false,maintenanceStateHelper);
   Map<String,String> requestProperties=new HashMap<String,String>();
   requestProperties.put("context","Called from a test");
   Cluster cluster=clusters.getCluster(clusterName);
@@ -40,7 +41,7 @@
   Set<ServiceRequest> srs=new HashSet<ServiceRequest>();
   srs.add(new ServiceRequest(clusterName,serviceName1,State.INSTALLED.name()));
   srs.add(new ServiceRequest(clusterName,serviceName2,State.INSTALLED.name()));
-  RequestStatusResponse rsr=ServiceResourceProviderTest.updateServices(controller,srs,requestProperties,false,false);
+  RequestStatusResponse rsr=ServiceResourceProviderTest.updateServices(controller,srs,requestProperties,false,false,maintenanceStateHelper);
   for (  ShortTaskStatus sts : rsr.getTasks()) {
     String role=sts.getRole();
     Assert.assertFalse(role.equals(componentName2_1));
@@ -51,26 +52,25 @@
  else     Assert.assertEquals(State.INSTALLED,service.getDesiredState());
   }
   service2.setMaintenanceState(MaintenanceState.OFF);
-  ServiceResourceProviderTest.updateServices(controller,srs,requestProperties,false,false);
+  ServiceResourceProviderTest.updateServices(controller,srs,requestProperties,false,false,maintenanceStateHelper);
   for (  Service service : cluster.getServices().values()) {
     Assert.assertEquals(State.INSTALLED,service.getDesiredState());
   }
-  startService(clusterName,serviceName1,false,false);
-  startService(clusterName,serviceName2,false,false);
+  startService(clusterName,serviceName1,false,false,maintenanceStateHelper);
+  startService(clusterName,serviceName2,false,false,maintenanceStateHelper);
   Host h1=clusters.getHost(host1);
   h1.setMaintenanceState(cluster.getClusterId(),MaintenanceState.ON);
   srs=new HashSet<ServiceRequest>();
   srs.add(new ServiceRequest(clusterName,serviceName1,State.INSTALLED.name()));
   srs.add(new ServiceRequest(clusterName,serviceName2,State.INSTALLED.name()));
-  rsr=ServiceResourceProviderTest.updateServices(controller,srs,requestProperties,false,false);
+  rsr=ServiceResourceProviderTest.updateServices(controller,srs,requestProperties,false,false,maintenanceStateHelper);
   for (  ShortTaskStatus sts : rsr.getTasks()) {
     Assert.assertFalse(sts.getHostName().equals(host1));
   }
   h1.setMaintenanceState(cluster.getClusterId(),MaintenanceState.OFF);
-  startService(clusterName,serviceName2,false,false);
+  startService(clusterName,serviceName2,false,false,maintenanceStateHelper);
   service2.setMaintenanceState(MaintenanceState.ON);
   ServiceRequest sr=new ServiceRequest(clusterName,serviceName2,State.INSTALLED.name());
-  rsr=ServiceResourceProviderTest.updateServices(controller,Collections.singleton(sr),requestProperties,false,false);
-  System.out.println(rsr.getTasks());
-  Assert.assertTrue("Service is started, command should create tasks",rsr.getTasks().size() > 0);
+  rsr=ServiceResourceProviderTest.updateServices(controller,Collections.singleton(sr),requestProperties,false,false,maintenanceStateHelper);
+  Assert.assertTrue("Service start request defaults to Cluster operation level," + "command does not create tasks",rsr == null || rsr.getTasks().size() == 0);
 }

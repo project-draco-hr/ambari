@@ -1,4 +1,5 @@
 {
+  Resource.Type opLvl=Resource.Type.Cluster;
   Set<String> smokeTestServices=new HashSet<String>();
   if (changedServices != null) {
     for (    Entry<State,List<Service>> entry : changedServices.entrySet()) {
@@ -6,7 +7,7 @@
         continue;
       }
       for (      Service s : entry.getValue()) {
-        if (runSmokeTest && (State.INSTALLED == s.getDesiredState())) {
+        if (runSmokeTest && (State.INSTALLED == s.getDesiredState() && maintenanceStateHelper.isOperationAllowed(opLvl,s))) {
           smokeTestServices.add(s.getName());
         }
       }
@@ -20,6 +21,9 @@
       }
       for (      ServiceComponentHost sch : entry.getValue()) {
         if (State.INSTALLED != sch.getState()) {
+          continue;
+        }
+        if (!maintenanceStateHelper.isOperationAllowed(opLvl,sch)) {
           continue;
         }
         if (!changedComponentCount.containsKey(sch.getServiceName())) {
@@ -37,7 +41,8 @@
   }
   for (  Entry<String,Map<String,Integer>> entry : changedComponentCount.entrySet()) {
     String serviceName=entry.getKey();
-    if (runSmokeTest && (entry.getValue().size() > 1)) {
+    Service s=cluster.getService(serviceName);
+    if (runSmokeTest && (entry.getValue().size() > 1) && maintenanceStateHelper.isOperationAllowed(opLvl,s)) {
       smokeTestServices.add(serviceName);
       continue;
     }
@@ -45,7 +50,7 @@
       ServiceComponent sc=cluster.getService(serviceName).getServiceComponent(componentName);
       StackId stackId=sc.getDesiredStackVersion();
       ComponentInfo compInfo=ambariMetaInfo.getComponentCategory(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
-      if (runSmokeTest && compInfo.isMaster()) {
+      if (runSmokeTest && compInfo.isMaster() && maintenanceStateHelper.isOperationAllowed(opLvl,s)) {
         smokeTestServices.add(serviceName);
       }
     }

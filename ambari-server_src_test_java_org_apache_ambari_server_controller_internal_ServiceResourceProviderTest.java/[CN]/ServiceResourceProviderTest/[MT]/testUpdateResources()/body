@@ -1,4 +1,5 @@
 {
+  MaintenanceStateHelper maintenanceStateHelper=createNiceMock(MaintenanceStateHelper.class);
   AmbariManagementController managementController=createMock(AmbariManagementController.class);
   Clusters clusters=createNiceMock(Clusters.class);
   Cluster cluster=createNiceMock(Cluster.class);
@@ -26,12 +27,13 @@
   expect(managementController.addStages((RequestStageContainer)isNull(),capture(clusterCapture),capture(requestPropertiesCapture),capture(requestParametersCapture),capture(changedServicesCapture),capture(changedCompsCapture),capture(changedScHostsCapture),capture(ignoredScHostsCapture),anyBoolean(),anyBoolean())).andReturn(requestStages);
   requestStages.persist();
   expect(requestStages.getRequestStatusResponse()).andReturn(requestStatusResponse);
-  replay(managementController,clusters,cluster,service0,serviceFactory,ambariMetaInfo,requestStages,requestStatusResponse);
-  ResourceProvider provider=getServiceProvider(managementController);
+  expect(maintenanceStateHelper.isOperationAllowed(anyObject(Resource.Type.class),anyObject(Service.class))).andReturn(true).anyTimes();
+  replay(managementController,clusters,cluster,maintenanceStateHelper,service0,serviceFactory,ambariMetaInfo,requestStages,requestStatusResponse);
+  ServiceResourceProvider provider=getServiceProvider(managementController,maintenanceStateHelper);
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
   properties.put(ServiceResourceProvider.SERVICE_SERVICE_STATE_PROPERTY_ID,"STARTED");
   Request request=PropertyHelper.getUpdateRequest(properties,mapRequestProps);
   Predicate predicate=new PredicateBuilder().property(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID).equals("Service102").toPredicate();
   provider.updateResources(request,predicate);
-  verify(managementController,clusters,cluster,service0,serviceFactory,ambariMetaInfo,requestStages,requestStatusResponse);
+  verify(managementController,clusters,cluster,maintenanceStateHelper,service0,serviceFactory,ambariMetaInfo,requestStages,requestStatusResponse);
 }

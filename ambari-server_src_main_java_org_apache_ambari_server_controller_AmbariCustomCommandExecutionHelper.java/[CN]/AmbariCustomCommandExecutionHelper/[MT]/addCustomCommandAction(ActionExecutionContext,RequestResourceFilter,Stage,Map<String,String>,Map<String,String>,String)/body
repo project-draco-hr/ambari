@@ -1,19 +1,30 @@
 {
-  List<String> hosts=resourceFilter.getHostNames();
-  if (hosts.isEmpty()) {
-    throw new AmbariException("Invalid request : No hosts specified.");
-  }
-  String serviceName=resourceFilter.getServiceName();
-  String componentName=resourceFilter.getComponentName();
-  String commandName=actionExecutionContext.getActionName();
+  final String serviceName=resourceFilter.getServiceName();
+  final String componentName=resourceFilter.getComponentName();
+  final String commandName=actionExecutionContext.getActionName();
   String clusterName=stage.getClusterName();
-  Cluster cluster=clusters.getCluster(clusterName);
+  final Cluster cluster=clusters.getCluster(clusterName);
+  Set<String> candidateHosts=new HashSet<String>(resourceFilter.getHostNames());
+  Set<String> ignoredHosts=maintenanceStateHelper.filterHostsInMaintenanceState(candidateHosts,new MaintenanceStateHelper.HostPredicate(){
+    @Override public boolean shouldHostBeRemoved(    final String hostname) throws AmbariException {
+      return !maintenanceStateHelper.isOperationAllowed(cluster,actionExecutionContext.getOperationLevel(),resourceFilter,serviceName,componentName,hostname);
+    }
+  }
+);
+  if (!ignoredHosts.isEmpty()) {
+    String message=String.format("Some hosts (%s) have been ignored " + "because components on them are in Maintenance state.",ignoredHosts);
+    LOG.debug(message);
+  }
+  if (candidateHosts.isEmpty()) {
+    String message="Invalid request : No hosts specified.";
+    throw new AmbariException(message);
+  }
   StackId stackId=cluster.getDesiredStackVersion();
   AmbariMetaInfo ambariMetaInfo=managementController.getAmbariMetaInfo();
   ServiceInfo serviceInfo=ambariMetaInfo.getServiceInfo(stackId.getStackName(),stackId.getStackVersion(),serviceName);
   StackInfo stackInfo=ambariMetaInfo.getStackInfo(stackId.getStackName(),stackId.getStackVersion());
   long nowTimestamp=System.currentTimeMillis();
-  for (  String hostName : hosts) {
+  for (  String hostName : candidateHosts) {
     Host host=clusters.getHost(hostName);
     stage.addHostRoleExecutionCommand(hostName,Role.valueOf(componentName),RoleCommand.CUSTOM_COMMAND,new ServiceComponentHostOpInProgressEvent(componentName,hostName,nowTimestamp),cluster.getClusterName(),serviceName);
     Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();

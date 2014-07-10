@@ -10,6 +10,16 @@
   Set<State> seenNewStates=new HashSet<State>();
   Map<ServiceComponentHost,State> directTransitionScHosts=new HashMap<ServiceComponentHost,State>();
   Set<String> maintenanceClusters=new HashSet<String>();
+  Resource.Type reqOpLvl;
+  if (requestProperties.containsKey(RequestOperationLevel.OPERATION_LEVEL_ID)) {
+    RequestOperationLevel operationLevel=new RequestOperationLevel(requestProperties);
+    reqOpLvl=operationLevel.getLevel();
+  }
+ else {
+    String message="Can not determine request operation level. " + "Operation level property should " + "be specified for this request.";
+    LOG.warn(message);
+    reqOpLvl=Resource.Type.Cluster;
+  }
   for (  ServiceComponentHostRequest request : requests) {
     validateServiceComponentHostRequest(request);
     Cluster cluster=clusters.getCluster(request.getClusterName());
@@ -77,6 +87,13 @@
       ignoredScHosts.add(sch);
       if (LOG.isDebugEnabled()) {
         LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+      }
+      continue;
+    }
+    if (!maintenanceStateHelper.isOperationAllowed(reqOpLvl,sch)) {
+      ignoredScHosts.add(sch);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName());
       }
       continue;
     }

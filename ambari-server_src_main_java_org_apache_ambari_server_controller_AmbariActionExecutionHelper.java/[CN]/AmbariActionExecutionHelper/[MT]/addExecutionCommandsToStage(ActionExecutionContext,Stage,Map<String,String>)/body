@@ -1,17 +1,21 @@
 {
   String actionName=actionContext.getActionName();
   String clusterName=actionContext.getClusterName();
-  Cluster cluster=null;
+  final Cluster cluster;
   if (null != clusterName)   cluster=clusters.getCluster(clusterName);
+ else   cluster=null;
   ComponentInfo componentInfo=null;
   List<RequestResourceFilter> resourceFilters=actionContext.getResourceFilters();
-  RequestResourceFilter resourceFilter=new RequestResourceFilter();
+  final RequestResourceFilter resourceFilter;
   if (resourceFilters != null && !resourceFilters.isEmpty()) {
     resourceFilter=resourceFilters.get(0);
   }
+ else {
+    resourceFilter=new RequestResourceFilter();
+  }
   Set<String> candidateHosts=new HashSet<String>();
-  String serviceName=actionContext.getExpectedServiceName();
-  String componentName=actionContext.getExpectedComponentName();
+  final String serviceName=actionContext.getExpectedServiceName();
+  final String componentName=actionContext.getExpectedComponentName();
   if (null != cluster) {
     StackId stackId=cluster.getCurrentStackVersion();
     if (serviceName != null && !serviceName.isEmpty()) {
@@ -30,6 +34,13 @@
  else {
       candidateHosts.addAll(clusters.getHostsForCluster(cluster.getClusterName()).keySet());
     }
+    Set<String> ignoredHosts=maintenanceStateHelper.filterHostsInMaintenanceState(candidateHosts,new MaintenanceStateHelper.HostPredicate(){
+      @Override public boolean shouldHostBeRemoved(      final String hostname) throws AmbariException {
+        return !maintenanceStateHelper.isOperationAllowed(cluster,actionContext.getOperationLevel(),resourceFilter,serviceName,componentName,hostname);
+      }
+    }
+);
+    LOG.debug("Ignoring action for hosts due to maintenance state." + "Ignored hosts =" + ignoredHosts + ", component="+ componentName+ ", service="+ serviceName+ ", cluster="+ cluster.getClusterName()+ ", "+ "actionName="+ actionContext.getActionName());
   }
   if (resourceFilter.getHostNames().isEmpty() && candidateHosts.isEmpty()) {
     throw new AmbariException("Suitable hosts not found, component=" + componentName + ", service="+ serviceName+ ((null == cluster) ? "" : ", cluster=" + cluster.getClusterName() + ", ")+ "actionName="+ actionContext.getActionName());
@@ -62,8 +73,6 @@ default :
 throw new AmbariException("Unsupported target type = " + hostType);
 }
 }
-Set<Map<String,String>> maintenanceSCHs=new HashSet<Map<String,String>>();
-if (null != cluster) maintenanceSCHs=maintenanceStateHelper.getMaintenanceHostComponents(clusters,cluster);
 for (String hostName : targetHosts) {
 stage.addHostRoleExecutionCommand(hostName,Role.valueOf(actionContext.getActionName()),RoleCommand.ACTIONEXECUTE,new ServiceComponentHostOpInProgressEvent(actionContext.getActionName(),hostName,System.currentTimeMillis()),clusterName,serviceName);
 Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
@@ -93,6 +102,13 @@ roleParams.put(COMPONENT_CATEGORY,componentInfo.getCategory());
 }
 execCmd.setRoleParams(roleParams);
 if (null != cluster) execCmd.setClusterHostInfo(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(clusterName),cluster));
+Set<Map<String,String>> maintenanceSCHs;
+if (null != cluster) {
+maintenanceSCHs=maintenanceStateHelper.getMaintenanceHostComponents(clusters,cluster);
+}
+ else {
+maintenanceSCHs=new HashSet<Map<String,String>>();
+}
 execCmd.setPassiveInfo(maintenanceSCHs);
 }
 }
