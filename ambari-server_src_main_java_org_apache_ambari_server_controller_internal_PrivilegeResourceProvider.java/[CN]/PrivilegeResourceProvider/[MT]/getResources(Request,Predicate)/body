@@ -1,0 +1,40 @@
+{
+  Set<Resource> resources=new HashSet<Resource>();
+  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  Set<Long> resourceIds=new HashSet<Long>();
+  Set<Map<String,Object>> propertyMaps=getPropertyMaps(predicate);
+  if (propertyMaps.isEmpty()) {
+    propertyMaps.add(Collections.<String,Object>emptyMap());
+  }
+  for (  Map<String,Object> properties : propertyMaps) {
+    Map<Long,T> resourceEntities=getResourceEntities(properties);
+    resourceIds.addAll(resourceEntities.keySet());
+    Map<Long,PrivilegeEntity> entityMap=new HashMap<Long,PrivilegeEntity>();
+    List<PrincipalEntity> principalList=new LinkedList<PrincipalEntity>();
+    List<PrivilegeEntity> entities=privilegeDAO.findAll();
+    for (    PrivilegeEntity privilegeEntity : entities) {
+      if (resourceIds.contains(privilegeEntity.getResource().getId())) {
+        PrincipalEntity principal=privilegeEntity.getPrincipal();
+        entityMap.put(principal.getId(),privilegeEntity);
+        principalList.add(principal);
+      }
+    }
+    Map<Long,UserEntity> userEntities=new HashMap<Long,UserEntity>();
+    List<UserEntity> userList=userDAO.findUsersByPrincipal(principalList);
+    for (    UserEntity userEntity : userList) {
+      userEntities.put(userEntity.getPrincipal().getId(),userEntity);
+    }
+    Map<Long,GroupEntity> groupEntities=new HashMap<Long,GroupEntity>();
+    List<GroupEntity> groupList=groupDAO.findGroupsByPrincipal(principalList);
+    for (    GroupEntity groupEntity : groupList) {
+      groupEntities.put(groupEntity.getPrincipal().getId(),groupEntity);
+    }
+    for (    PrivilegeEntity privilegeEntity : entityMap.values()) {
+      Resource resource=toResource(privilegeEntity,userEntities,groupEntities,resourceEntities,requestedIds);
+      if (predicate == null || predicate.evaluate(resource)) {
+        resources.add(resource);
+      }
+    }
+  }
+  return resources;
+}
