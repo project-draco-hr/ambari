@@ -1,0 +1,29 @@
+{
+  Set<String> requestPropertyIds=getRequestPropertyIds(request,predicate);
+  Set<Resource> results=new HashSet<Resource>();
+  for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+    String clusterName=(String)propertyMap.get(ALERT_DEF_CLUSTER_NAME);
+    if (null == clusterName || clusterName.isEmpty())     throw new IllegalArgumentException("Invalid argument, cluster name is required");
+    String id=(String)propertyMap.get(ALERT_DEF_ID);
+    if (null != id) {
+      AlertDefinitionEntity entity=alertDefinitionDAO.findById(Long.parseLong(id));
+      if (null != entity) {
+        results.add(toResource(false,clusterName,entity,requestPropertyIds));
+      }
+    }
+ else {
+      Cluster cluster=null;
+      try {
+        cluster=getManagementController().getClusters().getCluster(clusterName);
+      }
+ catch (      AmbariException e) {
+        throw new NoSuchResourceException("Parent Cluster resource doesn't exist",e);
+      }
+      List<AlertDefinitionEntity> entities=alertDefinitionDAO.findAll(cluster.getClusterId());
+      for (      AlertDefinitionEntity entity : entities) {
+        results.add(toResource(true,clusterName,entity,requestPropertyIds));
+      }
+    }
+  }
+  return results;
+}
