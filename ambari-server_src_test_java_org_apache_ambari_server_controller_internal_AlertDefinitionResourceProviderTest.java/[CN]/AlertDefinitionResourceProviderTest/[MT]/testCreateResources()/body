@@ -1,0 +1,35 @@
+{
+  AmbariManagementController amc=createMock(AmbariManagementController.class);
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  expect(amc.getClusters()).andReturn(clusters).atLeastOnce();
+  expect(clusters.getCluster((String)anyObject())).andReturn(cluster).atLeastOnce();
+  expect(cluster.getClusterId()).andReturn(Long.valueOf(1)).anyTimes();
+  Capture<AlertDefinitionEntity> entityCapture=new Capture<AlertDefinitionEntity>();
+  dao.create(capture(entityCapture));
+  expectLastCall();
+  replay(amc,clusters,cluster,dao);
+  AlertDefinitionResourceProvider provider=createProvider(amc);
+  Map<String,Object> requestProps=new HashMap<String,Object>();
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_CLUSTER_NAME,"c1");
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_INTERVAL,"1");
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_NAME,"my_def");
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_SERVICE_NAME,"HDFS");
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_SOURCE_TYPE,"METRIC");
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  provider.createResources(request);
+  Assert.assertTrue(entityCapture.hasCaptured());
+  AlertDefinitionEntity entity=entityCapture.getValue();
+  Assert.assertNotNull(entity);
+  Assert.assertEquals(Long.valueOf(1),entity.getClusterId());
+  Assert.assertNull(entity.getComponentName());
+  Assert.assertEquals("my_def",entity.getDefinitionName());
+  Assert.assertTrue(entity.getEnabled());
+  Assert.assertNotNull(entity.getHash());
+  Assert.assertEquals(Long.valueOf(1),entity.getScheduleInterval());
+  Assert.assertNull(entity.getScope());
+  Assert.assertEquals("HDFS",entity.getServiceName());
+  Assert.assertNotNull(entity.getSource());
+  Assert.assertEquals("METRIC",entity.getSourceType());
+  verify(amc,clusters,cluster,dao);
+}

@@ -1,0 +1,32 @@
+{
+  String clusterName=(String)requestMap.get(ALERT_DEF_CLUSTER_NAME);
+  if (null == clusterName || clusterName.isEmpty())   throw new IllegalArgumentException("Invalid argument, cluster name is required");
+  if (!requestMap.containsKey(ALERT_DEF_INTERVAL))   throw new IllegalArgumentException("Check interval must be specified");
+  Long interval=Long.valueOf((String)requestMap.get(ALERT_DEF_INTERVAL));
+  if (!requestMap.containsKey(ALERT_DEF_NAME))   throw new IllegalArgumentException("Definition name must be specified");
+  if (!requestMap.containsKey(ALERT_DEF_SERVICE_NAME))   throw new IllegalArgumentException("Service name must be specified");
+  if (!requestMap.containsKey(ALERT_DEF_SOURCE_TYPE))   throw new IllegalArgumentException(String.format("Source type must be specified and one of %s",EnumSet.allOf(SourceType.class)));
+  JsonObject jsonObj=new JsonObject();
+  for (  Entry<String,Object> entry : requestMap.entrySet()) {
+    String propCat=PropertyHelper.getPropertyCategory(entry.getKey());
+    String propName=PropertyHelper.getPropertyName(entry.getKey());
+    if (propCat.equals(ALERT_DEF_SOURCE)) {
+      jsonObj.addProperty(propName,entry.getValue().toString());
+    }
+  }
+  if (0 == jsonObj.entrySet().size())   throw new IllegalArgumentException("Source must be specified");
+  Cluster cluster=getManagementController().getClusters().getCluster(clusterName);
+  AlertDefinitionEntity entity=new AlertDefinitionEntity();
+  entity.setClusterId(Long.valueOf(cluster.getClusterId()));
+  entity.setComponentName((String)requestMap.get(ALERT_DEF_COMPONENT_NAME));
+  entity.setDefinitionName((String)requestMap.get(ALERT_DEF_NAME));
+  boolean b=requestMap.containsKey(ALERT_DEF_ENABLED) ? Boolean.parseBoolean((String)requestMap.get(ALERT_DEF_ENABLED)) : true;
+  entity.setEnabled(b);
+  entity.setHash(UUID.randomUUID().toString());
+  entity.setScheduleInterval(interval);
+  entity.setScope((String)requestMap.get(ALERT_DEF_SCOPE));
+  entity.setServiceName((String)requestMap.get(ALERT_DEF_SERVICE_NAME));
+  entity.setSourceType((String)requestMap.get(ALERT_DEF_SOURCE_TYPE));
+  entity.setSource(jsonObj.toString());
+  return entity;
+}
