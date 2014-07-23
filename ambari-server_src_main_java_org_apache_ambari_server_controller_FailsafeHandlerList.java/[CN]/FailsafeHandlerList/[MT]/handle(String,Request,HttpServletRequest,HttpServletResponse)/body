@@ -1,0 +1,28 @@
+{
+  final Handler[] handlers=getHandlers();
+  if (handlers != null && isStarted()) {
+    for (int i=0; i < handlers.length; i++) {
+      final Handler handler=handlers[i];
+      if (failsafeHandlers.contains(handler)) {
+        try {
+          final FailsafeServletResponse responseWrapper=new FailsafeServletResponse(response);
+          handler.handle(target,baseRequest,request,responseWrapper);
+          if (responseWrapper.isRequestFailed()) {
+            response.reset();
+            baseRequest.setHandled(false);
+          }
+        }
+ catch (        Exception ex) {
+          LOG.warn("Fail-safe handler failed to process request, continuing handler polling",ex);
+          continue;
+        }
+      }
+ else {
+        handler.handle(target,baseRequest,request,response);
+      }
+      if (baseRequest.isHandled()) {
+        return;
+      }
+    }
+  }
+}
