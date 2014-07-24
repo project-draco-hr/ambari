@@ -1,0 +1,32 @@
+{
+  RoleCommandOrder rco=injector.getInstance(RoleCommandOrder.class);
+  ClusterImpl cluster=createMock(ClusterImpl.class);
+  Service hdfsService=createMock(Service.class);
+  ServiceComponent namenode=createMock(ServiceComponent.class);
+  expect(namenode.getName()).andReturn("NAMENODE").anyTimes();
+  Map<String,ServiceComponent> hdfsComponents=Collections.singletonMap("NAMENODE",namenode);
+  expect(hdfsService.getServiceComponents()).andReturn(hdfsComponents).anyTimes();
+  Service nagiosService=createMock(Service.class);
+  expect(cluster.getService("NAGIOS")).andReturn(nagiosService).atLeastOnce();
+  expect(nagiosService.getCluster()).andReturn(cluster).anyTimes();
+  ServiceComponent nagiosServer=createMock(ServiceComponent.class);
+  expect(nagiosServer.getName()).andReturn("NAGIOS_SERVER").anyTimes();
+  Map<String,ServiceComponent> nagiosComponents=Collections.singletonMap("NAGIOS_SERVER",nagiosServer);
+  expect(nagiosService.getServiceComponents()).andReturn(nagiosComponents).anyTimes();
+  Map<String,Service> installedServices=new HashMap<String,Service>();
+  installedServices.put("HDFS",hdfsService);
+  installedServices.put("NAGIOS",nagiosService);
+  expect(cluster.getServices()).andReturn(installedServices).atLeastOnce();
+  expect(cluster.getService("HDFS")).andReturn(hdfsService).atLeastOnce();
+  expect(cluster.getService("GLUSTERFS")).andReturn(null);
+  expect(cluster.getService("YARN")).andReturn(null);
+  expect(hdfsService.getServiceComponent("JOURNALNODE")).andReturn(null);
+  expect(cluster.getCurrentStackVersion()).andReturn(new StackId("HDP","2.0.5"));
+  replay(cluster,hdfsService,nagiosService,nagiosServer,namenode);
+  rco.initialize(cluster);
+  Set<Service> transitiveServices=rco.getTransitiveServices(cluster.getService("NAGIOS"),RoleCommand.START);
+  Assert.assertNotNull(transitiveServices);
+  Assert.assertFalse(transitiveServices.isEmpty());
+  Assert.assertEquals(1,transitiveServices.size());
+  Assert.assertTrue(transitiveServices.contains(hdfsService));
+}

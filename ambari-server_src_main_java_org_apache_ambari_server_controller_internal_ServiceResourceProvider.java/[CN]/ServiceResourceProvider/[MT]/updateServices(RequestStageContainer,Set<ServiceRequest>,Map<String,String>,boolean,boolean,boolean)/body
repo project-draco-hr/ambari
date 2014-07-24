@@ -4,8 +4,8 @@
     LOG.warn("Received an empty requests set");
     return null;
   }
-  Map<State,List<Service>> changedServices=new HashMap<State,List<Service>>();
-  Map<State,List<ServiceComponent>> changedComps=new HashMap<State,List<ServiceComponent>>();
+  Map<State,List<Service>> changedServices=new EnumMap<State,List<Service>>(State.class);
+  Map<State,List<ServiceComponent>> changedComps=new EnumMap<State,List<ServiceComponent>>(State.class);
   Map<String,Map<State,List<ServiceComponentHost>>> changedScHosts=new HashMap<String,Map<State,List<ServiceComponentHost>>>();
   Collection<ServiceComponentHost> ignoredScHosts=new ArrayList<ServiceComponentHost>();
   Set<String> clusterNames=new HashSet<String>();
@@ -22,7 +22,6 @@
     reqOpLvl=Resource.Type.Cluster;
   }
   Clusters clusters=controller.getClusters();
-  AmbariMetaInfo ambariMetaInfo=controller.getAmbariMetaInfo();
   Set<String> maintenanceClusters=new HashSet<String>();
   for (  ServiceRequest request : requests) {
     if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getServiceName() == null || request.getServiceName().isEmpty()) {
@@ -82,70 +81,22 @@
       }
       changedServices.get(newState).add(s);
     }
-    for (    ServiceComponent sc : s.getServiceComponents().values()) {
-      State oldScState=sc.getDesiredState();
-      if (newState != oldScState) {
-        if (sc.isClientComponent() && !newState.isValidClientComponentState()) {
-          continue;
+    updateServiceComponents(requestStages,changedComps,changedScHosts,ignoredScHosts,reqOpLvl,s,newState);
+  }
+  if (startDependencies && changedServices.containsKey(State.STARTED)) {
+    HashSet<Service> depServices=new HashSet<Service>();
+    for (    Service service : changedServices.get(State.STARTED)) {
+      RoleCommandOrder rco=controller.getRoleCommandOrder(service.getCluster());
+      Set<Service> dependencies=rco.getTransitiveServices(service,RoleCommand.START);
+      for (      Service dependency : dependencies) {
+        if (!changedServices.get(State.STARTED).contains(dependency)) {
+          depServices.add(dependency);
         }
-        if (!State.isValidDesiredStateTransition(oldScState,newState)) {
-          throw new AmbariException("Invalid transition for" + " servicecomponent" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sc.getServiceName()+ ", componentName="+ sc.getName()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
-        }
-        if (!changedComps.containsKey(newState)) {
-          changedComps.put(newState,new ArrayList<ServiceComponent>());
-        }
-        changedComps.get(newState).add(sc);
       }
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Handling update to ServiceComponent" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
-      }
-      for (      ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
-        State oldSchState=sch.getState();
-        if (oldSchState == State.DISABLED || oldSchState == State.UNKNOWN) {
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
-          }
-          continue;
-        }
-        if (newState == oldSchState) {
-          ignoredScHosts.add(sch);
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
-          }
-          continue;
-        }
-        if (!maintenanceStateHelper.isOperationAllowed(reqOpLvl,sch)) {
-          ignoredScHosts.add(sch);
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Ignoring ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName());
-          }
-          continue;
-        }
-        if (sc.isClientComponent() && !newState.isValidClientComponentState()) {
-          continue;
-        }
-        if (!isValidStateTransition(requestStages,oldSchState,newState,sch)) {
-          String error="Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sch.getServiceName()+ ", componentName="+ sch.getServiceComponentName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState;
-          StackId sid=cluster.getDesiredStackVersion();
-          if (ambariMetaInfo.getComponentCategory(sid.getStackName(),sid.getStackVersion(),sc.getServiceName(),sch.getServiceComponentName()).isMaster()) {
-            throw new AmbariException(error);
-          }
- else {
-            LOG.warn("Ignoring: " + error);
-            continue;
-          }
-        }
-        if (!changedScHosts.containsKey(sc.getName())) {
-          changedScHosts.put(sc.getName(),new HashMap<State,List<ServiceComponentHost>>());
-        }
-        if (!changedScHosts.get(sc.getName()).containsKey(newState)) {
-          changedScHosts.get(sc.getName()).put(newState,new ArrayList<ServiceComponentHost>());
-        }
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("Handling update to ServiceComponentHost" + ", clusterName=" + request.getClusterName() + ", serviceName="+ s.getName()+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
-        }
-        changedScHosts.get(sc.getName()).get(newState).add(sch);
-      }
+    }
+    for (    Service service : depServices) {
+      updateServiceComponents(requestStages,changedComps,changedScHosts,ignoredScHosts,reqOpLvl,service,State.STARTED);
+      changedServices.get(State.STARTED).add(service);
     }
   }
   if (seenNewStates.size() > 1) {
