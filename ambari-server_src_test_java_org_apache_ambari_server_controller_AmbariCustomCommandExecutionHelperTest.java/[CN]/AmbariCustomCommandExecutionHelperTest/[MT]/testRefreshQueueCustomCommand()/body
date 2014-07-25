@@ -1,0 +1,34 @@
+{
+  try {
+    createClusterFixture();
+    Map<String,String> requestProperties=new HashMap<String,String>(){
+{
+        put(REQUEST_CONTEXT_PROPERTY,"Refresh YARN Capacity Scheduler");
+        put("command","REFRESHQUEUES");
+      }
+    }
+;
+    ExecuteActionRequest actionRequest=new ExecuteActionRequest("c1","REFRESHQUEUES",new HashMap<String,String>(){
+{
+        put("forceRefreshConfigTags","capacity-scheduler");
+      }
+    }
+);
+    actionRequest.getResourceFilters().add(new RequestResourceFilter("YARN","RESOURCEMANAGER",Collections.singletonList("c6401")));
+    controller.createAction(actionRequest,requestProperties);
+    Mockito.verify(am,Mockito.times(1)).sendActions(stagesCaptor.capture(),any(ExecuteActionRequest.class));
+    List<Stage> stages=stagesCaptor.getValue();
+    Assert.assertEquals(1,stages.size());
+    Stage stage=stages.get(0);
+    Assert.assertEquals(1,stage.getHosts().size());
+    List<ExecutionCommandWrapper> commands=stage.getExecutionCommands("c6401");
+    Assert.assertEquals(1,commands.size());
+    ExecutionCommand command=commands.get(0).getExecutionCommand();
+    Assert.assertNotNull(command.getForceRefreshConfigTags());
+    Assert.assertEquals(1,command.getForceRefreshConfigTags().size());
+    Assert.assertEquals("capacity-scheduler",command.getForceRefreshConfigTags().iterator().next());
+  }
+ catch (  AmbariException e) {
+    Assert.fail(e.getMessage());
+  }
+}
