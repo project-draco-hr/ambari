@@ -1,9 +1,11 @@
 {
   injector=Guice.createInjector(new InMemoryDefaultTestModule());
   injector.getInstance(GuiceJpaInitializer.class);
-  clusterId=injector.getInstance(OrmTestHelper.class).createCluster();
-  AlertsDAO alertDAO=injector.getInstance(AlertsDAO.class);
-  AlertDefinitionDAO alertDefinitionDAO=injector.getInstance(AlertDefinitionDAO.class);
+  helper=injector.getInstance(OrmTestHelper.class);
+  clusterId=helper.createCluster();
+  dao=injector.getInstance(AlertsDAO.class);
+  definitionDao=injector.getInstance(AlertDefinitionDAO.class);
+  dispatchDao=injector.getInstance(AlertDispatchDAO.class);
   for (int i=0; i < 5; i++) {
     AlertDefinitionEntity definition=new AlertDefinitionEntity();
     definition.setDefinitionName("Alert Definition " + i);
@@ -11,13 +13,13 @@
     definition.setComponentName(null);
     definition.setClusterId(clusterId);
     definition.setHash(UUID.randomUUID().toString());
-    definition.setScheduleInterval(60L);
-    definition.setScope("SERVICE");
+    definition.setScheduleInterval(60);
+    definition.setScope(Scope.SERVICE);
     definition.setSource("Source " + i);
     definition.setSourceType("SCRIPT");
-    alertDefinitionDAO.create(definition);
+    definitionDao.create(definition);
   }
-  List<AlertDefinitionEntity> definitions=alertDefinitionDAO.findAll();
+  List<AlertDefinitionEntity> definitions=definitionDao.findAll();
   assertNotNull(definitions);
   assertEquals(5,definitions.size());
   calendar.clear();
@@ -29,20 +31,18 @@
       history.setClusterId(clusterId);
       history.setAlertDefinition(definition);
       history.setAlertLabel(definition.getDefinitionName() + " " + i);
-      history.setAlertState(AlertState.OK);
       history.setAlertText(definition.getDefinitionName() + " " + i);
       history.setAlertTimestamp(calendar.getTimeInMillis());
-      calendar.add(Calendar.DATE,1);
-      alertDAO.create(history);
-      if (i == 0 || i == 1) {
-        history.setAlertId(null);
+      history.setAlertState(AlertState.OK);
+      if (i == 0 || i == 5) {
         history.setAlertState(AlertState.CRITICAL);
-        alertDAO.create(history);
       }
+      calendar.add(Calendar.DATE,1);
+      dao.create(history);
     }
   }
   for (  AlertDefinitionEntity definition : definitions) {
-    List<AlertHistoryEntity> alerts=alertDAO.findAll();
+    List<AlertHistoryEntity> alerts=dao.findAll();
     AlertHistoryEntity history=null;
     for (    AlertHistoryEntity alert : alerts) {
       if (definition.equals(alert.getAlertDefinition())) {
@@ -51,11 +51,10 @@
     }
     assertNotNull(history);
     AlertCurrentEntity current=new AlertCurrentEntity();
-    current.setAlertId(history.getAlertId());
     current.setAlertHistory(history);
     current.setLatestTimestamp(new Date().getTime());
     current.setOriginalTimestamp(new Date().getTime() - 10800000);
     current.setMaintenanceState(MaintenanceState.OFF);
-    alertDAO.create(current);
+    dao.create(current);
   }
 }
