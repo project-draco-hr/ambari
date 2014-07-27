@@ -23,8 +23,17 @@
   ViewDAO vDAO=createMock(ViewDAO.class);
   ViewRegistry.setViewDAO(vDAO);
   ViewEntity viewDefinition=ViewEntityTest.getViewEntity();
-  viewDefinition.setInstances(ViewInstanceEntityTest.getViewInstanceEntities(viewDefinition));
+  viewDefinition.setResourceType(resourceTypeEntity);
+  Set<ViewInstanceEntity> viewInstanceEntities=ViewInstanceEntityTest.getViewInstanceEntities(viewDefinition);
+  viewDefinition.setInstances(viewInstanceEntities);
   Map<File,ViewConfig> viewConfigs=Collections.singletonMap(viewArchive,viewDefinition.getConfiguration());
+  long resourceId=99L;
+  for (  ViewInstanceEntity viewInstanceEntity : viewInstanceEntities) {
+    ResourceEntity resourceEntity=new ResourceEntity();
+    resourceEntity.setId(resourceId);
+    resourceEntity.setResourceType(resourceTypeEntity);
+    viewInstanceEntity.setResource(resourceEntity);
+  }
   Map<String,File> files=new HashMap<String,File>();
   files.put("/var/lib/ambari-server/resources/views/work",extractedArchiveDir);
   files.put("/var/lib/ambari-server/resources/views/work/MY_VIEW{1.0.0}",archiveDir);
@@ -65,13 +74,8 @@
   expect(fileEntry.toURI()).andReturn(new URI("file:./"));
   Capture<ViewEntity> captureViewEntity=new Capture<ViewEntity>();
   expect(vDAO.findByName("MY_VIEW{1.0.0}")).andReturn(null);
-  expect(vDAO.merge(capture(captureViewEntity))).andReturn(null);
-  expect(vDAO.findByName("MY_VIEW{1.0.0}")).andReturn(viewDefinition);
+  expect(vDAO.merge(capture(captureViewEntity))).andReturn(viewDefinition);
   expect(vDAO.findAll()).andReturn(Collections.<ViewEntity>emptyList());
-  expect(rtDAO.findByName("MY_VIEW{1.0.0}")).andReturn(resourceTypeEntity);
-  Capture<ResourceEntity> resourceEntityCapture=new Capture<ResourceEntity>();
-  rDAO.create(capture(resourceEntityCapture));
-  rDAO.create(capture(resourceEntityCapture));
   replay(configuration,viewDir,extractedArchiveDir,viewArchive,archiveDir,entryFile,classesDir,libDir,fileEntry,viewJarFile,enumeration,jarEntry,is,fos,vDAO,rtDAO,rDAO);
   ViewRegistry registry=ViewRegistry.getInstance();
   registry.setHelper(new TestViewRegistryHelper(viewConfigs,files,outputStreams,jarFiles));

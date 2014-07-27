@@ -5,31 +5,14 @@
     if (LOG.isDebugEnabled()) {
       LOG.debug("Creating View " + viewName + ".");
     }
-    ResourceTypeEntity resourceTypeEntity=resourceTypeDAO.findByName(viewName);
-    if (resourceTypeEntity == null) {
-      resourceTypeEntity=new ResourceTypeEntity();
-      resourceTypeEntity.setName(view.getName());
-      resourceTypeDAO.create(resourceTypeEntity);
-    }
-    view.setResourceType(resourceTypeEntity);
-    for (    ViewInstanceEntity instance : view.getInstances()) {
-      ResourceEntity resourceEntity=new ResourceEntity();
-      resourceEntity.setResourceType(resourceTypeEntity);
-      resourceDAO.create(resourceEntity);
-      instance.setResource(resourceEntity);
-    }
-    viewDAO.merge(view);
-    persistedView=viewDAO.findByName(viewName);
-    if (persistedView == null) {
-      String message="View  " + persistedView.getViewName() + " can not be found.";
-      LOG.error(message);
-      throw new IllegalStateException(message);
-    }
+    persistedView=viewDAO.merge(view);
   }
   Map<String,ViewInstanceEntity> instanceEntityMap=new HashMap<String,ViewInstanceEntity>();
   for (  ViewInstanceEntity instance : view.getInstances()) {
     instanceEntityMap.put(instance.getName(),instance);
   }
+  view.setResourceType(persistedView.getResourceType());
+  view.setPermissions(persistedView.getPermissions());
   for (  ViewInstanceEntity persistedInstance : persistedView.getInstances()) {
     String instanceName=persistedInstance.getName();
     ViewInstanceEntity instance=view.getInstanceDefinition(instanceName);
@@ -46,9 +29,7 @@
     instance.setData(persistedInstance.getData());
     instance.setProperties(persistedInstance.getProperties());
     instance.setEntities(persistedInstance.getEntities());
-    if (instance.getResource() == null) {
-      instance.setResource(persistedInstance.getResource());
-    }
+    instance.setResource(persistedInstance.getResource());
   }
   for (  ViewInstanceEntity instance : instanceEntityMap.values()) {
     view.removeInstanceDefinition(instance.getName());
