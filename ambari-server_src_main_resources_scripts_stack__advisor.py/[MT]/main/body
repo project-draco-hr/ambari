@@ -1,0 +1,38 @@
+def main(argv=None):
+    args = argv[1:]
+    if (len(args) < 3):
+        sys.stderr.write(USAGE)
+        sys.exit(2)
+        pass
+    action = args[0]
+    if (action not in ALL_ACTIONS):
+        sys.stderr.write(USAGE)
+        sys.exit(2)
+        pass
+    hostsFile = args[1]
+    servicesFile = args[2]
+    hosts = loadJson(hostsFile)
+    services = loadJson(servicesFile)
+    stackName = services['Versions']['stack_name']
+    stackVersion = services['Versions']['stack_version']
+    parentVersions = []
+    if ('parent_stack_version' in services['Versions']):
+        parentVersions = [services['Versions']['parent_stack_version']]
+    stackAdvisor = instantiateStackAdvisor(stackName, stackVersion, parentVersions)
+    actionDir = os.path.realpath(os.path.dirname(args[1]))
+    result = {}
+    result_file = 'non_valid_result_file.json'
+    if (action == RECOMMEND_COMPONENT_LAYOUT_ACTION):
+        result = stackAdvisor.recommendComponentLayout(services, hosts)
+        result_file = os.path.join(actionDir, 'component-layout.json')
+    elif (action == VALIDATE_COMPONENT_LAYOUT_ACTION):
+        result = stackAdvisor.validateComponentLayout(services, hosts)
+        result_file = os.path.join(actionDir, 'component-layout-validation.json')
+    elif (action == RECOMMEND_CONFIGURATIONS):
+        result = stackAdvisor.recommendConfigurations(services, hosts)
+        result_file = os.path.join(actionDir, 'configurations.json')
+    else:
+        result = stackAdvisor.validateConfigurations(services, hosts)
+        result_file = os.path.join(actionDir, 'configurations-validation.json')
+    dumpJson(result, result_file)
+    pass
