@@ -1,0 +1,54 @@
+{
+  ConfigHelper configHelper=injector.getInstance(ConfigHelper.class);
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters == null) {
+    return;
+  }
+  Map<String,Cluster> clusterMap=clusters.getClusters();
+  if (clusterMap != null && !clusterMap.isEmpty()) {
+    for (    final Cluster cluster : clusterMap.values()) {
+      Config config=cluster.getDesiredConfigByType(Configuration.GLOBAL_CONFIG_TAG);
+      if (config == null) {
+        LOG.info("Config " + Configuration.GLOBAL_CONFIG_TAG + " not found. Assuming upgrade already done.");
+        return;
+      }
+      Map<String,Map<String,String>> newProperties=new HashMap<String,Map<String,String>>();
+      Map<String,String> globalProperites=config.getProperties();
+      Map<String,String> unmappedGlobalProperties=new HashMap<String,String>();
+      for (      Map.Entry<String,String> property : globalProperites.entrySet()) {
+        String propertyName=property.getKey();
+        String propertyValue=property.getValue();
+        Set<String> newConfigTypes=configHelper.findConfigTypesByPropertyName(cluster,propertyName);
+        newConfigTypes.remove(Configuration.GLOBAL_CONFIG_TAG);
+        String newConfigType=null;
+        if (newConfigTypes.size() > 0) {
+          newConfigType=newConfigTypes.iterator().next();
+        }
+ else {
+          newConfigType=getAdditionalMappingGlobalToEnv().get(propertyName);
+        }
+        if (newConfigType == null) {
+          LOG.warn("Cannot find where to map " + propertyName + " from "+ Configuration.GLOBAL_CONFIG_TAG+ " (value="+ propertyValue+ ")");
+          unmappedGlobalProperties.put(propertyName,propertyValue);
+          continue;
+        }
+        LOG.info("Mapping config " + propertyName + " from "+ Configuration.GLOBAL_CONFIG_TAG+ " to "+ newConfigType+ " (value="+ propertyValue+ ")");
+        if (!newProperties.containsKey(newConfigType)) {
+          newProperties.put(newConfigType,new HashMap<String,String>());
+        }
+        newProperties.get(newConfigType).put(propertyName,propertyValue);
+      }
+      for (      Entry<String,Map<String,String>> newProperty : newProperties.entrySet()) {
+        updateConfigurationProperties(newProperty.getKey(),newProperty.getValue(),true,true);
+      }
+      if (unmappedGlobalProperties.size() != 0) {
+        LOG.info("Not deleting globals because have custom properties");
+        configHelper.createConfigType(cluster,ambariManagementController,Configuration.GLOBAL_CONFIG_TAG,unmappedGlobalProperties,"ambari-upgrade");
+      }
+ else {
+        configHelper.removeConfigsByType(cluster,Configuration.GLOBAL_CONFIG_TAG);
+      }
+    }
+  }
+}
