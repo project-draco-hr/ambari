@@ -1,3 +1,34 @@
 {
-  throw new UnsupportedOperationException("Not currently supported.");
+  AmbariManagementController amc=getManagementController();
+  final Set<RequestRequest> requests=new HashSet<RequestRequest>();
+  Iterator<Map<String,Object>> iterator=requestInfo.getProperties().iterator();
+  if (iterator.hasNext()) {
+    for (    Map<String,Object> propertyMap : getPropertyMaps(iterator.next(),predicate)) {
+      requests.add(getRequest(propertyMap));
+    }
+  }
+  List<org.apache.ambari.server.actionmanager.Request> targets=new ArrayList<org.apache.ambari.server.actionmanager.Request>();
+  for (  RequestRequest updateRequest : requests) {
+    ActionManager actionManager=amc.getActionManager();
+    List<org.apache.ambari.server.actionmanager.Request> internalRequests=actionManager.getRequests(Collections.singletonList(updateRequest.getRequestId()));
+    if (internalRequests.size() == 0) {
+      throw new IllegalArgumentException(String.format("Request %s does not exist",updateRequest.getRequestId()));
+    }
+    org.apache.ambari.server.actionmanager.Request internalRequest=internalRequests.get(0);
+    if (updateRequest.getAbortReason() == null || updateRequest.getAbortReason().isEmpty()) {
+      throw new IllegalArgumentException("Abort reason can not be empty.");
+    }
+    HostRoleStatus internalRequestStatus=calculateSummaryStatus(calculateRequestStatusCounters(internalRequest),internalRequest.getCommands().size());
+    if (updateRequest.getStatus() != HostRoleStatus.ABORTED) {
+      throw new IllegalArgumentException(String.format("%s is wrong value. The only allowed value " + "for updating request status is ABORTED",updateRequest.getStatus()));
+    }
+    if (internalRequestStatus.isCompletedState()) {
+      throw new IllegalArgumentException(String.format("Can not set request that is in %s state to %s state.",internalRequestStatus.toString(),updateRequest.getStatus()));
+    }
+    targets.add(internalRequest);
+  }
+  for (  org.apache.ambari.server.actionmanager.Request target : targets) {
+    amc.getActionManager().cancelRequest(target);
+  }
+  return getRequestStatus(null);
 }
