@@ -1,0 +1,48 @@
+{
+  final Set<String> externalUsers=getExternalLdapUserNames();
+  for (  String user : users) {
+    if (!externalUsers.contains(user)) {
+      throw new AmbariException("Couldn't sync LDAP user " + user + ", it doesn't exist");
+    }
+  }
+  final Set<String> externalGroups=getExternalLdapGroupNames();
+  for (  String group : groups) {
+    if (!externalGroups.contains(group)) {
+      throw new AmbariException("Couldn't sync LDAP group " + group + ", it doesn't exist");
+    }
+  }
+  final Map<String,Group> internalGroupsMap=getInternalGroups();
+  for (  String groupName : groups) {
+    if (internalGroupsMap.containsKey(groupName)) {
+      final Group group=internalGroupsMap.get(groupName);
+      if (!group.isLdapGroup()) {
+        this.users.setGroupLdap(groupName);
+      }
+    }
+ else {
+      this.users.createGroup(groupName);
+      this.users.setGroupLdap(groupName);
+    }
+    refreshGroupMembers(groupName);
+    internalGroupsMap.remove(groupName);
+  }
+  for (  Entry<String,Group> internalGroup : internalGroupsMap.entrySet()) {
+    if (internalGroup.getValue().isLdapGroup()) {
+      this.users.removeGroup(internalGroup.getValue());
+    }
+  }
+  cleanUpLdapUsersWithoutGroup();
+  final Map<String,User> internalUsersMap=getInternalUsers();
+  for (  String userName : users) {
+    if (internalUsersMap.containsKey(userName)) {
+      final User user=internalUsersMap.get(userName);
+      if (!user.isLdapUser()) {
+        this.users.setUserLdap(userName);
+      }
+    }
+ else {
+      this.users.createUser(userName,"");
+      this.users.setUserLdap(userName);
+    }
+  }
+}
