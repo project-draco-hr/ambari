@@ -4,6 +4,8 @@
   }
   LOG.info("Received a updateCluster request" + ", clusterName=" + request.getClusterName() + ", request="+ request);
   final Cluster cluster=clusters.getCluster(request.getClusterName());
+  ConfigurationResponse configurationResponse=null;
+  ServiceConfigVersionResponse serviceConfigVersionResponse=null;
   if (null != request.getDesiredConfig()) {
     ConfigurationRequest cr=request.getDesiredConfig();
     Config oldConfig=cluster.getDesiredConfigByType(cr.getType());
@@ -12,15 +14,16 @@
       if (null == all || !all.containsKey(cr.getVersionTag()) || cr.getProperties().size() > 0) {
         LOG.info(MessageFormat.format("Applying configuration with tag ''{0}'' to cluster ''{1}''",cr.getVersionTag(),request.getClusterName()));
         cr.setClusterName(cluster.getClusterName());
-        createConfiguration(cr);
+        configurationResponse=createConfiguration(cr);
       }
     }
     Config baseConfig=cluster.getConfig(cr.getType(),cr.getVersionTag());
     if (null != baseConfig) {
       String authName=getAuthName();
-      if (cluster.addDesiredConfig(authName,baseConfig)) {
+      serviceConfigVersionResponse=cluster.addDesiredConfig(authName,baseConfig);
+      if (serviceConfigVersionResponse != null) {
         Logger logger=LoggerFactory.getLogger("configchange");
-        logger.info("cluster '" + request.getClusterName() + "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ baseConfig.getType()+ "' "+ "tag='"+ baseConfig.getVersionTag()+ "'"+ (null == oldConfig ? "" : " from='" + oldConfig.getVersionTag() + "'"));
+        logger.info("cluster '" + request.getClusterName() + "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ baseConfig.getType()+ "' "+ "tag='"+ baseConfig.getTag()+ "'"+ (null == oldConfig ? "" : " from='" + oldConfig.getTag() + "'"));
       }
     }
   }
@@ -48,6 +51,23 @@
       }
     }
     cluster.setProvisioningState(provisioningState);
+  }
+  if (null != request.getServiceConfigVersionRequest()) {
+    ServiceConfigVersionRequest serviceConfigVersionRequest=request.getServiceConfigVersionRequest();
+    if (StringUtils.isEmpty(serviceConfigVersionRequest.getServiceName()) || null == serviceConfigVersionRequest.getVersion()) {
+      String msg="Service name and version should be specified in service config version";
+      LOG.error(msg);
+      throw new IllegalArgumentException(msg);
+    }
+    cluster.setServiceConfigVersion(serviceConfigVersionRequest.getServiceName(),serviceConfigVersionRequest.getVersion(),getAuthName());
+  }
+  if (serviceConfigVersionResponse != null) {
+    if (configurationResponse != null) {
+      serviceConfigVersionResponse.setConfigurations(Collections.singletonList(configurationResponse));
+    }
+    ClusterResponse clusterResponse=new ClusterResponse(cluster.getClusterId(),cluster.getClusterName(),null,null,null,null,null);
+    clusterResponse.setDesiredServiceConfigVersions(Collections.singletonMap(serviceConfigVersionResponse.getServiceName(),serviceConfigVersionResponse));
+    saveClusterUpdate(request,clusterResponse);
   }
   return null;
 }

@@ -1,0 +1,33 @@
+{
+  clusterGlobalLock.readLock().lock();
+  try {
+    readWriteLock.readLock().lock();
+    try {
+      List<ServiceConfigVersionResponse> serviceConfigVersionResponses=new ArrayList<ServiceConfigVersionResponse>();
+      for (      ServiceConfigApplicationEntity applicationEntity : serviceConfigDAO.getServiceConfigApplications(getClusterId())) {
+        ServiceConfigVersionResponse serviceConfigVersionResponse=new ServiceConfigVersionResponse();
+        ServiceConfigEntity serviceConfigEntity=applicationEntity.getServiceConfigEntity();
+        serviceConfigVersionResponse.setClusterName(getClusterName());
+        serviceConfigVersionResponse.setServiceName(serviceConfigEntity.getServiceName());
+        serviceConfigVersionResponse.setVersion(serviceConfigEntity.getVersion());
+        serviceConfigVersionResponse.setCreateTime(serviceConfigEntity.getCreateTimestamp());
+        serviceConfigVersionResponse.setApplyTime(applicationEntity.getApplyTimestamp());
+        serviceConfigVersionResponse.setUserName(applicationEntity.getUser());
+        serviceConfigVersionResponse.setConfigurations(new ArrayList<ConfigurationResponse>());
+        List<ClusterConfigEntity> clusterConfigEntities=serviceConfigEntity.getClusterConfigEntities();
+        for (        ClusterConfigEntity clusterConfigEntity : clusterConfigEntities) {
+          Config config=allConfigs.get(clusterConfigEntity.getType()).get(clusterConfigEntity.getTag());
+          serviceConfigVersionResponse.getConfigurations().add(new ConfigurationResponse(getClusterName(),config.getType(),config.getTag(),config.getVersion(),config.getProperties(),config.getPropertiesAttributes()));
+        }
+        serviceConfigVersionResponses.add(serviceConfigVersionResponse);
+      }
+      return serviceConfigVersionResponses;
+    }
+  finally {
+      readWriteLock.readLock().unlock();
+    }
+  }
+  finally {
+    clusterGlobalLock.readLock().unlock();
+  }
+}

@@ -5,27 +5,12 @@
     readWriteLock.writeLock().lock();
     try {
       Config currentDesired=getDesiredConfigByType(config.getType());
-      if (null != currentDesired && currentDesired.getVersionTag().equals(config.getVersionTag())) {
-        return false;
+      if (null != currentDesired && currentDesired.getTag().equals(config.getTag())) {
+        return null;
       }
-      Collection<ClusterConfigMappingEntity> entities=clusterEntity.getConfigMappingEntities();
-      for (      ClusterConfigMappingEntity e : entities) {
-        if (e.isSelected() > 0 && e.getType().equals(config.getType())) {
-          e.setSelected(0);
-        }
-      }
-      ClusterConfigMappingEntity entity=new ClusterConfigMappingEntity();
-      entity.setClusterEntity(clusterEntity);
-      entity.setClusterId(clusterEntity.getClusterId());
-      entity.setCreateTimestamp(Long.valueOf(System.currentTimeMillis()));
-      entity.setSelected(1);
-      entity.setUser(user);
-      entity.setType(config.getType());
-      entity.setVersion(config.getVersionTag());
-      entities.add(entity);
-      clusterDAO.merge(clusterEntity);
+      ServiceConfigVersionResponse serviceConfigVersionResponse=applyConfig(config.getType(),config.getTag(),user);
       configHelper.invalidateStaleConfigsCache();
-      return true;
+      return serviceConfigVersionResponse;
     }
   finally {
       readWriteLock.writeLock().unlock();

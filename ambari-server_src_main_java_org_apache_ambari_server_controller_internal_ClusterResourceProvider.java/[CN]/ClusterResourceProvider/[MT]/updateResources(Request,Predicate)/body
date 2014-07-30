@@ -14,5 +14,25 @@
   }
 );
   notifyUpdate(Resource.Type.Cluster,request,predicate);
-  return getRequestStatus(response);
+  Set<Resource> associatedResources=null;
+  for (  ClusterRequest clusterRequest : requests) {
+    ClusterResponse updateResults=getManagementController().getClusterUpdateResults(clusterRequest);
+    if (updateResults != null) {
+      Map<String,ServiceConfigVersionResponse> serviceConfigVersions=updateResults.getDesiredServiceConfigVersions();
+      if (serviceConfigVersions != null) {
+        associatedResources=new HashSet<Resource>();
+        for (        Map.Entry<String,ServiceConfigVersionResponse> stringServiceConfigVersionResponseEntry : serviceConfigVersions.entrySet()) {
+          Resource resource=new ResourceImpl(Resource.Type.ServiceConfigVersion);
+          ServiceConfigVersionResponse serviceConfigVersionResponse=stringServiceConfigVersionResponseEntry.getValue();
+          resource.setProperty(ServiceConfigVersionResourceProvider.SERVICE_CONFIG_VERSION_SERVICE_NAME_PROPERTY_ID,serviceConfigVersionResponse.getServiceName());
+          resource.setProperty(ServiceConfigVersionResourceProvider.SERVICE_CONFIG_VERSION_PROPERTY_ID,serviceConfigVersionResponse.getVersion());
+          if (serviceConfigVersionResponse.getConfigurations() != null) {
+            resource.setProperty(ServiceConfigVersionResourceProvider.SERVICE_CONFIG_VERSION_CONFIGURATIONS_PROPERTY_ID,serviceConfigVersionResponse.getConfigurations());
+          }
+          associatedResources.add(resource);
+        }
+      }
+    }
+  }
+  return getRequestStatus(response,associatedResources);
 }

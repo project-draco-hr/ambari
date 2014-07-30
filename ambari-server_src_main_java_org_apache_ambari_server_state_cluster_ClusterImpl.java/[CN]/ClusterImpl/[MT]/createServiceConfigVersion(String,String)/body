@@ -1,0 +1,35 @@
+{
+  ServiceConfigEntity serviceConfigEntity=new ServiceConfigEntity();
+  serviceConfigEntity.setServiceName(serviceName);
+  serviceConfigEntity.setClusterEntity(clusterEntity);
+  serviceConfigEntity.setVersion(configVersionHelper.getNextVersion(serviceName));
+  serviceConfigEntity.setServiceConfigApplicationEntities(new ArrayList<ServiceConfigApplicationEntity>());
+  ServiceConfigApplicationEntity serviceConfigApplicationEntity=new ServiceConfigApplicationEntity();
+  serviceConfigApplicationEntity.setApplyTimestamp(serviceConfigEntity.getCreateTimestamp());
+  serviceConfigApplicationEntity.setServiceConfigEntity(serviceConfigEntity);
+  serviceConfigApplicationEntity.setUser(user);
+  serviceConfigEntity.getServiceConfigApplicationEntities().add(serviceConfigApplicationEntity);
+  List<ClusterConfigEntity> configEntities=new ArrayList<ClusterConfigEntity>();
+  serviceConfigEntity.setClusterConfigEntities(configEntities);
+  Collection<String> configTypes=serviceConfigTypes.get(serviceName);
+  for (  ClusterConfigMappingEntity mappingEntity : clusterEntity.getConfigMappingEntities()) {
+    if (mappingEntity.isSelected() > 0 && configTypes.contains(mappingEntity.getType())) {
+      ClusterConfigEntity configEntity=clusterDAO.findConfig(getClusterId(),mappingEntity.getType(),mappingEntity.getTag());
+      if (configEntity != null) {
+        configEntities.add(configEntity);
+      }
+ else {
+        LOG.error("Desired cluster config type={}, tag={} is not present in database," + " unable to add to service config version");
+      }
+    }
+  }
+  serviceConfigDAO.create(serviceConfigEntity);
+  ServiceConfigVersionResponse response=new ServiceConfigVersionResponse();
+  response.setUserName(user);
+  response.setClusterName(getClusterName());
+  response.setVersion(serviceConfigEntity.getVersion());
+  response.setServiceName(serviceConfigEntity.getServiceName());
+  response.setCreateTime(serviceConfigEntity.getCreateTimestamp());
+  response.setApplyTime(serviceConfigApplicationEntity.getApplyTimestamp());
+  return response;
+}

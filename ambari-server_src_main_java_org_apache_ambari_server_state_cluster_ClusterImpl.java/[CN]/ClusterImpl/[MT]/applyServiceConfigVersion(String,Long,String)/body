@@ -1,0 +1,22 @@
+{
+  ServiceConfigEntity serviceConfigEntity=serviceConfigDAO.findByServiceAndVersion(serviceName,serviceConfigVersion);
+  if (serviceConfigEntity == null) {
+    throw new ObjectNotFoundException("Service config version with serviceName={} and version={} not found");
+  }
+  Collection<String> configTypes=serviceConfigTypes.get(serviceName);
+  for (  ClusterConfigMappingEntity entity : clusterEntity.getConfigMappingEntities()) {
+    if (configTypes.contains(entity.getType()) && entity.isSelected() > 0) {
+      entity.setSelected(0);
+    }
+  }
+  clusterDAO.merge(clusterEntity);
+  for (  ClusterConfigEntity configEntity : serviceConfigEntity.getClusterConfigEntities()) {
+    selectConfig(configEntity.getType(),configEntity.getTag(),user);
+  }
+  ServiceConfigApplicationEntity applicationEntity=new ServiceConfigApplicationEntity();
+  applicationEntity.setApplyTimestamp(System.currentTimeMillis());
+  applicationEntity.setServiceConfigEntity(serviceConfigEntity);
+  applicationEntity.setUser(user);
+  serviceConfigEntity.getServiceConfigApplicationEntities().add(applicationEntity);
+  serviceConfigDAO.merge(serviceConfigEntity);
+}
