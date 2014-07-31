@@ -1,0 +1,24 @@
+{
+  validate(request);
+  String hostsJSON=getHostsInformation(request);
+  String servicesJSON=getServicesInformation(request);
+  StackAdvisorData adjusted=adjust(new StackAdvisorData(hostsJSON,servicesJSON),request);
+  try {
+    createRequestDirectory();
+    FileUtils.writeStringToFile(new File(requestDirectory,"hosts.json"),adjusted.hostsJSON);
+    FileUtils.writeStringToFile(new File(requestDirectory,"services.json"),adjusted.servicesJSON);
+    boolean success=saRunner.runScript(stackAdvisorScript,getCommandType(),requestDirectory);
+    if (!success) {
+      String message="Stack advisor script finished with errors";
+      LOG.warn(message);
+      throw new StackAdvisorException(message);
+    }
+    String result=FileUtils.readFileToString(new File(requestDirectory,getResultFileName()));
+    return this.mapper.readValue(result,this.type);
+  }
+ catch (  Exception e) {
+    String message="Error occured during stack advisor command invocation";
+    LOG.warn(message,e);
+    throw new StackAdvisorException(message,e);
+  }
+}
