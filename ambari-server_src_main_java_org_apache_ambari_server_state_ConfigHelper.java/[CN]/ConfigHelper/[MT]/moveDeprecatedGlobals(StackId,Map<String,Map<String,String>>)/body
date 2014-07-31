@@ -1,0 +1,41 @@
+{
+  Map<String,String> globalConfigurations=new HashMap<String,String>();
+  if (configurations.get(Configuration.GLOBAL_CONFIG_TAG) == null || configurations.get(Configuration.GLOBAL_CONFIG_TAG).size() == 0)   return;
+  globalConfigurations.putAll(configurations.get(Configuration.GLOBAL_CONFIG_TAG));
+  if (globalConfigurations != null && globalConfigurations.size() != 0) {
+    LOG.warn("Global configurations are deprecated, " + "please use *-env");
+  }
+  for (  Map.Entry<String,String> property : globalConfigurations.entrySet()) {
+    String propertyName=property.getKey();
+    String propertyValue=property.getValue();
+    Set<String> newConfigTypes=null;
+    try {
+      newConfigTypes=this.findConfigTypesByPropertyName(stackId,propertyName);
+    }
+ catch (    AmbariException e) {
+      LOG.error("Exception while getting configurations from the stacks",e);
+      return;
+    }
+    newConfigTypes.remove(Configuration.GLOBAL_CONFIG_TAG);
+    String newConfigType=null;
+    if (newConfigTypes.size() > 0) {
+      newConfigType=newConfigTypes.iterator().next();
+    }
+ else {
+      newConfigType=UpgradeCatalog170.getAdditionalMappingGlobalToEnv().get(propertyName);
+    }
+    if (newConfigType == null) {
+      LOG.warn("Cannot find where to map " + propertyName + " from "+ Configuration.GLOBAL_CONFIG_TAG+ " (value="+ propertyValue+ ")");
+      continue;
+    }
+    LOG.info("Mapping config " + propertyName + " from "+ Configuration.GLOBAL_CONFIG_TAG+ " to "+ newConfigType+ " (value="+ propertyValue+ ")");
+    configurations.get(Configuration.GLOBAL_CONFIG_TAG).remove(propertyName);
+    if (!configurations.containsKey(newConfigType)) {
+      configurations.put(newConfigType,new HashMap<String,String>());
+    }
+    configurations.get(newConfigType).put(propertyName,propertyValue);
+  }
+  if (configurations.get(Configuration.GLOBAL_CONFIG_TAG).size() == 0) {
+    configurations.remove(Configuration.GLOBAL_CONFIG_TAG);
+  }
+}
