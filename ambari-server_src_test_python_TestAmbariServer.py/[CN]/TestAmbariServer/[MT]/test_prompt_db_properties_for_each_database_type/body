@@ -1,0 +1,61 @@
+@patch.object(ambari_server, 'setup_master_key')
+@patch.object(ambari_server, 'read_password')
+@patch.object(ambari_server, 'get_validated_string_input')
+@patch.object(ambari_server, 'get_YN_input')
+def test_prompt_db_properties_for_each_database_type(self, gyni_mock, gvsi_mock, rp_mock, smk_mock):
+    '\n    :return: Validates that installation for each database type correctly stores the database type, database name,\n    and optionally the postgres schema name.\n    '
+    ambari_server.PROMPT_DATABASE_OPTIONS = True
+    gyni_mock.return_value = True
+    rp_mock.return_value = 'password'
+    smk_mock.return_value = (None, False, True)
+    hostname = 'localhost'
+    db_name = 'db_ambari'
+    postgres_schema = 'sc_ambari'
+    port = '1234'
+    oracle_service = '1'
+    oracle_service_name = 'ambari'
+    user_name = 'ambari'
+    postgres_embedded_values = ['1', db_name, postgres_schema, hostname]
+    oracle_values = ['2', hostname, port, oracle_service, oracle_service_name, user_name]
+    mysql_values = ['3', hostname, port, db_name, user_name]
+    postgres_external_values = ['4', hostname, port, db_name, postgres_schema, user_name]
+    list_of_return_values = (((postgres_embedded_values + oracle_values) + mysql_values) + postgres_external_values)
+    list_of_return_values = list_of_return_values[::(-1)]
+
+    def side_effect(*args, **kwargs):
+        return list_of_return_values.pop()
+    gvsi_mock.side_effect = side_effect
+    if (ambari_server.AMBARI_CONF_VAR in os.environ):
+        del os.environ[ambari_server.AMBARI_CONF_VAR]
+    tempdir = tempfile.gettempdir()
+    os.environ[ambari_server.AMBARI_CONF_VAR] = tempdir
+    for i in range(1, 5):
+        prop_file = os.path.join(tempdir, 'ambari.properties')
+        if os.path.exists(prop_file):
+            os.remove(prop_file)
+        with open(prop_file, 'w') as f:
+            f.write('server.jdbc.database_name=oldDBName')
+        f.close()
+        ambari_server.AMBARI_PROPERTIES_FILE = prop_file
+        args = MagicMock()
+        ambari_server.load_default_db_properties(args)
+        ambari_server.prompt_db_properties(args)
+        if (i == 1):
+            ambari_server.store_local_properties(args)
+        else:
+            ambari_server.store_remote_properties(args)
+        properties = ambari_server.get_ambari_properties()
+        if (i == 1):
+            self.assertEqual(properties[ambari_server.JDBC_DATABASE_PROPERTY], 'postgres')
+            self.assertEqual(properties[ambari_server.JDBC_DATABASE_NAME_PROPERTY], db_name)
+            self.assertEqual(properties[ambari_server.JDBC_POSTGRES_SCHEMA_PROPERTY], postgres_schema)
+        elif (i == 2):
+            self.assertEqual(properties[ambari_server.JDBC_DATABASE_PROPERTY], 'oracle')
+            self.assertFalse((ambari_server.JDBC_POSTGRES_SCHEMA_PROPERTY in properties.propertyNames()))
+        elif (i == 3):
+            self.assertEqual(properties[ambari_server.JDBC_DATABASE_PROPERTY], 'mysql')
+            self.assertFalse((ambari_server.JDBC_POSTGRES_SCHEMA_PROPERTY in properties.propertyNames()))
+        elif (i == 4):
+            self.assertEqual(properties[ambari_server.JDBC_DATABASE_PROPERTY], 'postgres')
+            self.assertEqual(properties[ambari_server.JDBC_DATABASE_NAME_PROPERTY], db_name)
+            self.assertEqual(properties[ambari_server.JDBC_POSTGRES_SCHEMA_PROPERTY], postgres_schema)
