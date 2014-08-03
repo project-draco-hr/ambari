@@ -1,0 +1,46 @@
+{
+  HttpServletRequest httpRequest=(HttpServletRequest)request;
+  HttpServletResponse httpResponse=(HttpServletResponse)response;
+  SecurityContext context=SecurityContextHolder.getContext();
+  if (context.getAuthentication() == null || !context.getAuthentication().isAuthenticated()) {
+    String token=httpRequest.getHeader(INTERNAL_TOKEN_HEADER);
+    if (token != null) {
+      context.setAuthentication(new InternalAuthenticationToken(token));
+    }
+  }
+ else {
+    boolean authorized=false;
+    Authentication authentication=context.getAuthentication();
+    for (    GrantedAuthority grantedAuthority : authentication.getAuthorities()) {
+      if (grantedAuthority instanceof AmbariGrantedAuthority) {
+        AmbariGrantedAuthority ambariGrantedAuthority=(AmbariGrantedAuthority)grantedAuthority;
+        PrivilegeEntity privilegeEntity=ambariGrantedAuthority.getPrivilegeEntity();
+        String requestURI=httpRequest.getRequestURI();
+        Integer permissionId=privilegeEntity.getPermission().getId();
+        if (permissionId.equals(PermissionEntity.AMBARI_ADMIN_PERMISSION)) {
+          authorized=true;
+          break;
+        }
+        if (requestURI.matches("/api/v[0-9]+/clusters.*")) {
+          if (permissionId.equals(PermissionEntity.CLUSTER_READ_PERMISSION) || permissionId.equals(PermissionEntity.CLUSTER_OPERATE_PERMISSION)) {
+            authorized=true;
+            break;
+          }
+        }
+ else         if (requestURI.matches("/api/v[0-9]+/views.*")) {
+          if (permissionId.equals(PermissionEntity.VIEW_USE_PERMISSION)) {
+            authorized=true;
+            break;
+          }
+        }
+      }
+    }
+    if (!authorized && !httpRequest.getMethod().equals("GET")) {
+      httpResponse.setHeader("WWW-Authenticate","Basic realm=\"" + realm + "\"");
+      httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN,"You do not have permissions to access this resource.");
+      httpResponse.flushBuffer();
+      return;
+    }
+  }
+  chain.doFilter(request,response);
+}

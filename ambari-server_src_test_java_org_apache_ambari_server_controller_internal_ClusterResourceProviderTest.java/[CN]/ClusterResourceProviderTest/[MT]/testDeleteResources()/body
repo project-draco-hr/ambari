@@ -1,10 +1,14 @@
 {
   Resource.Type type=Resource.Type.Cluster;
   AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Clusters clusters=createMock(Clusters.class);
   RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
   managementController.deleteCluster(AbstractResourceProviderTest.Matcher.getClusterRequest(null,"Cluster102",null,null));
   managementController.deleteCluster(AbstractResourceProviderTest.Matcher.getClusterRequest(103L,null,null,null));
-  replay(managementController,response);
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.checkPermission("Cluster102",false)).andReturn(true).anyTimes();
+  expect(clusters.checkPermission(null,false)).andReturn(true).anyTimes();
+  replay(managementController,response,clusters);
   ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
   AbstractResourceProviderTest.TestObserver observer=new AbstractResourceProviderTest.TestObserver();
   ((ObservableResourceProvider)provider).addObserver(observer);
@@ -18,5 +22,5 @@
   Assert.assertEquals(ResourceProviderEvent.Type.Delete,lastEvent.getType());
   Assert.assertEquals(predicate,lastEvent.getPredicate());
   Assert.assertNull(lastEvent.getRequest());
-  verify(managementController,response);
+  verify(managementController,response,clusters);
 }
