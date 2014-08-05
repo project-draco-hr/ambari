@@ -1,14 +1,15 @@
 {
   try {
     unitOfWork.begin();
-    Set<String> runningRequestIds=new HashSet<String>();
+    processCancelledRequestsList();
+    Set<Long> runningRequestIds=new HashSet<Long>();
     Set<String> affectedHosts=new HashSet<String>();
     List<Stage> stages=db.getStagesInProgress();
     if (LOG.isDebugEnabled()) {
       LOG.debug("Scheduler wakes up");
       LOG.debug("Processing {} in progress stages ",stages.size());
     }
-    if (stages == null || stages.isEmpty()) {
+    if (stages.isEmpty()) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("No stage in progress..nothing to do");
       }
@@ -18,16 +19,15 @@
     for (    Stage s : stages) {
       i_stage++;
       long requestId=s.getRequestId();
-      String requestIdStr=String.valueOf(requestId);
-      LOG.debug("==> STAGE_i = " + i_stage + "(requestId="+ requestIdStr+ ",StageId="+ s.getStageId()+ ")");
-      if (runningRequestIds.contains(requestIdStr)) {
+      LOG.debug("==> STAGE_i = " + i_stage + "(requestId="+ requestId+ ",StageId="+ s.getStageId()+ ")");
+      if (runningRequestIds.contains(requestId)) {
         LOG.debug("==> We don't want to process different stages from the same request in parallel");
         continue;
       }
  else {
-        runningRequestIds.add(requestIdStr);
-        if (!requestsInProgress.contains(requestIdStr)) {
-          requestsInProgress.add(requestIdStr);
+        runningRequestIds.add(requestId);
+        if (!requestsInProgress.contains(requestId)) {
+          requestsInProgress.add(requestId);
           db.startRequest(requestId);
         }
       }
@@ -63,6 +63,7 @@
       }
       if (failed) {
         LOG.warn("Operation completely failed, aborting request id:" + s.getRequestId());
+        cancelHostRoleCommands(s.getOrderedHostRoleCommands(),FAILED_TASK_ABORT_REASONING);
         abortOperationsForStage(s);
         return;
       }
@@ -103,8 +104,16 @@
       }
       LOG.debug("==> Scheduling {} tasks...",commandsToUpdate.size());
       db.bulkHostRoleScheduled(s,commandsToUpdate);
-      LOG.debug("==> Aborting {} tasks...",commandsToAbort.size());
-      db.bulkAbortHostRole(s,commandsToAbort);
+      if (commandsToAbort.size() > 0) {
+        LOG.debug("==> Aborting {} tasks...",commandsToAbort.size());
+        List<Long> taskIds=new ArrayList<Long>();
+        for (        ExecutionCommand command : commandsToAbort) {
+          taskIds.add(command.getTaskId());
+        }
+        Collection<HostRoleCommand> hostRoleCommands=db.getTasks(taskIds);
+        cancelHostRoleCommands(hostRoleCommands,FAILED_TASK_ABORT_REASONING);
+        db.bulkAbortHostRole(s,commandsToAbort);
+      }
       LOG.debug("==> Adding {} tasks to queue...",commandsToUpdate.size());
       for (      ExecutionCommand cmd : commandsToUpdate) {
         actionQueue.enqueue(cmd.getHostname(),cmd);
