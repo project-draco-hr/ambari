@@ -1,0 +1,164 @@
+{
+  Set<Resource> resources=new HashSet<Resource>();
+  final Set<ServiceComponentHostRequest> requests=new HashSet<ServiceComponentHostRequest>();
+  for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+    requests.add(getRequest(propertyMap));
+  }
+  Set<ServiceComponentHostResponse> responses=null;
+  try {
+    responses=getResources(new Command<Set<ServiceComponentHostResponse>>(){
+      @Override public Set<ServiceComponentHostResponse> invoke() throws AmbariException {
+        return getManagementController().getHostComponents(requests);
+      }
+    }
+);
+  }
+ catch (  Exception e) {
+    throw new SystemException("Failed to get components ",e);
+  }
+  AmbariManagementController managementController=getManagementController();
+  ConfigHelper configHelper=managementController.getConfigHelper();
+  Cluster cluster=null;
+  Clusters clusters=managementController.getClusters();
+  try {
+    cluster=clusters.getCluster(responses.iterator().next().getClusterName());
+    StackId stackId=cluster.getCurrentStackVersion();
+    String serviceName=responses.iterator().next().getServiceName();
+    String componentName=responses.iterator().next().getComponentName();
+    String hostName=responses.iterator().next().getHostname();
+    ComponentInfo componentInfo=null;
+    String packageFolder=null;
+    componentInfo=managementController.getAmbariMetaInfo().getComponent(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
+    packageFolder=managementController.getAmbariMetaInfo().getServiceInfo(stackId.getStackName(),stackId.getStackVersion(),serviceName).getServicePackageFolder();
+    String commandScript=componentInfo.getCommandScript().getScript();
+    List<ClientConfigFileDefinition> clientConfigFiles=componentInfo.getClientConfigFiles();
+    if (clientConfigFiles == null) {
+      throw new SystemException("No cofiguration files defined for the component");
+    }
+    String stackRoot=managementController.getAmbariMetaInfo().getStackRoot().getAbsolutePath();
+    String packageFolderAbsolute=stackRoot + File.separator + packageFolder;
+    String commandScriptAbsolute=packageFolderAbsolute + File.separator + commandScript;
+    Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
+    Map<String,Map<String,Map<String,String>>> configurationAttributes=new TreeMap<String,Map<String,Map<String,String>>>();
+    Collection<Config> clusterConfigs=cluster.getAllConfigs();
+    for (    Config clusterConfig : clusterConfigs) {
+      if (clusterConfig != null) {
+        Map<String,String> props=new HashMap<String,String>(clusterConfig.getProperties());
+        Map<String,Map<String,String>> allConfigTags=null;
+        allConfigTags=configHelper.getEffectiveDesiredTags(cluster,hostName);
+        Map<String,Map<String,String>> configTags=new HashMap<String,Map<String,String>>();
+        for (        Map.Entry<String,Map<String,String>> entry : allConfigTags.entrySet()) {
+          if (entry.getKey().equals(clusterConfig.getType())) {
+            configTags.put(clusterConfig.getType(),entry.getValue());
+          }
+        }
+        Map<String,Map<String,String>> properties=configHelper.getEffectiveConfigProperties(cluster,configTags);
+        if (!properties.isEmpty()) {
+          for (          Map<String,String> propertyMap : properties.values()) {
+            props.putAll(propertyMap);
+          }
+        }
+        configurations.put(clusterConfig.getType(),props);
+        Map<String,Map<String,String>> attrs=new TreeMap<String,Map<String,String>>();
+        configHelper.cloneAttributesMap(clusterConfig.getPropertiesAttributes(),attrs);
+        Map<String,Map<String,Map<String,String>>> attributes=configHelper.getEffectiveConfigAttributes(cluster,configTags);
+        for (        Map<String,Map<String,String>> attributesMap : attributes.values()) {
+          configHelper.cloneAttributesMap(attributesMap,attrs);
+        }
+        configurationAttributes.put(clusterConfig.getType(),attrs);
+      }
+    }
+    Map<String,Set<String>> clusterHostInfo=null;
+    ServiceInfo serviceInfo=null;
+    String osFamily=null;
+    clusterHostInfo=StageUtils.getClusterHostInfo(managementController.getClusters().getHostsForCluster(cluster.getClusterName()),cluster);
+    serviceInfo=managementController.getAmbariMetaInfo().getServiceInfo(stackId.getStackName(),stackId.getStackVersion(),serviceName);
+    osFamily=clusters.getHost(hostName).getOsFamily();
+    TreeMap<String,String> hostLevelParams=new TreeMap<String,String>();
+    hostLevelParams.put(JDK_LOCATION,managementController.getJdkResourceUrl());
+    hostLevelParams.put(JAVA_HOME,managementController.getJavaHome());
+    hostLevelParams.put(JDK_NAME,managementController.getJDKName());
+    hostLevelParams.put(JCE_NAME,managementController.getJCEName());
+    hostLevelParams.put(STACK_NAME,stackId.getStackName());
+    hostLevelParams.put(STACK_VERSION,stackId.getStackVersion());
+    hostLevelParams.put(DB_NAME,managementController.getServerDB());
+    hostLevelParams.put(MYSQL_JDBC_URL,managementController.getMysqljdbcUrl());
+    hostLevelParams.put(ORACLE_JDBC_URL,managementController.getOjdbcUrl());
+    hostLevelParams.putAll(managementController.getRcaParameters());
+    hostLevelParams.putAll(managementController.getRcaParameters());
+    ServiceOsSpecific anyOs=null;
+    if (serviceInfo.getOsSpecifics().containsKey(AmbariMetaInfo.ANY_OS)) {
+      anyOs=serviceInfo.getOsSpecifics().get(AmbariMetaInfo.ANY_OS);
+    }
+    ServiceOsSpecific hostOs=populateServicePackagesInfo(serviceInfo,hostLevelParams,osFamily);
+    List<ServiceOsSpecific.Package> packages=new ArrayList<ServiceOsSpecific.Package>();
+    if (anyOs != null) {
+      packages.addAll(anyOs.getPackages());
+    }
+    if (hostOs != null) {
+      packages.addAll(hostOs.getPackages());
+    }
+    String packageList=gson.toJson(packages);
+    hostLevelParams.put(PACKAGE_LIST,packageList);
+    String jsonConfigurations=null;
+    Map<String,Object> commandParams=new HashMap<String,Object>();
+    List<Map<String,String>> xmlConfigs=new LinkedList<Map<String,String>>();
+    List<Map<String,String>> envConfigs=new LinkedList<Map<String,String>>();
+    for (    ClientConfigFileDefinition clientConfigFile : clientConfigFiles) {
+      Map<String,String> fileDict=new HashMap<String,String>();
+      fileDict.put(clientConfigFile.getFileName(),clientConfigFile.getDictionaryName());
+      if (clientConfigFile.getType().equals("xml")) {
+        xmlConfigs.add(fileDict);
+      }
+ else {
+        envConfigs.add(fileDict);
+      }
+    }
+    commandParams.put("xml_configs_list",xmlConfigs);
+    commandParams.put("env_configs_list",envConfigs);
+    commandParams.put("output_file",componentName + "-configs.tar.gz");
+    Map<String,Object> jsonContent=new TreeMap<String,Object>();
+    jsonContent.put("configurations",configurations);
+    jsonContent.put("configuration_attributes",configurationAttributes);
+    jsonContent.put("commandParams",commandParams);
+    jsonContent.put("clusterHostInfo",clusterHostInfo);
+    jsonContent.put("hostLevelParams",hostLevelParams);
+    jsonContent.put("hostname",hostName);
+    jsonConfigurations=gson.toJson(jsonContent);
+    File jsonFileName=new File(TMP_PATH + File.separator + componentName+ "-configuration.json");
+    File tmpDirectory=new File(jsonFileName.getParent());
+    if (!tmpDirectory.exists()) {
+      try {
+        tmpDirectory.mkdir();
+        tmpDirectory.setWritable(true,true);
+        tmpDirectory.setReadable(true,true);
+      }
+ catch (      SecurityException se) {
+        throw new SystemException("Failed to get temporary directory to store configurations",se);
+      }
+    }
+    PrintWriter printWriter=null;
+    try {
+      printWriter=new PrintWriter(jsonFileName.getAbsolutePath());
+      printWriter.print(jsonConfigurations);
+      printWriter.close();
+    }
+ catch (    FileNotFoundException e) {
+      throw new SystemException("Failed to write configurations to json file ",e);
+    }
+    String cmd="python " + commandScriptAbsolute + " generate_configs "+ jsonFileName.getAbsolutePath()+ " "+ packageFolderAbsolute+ " "+ TMP_PATH+ File.separator+ "structured-out.json"+ " INFO "+ TMP_PATH;
+    try {
+      executeCommand(cmd,1500);
+    }
+ catch (    TimeoutException e) {
+      throw new SystemException("Script was killed due to timeout  ",e);
+    }
+catch (    Exception e) {
+      throw new SystemException("Failed to run python script for a component ",e);
+    }
+  }
+ catch (  AmbariException e) {
+    throw new SystemException("Controller error ",e);
+  }
+  return resources;
+}
