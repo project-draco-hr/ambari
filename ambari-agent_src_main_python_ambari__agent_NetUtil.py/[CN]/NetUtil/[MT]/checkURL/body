@@ -1,23 +1,24 @@
 def checkURL(self, url):
-    'Try to connect to a given url. Result is True if url returns HTTP code 200, in any other case\n    (like unreachable server or wrong HTTP code) result will be False\n    '
+    'Try to connect to a given url. Result is True if url returns HTTP code 200, in any other case\n    (like unreachable server or wrong HTTP code) result will be False.\n\n       Additionally returns body of request, if available\n    '
     logger.info(('Connecting to ' + url))
+    responseBody = ''
     try:
         parsedurl = urlparse(url)
         ca_connection = httplib.HTTPSConnection(parsedurl[1])
-        ca_connection.request('HEAD', parsedurl[2])
+        ca_connection.request('GET', parsedurl[2])
         response = ca_connection.getresponse()
         status = response.status
-        requestLogMessage = 'HEAD %s -> %s'
         if (status == 200):
-            logger.debug(requestLogMessage, url, str(status))
-            return True
+            responseBody = response.read()
+            logger.debug(LOG_REQUEST_MESSAGE, url, str(status), responseBody)
+            return (True, responseBody)
         else:
-            logger.warning(requestLogMessage, url, str(status))
-            return False
+            logger.warning(LOG_REQUEST_MESSAGE, url, str(status), responseBody)
+            return (False, responseBody)
     except SSLError as slerror:
         logger.error(str(slerror))
-        logger.error(('SSLError: Failed to connect. Please check openssl library versions. \n' + 'Refer to: https://bugzilla.redhat.com/show_bug.cgi?id=1022468 for more details.'))
-        return False
+        logger.error(ERROR_SSL_WRONG_VERSION)
+        return (False, responseBody)
     except Exception as e:
         logger.warning((((('Failed to connect to ' + str(url)) + ' due to ') + str(e)) + '  '))
-        return False
+        return (False, responseBody)
