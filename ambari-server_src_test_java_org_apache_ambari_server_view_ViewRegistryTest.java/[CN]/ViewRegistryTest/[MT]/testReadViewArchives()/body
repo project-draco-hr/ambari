@@ -47,7 +47,6 @@
   expect(configuration.getViewsDir()).andReturn(viewDir);
   expect(viewDir.getAbsolutePath()).andReturn("/var/lib/ambari-server/resources/views");
   expect(viewDir.listFiles()).andReturn(new File[]{viewArchive});
-  expect(viewArchive.getAbsolutePath()).andReturn("/var/lib/ambari-server/resources/views/work/MY_VIEW{1.0.0}");
   expect(viewArchive.isDirectory()).andReturn(false);
   expect(archiveDir.exists()).andReturn(false);
   expect(archiveDir.getAbsolutePath()).andReturn("/var/lib/ambari-server/resources/views/work/MY_VIEW{1.0.0}").anyTimes();
@@ -73,17 +72,15 @@
   expect(libDir.exists()).andReturn(true);
   expect(libDir.listFiles()).andReturn(new File[]{fileEntry});
   expect(fileEntry.toURI()).andReturn(new URI("file:./"));
-  expect(vDAO.findByName("MY_VIEW{1.0.0}")).andReturn(viewDefinition);
+  Capture<ViewEntity> captureViewEntity=new Capture<ViewEntity>();
+  expect(vDAO.findByName("MY_VIEW{1.0.0}")).andReturn(null);
+  expect(vDAO.merge(capture(captureViewEntity))).andReturn(viewDefinition);
   expect(vDAO.findAll()).andReturn(Collections.<ViewEntity>emptyList());
-  expect(rtDAO.findByName("MY_VIEW{1.0.0}")).andReturn(null);
-  rtDAO.create(EasyMock.anyObject(ResourceTypeEntity.class));
-  EasyMock.expectLastCall().anyTimes();
-  rDAO.create(EasyMock.anyObject(ResourceEntity.class));
-  EasyMock.expectLastCall().anyTimes();
   replay(configuration,viewDir,extractedArchiveDir,viewArchive,archiveDir,entryFile,classesDir,libDir,fileEntry,viewJarFile,enumeration,jarEntry,is,fos,vDAO,rtDAO,rDAO);
   ViewRegistry registry=ViewRegistry.getInstance();
   registry.setHelper(new TestViewRegistryHelper(viewConfigs,files,outputStreams,jarFiles));
   Set<ViewInstanceEntity> instanceEntities=registry.readViewArchives(configuration);
   Assert.assertEquals(2,instanceEntities.size());
+  Assert.assertEquals("MY_VIEW",captureViewEntity.getValue().getCommonName());
   verify(configuration,viewDir,extractedArchiveDir,viewArchive,archiveDir,entryFile,classesDir,libDir,fileEntry,viewJarFile,enumeration,jarEntry,is,fos,vDAO,rtDAO,rDAO);
 }
