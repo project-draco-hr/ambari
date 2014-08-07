@@ -6,16 +6,18 @@ def instantiateStackAdvisor(stackName, stackVersion, parentVersions):
         stack_advisor = imp.load_module('stack_advisor', fp, stackAdvisorPath, ('.py', 'rb', imp.PY_SOURCE))
     versions = [stackVersion]
     versions.extend(parentVersions)
-    for version in versions:
+    for version in reversed(versions):
         try:
             path = STACK_ADVISOR_IMPL_PATH_TEMPLATE.format(stackName, version)
             className = STACK_ADVISOR_IMPL_CLASS_TEMPLATE.format(stackName, version.replace('.', ''))
             with open(path, 'rb') as fp:
                 stack_advisor_impl = imp.load_module('stack_advisor_impl', fp, path, ('.py', 'rb', imp.PY_SOURCE))
-            clazz = getattr(stack_advisor_impl, className)
-            print 'StackAdvisor for stack {0}, version {1} will be used'.format(stackName, version)
-            return clazz()
+            print 'StackAdvisor implementation for stack {0}, version {1} was loaded'.format(stackName, version)
         except Exception as e:
             print 'StackAdvisor implementation for stack {0}, version {1} was not found'.format(stackName, version)
-    print 'StackAdvisor default implementation will be used!'
-    return stack_advisor.StackAdvisor()
+    try:
+        clazz = getattr(stack_advisor_impl, className)
+        return clazz()
+    except Exception as e:
+        print 'Returning default implementation'
+        return stack_advisor.StackAdvisor()
