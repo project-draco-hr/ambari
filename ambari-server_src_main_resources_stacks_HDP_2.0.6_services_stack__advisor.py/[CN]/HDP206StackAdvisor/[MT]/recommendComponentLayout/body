@@ -1,5 +1,5 @@
 def recommendComponentLayout(self, services, hosts):
-    'Returns Services object with hostnames array populated for components'
+    '\n    Returns Services object with hostnames array populated for components\n    If hostnames are populated for some components (partial blueprint) - these components will not be processed\n    '
     stackName = services['Versions']['stack_name']
     stackVersion = services['Versions']['stack_version']
     hostsList = [host['Hosts']['host_name'] for host in hosts['items']]
@@ -11,31 +11,41 @@ def recommendComponentLayout(self, services, hosts):
         for component in masterComponents:
             componentName = component['StackServiceComponents']['component_name']
             hostsForComponent = []
-            availableHosts = hostsList
-            if ((len(hostsList) > 1) and isNotPreferableOnAmbariServerHost(component)):
-                availableHosts = [hostName for hostName in hostsList if (not isLocalHost(hostName))]
-            if isMasterWithMultipleInstances(component):
-                hostsCount = defaultNoOfMasterHosts(component)
-                if (hostsCount > 1):
-                    if (len(availableHosts) < hostsCount):
-                        hostsCount = len(availableHosts)
-                    hostsForComponent = availableHosts[:hostsCount]
+            if isAlreadyPopulated(component):
+                hostsForComponent = component['StackServiceComponents']['hostnames']
+            else:
+                availableHosts = hostsList
+                if ((len(hostsList) > 1) and isNotPreferableOnAmbariServerHost(component)):
+                    availableHosts = [hostName for hostName in hostsList if (not isLocalHost(hostName))]
+                if isMasterWithMultipleInstances(component):
+                    hostsCount = defaultNoOfMasterHosts(component)
+                    if (hostsCount > 1):
+                        if (len(availableHosts) < hostsCount):
+                            hostsCount = len(availableHosts)
+                        hostsForComponent = availableHosts[:hostsCount]
+                    else:
+                        hostsForComponent = [getHostForComponent(component, availableHosts)]
                 else:
                     hostsForComponent = [getHostForComponent(component, availableHosts)]
-            else:
-                hostsForComponent = [getHostForComponent(component, availableHosts)]
             for hostName in hostsForComponent:
                 if (hostName not in hostsComponentsMap):
                     hostsComponentsMap[hostName] = []
                 hostsComponentsMap[hostName].append({'name': componentName, })
-    utilizedHosts = hostsComponentsMap.keys()
+    componentsListList = [service['components'] for service in services['services']]
+    componentsList = [item for sublist in componentsListList for item in sublist]
+    usedHostsListList = [component['StackServiceComponents']['hostnames'] for component in componentsList if (not isNotValuable(component))]
+    utilizedHosts = [item for sublist in usedHostsListList for item in sublist]
     freeHosts = [hostName for hostName in hostsList if (hostName not in utilizedHosts)]
     for service in services['services']:
         slaveClientComponents = [component for component in service['components'] if (isSlave(component) or isClient(component))]
         for component in slaveClientComponents:
             componentName = component['StackServiceComponents']['component_name']
             hostsForComponent = []
-            if (len(freeHosts) == 0):
+            if isAlreadyPopulated(component):
+                hostsForComponent = component['StackServiceComponents']['hostnames']
+            elif (component['StackServiceComponents']['cardinality'] == 'ALL'):
+                hostsForComponent = hostsList
+            elif (len(freeHosts) == 0):
                 hostsForComponent = hostsList[(-1):]
             else:
                 hostsForComponent = freeHosts

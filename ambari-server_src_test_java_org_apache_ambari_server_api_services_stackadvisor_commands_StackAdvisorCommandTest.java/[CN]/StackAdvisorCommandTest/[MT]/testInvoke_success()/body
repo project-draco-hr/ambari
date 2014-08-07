@@ -1,0 +1,28 @@
+{
+  String expected="success";
+  final String testResourceString=String.format("{\"type\": \"%s\"}",expected);
+  final File recommendationsDir=temp.newFolder("recommendationDir");
+  String stackAdvisorScript="echo";
+  final int requestId=0;
+  StackAdvisorRunner saRunner=mock(StackAdvisorRunner.class);
+  final StackAdvisorCommand<TestResource> command=spy(new TestStackAdvisorCommand(recommendationsDir,stackAdvisorScript,requestId,saRunner));
+  StackAdvisorRequest request=StackAdvisorRequestBuilder.forStack("stackName","stackVersion").build();
+  String hostsJSON="{\"hosts\" : \"localhost\"";
+  String servicesJSON="{\"services\" : \"HDFS\"";
+  StackAdvisorData data=new StackAdvisorData(hostsJSON,servicesJSON);
+  doReturn(hostsJSON).when(command).getHostsInformation(request);
+  doReturn(servicesJSON).when(command).getServicesInformation(request);
+  doReturn(data).when(command).adjust(any(StackAdvisorData.class),any(StackAdvisorRequest.class));
+  when(saRunner.runScript(any(String.class),any(StackAdvisorCommandType.class),any(File.class))).thenAnswer(new Answer<Boolean>(){
+    public Boolean answer(    InvocationOnMock invocation) throws Throwable {
+      String resultFilePath=String.format("%s/%s",requestId,command.getResultFileName());
+      File resultFile=new File(recommendationsDir,resultFilePath);
+      resultFile.getParentFile().mkdirs();
+      FileUtils.writeStringToFile(resultFile,testResourceString);
+      return true;
+    }
+  }
+);
+  TestResource result=command.invoke(request);
+  assertEquals(expected,result.getType());
+}
