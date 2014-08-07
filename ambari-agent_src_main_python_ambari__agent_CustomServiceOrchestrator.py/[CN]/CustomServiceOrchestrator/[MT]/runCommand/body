@@ -40,12 +40,21 @@ def runCommand(self, command, tmpoutfile, tmperrfile, forced_command_name=None, 
         ret = None
         for (py_file, current_base_dir) in filtered_py_file_list:
             script_params = [command_name, json_path, current_base_dir]
-            ret = self.python_executor.run_file(py_file, script_params, self.exec_tmp_dir, tmpoutfile, tmperrfile, timeout, tmpstrucoutfile, logger_level, override_output_files)
+            ret = self.python_executor.run_file(py_file, script_params, self.exec_tmp_dir, tmpoutfile, tmperrfile, timeout, tmpstrucoutfile, logger_level, self.map_task_to_process, task_id, override_output_files)
             override_output_files = False
             if (ret['exitcode'] != 0):
                 break
         if (not ret):
             raise AgentException('No script has been executed')
+        pid = self.commands_in_progress.pop(task_id)
+        if (not isinstance(pid, int)):
+            reason = ('\nCommand aborted. ' + pid)
+            ret['stdout'] += reason
+            ret['stderr'] += reason
+            with open(tmpoutfile, 'a') as f:
+                f.write(reason)
+            with open(tmperrfile, 'a') as f:
+                f.write(reason)
     except Exception:
         (exc_type, exc_obj, exc_tb) = sys.exc_info()
         message = 'Catched an exception while executing custom service command: {0}: {1}'.format(exc_type, exc_obj)
