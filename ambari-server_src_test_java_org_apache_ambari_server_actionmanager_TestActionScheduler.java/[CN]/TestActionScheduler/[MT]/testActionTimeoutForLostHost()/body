@@ -13,7 +13,6 @@
   when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
   when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
   when(serviceObj.getCluster()).thenReturn(oneClusterMock);
-  String hostname="ahost.ambari.apache.org";
   Host host=mock(Host.class);
   HashMap<String,ServiceComponentHost> hosts=new HashMap<String,ServiceComponentHost>();
   hosts.put(hostname,sch);
@@ -36,11 +35,14 @@
     }
   }
 ).when(db).timeoutHostRole(anyString(),anyLong(),anyLong(),anyString());
-  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),null,unitOfWork,conf);
+  ServerActionManager sam=EasyMock.createNiceMock(ServerActionManager.class);
+  ActionScheduler scheduler=EasyMock.createMockBuilder(ActionScheduler.class).withConstructor((long)100,(long)50,db,aq,fsm,3,new HostsMap((String)null),sam,unitOfWork,conf).addMockedMethod("cancelHostRoleCommands").createMock();
+  EasyMock.replay(scheduler);
   scheduler.setTaskTimeoutAdjustment(false);
   scheduler.start();
   while (!stages.get(0).getHostRoleStatus(hostname,"NAMENODE").equals(HostRoleStatus.TIMEDOUT)) {
     Thread.sleep(100L);
   }
   scheduler.stop();
+  EasyMock.verify(scheduler);
 }

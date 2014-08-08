@@ -1,5 +1,4 @@
 {
-  ActionManager am=getMockActionManager();
   Cluster cluster=getDummyCluster();
   @SuppressWarnings("serial") Set<String> hostNames=new HashSet<String>(){
 {
@@ -17,7 +16,6 @@
   hdfs.addServiceComponent(SECONDARY_NAMENODE).persist();
   hdfs.getServiceComponent(SECONDARY_NAMENODE).addServiceComponentHost(DummyHostname1).persist();
   ActionQueue aq=new ActionQueue();
-  HeartBeatHandler handler=getHeartBeatHandler(am,aq);
   ServiceComponentHost serviceComponentHost1=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1);
   ServiceComponentHost serviceComponentHost2=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(NAMENODE).getServiceComponentHost(DummyHostname1);
   ServiceComponentHost serviceComponentHost3=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(SECONDARY_NAMENODE).getServiceComponentHost(DummyHostname1);
@@ -46,6 +44,17 @@
   componentStatus2.setComponentName(SECONDARY_NAMENODE);
   componentStatuses.add(componentStatus2);
   hb.setComponentStatus(componentStatuses);
+  final HostRoleCommand command=new HostRoleCommand(DummyHostname1,Role.DATANODE,null,null);
+  ActionManager am=getMockActionManager();
+  expect(am.getTasks(anyObject(List.class))).andReturn(new ArrayList<HostRoleCommand>(){
+{
+      add(command);
+      add(command);
+    }
+  }
+);
+  replay(am);
+  HeartBeatHandler handler=getHeartBeatHandler(am,aq);
   handler.handleHeartBeat(hb);
   State componentState1=serviceComponentHost1.getState();
   State componentState2=serviceComponentHost2.getState();

@@ -1,5 +1,4 @@
 {
-  ActionManager am=getMockActionManager();
   Cluster cluster=getDummyCluster();
   @SuppressWarnings("serial") Set<String> hostNames=new HashSet<String>(){
 {
@@ -17,7 +16,6 @@
   hdfs.addServiceComponent(SECONDARY_NAMENODE).persist();
   hdfs.getServiceComponent(SECONDARY_NAMENODE).addServiceComponentHost(DummyHostname1).persist();
   ActionQueue aq=new ActionQueue();
-  HeartBeatHandler handler=getHeartBeatHandler(am,aq);
   ServiceComponentHost serviceComponentHost1=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1);
   serviceComponentHost1.setState(State.INSTALLING);
   Stage s=new Stage(1,"/a/b","cluster1",1L,"action manager test","clusterHostInfo");
@@ -47,6 +45,16 @@
   reports.add(cr);
   hb.setReports(reports);
   hb.setComponentStatus(new ArrayList<ComponentStatus>());
+  final HostRoleCommand command=new HostRoleCommand(DummyHostname1,Role.DATANODE,null,null);
+  ActionManager am=getMockActionManager();
+  expect(am.getTasks(anyObject(List.class))).andReturn(new ArrayList<HostRoleCommand>(){
+{
+      add(command);
+    }
+  }
+);
+  replay(am);
+  HeartBeatHandler handler=getHeartBeatHandler(am,aq);
   handler.handleHeartBeat(hb);
   State componentState1=serviceComponentHost1.getState();
   assertEquals("Host state should still be installing",State.INSTALLING,componentState1);

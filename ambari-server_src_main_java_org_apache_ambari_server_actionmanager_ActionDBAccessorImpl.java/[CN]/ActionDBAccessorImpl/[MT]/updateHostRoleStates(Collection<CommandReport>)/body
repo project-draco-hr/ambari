@@ -5,11 +5,15 @@
   }
   long now=System.currentTimeMillis();
   List<Long> requestsToCheck=new ArrayList<Long>();
+  List<Long> abortedCommandUpdates=new ArrayList<Long>();
   List<HostRoleCommandEntity> commandEntities=hostRoleCommandDAO.findByPKs(taskReports.keySet());
   for (  HostRoleCommandEntity commandEntity : commandEntities) {
     CommandReport report=taskReports.get(commandEntity.getTaskId());
     if (commandEntity.getStatus() != HostRoleStatus.ABORTED) {
       commandEntity.setStatus(HostRoleStatus.valueOf(report.getStatus()));
+    }
+ else {
+      abortedCommandUpdates.add(commandEntity.getTaskId());
     }
     commandEntity.setStdOut(report.getStdOut().getBytes());
     commandEntity.setStdError(report.getStdErr().getBytes());
@@ -27,6 +31,7 @@
     }
   }
   hostRoleCommandDAO.mergeAll(commandEntities);
+  hostRoleCommandCache.invalidateAll(abortedCommandUpdates);
   for (  Long requestId : requestsToCheck) {
     endRequestIfCompleted(requestId);
   }
