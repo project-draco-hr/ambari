@@ -1,7 +1,8 @@
 def execute_command(self, command):
-    '\n    Executes commands of type  EXECUTION_COMMAND\n    '
+    '\n    Executes commands of type EXECUTION_COMMAND\n    '
     clusterName = command['clusterName']
     commandId = command['commandId']
+    isCommandBackground = (command['commandType'] == self.BACKGROUND_EXECUTION_COMMAND)
     message = 'Executing command with id = {commandId} for role = {role} of cluster {cluster}.'.format(commandId=str(commandId), role=command['role'], cluster=clusterName)
     logger.info(message)
     logger.debug(pprint.pformat(command))
@@ -10,9 +11,10 @@ def execute_command(self, command):
     in_progress_status.update({'tmpout': ((((self.tmpdir + os.sep) + 'output-') + str(taskId)) + '.txt'), 'tmperr': ((((self.tmpdir + os.sep) + 'errors-') + str(taskId)) + '.txt'), 'structuredOut': ((((self.tmpdir + os.sep) + 'structured-out-') + str(taskId)) + '.json'), 'status': self.IN_PROGRESS_STATUS, })
     self.commandStatuses.put_command_status(command, in_progress_status)
     commandresult = self.customServiceOrchestrator.runCommand(command, in_progress_status['tmpout'], in_progress_status['tmperr'])
-    status = self.COMPLETED_STATUS
-    if (commandresult['exitcode'] != 0):
-        status = self.FAILED_STATUS
+    if isCommandBackground:
+        return
+    else:
+        status = (self.COMPLETED_STATUS if (commandresult['exitcode'] == 0) else self.FAILED_STATUS)
     roleResult = self.commandStatuses.generate_report_template(command)
     roleResult.update({'stdout': commandresult['stdout'], 'stderr': commandresult['stderr'], 'exitCode': commandresult['exitcode'], 'status': status, })
     if (roleResult['stdout'] == ''):

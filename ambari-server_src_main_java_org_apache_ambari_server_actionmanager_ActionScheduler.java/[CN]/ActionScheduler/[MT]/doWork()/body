@@ -3,7 +3,6 @@
     unitOfWork.begin();
     processCancelledRequestsList();
     Set<Long> runningRequestIds=new HashSet<Long>();
-    Set<String> affectedHosts=new HashSet<String>();
     List<Stage> stages=db.getStagesInProgress();
     if (LOG.isDebugEnabled()) {
       LOG.debug("Scheduler wakes up");
@@ -16,6 +15,7 @@
       return;
     }
     int i_stage=0;
+    stages=filterParallelPerHostStages(stages);
     for (    Stage s : stages) {
       i_stage++;
       long requestId=s.getRequestId();
@@ -30,20 +30,6 @@
           requestsInProgress.add(requestId);
           db.startRequest(requestId);
         }
-      }
-      List<String> stageHosts=s.getHosts();
-      boolean conflict=false;
-      for (      String host : stageHosts) {
-        if (affectedHosts.contains(host)) {
-          conflict=true;
-          break;
-        }
-      }
-      if (conflict) {
-        continue;
-      }
- else {
-        affectedHosts.addAll(stageHosts);
       }
       List<ExecutionCommand> commandsToSchedule=new ArrayList<ExecutionCommand>();
       Map<String,RoleStats> roleStats=processInProgressStage(s,commandsToSchedule);
