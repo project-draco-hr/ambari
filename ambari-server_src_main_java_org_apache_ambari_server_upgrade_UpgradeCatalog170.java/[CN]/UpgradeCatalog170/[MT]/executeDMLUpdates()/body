@@ -10,6 +10,52 @@
   dbAccessor.executeQuery("INSERT INTO ambari_sequences(sequence_name, " + valueColumnName + ") "+ "VALUES('alert_history_id_seq', 0)",false);
   dbAccessor.executeQuery("INSERT INTO ambari_sequences(sequence_name, " + valueColumnName + ") "+ "VALUES('alert_notice_id_seq', 0)",false);
   dbAccessor.executeQuery("INSERT INTO ambari_sequences(sequence_name, " + valueColumnName + ") "+ "VALUES('alert_current_id_seq', 0)",false);
+  executeInTransaction(new Runnable(){
+    @Override public void run(){
+      try {
+        HostRoleCommandDAO hostRoleCommandDAO=injector.getInstance(HostRoleCommandDAO.class);
+        EntityManager em=getEntityManagerProvider().get();
+        CriteriaBuilder cb=em.getCriteriaBuilder();
+        CriteriaQuery<HostRoleCommandEntity> cq1=cb.createQuery(HostRoleCommandEntity.class);
+        CriteriaQuery<HostRoleCommandEntity> cq2=cb.createQuery(HostRoleCommandEntity.class);
+        Root<HostRoleCommandEntity> hrc1=cq1.from(HostRoleCommandEntity.class);
+        Root<HostRoleCommandEntity> hrc2=cq1.from(HostRoleCommandEntity.class);
+        Expression<Long> taskID1=hrc1.get(HostRoleCommandEntity_.taskId);
+        Expression<Long> taskID2=hrc2.get(HostRoleCommandEntity_.taskId);
+        Expression<String> outputLog=hrc1.get(HostRoleCommandEntity_.outputLog);
+        Expression<String> errorLog=hrc2.get(HostRoleCommandEntity_.errorLog);
+        Predicate p1=cb.isNull(outputLog);
+        Predicate p2=cb.equal(outputLog,"");
+        Predicate p1_or_2=cb.or(p1,p2);
+        Predicate p3=cb.isNull(errorLog);
+        Predicate p4=cb.equal(errorLog,"");
+        Predicate p3_or_4=cb.or(p3,p4);
+        if (daoUtils == null) {
+          daoUtils=new DaoUtils();
+        }
+        cq1.select(hrc1).where(p1_or_2).orderBy(cb.desc(taskID1));
+        TypedQuery<HostRoleCommandEntity> q1=em.createQuery(cq1);
+        q1.setMaxResults(1000);
+        List<HostRoleCommandEntity> r1=daoUtils.selectList(q1);
+        for (        HostRoleCommandEntity entity : r1) {
+          entity.setOutputLog("/var/lib/ambari-agent/data/output-" + entity.getTaskId() + ".txt");
+          hostRoleCommandDAO.merge(entity);
+        }
+        cq2.select(hrc2).where(p3_or_4).orderBy(cb.desc(taskID2));
+        TypedQuery<HostRoleCommandEntity> q2=em.createQuery(cq2);
+        q2.setMaxResults(1000);
+        List<HostRoleCommandEntity> r2=daoUtils.selectList(q2);
+        for (        HostRoleCommandEntity entity : r2) {
+          entity.setErrorLog("/var/lib/ambari-agent/data/errors-" + entity.getTaskId() + ".txt");
+          hostRoleCommandDAO.merge(entity);
+        }
+      }
+ catch (      Exception e) {
+        LOG.warn("Could not populate historic records with output_log and error_log in host_role_command table. ",e);
+      }
+    }
+  }
+);
   moveGlobalsToEnv();
   addEnvContentFields();
   addMissingConfigs();
