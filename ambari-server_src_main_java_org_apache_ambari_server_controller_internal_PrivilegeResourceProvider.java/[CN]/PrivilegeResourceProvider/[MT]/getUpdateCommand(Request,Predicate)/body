@@ -1,0 +1,54 @@
+{
+  return new Command<Void>(){
+    @Override public Void invoke() throws AmbariException {
+      Long resource=null;
+      final List<PrivilegeEntity> requiredEntities=new ArrayList<PrivilegeEntity>();
+      for (      Map<String,Object> properties : request.getProperties()) {
+        Set<Long> resourceIds=getResourceEntities(properties).keySet();
+        Long resourceId=resourceIds.iterator().next();
+        if (resource != null && resourceId != resource) {
+          throw new AmbariException("Can't update privileges of multiple resources in one request");
+        }
+        resource=resourceId;
+        PrivilegeEntity entity=toEntity(properties,resourceId);
+        requiredEntities.add(entity);
+      }
+      if (resource == null) {
+        resource=getResourceEntityId(predicate);
+      }
+      final List<PrivilegeEntity> currentPrivileges=privilegeDAO.findByResourceId(resource);
+      for (      PrivilegeEntity requiredPrivilege : requiredEntities) {
+        boolean isInBothLists=false;
+        for (        PrivilegeEntity currentPrivilege : currentPrivileges) {
+          if (requiredPrivilege.getPermission().getPermissionName().equals(currentPrivilege.getPermission().getPermissionName()) && requiredPrivilege.getPrincipal().getId().equals(currentPrivilege.getPrincipal().getId())) {
+            isInBothLists=true;
+            break;
+          }
+        }
+        if (!isInBothLists) {
+          if (!checkResourceTypes(requiredPrivilege)) {
+            throw new AmbariException("Can't grant " + requiredPrivilege.getPermission().getResourceType().getName() + " permission on a "+ requiredPrivilege.getResource().getResourceType().getName()+ " resource.");
+          }
+          privilegeDAO.create(requiredPrivilege);
+        }
+      }
+      for (      PrivilegeEntity currentPrivilege : currentPrivileges) {
+        boolean isInBothLists=false;
+        for (        PrivilegeEntity requiredPrivilege : requiredEntities) {
+          if (requiredPrivilege.getPermission().getPermissionName().equals(currentPrivilege.getPermission().getPermissionName()) && requiredPrivilege.getPrincipal().getId().equals(currentPrivilege.getPrincipal().getId())) {
+            isInBothLists=true;
+            break;
+          }
+        }
+        if (!isInBothLists) {
+          if (!checkResourceTypes(currentPrivilege)) {
+            throw new AmbariException("Can't remove " + currentPrivilege.getPermission().getResourceType().getName() + " permission from a "+ currentPrivilege.getResource().getResourceType().getName()+ " resource.");
+          }
+          privilegeDAO.remove(currentPrivilege);
+        }
+      }
+      return null;
+    }
+  }
+;
+}

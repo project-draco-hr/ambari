@@ -2,10 +2,15 @@
   return new Command<Void>(){
     @Override public Void invoke() throws AmbariException {
       try {
-        Set<Resource> resources=getResources(PropertyHelper.getReadRequest(),predicate);
-        for (        Resource resource : resources) {
-          PrivilegeEntity entity=privilegeDAO.findById((Integer)resource.getPropertyValue(PRIVILEGE_ID_PROPERTY_ID));
+        for (        Map<String,Object> resource : getPropertyMaps(predicate)) {
+          if (resource.get(PRIVILEGE_ID_PROPERTY_ID) == null) {
+            throw new AmbariException("Privilege ID should be provided for this request");
+          }
+          PrivilegeEntity entity=privilegeDAO.findById(Integer.valueOf(resource.get(PRIVILEGE_ID_PROPERTY_ID).toString()));
           if (entity != null) {
+            if (!checkResourceTypes(entity)) {
+              throw new AmbariException("Can't remove " + entity.getPermission().getResourceType().getName() + " permission from a "+ entity.getResource().getResourceType().getName()+ " resource.");
+            }
             privilegeDAO.remove(entity);
           }
         }
