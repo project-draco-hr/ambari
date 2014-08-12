@@ -4,7 +4,6 @@ def runCommand(self, command, tmpoutfile, tmperrfile, forced_command_name=None, 
         script_type = command['commandParams']['script_type']
         script = command['commandParams']['script']
         timeout = int(command['commandParams']['command_timeout'])
-        before_interceptor_method = (command['commandParams']['before_system_hook_function'] if command['commandParams'].has_key('before_system_hook_function') else None)
         if (('hostLevelParams' in command) and ('jdk_location' in command['hostLevelParams'])):
             server_url_prefix = command['hostLevelParams']['jdk_location']
         else:
@@ -20,8 +19,6 @@ def runCommand(self, command, tmpoutfile, tmperrfile, forced_command_name=None, 
         if (command_name == self.CUSTOM_ACTION_COMMAND):
             base_dir = self.file_cache.get_custom_actions_base_dir(server_url_prefix)
             script_tuple = (os.path.join(base_dir, script), base_dir)
-            if (before_interceptor_method != None):
-                self.processSystemHookFunctions(script_tuple, before_interceptor_method, command)
             hook_dir = None
         else:
             if (command_name == self.CUSTOM_COMMAND_COMMAND):
@@ -37,6 +34,7 @@ def runCommand(self, command, tmpoutfile, tmperrfile, forced_command_name=None, 
         handle = None
         if command.has_key('__handle'):
             handle = command['__handle']
+            handle.on_background_command_started = self.map_task_to_process
             del command['__handle']
         json_path = self.dump_command_to_json(command)
         pre_hook_tuple = self.resolve_hook_script_path(hook_dir, self.PRE_HOOK_PREFIX, command_name, script_type)
@@ -56,16 +54,15 @@ def runCommand(self, command, tmpoutfile, tmperrfile, forced_command_name=None, 
                 break
         if (not ret):
             raise AgentException('No script has been executed')
-        if self.commands_in_progress.has_key(task_id):
-            pid = self.commands_in_progress.pop(task_id)
-            if (not isinstance(pid, int)):
-                reason = ('\nCommand aborted. ' + pid)
-                ret['stdout'] += reason
-                ret['stderr'] += reason
+        if (handle is None):
+            cancel_reason = self.command_canceled_reason(task_id)
+            if cancel_reason:
+                ret['stdout'] += cancel_reason
+                ret['stderr'] += cancel_reason
                 with open(tmpoutfile, 'a') as f:
-                    f.write(reason)
+                    f.write(cancel_reason)
                 with open(tmperrfile, 'a') as f:
-                    f.write(reason)
+                    f.write(cancel_reason)
     except Exception:
         (exc_type, exc_obj, exc_tb) = sys.exc_info()
         message = 'Catched an exception while executing custom service command: {0}: {1}'.format(exc_type, exc_obj)
