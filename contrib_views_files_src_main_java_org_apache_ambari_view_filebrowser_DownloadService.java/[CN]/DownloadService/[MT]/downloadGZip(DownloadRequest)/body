@@ -1,36 +1,45 @@
 {
-  StreamingOutput result=new StreamingOutput(){
-    public void write(    OutputStream output) throws IOException, WebApplicationException {
-      ZipOutputStream zip=new ZipOutputStream(output);
-      try {
-        HdfsApi api=getApi(context);
-        Queue<String> files=new LinkedList<String>();
-        for (        String file : request.entries) {
-          files.add(file);
-        }
-        while (!files.isEmpty()) {
-          String path=files.poll();
-          FileStatus status=api.getFileStatus(path);
-          if (status.isDirectory()) {
-            FileStatus[] subdir=api.listdir(path);
-            for (            FileStatus file : subdir) {
-              files.add(org.apache.hadoop.fs.Path.getPathWithoutSchemeAndAuthority(file.getPath()).toString());
+  try {
+    StreamingOutput result=new StreamingOutput(){
+      public void write(      OutputStream output) throws IOException, ServiceFormattedException {
+        ZipOutputStream zip=new ZipOutputStream(output);
+        try {
+          HdfsApi api=getApi(context);
+          Queue<String> files=new LinkedList<String>();
+          for (          String file : request.entries) {
+            files.add(file);
+          }
+          while (!files.isEmpty()) {
+            String path=files.poll();
+            FileStatus status=api.getFileStatus(path);
+            if (status.isDirectory()) {
+              FileStatus[] subdir=api.listdir(path);
+              for (              FileStatus file : subdir) {
+                files.add(org.apache.hadoop.fs.Path.getPathWithoutSchemeAndAuthority(file.getPath()).toString());
+              }
+              zipDirectory(zip,path);
             }
-            zipDirectory(zip,path);
-          }
  else {
-            zipFile(zip,path);
+              zipFile(zip,path);
+            }
           }
         }
-      }
- catch (      Exception ex) {
-        logger.error("Error occured: " + ex.getMessage());
-      }
+ catch (        Exception ex) {
+          logger.error("Error occurred: " + ex.getMessage());
+          throw new ServiceFormattedException(ex.getMessage(),ex);
+        }
  finally {
-        zip.close();
+          zip.close();
+        }
       }
     }
-  }
 ;
-  return Response.ok(result).header("Content-Disposition","inline; filename=\"hdfs.zip\"").build();
+    return Response.ok(result).header("Content-Disposition","inline; filename=\"hdfs.zip\"").build();
+  }
+ catch (  WebApplicationException ex) {
+    throw ex;
+  }
+catch (  Exception ex) {
+    throw new ServiceFormattedException(ex.getMessage(),ex);
+  }
 }

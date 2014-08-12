@@ -1,31 +1,39 @@
 {
-  StreamingOutput result=new StreamingOutput(){
-    public void write(    OutputStream output) throws IOException, WebApplicationException {
-      FSDataInputStream in=null;
-      for (      String path : request.entries) {
-        try {
-          in=getApi(context).open(path);
-          byte[] chunk=new byte[1024];
-          while (in.read(chunk) != -1) {
-            output.write(chunk);
+  try {
+    StreamingOutput result=new StreamingOutput(){
+      public void write(      OutputStream output) throws IOException, ServiceFormattedException {
+        FSDataInputStream in=null;
+        for (        String path : request.entries) {
+          try {
+            in=getApi(context).open(path);
+            byte[] chunk=new byte[1024];
+            while (in.read(chunk) != -1) {
+              output.write(chunk);
+            }
           }
-        }
- catch (        Exception ex) {
-          ex.printStackTrace();
-        }
+ catch (          Exception ex) {
+            throw new ServiceFormattedException(ex.getMessage(),ex);
+          }
  finally {
-          if (in != null)           in.close();
+            if (in != null)             in.close();
+          }
         }
       }
     }
-  }
 ;
-  ResponseBuilder response=Response.ok(result);
-  if (request.download) {
-    response.header("Content-Disposition","inline; filename=\"concatResult.txt\"").type(MediaType.APPLICATION_OCTET_STREAM);
-  }
+    ResponseBuilder response=Response.ok(result);
+    if (request.download) {
+      response.header("Content-Disposition","inline; filename=\"concatResult.txt\"").type(MediaType.APPLICATION_OCTET_STREAM);
+    }
  else {
-    response.header("Content-Disposition","filename=\"concatResult.txt\"").type(MediaType.TEXT_PLAIN);
+      response.header("Content-Disposition","filename=\"concatResult.txt\"").type(MediaType.TEXT_PLAIN);
+    }
+    return response.build();
   }
-  return response.build();
+ catch (  WebApplicationException ex) {
+    throw ex;
+  }
+catch (  Exception ex) {
+    throw new ServiceFormattedException(ex.getMessage(),ex);
+  }
 }
