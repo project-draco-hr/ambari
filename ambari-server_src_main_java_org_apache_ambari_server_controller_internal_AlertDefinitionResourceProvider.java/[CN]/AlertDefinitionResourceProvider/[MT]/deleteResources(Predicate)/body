@@ -1,21 +1,27 @@
 {
   Set<Resource> resources=getResources(new RequestImpl(null,null,null,null),predicate);
   Set<Long> definitionIds=new HashSet<Long>();
+  String clusterName=null;
   for (  final Resource resource : resources) {
     definitionIds.add((Long)resource.getPropertyValue(ALERT_DEF_ID));
+    if (null == clusterName) {
+      clusterName=(String)resource.getPropertyValue(ALERT_DEF_CLUSTER_NAME);
+    }
   }
+  final Set<String> invalidatedHosts=new HashSet<String>();
   for (  Long definitionId : definitionIds) {
     LOG.info("Deleting alert definition {}",definitionId);
     final AlertDefinitionEntity entity=alertDefinitionDAO.findById(definitionId.longValue());
     modifyResources(new Command<Void>(){
       @Override public Void invoke() throws AmbariException {
         alertDefinitionDAO.remove(entity);
-        alertDefinitionHash.invalidateHosts(entity);
+        invalidatedHosts.addAll(alertDefinitionHash.invalidateHosts(entity));
         return null;
       }
     }
 );
   }
+  enqueueAgentCommands(clusterName,invalidatedHosts);
   notifyDelete(Resource.Type.AlertDefinition,predicate);
   return getRequestStatus(null);
 }

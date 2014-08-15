@@ -1,0 +1,43 @@
+{
+  Set<AlertDefinitionEntity> definitions=new HashSet<AlertDefinitionEntity>();
+  try {
+    Cluster cluster=m_clusters.getCluster(clusterName);
+    if (null == cluster) {
+      LOG.warn("Unable to get alert definitions for the missing cluster {}",clusterName);
+      return Collections.emptySet();
+    }
+    long clusterId=cluster.getClusterId();
+    List<ServiceComponentHost> serviceComponents=cluster.getServiceComponentHosts(hostName);
+    if (null == serviceComponents || serviceComponents.size() == 0) {
+      LOG.warn("Unable to get alert definitions for {} since there are no service components defined",hostName);
+      return Collections.emptySet();
+    }
+    for (    ServiceComponentHost serviceComponent : serviceComponents) {
+      String serviceName=serviceComponent.getServiceName();
+      String componentName=serviceComponent.getServiceComponentName();
+      definitions.addAll(m_definitionDao.findByServiceComponent(clusterId,serviceName,componentName));
+    }
+    Set<String> services=new HashSet<String>();
+    for (    Entry<String,Service> entry : cluster.getServices().entrySet()) {
+      Service service=entry.getValue();
+      Map<String,ServiceComponent> components=service.getServiceComponents();
+      for (      Entry<String,ServiceComponent> component : components.entrySet()) {
+        if (component.getValue().isMasterComponent()) {
+          Map<String,ServiceComponentHost> hosts=component.getValue().getServiceComponentHosts();
+          if (hosts.containsKey(hostName)) {
+            services.add(service.getName());
+          }
+        }
+      }
+    }
+    if (services.size() > 0) {
+      definitions.addAll(m_definitionDao.findByServiceMaster(clusterId,services));
+    }
+    definitions.addAll(m_definitionDao.findAgentScoped(clusterId));
+  }
+ catch (  AmbariException ambariException) {
+    LOG.error("Unable to get alert definitions",ambariException);
+    return Collections.emptySet();
+  }
+  return definitions;
+}

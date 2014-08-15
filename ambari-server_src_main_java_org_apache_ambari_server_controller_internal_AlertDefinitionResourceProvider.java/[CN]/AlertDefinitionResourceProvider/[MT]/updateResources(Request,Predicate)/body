@@ -1,10 +1,24 @@
 {
+  String clusterName=null;
+  Set<String> invalidatedHosts=new HashSet<String>();
+  Clusters clusters=getManagementController().getClusters();
   for (  Map<String,Object> requestPropMap : request.getProperties()) {
     for (    Map<String,Object> propertyMap : getPropertyMaps(requestPropMap,predicate)) {
       Long id=(Long)propertyMap.get(ALERT_DEF_ID);
       AlertDefinitionEntity entity=alertDefinitionDAO.findById(id.longValue());
       if (null == entity) {
         continue;
+      }
+      if (null == clusterName) {
+        try {
+          Cluster cluster=clusters.getClusterById(entity.getClusterId());
+          if (null != cluster) {
+            clusterName=cluster.getClusterName();
+          }
+        }
+ catch (        AmbariException ae) {
+          throw new IllegalArgumentException("Invalid cluster ID",ae);
+        }
       }
       if (propertyMap.containsKey(ALERT_DEF_NAME)) {
         entity.setDefinitionName((String)propertyMap.get(ALERT_DEF_NAME));
@@ -36,9 +50,10 @@
       }
       entity.setHash(UUID.randomUUID().toString());
       alertDefinitionDAO.merge(entity);
-      alertDefinitionHash.invalidateHosts(entity);
+      invalidatedHosts.addAll(alertDefinitionHash.invalidateHosts(entity));
     }
   }
+  enqueueAgentCommands(clusterName,invalidatedHosts);
   notifyUpdate(Resource.Type.AlertDefinition,request,predicate);
   return getRequestStatus(null);
 }
