@@ -1,0 +1,85 @@
+{
+  final UserDAO userDAO=injector.getInstance(UserDAO.class);
+  final PrincipalDAO principalDAO=injector.getInstance(PrincipalDAO.class);
+  final PrincipalTypeDAO principalTypeDAO=injector.getInstance(PrincipalTypeDAO.class);
+  final ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  final ResourceTypeDAO resourceTypeDAO=injector.getInstance(ResourceTypeDAO.class);
+  final ResourceDAO resourceDAO=injector.getInstance(ResourceDAO.class);
+  final ViewDAO viewDAO=injector.getInstance(ViewDAO.class);
+  final ViewInstanceDAO viewInstanceDAO=injector.getInstance(ViewInstanceDAO.class);
+  final PermissionDAO permissionDAO=injector.getInstance(PermissionDAO.class);
+  final PrivilegeDAO privilegeDAO=injector.getInstance(PrivilegeDAO.class);
+  final PrincipalTypeEntity userPrincipalType=principalTypeDAO.findById(PrincipalTypeEntity.USER_PRINCIPAL_TYPE);
+  for (  UserEntity user : userDAO.findAll()) {
+    final PrincipalEntity principalEntity=new PrincipalEntity();
+    principalEntity.setPrincipalType(userPrincipalType);
+    principalDAO.create(principalEntity);
+    user.setPrincipal(principalEntity);
+    userDAO.merge(user);
+  }
+  final ResourceTypeEntity clusterResourceType=resourceTypeDAO.findById(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE);
+  for (  ClusterEntity cluster : clusterDAO.findAll()) {
+    final ResourceEntity resourceEntity=new ResourceEntity();
+    resourceEntity.setResourceType(clusterResourceType);
+    resourceDAO.create(resourceEntity);
+    cluster.setResource(resourceEntity);
+    clusterDAO.merge(cluster);
+  }
+  for (  ViewEntity view : viewDAO.findAll()) {
+    final ResourceTypeEntity resourceType=new ResourceTypeEntity();
+    resourceType.setName(ViewEntity.getViewName(view.getCommonName(),view.getVersion()));
+    resourceTypeDAO.create(resourceType);
+  }
+  for (  ViewInstanceEntity viewInstance : viewInstanceDAO.findAll()) {
+    final ResourceEntity resourceEntity=new ResourceEntity();
+    viewInstance.getViewEntity();
+    resourceEntity.setResourceType(resourceTypeDAO.findByName(ViewEntity.getViewName(viewInstance.getViewEntity().getCommonName(),viewInstance.getViewEntity().getVersion())));
+    viewInstance.setResource(resourceEntity);
+    resourceDAO.create(resourceEntity);
+    viewInstanceDAO.merge(viewInstance);
+  }
+  final PermissionEntity adminPermission=permissionDAO.findAmbariAdminPermission();
+  final PermissionEntity clusterOperatePermission=permissionDAO.findClusterOperatePermission();
+  final PermissionEntity clusterReadPermission=permissionDAO.findClusterReadPermission();
+  final ResourceEntity ambariResource=resourceDAO.findAmbariResource();
+  for (  UserEntity user : userDAO.findAll()) {
+    boolean hasAdminRole=false;
+    boolean hasUserRole=false;
+    for (    RoleEntity role : user.getRoleEntities()) {
+      if (role.getRoleName().equals("admin")) {
+        hasAdminRole=true;
+      }
+      if (role.getRoleName().equals("user")) {
+        hasUserRole=true;
+      }
+      if (hasAdminRole) {
+        final PrivilegeEntity privilege=new PrivilegeEntity();
+        privilege.setPermission(adminPermission);
+        privilege.setPrincipal(user.getPrincipal());
+        privilege.setResource(ambariResource);
+        user.getPrincipal().getPrivileges().add(privilege);
+        privilegeDAO.create(privilege);
+        for (        ClusterEntity cluster : clusterDAO.findAll()) {
+          final PrivilegeEntity clusterPrivilege=new PrivilegeEntity();
+          clusterPrivilege.setPermission(clusterOperatePermission);
+          clusterPrivilege.setPrincipal(user.getPrincipal());
+          clusterPrivilege.setResource(cluster.getResource());
+          privilegeDAO.create(clusterPrivilege);
+          user.getPrincipal().getPrivileges().add(clusterPrivilege);
+        }
+        userDAO.merge(user);
+      }
+ else       if (hasUserRole) {
+        for (        ClusterEntity cluster : clusterDAO.findAll()) {
+          final PrivilegeEntity privilege=new PrivilegeEntity();
+          privilege.setPermission(clusterReadPermission);
+          privilege.setPrincipal(user.getPrincipal());
+          privilege.setResource(cluster.getResource());
+          privilegeDAO.create(privilege);
+          user.getPrincipal().getPrivileges().add(privilege);
+        }
+        userDAO.merge(user);
+      }
+    }
+  }
+}
