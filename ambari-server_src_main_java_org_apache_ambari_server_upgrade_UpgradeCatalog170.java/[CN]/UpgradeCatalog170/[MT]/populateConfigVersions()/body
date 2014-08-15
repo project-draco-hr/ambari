@@ -1,0 +1,56 @@
+{
+  ResultSet resultSet=dbAccessor.executeSelect("SELECT DISTINCT type_name FROM clusterconfig ");
+  Set<String> configTypes=new HashSet<String>();
+  if (resultSet != null) {
+    try {
+      while (resultSet.next()) {
+        configTypes.add(resultSet.getString("type_name"));
+      }
+    }
+  finally {
+      resultSet.close();
+    }
+  }
+  Connection connection=dbAccessor.getNewConnection();
+  PreparedStatement orderedConfigsStatement=connection.prepareStatement("SELECT config_id FROM clusterconfig WHERE type_name = ? ORDER BY create_timestamp");
+  Map<String,List<Long>> configVersionMap=new HashMap<String,List<Long>>();
+  for (  String configType : configTypes) {
+    List<Long> configIds=new ArrayList<Long>();
+    orderedConfigsStatement.setString(1,configType);
+    resultSet=orderedConfigsStatement.executeQuery();
+    if (resultSet != null) {
+      try {
+        while (resultSet.next()) {
+          configIds.add(resultSet.getLong("config_id"));
+        }
+      }
+  finally {
+        resultSet.close();
+      }
+    }
+    configVersionMap.put(configType,configIds);
+  }
+  orderedConfigsStatement.close();
+  connection.setAutoCommit(false);
+  PreparedStatement configVersionStatement=connection.prepareStatement("UPDATE clusterconfig SET version = ? WHERE config_id = ?");
+  try {
+    for (    Entry<String,List<Long>> entry : configVersionMap.entrySet()) {
+      long version=1L;
+      for (      Long configId : entry.getValue()) {
+        configVersionStatement.setLong(1,version++);
+        configVersionStatement.setLong(2,configId);
+        configVersionStatement.addBatch();
+      }
+      configVersionStatement.executeBatch();
+    }
+    connection.commit();
+  }
+ catch (  SQLException e) {
+    connection.rollback();
+    throw e;
+  }
+ finally {
+    configVersionStatement.close();
+    connection.close();
+  }
+}
