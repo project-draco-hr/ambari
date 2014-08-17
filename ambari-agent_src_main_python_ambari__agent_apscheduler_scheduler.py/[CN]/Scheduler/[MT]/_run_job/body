@@ -1,0 +1,32 @@
+def _run_job(self, job, run_times):
+    '\n        Acts as a harness that runs the actual job code in a thread.\n        '
+    for run_time in run_times:
+        difference = (datetime.now() - run_time)
+        grace_time = timedelta(seconds=job.misfire_grace_time)
+        if (difference > grace_time):
+            event = JobEvent(EVENT_JOB_MISSED, job, run_time)
+            self._notify_listeners(event)
+            logger.warning('Run time of job "%s" was missed by %s', job, difference)
+        else:
+            try:
+                job.add_instance()
+            except MaxInstancesReachedError:
+                event = JobEvent(EVENT_JOB_MISSED, job, run_time)
+                self._notify_listeners(event)
+                logger.warning('Execution of job "%s" skipped: maximum number of running instances reached (%d)', job, job.max_instances)
+                break
+            logger.info('Running job "%s" (scheduled at %s)', job, run_time)
+            try:
+                retval = job.func(*job.args, **job.kwargs)
+            except:
+                (exc, tb) = sys.exc_info()[1:]
+                event = JobEvent(EVENT_JOB_ERROR, job, run_time, exception=exc, traceback=tb)
+                self._notify_listeners(event)
+                logger.exception('Job "%s" raised an exception', job)
+            else:
+                event = JobEvent(EVENT_JOB_EXECUTED, job, run_time, retval=retval)
+                self._notify_listeners(event)
+                logger.info('Job "%s" executed successfully', job)
+            job.remove_instance()
+            if job.coalesce:
+                break

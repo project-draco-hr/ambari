@@ -1,0 +1,25 @@
+def configure(self, gconfig={}, **options):
+    "\n        Reconfigures the scheduler with the given options. Can only be done\n        when the scheduler isn't running.\n        "
+    if self.running:
+        raise SchedulerAlreadyRunningError
+    config = combine_opts(gconfig, 'apscheduler.', options)
+    self.misfire_grace_time = int(config.pop('misfire_grace_time', 1))
+    self.coalesce = asbool(config.pop('coalesce', True))
+    self.daemonic = asbool(config.pop('daemonic', True))
+    self.standalone = asbool(config.pop('standalone', False))
+    if ('threadpool' in config):
+        self._threadpool = maybe_ref(config['threadpool'])
+    else:
+        threadpool_opts = combine_opts(config, 'threadpool.')
+        self._threadpool = ThreadPool(**threadpool_opts)
+    jobstore_opts = combine_opts(config, 'jobstore.')
+    jobstores = {}
+    for (key, value) in jobstore_opts.items():
+        (store_name, option) = key.split('.', 1)
+        opts_dict = jobstores.setdefault(store_name, {})
+        opts_dict[option] = value
+    for (alias, opts) in jobstores.items():
+        classname = opts.pop('class')
+        cls = maybe_ref(classname)
+        jobstore = cls(**opts)
+        self.add_jobstore(jobstore, alias, True)
