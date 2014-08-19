@@ -1,13 +1,38 @@
-@patch.object(ambari_server, 'run_os_command')
-@patch.object(ambari_server, 'print_warning_msg')
-@patch.object(ambari_server, 'get_YN_input')
-def test_check_iptables_is_running(self, get_YN_input_mock, print_warning_msg, run_os_command_mock):
-    counter = 0
-    for fwo_type in ambari_server.get_firewall_object_types():
-        fwo = fwo_type()
-        run_os_command_mock.return_value = fwo.get_running_result()
-        get_YN_input_mock.side_effect = [True]
-        fwo.check_iptables()
-        self.assertEqual(len(print_warning_msg.call_args_list), (counter + 1))
-        self.assertEqual(print_warning_msg.call_args_list[counter][0][0], (('%s is running. Confirm the necessary Ambari ports are accessible. ' % fwo.FIREWALL_SERVICE_NAME) + 'Refer to the Ambari documentation for more details on ports.'))
-        counter += 1
+@patch.object(FirewallChecks, 'run_os_command')
+@patch.object(OSCheck, 'get_os_family')
+@patch.object(OSCheck, 'get_os_type')
+@patch.object(OSCheck, 'get_os_major_version')
+def test_check_iptables_is_running(self, get_os_major_version_mock, get_os_type_mock, get_os_family_mock, run_os_command_mock):
+    get_os_major_version_mock.return_value = 18
+    get_os_type_mock.return_value = OSConst.OS_FEDORA
+    get_os_family_mock.return_value = OSConst.REDHAT_FAMILY
+    firewall_obj = Firewall().getFirewallObject()
+    run_os_command_mock.return_value = (0, 'active', '')
+    self.assertEqual('Fedora18FirewallChecks', firewall_obj.__class__.__name__)
+    self.assertTrue(firewall_obj.check_iptables())
+    run_os_command_mock.return_value = (3, '', '')
+    self.assertFalse(firewall_obj.check_iptables())
+    get_os_type_mock.return_value = OSConst.OS_UBUNTU
+    get_os_family_mock.return_value = OSConst.DEBIAN_FAMILY
+    firewall_obj = Firewall().getFirewallObject()
+    run_os_command_mock.return_value = (0, 'Status: active', '')
+    self.assertEqual('UbuntuFirewallChecks', firewall_obj.__class__.__name__)
+    self.assertTrue(firewall_obj.check_iptables())
+    run_os_command_mock.return_value = (0, 'Status: inactive', '')
+    self.assertFalse(firewall_obj.check_iptables())
+    get_os_type_mock.return_value = ''
+    get_os_family_mock.return_value = OSConst.SUSE_FAMILY
+    firewall_obj = Firewall().getFirewallObject()
+    run_os_command_mock.return_value = (0, '### iptables', '')
+    self.assertEqual('SuseFirewallChecks', firewall_obj.__class__.__name__)
+    self.assertTrue(firewall_obj.check_iptables())
+    run_os_command_mock.return_value = (0, 'SuSEfirewall2 not active', '')
+    self.assertFalse(firewall_obj.check_iptables())
+    get_os_type_mock.return_value = ''
+    get_os_family_mock.return_value = OSConst.REDHAT_FAMILY
+    firewall_obj = Firewall().getFirewallObject()
+    run_os_command_mock.return_value = (0, 'Table: filter', '')
+    self.assertEqual('FirewallChecks', firewall_obj.__class__.__name__)
+    self.assertTrue(firewall_obj.check_iptables())
+    run_os_command_mock.return_value = (3, '', '')
+    self.assertFalse(firewall_obj.check_iptables())
