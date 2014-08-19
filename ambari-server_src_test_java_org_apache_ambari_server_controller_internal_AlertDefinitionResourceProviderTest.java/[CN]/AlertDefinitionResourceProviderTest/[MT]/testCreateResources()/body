@@ -10,13 +10,17 @@
   expectLastCall();
   expect(definitionHash.invalidateHosts(EasyMock.anyObject(AlertDefinitionEntity.class))).andReturn(new HashSet<String>()).once();
   replay(amc,clusters,cluster,dao,definitionHash);
+  Gson gson=m_factory.getGson();
+  Source source=getMockSource();
+  String sourceJson=gson.toJson(source);
   AlertDefinitionResourceProvider provider=createProvider(amc);
   Map<String,Object> requestProps=new HashMap<String,Object>();
   requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_CLUSTER_NAME,"c1");
   requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_INTERVAL,"1");
   requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_NAME,"my_def");
   requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_SERVICE_NAME,"HDFS");
-  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_SOURCE_TYPE,"METRIC");
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_SOURCE,sourceJson);
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_SOURCE_TYPE,SourceType.METRIC.name());
   requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_LABEL,"Mock Label (Create)");
   Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
   provider.createResources(request);
@@ -31,8 +35,13 @@
   Assert.assertEquals(Integer.valueOf(1),entity.getScheduleInterval());
   Assert.assertNull(entity.getScope());
   Assert.assertEquals("HDFS",entity.getServiceName());
-  Assert.assertNotNull(entity.getSource());
   Assert.assertEquals("METRIC",entity.getSourceType());
   Assert.assertEquals("Mock Label (Create)",entity.getLabel());
+  Assert.assertNotNull(entity.getSource());
+  Source actualSource=gson.fromJson(entity.getSource(),Source.class);
+  Assert.assertNotNull(actualSource);
+  assertEquals(source.getReporting().getOk().getText(),source.getReporting().getOk().getText());
+  assertEquals(source.getReporting().getWarning().getText(),source.getReporting().getWarning().getText());
+  assertEquals(source.getReporting().getCritical().getText(),source.getReporting().getCritical().getText());
   verify(amc,clusters,cluster,dao);
 }
