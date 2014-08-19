@@ -1,11 +1,39 @@
 def cleanup(self):
+    logger.debug(('Cleaning up inside directory ' + self.data_dir))
+    now = time.time()
+    total_size_bytes = 0
+    file_path_to_timestamp = {}
+    file_path_to_size = {}
     for (root, dirs, files) in os.walk(self.data_dir):
         for f in files:
             file_path = os.path.join(root, f)
             if self.compiled_pattern.match(f):
                 try:
-                    if ((time.time() - os.path.getmtime(file_path)) > self.file_max_age):
+                    file_age = (now - os.path.getmtime(file_path))
+                    if (file_age > self.file_max_age):
                         os.remove(os.path.join(file_path))
                         logger.debug(('Removed file: ' + file_path))
+                    else:
+                        file_size = os.path.getsize(file_path)
+                        total_size_bytes += file_size
+                        file_path_to_timestamp[file_path] = file_age
+                        file_path_to_size[file_path] = file_size
                 except Exception:
                     logger.error(('Error when removing file: ' + file_path))
+    target_size_bytes = (self.cleanup_max_size_MB * 1000000)
+    if (len(file_path_to_timestamp) and (total_size_bytes > target_size_bytes)):
+        logger.info(('DataCleaner values need to be more aggressive. Current size in bytes for all log files is %d, and will try to clean to reach %d bytes.' % (total_size_bytes, target_size_bytes)))
+        count = 0
+        file_path_oldest_first_list = sorted(file_path_to_timestamp, key=file_path_to_timestamp.get, reverse=True)
+        for file_path in file_path_oldest_first_list:
+            try:
+                os.remove(os.path.join(file_path))
+                total_size_bytes -= file_path_to_size[file_path]
+                count += 1
+                if (total_size_bytes <= target_size_bytes):
+                    break
+            except Exception:
+                pass
+        else:
+            logger.warn(('DataCleaner deleted an additional %d files, currently log files occupy %d bytes.' % (count, total_size_bytes)))
+            pass
