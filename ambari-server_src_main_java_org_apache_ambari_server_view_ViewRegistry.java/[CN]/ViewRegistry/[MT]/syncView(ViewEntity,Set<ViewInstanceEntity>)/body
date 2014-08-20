@@ -1,28 +1,20 @@
 {
   String viewName=view.getName();
   ViewEntity persistedView=viewDAO.findByName(viewName);
+  ResourceTypeEntity resourceType=view.getResourceType();
   if (persistedView == null) {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Creating View " + viewName + ".");
     }
     ResourceTypeEntity resourceTypeEntity=resourceTypeDAO.findByName(viewName);
     if (resourceTypeEntity == null) {
-      resourceTypeEntity=view.getResourceType();
+      resourceTypeEntity=resourceType;
       resourceTypeDAO.create(resourceTypeEntity);
     }
     for (    ViewInstanceEntity instance : view.getInstances()) {
-      ResourceEntity resourceEntity=new ResourceEntity();
-      resourceEntity.setResourceType(view.getResourceType());
-      resourceDAO.create(resourceEntity);
-      instance.setResource(resourceEntity);
+      instance.setResource(createViewInstanceResource(resourceType));
     }
-    viewDAO.merge(view);
-    persistedView=viewDAO.findByName(viewName);
-    if (persistedView == null) {
-      String message="View  " + viewName + " can not be found.";
-      LOG.error(message);
-      throw new IllegalStateException(message);
-    }
+    persistedView=viewDAO.merge(view);
   }
   Map<String,ViewInstanceEntity> xmlInstanceEntityMap=new HashMap<String,ViewInstanceEntity>();
   for (  ViewInstanceEntity instance : view.getInstances()) {
@@ -33,40 +25,23 @@
   for (  ViewInstanceEntity persistedInstance : persistedView.getInstances()) {
     String instanceName=persistedInstance.getName();
     ViewInstanceEntity instance=view.getInstanceDefinition(instanceName);
-    if (persistedInstance.isXmlDriven() && !xmlInstanceEntityMap.containsKey(instanceName)) {
-      instanceDAO.remove(persistedInstance);
-      xmlInstanceEntityMap.remove(instanceName);
-      continue;
-    }
     xmlInstanceEntityMap.remove(instanceName);
     if (instance == null) {
-      instance=new ViewInstanceEntity(view,instanceName);
-      bindViewInstance(view,instance);
-      instanceDefinitions.add(instance);
-    }
-    instance.setViewInstanceId(persistedInstance.getViewInstanceId());
-    if (instance.isXmlDriven()) {
-      persistedInstance.setLabel(instance.getLabel());
-      persistedInstance.setDescription(instance.getDescription());
-      persistedInstance.setVisible(instance.isVisible());
-      persistedInstance.setIcon(instance.getIcon());
-      persistedInstance.setIcon64(instance.getIcon64());
-      persistedInstance.setProperties(instance.getProperties());
-      instanceDAO.merge(persistedInstance);
+      if (persistedInstance.isXmlDriven()) {
+        instanceDAO.remove(persistedInstance);
+      }
+ else {
+        instanceDAO.merge(persistedInstance);
+        bindViewInstance(view,persistedInstance);
+        instanceDefinitions.add(persistedInstance);
+      }
     }
  else {
-      view.removeInstanceDefinition(instanceName);
-      view.addInstanceDefinition(persistedInstance);
+      instance.setResource(persistedInstance.getResource());
     }
-    instance.setResource(persistedInstance.getResource());
   }
   for (  ViewInstanceEntity instance : xmlInstanceEntityMap.values()) {
-    ResourceEntity resourceEntity=new ResourceEntity();
-    resourceEntity.setResourceType(view.getResourceType());
-    resourceDAO.create(resourceEntity);
-    instance.setResource(resourceEntity);
+    instance.setResource(createViewInstanceResource(resourceType));
     instanceDAO.merge(instance);
-    bindViewInstance(view,instance);
-    instanceDefinitions.add(instance);
   }
 }
