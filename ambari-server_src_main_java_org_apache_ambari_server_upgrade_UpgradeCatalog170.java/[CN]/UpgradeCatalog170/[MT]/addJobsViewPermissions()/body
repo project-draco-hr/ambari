@@ -1,0 +1,52 @@
+{
+  final UserDAO userDAO=injector.getInstance(UserDAO.class);
+  final ResourceTypeDAO resourceTypeDAO=injector.getInstance(ResourceTypeDAO.class);
+  final ResourceDAO resourceDAO=injector.getInstance(ResourceDAO.class);
+  final ViewDAO viewDAO=injector.getInstance(ViewDAO.class);
+  final ViewInstanceDAO viewInstanceDAO=injector.getInstance(ViewInstanceDAO.class);
+  final KeyValueDAO keyValueDAO=injector.getInstance(KeyValueDAO.class);
+  final PermissionDAO permissionDAO=injector.getInstance(PermissionDAO.class);
+  final PrivilegeDAO privilegeDAO=injector.getInstance(PrivilegeDAO.class);
+  ViewEntity jobsView=viewDAO.findByCommonName(JOBS_VIEW_NAME);
+  if (jobsView != null) {
+    ViewInstanceEntity jobsInstance=jobsView.getInstanceDefinition(JOBS_VIEW_INSTANCE_NAME);
+    if (jobsInstance == null) {
+      jobsInstance=new ViewInstanceEntity(jobsView,JOBS_VIEW_INSTANCE_NAME,JOBS_VIEW_INSTANCE_LABEL);
+      ResourceEntity resourceEntity=new ResourceEntity();
+      resourceEntity.setResourceType(resourceTypeDAO.findByName(ViewEntity.getViewName(jobsView.getCommonName(),jobsView.getVersion())));
+      jobsInstance.setResource(resourceEntity);
+      jobsView.addInstanceDefinition(jobsInstance);
+      resourceDAO.create(resourceEntity);
+      viewInstanceDAO.create(jobsInstance);
+      viewDAO.merge(jobsView);
+    }
+    boolean showJobsForNonAdmin=false;
+    KeyValueEntity showJobsKeyValueEntity=keyValueDAO.findByKey(SHOW_JOBS_FOR_NON_ADMIN_KEY);
+    if (showJobsKeyValueEntity != null) {
+      String value=showJobsKeyValueEntity.getValue();
+      showJobsForNonAdmin=Boolean.parseBoolean(value);
+      keyValueDAO.remove(showJobsKeyValueEntity);
+    }
+    if (showJobsForNonAdmin) {
+      ResourceEntity jobsResource=jobsInstance.getResource();
+      PermissionEntity viewUsePermission=permissionDAO.findViewUsePermission();
+      for (      UserEntity userEntity : userDAO.findAll()) {
+        List<PrivilegeEntity> privilegeEntities=privilegeDAO.findAllByPrincipal(Collections.singletonList(userEntity.getPrincipal()));
+        boolean hasJobsUsePrivilege=false;
+        for (        PrivilegeEntity privilegeEntity : privilegeEntities) {
+          if (privilegeEntity.getResource().getId() == jobsInstance.getResource().getId() && privilegeEntity.getPermission().getId() == viewUsePermission.getId()) {
+            hasJobsUsePrivilege=true;
+            break;
+          }
+        }
+        if (!hasJobsUsePrivilege) {
+          PrivilegeEntity privilegeEntity=new PrivilegeEntity();
+          privilegeEntity.setResource(jobsResource);
+          privilegeEntity.setPermission(viewUsePermission);
+          privilegeEntity.setPrincipal(userEntity.getPrincipal());
+          privilegeDAO.create(privilegeEntity);
+        }
+      }
+    }
+  }
+}
