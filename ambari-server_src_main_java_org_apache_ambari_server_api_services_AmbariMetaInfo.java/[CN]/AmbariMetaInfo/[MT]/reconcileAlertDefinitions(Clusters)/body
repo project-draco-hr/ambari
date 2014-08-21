@@ -1,0 +1,60 @@
+{
+  Map<String,Cluster> clusterMap=clusters.getClusters();
+  if (null == clusterMap || clusterMap.size() == 0) {
+    return;
+  }
+  Set<Entry<String,Cluster>> clusterEntries=clusterMap.entrySet();
+  for (  Entry<String,Cluster> clusterEntry : clusterEntries) {
+    Cluster cluster=clusterEntry.getValue();
+    long clusterId=cluster.getClusterId();
+    StackId stackId=cluster.getDesiredStackVersion();
+    StackInfo stackInfo=getStackInfo(stackId.getStackName(),stackId.getStackVersion());
+    List<ServiceInfo> stackServices=stackInfo.getServices();
+    Map<String,ServiceInfo> stackServiceMap=new HashMap<String,ServiceInfo>();
+    for (    ServiceInfo stackService : stackServices) {
+      stackServiceMap.put(stackService.getName(),stackService);
+    }
+    Map<String,Service> clusterServiceMap=cluster.getServices();
+    Set<String> clusterServiceNames=clusterServiceMap.keySet();
+    List<AlertDefinition> stackDefinitions=new ArrayList<AlertDefinition>(50);
+    for (    String clusterServiceName : clusterServiceNames) {
+      ServiceInfo stackService=stackServiceMap.get(clusterServiceName);
+      if (null == stackService) {
+        continue;
+      }
+      Set<AlertDefinition> serviceDefinitions=getAlertDefinitions(stackService);
+      if (null != serviceDefinitions) {
+        stackDefinitions.addAll(serviceDefinitions);
+      }
+    }
+    if (null == stackDefinitions || stackDefinitions.size() == 0) {
+      continue;
+    }
+    List<AlertDefinitionEntity> persist=new ArrayList<AlertDefinitionEntity>();
+    List<AlertDefinitionEntity> entities=alertDefinitionDao.findAll(clusterId);
+    Map<String,AlertDefinitionEntity> mappedEntities=new HashMap<String,AlertDefinitionEntity>(100);
+    for (    AlertDefinitionEntity entity : entities) {
+      mappedEntities.put(entity.getDefinitionName(),entity);
+    }
+    for (    AlertDefinition stackDefinition : stackDefinitions) {
+      AlertDefinitionEntity entity=mappedEntities.get(stackDefinition.getName());
+      if (null == entity) {
+        entity=alertDefinitionFactory.coerce(clusterId,stackDefinition);
+        persist.add(entity);
+        continue;
+      }
+      AlertDefinition databaseDefinition=alertDefinitionFactory.coerce(entity);
+      if (!stackDefinition.deeplyEquals(databaseDefinition)) {
+        entity=alertDefinitionFactory.merge(stackDefinition,entity);
+        persist.add(entity);
+        continue;
+      }
+    }
+    for (    AlertDefinitionEntity entity : persist) {
+      if (LOG.isDebugEnabled()) {
+        LOG.info("Merging Alert Definition {} into the database",entity.getDefinitionName());
+      }
+      alertDefinitionDao.createOrUpdate(entity);
+    }
+  }
+}

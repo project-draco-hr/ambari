@@ -1,0 +1,39 @@
+{
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  AlertDefinitionDAO dao=createMock(AlertDefinitionDAO.class);
+  metaInfo.alertDefinitionDao=dao;
+  Set<AlertDefinition> alertDefinitions=metaInfo.getAlertDefinitions(STACK_NAME_HDP,"2.0.6","HDFS");
+  assertEquals(4,alertDefinitions.size());
+  Map<String,Cluster> clustersMap=new HashMap<String,Cluster>();
+  clustersMap.put("c1",cluster);
+  StackId stackId=new StackId(STACK_NAME_HDP,"2.0.6");
+  Map<String,Service> clusterServiceMap=new HashMap<String,Service>();
+  clusterServiceMap.put("HDFS",null);
+  List<AlertDefinitionEntity> entities=new ArrayList<AlertDefinitionEntity>();
+  expect(clusters.getClusters()).andReturn(clustersMap).anyTimes();
+  expect(clusters.getCluster((String)anyObject())).andReturn(cluster).atLeastOnce();
+  expect(cluster.getClusterId()).andReturn(Long.valueOf(1)).anyTimes();
+  expect(cluster.getDesiredStackVersion()).andReturn(stackId).anyTimes();
+  expect(cluster.getServices()).andReturn(clusterServiceMap).anyTimes();
+  expect(dao.findAll(EasyMock.anyInt())).andReturn(entities);
+  dao.createOrUpdate(EasyMock.anyObject(AlertDefinitionEntity.class));
+  EasyMock.expectLastCall().times(4);
+  EasyMock.replay(clusters,cluster,dao);
+  metaInfo.reconcileAlertDefinitions(clusters);
+  EasyMock.verify(cluster,cluster,dao);
+  AlertDefinitionFactory alertDefinitionFactory=injector.getInstance(AlertDefinitionFactory.class);
+  for (  AlertDefinition definition : alertDefinitions) {
+    entities.add(alertDefinitionFactory.coerce(1,definition));
+  }
+  EasyMock.reset(clusters,cluster,dao);
+  expect(clusters.getClusters()).andReturn(clustersMap).anyTimes();
+  expect(clusters.getCluster((String)anyObject())).andReturn(cluster).atLeastOnce();
+  expect(cluster.getClusterId()).andReturn(Long.valueOf(1)).anyTimes();
+  expect(cluster.getDesiredStackVersion()).andReturn(stackId).anyTimes();
+  expect(cluster.getServices()).andReturn(clusterServiceMap).anyTimes();
+  expect(dao.findAll(EasyMock.anyInt())).andReturn(entities);
+  EasyMock.replay(clusters,cluster,dao);
+  metaInfo.reconcileAlertDefinitions(clusters);
+  EasyMock.verify(cluster,cluster,dao);
+}
