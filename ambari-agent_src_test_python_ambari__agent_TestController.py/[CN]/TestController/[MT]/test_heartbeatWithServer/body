@@ -95,6 +95,22 @@ def test_heartbeatWithServer(self, dumpsMock, sleepMock, event_mock):
     response['restartAgent'] = 'false'
     self.controller.heartbeatWithServer()
     sleepMock.assert_called_with(self.controller.netutil.MINIMUM_INTERVAL_BETWEEN_HEARTBEATS)
+    self.controller.responseId = 1
+    self.controller.TEST_IOERROR_COUNTER = 1
+    sendRequest.reset()
+
+    def util_throw_IOErrors(*args, **kwargs):
+        '\n      Throws IOErrors 100 times and then stops heartbeats/registrations\n      '
+        if (self.controller.TEST_IOERROR_COUNTER == 10):
+            self.controller.DEBUG_STOP_HEARTBEATING = True
+        self.controller.TEST_IOERROR_COUNTER += 1
+        raise IOError('Sample error')
+    self.controller.DEBUG_STOP_HEARTBEATING = False
+    actionQueue.isIdle.return_value = False
+    sendRequest.side_effect = util_throw_IOErrors
+    self.controller.heartbeatWithServer()
+    self.assertTrue((sendRequest.call_count > 5))
+    sleepMock.assert_called_with(self.controller.netutil.MINIMUM_INTERVAL_BETWEEN_HEARTBEATS)
     sys.stdout = sys.__stdout__
     self.controller.sendRequest = Controller.Controller.sendRequest
     self.controller.sendRequest = Controller.Controller.addToQueue
