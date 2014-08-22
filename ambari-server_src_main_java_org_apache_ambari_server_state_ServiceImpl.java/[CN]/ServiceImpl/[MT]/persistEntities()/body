@@ -1,5 +1,7 @@
 {
-  ClusterEntity clusterEntity=clusterDAO.findById(cluster.getClusterId());
+  long clusterId=cluster.getClusterId();
+  StackId stackId=cluster.getDesiredStackVersion();
+  ClusterEntity clusterEntity=clusterDAO.findById(clusterId);
   serviceEntity.setClusterEntity(clusterEntity);
   clusterServiceDAO.create(serviceEntity);
   serviceDesiredStateDAO.create(serviceDesiredStateEntity);
@@ -7,4 +9,14 @@
   clusterDAO.merge(clusterEntity);
   clusterServiceDAO.merge(serviceEntity);
   serviceDesiredStateDAO.merge(serviceDesiredStateEntity);
+  try {
+    Set<AlertDefinition> alertDefinitions=ambariMetaInfo.getAlertDefinitions(stackId.getStackName(),stackId.getStackVersion(),getName());
+    for (    AlertDefinition definition : alertDefinitions) {
+      AlertDefinitionEntity entity=alertDefinitionFactory.coerce(clusterId,definition);
+      alertDefinitionDAO.create(entity);
+    }
+  }
+ catch (  AmbariException ae) {
+    LOG.error("Unable to populate alert definitions from the database during installation of {}",getName(),ae);
+  }
 }
