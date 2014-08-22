@@ -3,15 +3,44 @@
   if (serviceConfigEntity == null) {
     throw new ObjectNotFoundException("Service config version with serviceName={} and version={} not found");
   }
-  Collection<String> configTypes=serviceConfigTypes.get(serviceName);
-  for (  ClusterConfigMappingEntity entity : clusterEntity.getConfigMappingEntities()) {
-    if (configTypes.contains(entity.getType()) && entity.isSelected() > 0) {
-      entity.setSelected(0);
+  if (serviceConfigEntity.getGroupId() == null) {
+    Collection<String> configTypes=serviceConfigTypes.get(serviceName);
+    for (    ClusterConfigMappingEntity entity : clusterEntity.getConfigMappingEntities()) {
+      if (configTypes.contains(entity.getType()) && entity.isSelected() > 0) {
+        entity.setSelected(0);
+      }
+    }
+    clusterDAO.merge(clusterEntity);
+    for (    ClusterConfigEntity configEntity : serviceConfigEntity.getClusterConfigEntities()) {
+      selectConfig(configEntity.getType(),configEntity.getTag(),user);
     }
   }
-  clusterDAO.merge(clusterEntity);
-  for (  ClusterConfigEntity configEntity : serviceConfigEntity.getClusterConfigEntities()) {
-    selectConfig(configEntity.getType(),configEntity.getTag(),user);
+ else {
+    Long configGroupId=serviceConfigEntity.getGroupId();
+    ConfigGroup configGroup=clusterConfigGroups.get(configGroupId);
+    if (configGroup != null) {
+      Map<String,Config> groupDesiredConfigs=new HashMap<String,Config>();
+      for (      ClusterConfigEntity entity : serviceConfigEntity.getClusterConfigEntities()) {
+        Config config=allConfigs.get(entity.getType()).get(entity.getTag());
+        groupDesiredConfigs.put(config.getType(),config);
+      }
+      configGroup.setConfigurations(groupDesiredConfigs);
+      Map<String,Host> groupDesiredHosts=new HashMap<String,Host>();
+      for (      String hostname : serviceConfigEntity.getHostNames()) {
+        Host host=clusters.getHost(hostname);
+        if (host != null) {
+          groupDesiredHosts.put(hostname,host);
+        }
+ else {
+          LOG.warn("Host {} doesn't exist anymore, skipping",hostname);
+        }
+      }
+      configGroup.setHosts(groupDesiredHosts);
+      configGroup.persist();
+    }
+ else {
+      throw new IllegalArgumentException("Config group {} doesn't exist");
+    }
   }
   ServiceConfigEntity serviceConfigEntityClone=new ServiceConfigEntity();
   serviceConfigEntityClone.setCreateTimestamp(System.currentTimeMillis());
@@ -20,6 +49,8 @@
   serviceConfigEntityClone.setClusterEntity(clusterEntity);
   serviceConfigEntityClone.setClusterConfigEntities(serviceConfigEntity.getClusterConfigEntities());
   serviceConfigEntityClone.setClusterId(serviceConfigEntity.getClusterId());
+  serviceConfigEntityClone.setHostNames(serviceConfigEntity.getHostNames());
+  serviceConfigEntityClone.setGroupId(serviceConfigEntity.getGroupId());
   serviceConfigEntityClone.setNote(serviceConfigVersionNote);
   serviceConfigEntityClone.setVersion(configVersionHelper.getNextVersion(serviceName));
   serviceConfigDAO.create(serviceConfigEntityClone);

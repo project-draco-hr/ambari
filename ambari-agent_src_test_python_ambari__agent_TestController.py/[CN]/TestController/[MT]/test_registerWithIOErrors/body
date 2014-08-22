@@ -1,0 +1,23 @@
+@patch('time.sleep')
+@patch.object(Controller.Controller, 'sendRequest')
+def test_registerWithIOErrors(self, sendRequestMock, sleepMock):
+    registerMock = MagicMock(name='Register')
+    registerMock.build.return_value = {}
+    actionQueue = MagicMock()
+    actionQueue.isIdle.return_value = True
+    self.controller.actionQueue = actionQueue
+    self.controller.register = registerMock
+    self.controller.responseId = 1
+    self.controller.TEST_IOERROR_COUNTER = 1
+    self.controller.isRegistered = False
+
+    def util_throw_IOErrors(*args, **kwargs):
+        '\n      Throws IOErrors 10 times and then stops heartbeats/registrations\n      '
+        if (self.controller.TEST_IOERROR_COUNTER == 10):
+            self.controller.isRegistered = True
+        self.controller.TEST_IOERROR_COUNTER += 1
+        raise IOError('Sample error')
+    actionQueue.isIdle.return_value = False
+    sendRequestMock.side_effect = util_throw_IOErrors
+    self.controller.registerWithServer()
+    self.assertTrue((sendRequestMock.call_count > 5))
