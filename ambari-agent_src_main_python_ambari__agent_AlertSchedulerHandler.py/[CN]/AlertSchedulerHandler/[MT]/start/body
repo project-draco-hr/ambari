@@ -1,12 +1,15 @@
 def start(self):
     ' loads definitions from file and starts the scheduler '
-    if (not self.__loaded):
-        alert_callables = self.__load_definitions()
-        for _callable in alert_callables:
-            if self.__in_minutes:
-                self.__scheduler.add_interval_job(self.__make_function(_callable), minutes=_callable.interval())
-            else:
-                self.__scheduler.add_interval_job(self.__make_function(_callable), seconds=_callable.interval())
-        self.__loaded = True
-    if (not (self.__scheduler is None)):
-        self.__scheduler.start()
+    if (self.__scheduler is None):
+        return
+    if self.__scheduler.running:
+        self.__scheduler.shutdown(wait=False)
+        self.__scheduler = Scheduler(AlertSchedulerHandler.APS_CONFIG)
+    alert_callables = self.__load_definitions()
+    for _callable in alert_callables:
+        if self.__in_minutes:
+            self.__scheduler.add_interval_job(self.__make_function(_callable), minutes=_callable.interval())
+        else:
+            self.__scheduler.add_interval_job(self.__make_function(_callable), seconds=_callable.interval())
+    logger.debug('Starting scheduler {0}; currently running: {1}'.format(str(self.__scheduler), str(self.__scheduler.running)))
+    self.__scheduler.start()
