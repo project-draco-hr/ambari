@@ -42,17 +42,30 @@
   final PermissionEntity clusterOperatePermission=permissionDAO.findClusterOperatePermission();
   final PermissionEntity clusterReadPermission=permissionDAO.findClusterReadPermission();
   final ResourceEntity ambariResource=resourceDAO.findAmbariResource();
+  final Map<UserEntity,List<String>> roles=new HashMap<UserEntity,List<String>>();
+  ResultSet resultSet=null;
+  try {
+    resultSet=dbAccessor.executeSelect("SELECT role_name, user_id FROM user_roles");
+    while (resultSet.next()) {
+      final String roleName=resultSet.getString(1);
+      final int userId=resultSet.getInt(2);
+      final UserEntity user=userDAO.findByPK(userId);
+      List<String> userRoles=roles.get(user);
+      if (userRoles == null) {
+        userRoles=new ArrayList<String>();
+        roles.put(user,userRoles);
+      }
+      userRoles.add(roleName);
+    }
+  }
+  finally {
+    if (resultSet != null) {
+      resultSet.close();
+    }
+  }
   for (  UserEntity user : userDAO.findAll()) {
-    boolean hasAdminRole=false;
-    boolean hasUserRole=false;
-    for (    RoleEntity role : user.getRoleEntities()) {
-      if (role.getRoleName().equals("admin")) {
-        hasAdminRole=true;
-      }
-      if (role.getRoleName().equals("user")) {
-        hasUserRole=true;
-      }
-      if (hasAdminRole) {
+    for (    String role : roles.get(user)) {
+      if (role.equals("admin")) {
         final PrivilegeEntity privilege=new PrivilegeEntity();
         privilege.setPermission(adminPermission);
         privilege.setPrincipal(user.getPrincipal());
@@ -69,7 +82,7 @@
         }
         userDAO.merge(user);
       }
- else       if (hasUserRole) {
+ else       if (role.equals("user")) {
         for (        ClusterEntity cluster : clusterDAO.findAll()) {
           final PrivilegeEntity privilege=new PrivilegeEntity();
           privilege.setPermission(clusterReadPermission);
@@ -82,4 +95,6 @@
       }
     }
   }
+  dbAccessor.dropTable("user_roles");
+  dbAccessor.dropTable("roles");
 }
