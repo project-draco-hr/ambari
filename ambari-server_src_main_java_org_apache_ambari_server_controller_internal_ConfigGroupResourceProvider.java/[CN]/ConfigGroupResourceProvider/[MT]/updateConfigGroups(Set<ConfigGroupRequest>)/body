@@ -20,9 +20,14 @@
     if (configGroup == null) {
       throw new AmbariException("Config group not found" + ", clusterName = " + request.getClusterName() + ", groupId = "+ request.getId());
     }
-    String serviceName=null;
-    if (configGroup.getConfigurations() != null) {
-      serviceName=cluster.getServiceForConfigTypes(configGroup.getConfigurations().keySet());
+    String serviceName=configGroup.getServiceName();
+    String requestServiceName=cluster.getServiceForConfigTypes(request.getConfigs().keySet());
+    if (serviceName != null && requestServiceName != null && !StringUtils.equals(serviceName,requestServiceName)) {
+      throw new IllegalArgumentException("Config group " + configGroup.getId() + " is mapped to service "+ serviceName+ ", "+ "but request contain configs from service "+ requestServiceName);
+    }
+ else     if (serviceName == null && requestServiceName != null) {
+      configGroup.setServiceName(requestServiceName);
+      serviceName=requestServiceName;
     }
     Map<String,Host> hosts=new HashMap<String,Host>();
     if (request.getHosts() != null && !request.getHosts().isEmpty()) {
@@ -44,6 +49,9 @@
     configGroup.persist();
     if (serviceName != null) {
       cluster.createServiceConfigVersion(serviceName,getManagementController().getAuthName(),null,configGroup);
+    }
+ else {
+      LOG.warn("Could not determine service name for config group {}, service config version not created",configGroup.getId());
     }
   }
   getManagementController().getConfigHelper().invalidateStaleConfigsCache();
