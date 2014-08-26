@@ -1,0 +1,24 @@
+{
+  AmbariManagementController amc=createMock(AmbariManagementController.class);
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  expect(amc.getClusters()).andReturn(clusters).atLeastOnce();
+  expect(clusters.getCluster((String)anyObject())).andReturn(cluster).atLeastOnce();
+  expect(cluster.getClusterId()).andReturn(Long.valueOf(1)).anyTimes();
+  Capture<List<AlertGroupEntity>> listCapture=new Capture<List<AlertGroupEntity>>();
+  m_dao.createGroups(capture(listCapture));
+  expectLastCall();
+  replay(amc,clusters,cluster,m_dao);
+  AlertGroupResourceProvider provider=createProvider(amc);
+  Map<String,Object> requestProps=new HashMap<String,Object>();
+  requestProps.put(AlertGroupResourceProvider.ALERT_GROUP_NAME,ALERT_GROUP_NAME);
+  requestProps.put(AlertGroupResourceProvider.ALERT_GROUP_CLUSTER_NAME,ALERT_GROUP_CLUSTER_NAME);
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  provider.createResources(request);
+  Assert.assertTrue(listCapture.hasCaptured());
+  AlertGroupEntity entity=listCapture.getValue().get(0);
+  Assert.assertNotNull(entity);
+  Assert.assertEquals(ALERT_GROUP_NAME,entity.getGroupName());
+  Assert.assertEquals(ALERT_GROUP_CLUSTER_ID,entity.getClusterId().longValue());
+  verify(amc,clusters,cluster,m_dao);
+}
