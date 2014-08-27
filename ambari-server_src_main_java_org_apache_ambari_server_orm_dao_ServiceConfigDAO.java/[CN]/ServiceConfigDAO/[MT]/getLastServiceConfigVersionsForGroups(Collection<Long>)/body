@@ -1,0 +1,21 @@
+{
+  if (configGroupIds == null || configGroupIds.isEmpty()) {
+    return Collections.emptyList();
+  }
+  CriteriaBuilder cb=entityManagerProvider.get().getCriteriaBuilder();
+  CriteriaQuery<Tuple> cq=cb.createTupleQuery();
+  Root<ServiceConfigEntity> groupVersion=cq.from(ServiceConfigEntity.class);
+  cq.multiselect(groupVersion.get("groupId").alias("groupId"),cb.max(groupVersion.<Long>get("version")).alias("lastVersion"));
+  cq.where(groupVersion.get("groupId").in(configGroupIds));
+  cq.groupBy(groupVersion.get("groupId"));
+  List<Tuple> tuples=daoUtils.selectList(entityManagerProvider.get().createQuery(cq));
+  List<ServiceConfigEntity> result=new ArrayList<ServiceConfigEntity>();
+  for (  Tuple tuple : tuples) {
+    CriteriaQuery<ServiceConfigEntity> sce=cb.createQuery(ServiceConfigEntity.class);
+    Root<ServiceConfigEntity> sceRoot=sce.from(ServiceConfigEntity.class);
+    sce.where(cb.and(cb.equal(sceRoot.get("groupId"),tuple.get("groupId")),cb.equal(sceRoot.get("version"),tuple.get("lastVersion"))));
+    sce.select(sceRoot);
+    result.add(daoUtils.selectSingle(entityManagerProvider.get().createQuery(sce)));
+  }
+  return result;
+}

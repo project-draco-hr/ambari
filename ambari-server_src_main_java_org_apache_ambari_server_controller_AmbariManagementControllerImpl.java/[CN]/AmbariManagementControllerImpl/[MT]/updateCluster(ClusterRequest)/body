@@ -4,26 +4,36 @@
   }
   LOG.info("Received a updateCluster request" + ", clusterName=" + request.getClusterName() + ", request="+ request);
   final Cluster cluster=clusters.getCluster(request.getClusterName());
-  ConfigurationResponse configurationResponse=null;
+  List<ConfigurationResponse> configurationResponses=new LinkedList<ConfigurationResponse>();
   ServiceConfigVersionResponse serviceConfigVersionResponse=null;
+  if (request.getDesiredConfig() != null && request.getServiceConfigVersionRequest() != null) {
+    String msg="Unable to set desired configs and rollback at same time, request = " + request.toString();
+    LOG.error(msg);
+    throw new IllegalArgumentException(msg);
+  }
   if (null != request.getDesiredConfig()) {
-    ConfigurationRequest cr=request.getDesiredConfig();
-    Config oldConfig=cluster.getDesiredConfigByType(cr.getType());
-    if (null != cr.getProperties()) {
-      Map<String,Config> all=cluster.getConfigsByType(cr.getType());
-      if (null == all || !all.containsKey(cr.getVersionTag()) || cr.getProperties().size() > 0) {
-        LOG.info(MessageFormat.format("Applying configuration with tag ''{0}'' to cluster ''{1}''",cr.getVersionTag(),request.getClusterName()));
-        cr.setClusterName(cluster.getClusterName());
-        configurationResponse=createConfiguration(cr);
+    Set<Config> configs=new HashSet<Config>();
+    String note=null;
+    for (    ConfigurationRequest cr : request.getDesiredConfig()) {
+      if (null != cr.getProperties()) {
+        Map<String,Config> all=cluster.getConfigsByType(cr.getType());
+        if (null == all || !all.containsKey(cr.getVersionTag()) || cr.getProperties().size() > 0) {
+          LOG.info(MessageFormat.format("Applying configuration with tag ''{0}'' to cluster ''{1}''",cr.getVersionTag(),request.getClusterName()));
+          cr.setClusterName(cluster.getClusterName());
+          configurationResponses.add(createConfiguration(cr));
+        }
       }
+      note=cr.getServiceConfigVersionNote();
+      configs.add(cluster.getConfig(cr.getType(),cr.getVersionTag()));
     }
-    Config baseConfig=cluster.getConfig(cr.getType(),cr.getVersionTag());
-    if (null != baseConfig) {
+    if (!configs.isEmpty()) {
       String authName=getAuthName();
-      serviceConfigVersionResponse=cluster.addDesiredConfig(authName,baseConfig,cr.getServiceConfigVersionNote());
+      serviceConfigVersionResponse=cluster.addDesiredConfig(authName,configs,note);
       if (serviceConfigVersionResponse != null) {
         Logger logger=LoggerFactory.getLogger("configchange");
-        logger.info("cluster '" + request.getClusterName() + "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ baseConfig.getType()+ "' "+ "tag='"+ baseConfig.getTag()+ "'"+ (null == oldConfig ? "" : " from='" + oldConfig.getTag() + "'"));
+        for (        Config config : configs) {
+          logger.info("cluster '" + request.getClusterName() + "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ config.getType()+ "' "+ "tag='"+ config.getTag()+ "'");
+        }
       }
     }
   }
@@ -59,14 +69,16 @@
       LOG.error(msg);
       throw new IllegalArgumentException(msg);
     }
-    cluster.setServiceConfigVersion(serviceConfigVersionRequest.getServiceName(),serviceConfigVersionRequest.getVersion(),getAuthName(),serviceConfigVersionRequest.getNote());
+    serviceConfigVersionResponse=cluster.setServiceConfigVersion(serviceConfigVersionRequest.getServiceName(),serviceConfigVersionRequest.getVersion(),getAuthName(),serviceConfigVersionRequest.getNote());
   }
   if (serviceConfigVersionResponse != null) {
-    if (configurationResponse != null) {
-      serviceConfigVersionResponse.setConfigurations(Collections.singletonList(configurationResponse));
+    if (!configurationResponses.isEmpty()) {
+      serviceConfigVersionResponse.setConfigurations(configurationResponses);
     }
     ClusterResponse clusterResponse=new ClusterResponse(cluster.getClusterId(),cluster.getClusterName(),null,null,null,null,null);
-    clusterResponse.setDesiredServiceConfigVersions(Collections.singletonMap(serviceConfigVersionResponse.getServiceName(),serviceConfigVersionResponse));
+    Map<String,Collection<ServiceConfigVersionResponse>> map=new HashMap<String,Collection<ServiceConfigVersionResponse>>();
+    map.put(serviceConfigVersionResponse.getServiceName(),Collections.singletonList(serviceConfigVersionResponse));
+    clusterResponse.setDesiredServiceConfigVersions(map);
     saveClusterUpdate(request,clusterResponse);
   }
   return null;
