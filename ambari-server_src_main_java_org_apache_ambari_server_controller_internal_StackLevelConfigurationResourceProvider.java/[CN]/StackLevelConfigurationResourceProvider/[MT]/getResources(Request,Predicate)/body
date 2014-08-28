@@ -1,0 +1,34 @@
+{
+  final Set<StackLevelConfigurationRequest> requests=new HashSet<StackLevelConfigurationRequest>();
+  if (predicate == null) {
+    requests.add(getRequest(Collections.<String,Object>emptyMap()));
+  }
+ else {
+    for (    Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+      requests.add(getRequest(propertyMap));
+    }
+  }
+  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  Set<StackConfigurationResponse> responses=getResources(new Command<Set<StackConfigurationResponse>>(){
+    @Override public Set<StackConfigurationResponse> invoke() throws AmbariException {
+      return getManagementController().getStackLevelConfigurations(requests);
+    }
+  }
+);
+  Set<Resource> resources=new HashSet<Resource>();
+  for (  StackConfigurationResponse response : responses) {
+    Resource resource=new ResourceImpl(Resource.Type.StackLevelConfiguration);
+    setResourceProperty(resource,STACK_NAME_PROPERTY_ID,response.getStackName(),requestedIds);
+    setResourceProperty(resource,STACK_VERSION_PROPERTY_ID,response.getStackVersion(),requestedIds);
+    setResourceProperty(resource,PROPERTY_NAME_PROPERTY_ID,response.getPropertyName(),requestedIds);
+    setResourceProperty(resource,PROPERTY_VALUE_PROPERTY_ID,response.getPropertyValue(),requestedIds);
+    setResourceProperty(resource,PROPERTY_DESCRIPTION_PROPERTY_ID,response.getPropertyDescription(),requestedIds);
+    setResourceProperty(resource,PROPERTY_TYPE_PROPERTY_ID,response.getType(),requestedIds);
+    setDefaultPropertiesAttributes(resource,requestedIds);
+    for (    Map.Entry<String,String> attribute : response.getPropertyAttributes().entrySet()) {
+      setResourceProperty(resource,PropertyHelper.getPropertyId("StackLevelConfigurations",attribute.getKey()),attribute.getValue(),requestedIds);
+    }
+    resources.add(resource);
+  }
+  return resources;
+}
