@@ -1,0 +1,29 @@
+@patch('mm_wrapper.check_output')
+def test_work_in_and_mode(self, check_output_mock):
+    hostnames = ['h1', 'h2', 'h3', 'h4']
+    ignored_hosts = ['h2', 'h3']
+    command_line = ['prog', '-h', '^^', '-opt', 'yet', 'another', 'opt']
+    custom_env = {'MM_HOSTS': ignored_hosts, }
+    check_output_mock.return_value = 'Dummy message'
+    result = mm_wrapper.work_in_and_mode(hostnames, ignored_hosts, command_line, custom_env, self.default_empty_check_result)
+    self.assertEquals(str(result), "{'message': 'Dummy message', 'real_retcode': None, 'retcode': 0}")
+    self.assertEquals(check_output_mock.call_count, 4)
+    self.assertEquals(check_output_mock.call_args[1]['env']['MM_HOSTS'], ignored_hosts)
+    for check_tupple in zip(check_output_mock.call_args_list, hostnames):
+        self.assertEquals(check_tupple[0][0][0], ['prog', '-h', check_tupple[1], '-opt', 'yet', 'another', 'opt'])
+    check_output_mock.reset_mock()
+    check_output_mock.side_effect = [subprocess.CalledProcessError(1, 'dummy cmd', output='dummy output1'), subprocess.CalledProcessError(3, 'dummy cmd', output='dummy output2'), subprocess.CalledProcessError(1, 'dummy cmd', output='dummy output3'), subprocess.CalledProcessError(2, 'dummy cmd', output='dummy output4')]
+    result = mm_wrapper.work_in_and_mode(hostnames, ignored_hosts, command_line, custom_env, self.default_empty_check_result)
+    self.assertEquals(check_output_mock.call_count, 4)
+    self.assertEquals(str(result), "{'message': 'dummy output4', 'real_retcode': None, 'retcode': 2}")
+    check_output_mock.reset_mock()
+    check_output_mock.side_effect = [subprocess.CalledProcessError(1, 'dummy cmd', output='dummy output1'), subprocess.CalledProcessError(0, 'dummy cmd', output='dummy output2'), subprocess.CalledProcessError(2, 'dummy cmd', output='dummy output3'), subprocess.CalledProcessError(3, 'dummy cmd', output='dummy output4')]
+    result = mm_wrapper.work_in_and_mode(hostnames, ignored_hosts, command_line, custom_env, self.default_empty_check_result)
+    self.assertEquals(check_output_mock.call_count, 4)
+    self.assertEquals(str(result), "{'message': 'dummy output4', 'real_retcode': None, 'retcode': 3}")
+    check_output_mock.reset_mock()
+    ignored_hosts = []
+    check_output_mock.side_effect = [subprocess.CalledProcessError(1, 'dummy cmd', output='dummy output1'), subprocess.CalledProcessError(0, 'dummy cmd', output='dummy output2'), subprocess.CalledProcessError(2, 'dummy cmd', output='dummy output3'), subprocess.CalledProcessError(3, 'dummy cmd', output='dummy output4')]
+    result = mm_wrapper.work_in_and_mode(hostnames, ignored_hosts, command_line, custom_env, self.default_empty_check_result)
+    self.assertEquals(check_output_mock.call_count, 4)
+    self.assertEquals(str(result), "{'message': 'dummy output4', 'real_retcode': None, 'retcode': 3}")

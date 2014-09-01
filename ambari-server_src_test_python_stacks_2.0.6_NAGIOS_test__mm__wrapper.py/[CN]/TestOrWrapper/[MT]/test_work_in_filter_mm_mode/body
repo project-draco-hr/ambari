@@ -1,0 +1,24 @@
+@patch('mm_wrapper.check_output')
+def test_work_in_filter_mm_mode(self, check_output_mock):
+    hostnames = ['h1', 'h2', 'h3', 'h4']
+    ignored_hosts = ['h2', 'h3']
+    command_line = ['prog', '-h', '^^', '-opt', 'yet', 'another', 'opt']
+    custom_env = {'MM_HOSTS': ignored_hosts, }
+    check_output_mock.return_value = 'Dummy message'
+    result = mm_wrapper.work_in_filter_mm_mode(hostnames, ignored_hosts, command_line, custom_env, self.default_empty_check_result)
+    self.assertEquals(str(result), "{'message': 'Dummy message', 'real_retcode': None, 'retcode': 0}")
+    self.assertEquals(check_output_mock.call_count, 1)
+    self.assertEquals(check_output_mock.call_args[1]['env']['MM_HOSTS'], ignored_hosts)
+    self.assertEquals(check_output_mock.call_args[0][0], ['prog', '-h', 'h1', 'h4', '-opt', 'yet', 'another', 'opt'])
+    check_output_mock.reset_mock()
+    check_output_mock.side_effect = [subprocess.CalledProcessError(1, 'dummy cmd', output='dummy output1')]
+    result = mm_wrapper.work_in_filter_mm_mode(hostnames, ignored_hosts, command_line, custom_env, self.default_empty_check_result)
+    self.assertEquals(check_output_mock.call_count, 1)
+    self.assertEquals(str(result), "{'message': 'dummy output1', 'real_retcode': None, 'retcode': 1}")
+    check_output_mock.reset_mock()
+    ignored_hosts = hostnames
+    check_output_mock.side_effect = [subprocess.CalledProcessError(1, 'dummy cmd', output='dummy output1')]
+    result = mm_wrapper.work_in_filter_mm_mode(hostnames, ignored_hosts, command_line, custom_env, self.default_empty_check_result)
+    self.assertEquals(check_output_mock.call_count, 0)
+    self.assertEquals(str(result), "{'message': 'No checks have been run (no hostnames provided)', 'real_retcode': None, 'retcode': -1}")
+    check_output_mock.reset_mock()
