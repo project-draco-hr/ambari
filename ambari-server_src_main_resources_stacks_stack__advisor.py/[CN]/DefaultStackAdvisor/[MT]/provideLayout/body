@@ -1,0 +1,61 @@
+def provideLayout(self, services, hosts):
+    recommendations = {'blueprint': {'host_groups': [], }, 'blueprint_cluster_binding': {'host_groups': [], }, }
+    hostsList = [host['Hosts']['host_name'] for host in hosts['items']]
+    hostsComponentsMap = {}
+    for hostName in hostsList:
+        if (hostName not in hostsComponentsMap):
+            hostsComponentsMap[hostName] = []
+    for service in services['services']:
+        masterComponents = [component for component in service['components'] if self.isMaster(component)]
+        for component in masterComponents:
+            componentName = component['StackServiceComponents']['component_name']
+            if self.isAlreadyPopulated(component):
+                hostsForComponent = component['StackServiceComponents']['hostnames']
+            else:
+                availableHosts = hostsList
+                if ((len(hostsList) > 1) and self.isNotPreferableOnAmbariServerHost(component)):
+                    availableHosts = [hostName for hostName in hostsList if (not self.isLocalHost(hostName))]
+                if self.isMasterWithMultipleInstances(component):
+                    hostsCount = self.defaultNoOfMasterHosts(component)
+                    if (hostsCount > 1):
+                        if (len(availableHosts) < hostsCount):
+                            hostsCount = len(availableHosts)
+                        hostsForComponent = availableHosts[:hostsCount]
+                    else:
+                        hostsForComponent = [self.getHostForComponent(component, availableHosts, hostsComponentsMap)]
+                else:
+                    hostsForComponent = [self.getHostForComponent(component, availableHosts, hostsComponentsMap)]
+            for hostName in hostsForComponent:
+                hostsComponentsMap[hostName].append({'name': componentName, })
+    componentsListList = [service['components'] for service in services['services']]
+    componentsList = [item for sublist in componentsListList for item in sublist]
+    usedHostsListList = [component['StackServiceComponents']['hostnames'] for component in componentsList if (not self.isNotValuable(component))]
+    utilizedHosts = [item for sublist in usedHostsListList for item in sublist]
+    freeHosts = [hostName for hostName in hostsList if (hostName not in utilizedHosts)]
+    for service in services['services']:
+        slaveClientComponents = [component for component in service['components'] if (self.isSlave(component) or self.isClient(component))]
+        for component in slaveClientComponents:
+            componentName = component['StackServiceComponents']['component_name']
+            if self.isAlreadyPopulated(component):
+                hostsForComponent = component['StackServiceComponents']['hostnames']
+            elif (component['StackServiceComponents']['cardinality'] == 'ALL'):
+                hostsForComponent = hostsList
+            elif (len(freeHosts) == 0):
+                hostsForComponent = hostsList[(-1):]
+            else:
+                hostsForComponent = freeHosts
+                if self.isClient(component):
+                    hostsForComponent = freeHosts[0:1]
+            for hostName in hostsForComponent:
+                if (hostName not in hostsComponentsMap):
+                    hostsComponentsMap[hostName] = []
+                hostsComponentsMap[hostName].append({'name': componentName, })
+    host_groups = recommendations['blueprint']['host_groups']
+    bindings = recommendations['blueprint_cluster_binding']['host_groups']
+    index = 0
+    for key in hostsComponentsMap.keys():
+        index += 1
+        host_group_name = 'host-group-{0}'.format(index)
+        host_groups.append({'name': host_group_name, 'components': hostsComponentsMap[key], })
+        bindings.append({'name': host_group_name, 'hosts': [{'fqdn': socket.getfqdn(key), }], })
+    return recommendations
