@@ -1,0 +1,42 @@
+'\n    RealWorldish Benchmark\n    ~~~~~~~~~~~~~~~~~~~~~~\n\n    A more real-world benchmark of Jinja2.  Like the other benchmark in the\n    Jinja2 repository this has no real-world usefulnes (despite the name).\n    Just go away and ignore it.  NOW!\n\n    :copyright: (c) 2009 by the Jinja Team.\n    :license: BSD.\n'
+import sys
+from os.path import join, dirname, abspath
+try:
+    from cProfile import Profile
+except ImportError:
+    from profile import Profile
+from pstats import Stats
+ROOT = abspath(dirname(__file__))
+from random import choice, randrange
+from datetime import datetime
+from timeit import Timer
+from jinja2 import Environment, FileSystemLoader
+from jinja2.utils import generate_lorem_ipsum
+from mako.lookup import TemplateLookup
+from genshi.template import TemplateLoader as GenshiTemplateLoader
+jinja_env = Environment(loader=FileSystemLoader(join(ROOT, 'jinja')))
+jinja_env.filters['dateformat'] = dateformat
+mako_lookup = TemplateLookup(directories=[join(ROOT, 'mako')])
+genshi_loader = GenshiTemplateLoader([join(ROOT, 'genshi')])
+users = map(User, [u'John Doe', u'Jane Doe', u'Peter Somewhat'])
+articles = map(Article, range(20))
+navigation = ([('index', 'Index'), ('about', 'About'), ('foo?bar=1', 'Foo with Bar'), ('foo?bar=2&s=x', 'Foo with X'), ('blah', 'Blub Blah'), ('hehe', 'Haha')] * 5)
+context = dict(users=users, articles=articles, page_navigation=navigation)
+jinja_template = jinja_env.get_template('index.html')
+mako_template = mako_lookup.get_template('index.html')
+genshi_template = genshi_loader.load('index.html')
+from djangoext import django_loader, DjangoContext
+if (__name__ == '__main__'):
+    sys.stdout.write('Realworldish Benchmark:\n')
+    for test in ('jinja', 'mako', 'django', 'genshi'):
+        t = Timer(setup=('from __main__ import test_%s as bench' % test), stmt='bench()')
+        sys.stdout.write((' >> %-20s<running>' % test))
+        sys.stdout.flush()
+        sys.stdout.write(('\r    %-20s%.4f seconds\n' % (test, (t.timeit(number=200) / 200))))
+    if ('-p' in sys.argv):
+        print 'Jinja profile'
+        p = Profile()
+        p.runcall(test_jinja)
+        stats = Stats(p)
+        stats.sort_stats('time', 'calls')
+        stats.print_stats()

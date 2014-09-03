@@ -1,0 +1,22 @@
+'\n    jinja2.testsuite.ext\n    ~~~~~~~~~~~~~~~~~~~~\n\n    Tests for the extensions.\n\n    :copyright: (c) 2010 by the Jinja Team.\n    :license: BSD, see LICENSE for more details.\n'
+import re
+import unittest
+from jinja2.testsuite import JinjaTestCase, filesystem_loader
+from jinja2 import Environment, DictLoader, contextfunction, nodes
+from jinja2.exceptions import TemplateAssertionError
+from jinja2.ext import Extension
+from jinja2.lexer import Token, count_newlines
+from jinja2.utils import next
+try:
+    from io import BytesIO
+except ImportError:
+    from StringIO import StringIO as BytesIO
+importable_object = 23
+_gettext_re = re.compile('_\\((.*?)\\)(?s)')
+i18n_templates = {'master.html': '<title>{{ page_title|default(_("missing")) }}</title>{% block body %}{% endblock %}', 'child.html': '{% extends "master.html" %}{% block body %}{% trans %}watch out{% endtrans %}{% endblock %}', 'plural.html': '{% trans user_count %}One user online{% pluralize %}{{ user_count }} users online{% endtrans %}', 'stringformat.html': '{{ _("User: %(num)s")|format(num=user_count) }}', }
+newstyle_i18n_templates = {'master.html': '<title>{{ page_title|default(_("missing")) }}</title>{% block body %}{% endblock %}', 'child.html': '{% extends "master.html" %}{% block body %}{% trans %}watch out{% endtrans %}{% endblock %}', 'plural.html': '{% trans user_count %}One user online{% pluralize %}{{ user_count }} users online{% endtrans %}', 'stringformat.html': '{{ _("User: %(num)s", num=user_count) }}', 'ngettext.html': '{{ ngettext("%(num)s apple", "%(num)s apples", apples) }}', 'ngettext_long.html': '{% trans num=apples %}{{ num }} apple{% pluralize %}{{ num }} apples{% endtrans %}', 'transvars1.html': '{% trans %}User: {{ num }}{% endtrans %}', 'transvars2.html': '{% trans num=count %}User: {{ num }}{% endtrans %}', 'transvars3.html': '{% trans count=num %}User: {{ count }}{% endtrans %}', 'novars.html': '{% trans %}%(hello)s{% endtrans %}', 'vars.html': '{% trans %}{{ foo }}%(foo)s{% endtrans %}', 'explicitvars.html': '{% trans foo="42" %}%(foo)s{% endtrans %}', }
+languages = {'de': {'missing': u'fehlend', 'watch out': u'pass auf', 'One user online': u'Ein Benutzer online', '%(user_count)s users online': u'%(user_count)s Benutzer online', 'User: %(num)s': u'Benutzer: %(num)s', 'User: %(count)s': u'Benutzer: %(count)s', '%(num)s apple': u'%(num)s Apfel', '%(num)s apples': u'%(num)s \xc4pfel', }, }
+i18n_env = Environment(loader=DictLoader(i18n_templates), extensions=['jinja2.ext.i18n'])
+i18n_env.globals.update({'_': gettext, 'gettext': gettext, 'ngettext': ngettext, })
+newstyle_i18n_env = Environment(loader=DictLoader(newstyle_i18n_templates), extensions=['jinja2.ext.i18n'])
+newstyle_i18n_env.install_gettext_callables(gettext, ngettext, newstyle=True)

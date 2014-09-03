@@ -1,0 +1,91 @@
+'\n    jinja2.utils\n    ~~~~~~~~~~~~\n\n    Utility functions.\n\n    :copyright: (c) 2010 by the Jinja Team.\n    :license: BSD, see LICENSE for more details.\n'
+import re
+import sys
+import errno
+try:
+    from thread import allocate_lock
+except ImportError:
+    from dummy_thread import allocate_lock
+from collections import deque
+from itertools import imap
+_word_split_re = re.compile('(\\s+)')
+_punctuation_re = re.compile(('^(?P<lead>(?:%s)*)(?P<middle>.*?)(?P<trail>(?:%s)*)$' % ('|'.join(imap(re.escape, ('(', '<', '&lt;'))), '|'.join(imap(re.escape, ('.', ',', ')', '>', '\n', '&gt;'))))))
+_simple_email_re = re.compile('^\\S+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9._-]+$')
+_striptags_re = re.compile('(<!--.*?-->|<[^>]*>)')
+_entity_re = re.compile('&([^;]+);')
+_letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+_digits = '0123456789'
+missing = type('MissingType', (), {'__repr__': (lambda x: 'missing'), })()
+internal_code = set()
+_concat = u''.join
+try:
+
+    def _test_gen_bug():
+        raise TypeError(_test_gen_bug)
+        yield None
+    _concat(_test_gen_bug())
+except TypeError as _error:
+    if ((not _error.args) or (_error.args[0] is not _test_gen_bug)):
+
+        def concat(gen):
+            try:
+                return _concat(list(gen))
+            except:
+                (exc_type, exc_value, tb) = sys.exc_info()
+                raise exc_type, exc_value, tb.tb_next
+    else:
+        concat = _concat
+    del _test_gen_bug, _error
+try:
+    next = next
+except NameError:
+
+    def next(x):
+        return x.next()
+if (sys.version_info < (3, 0)):
+
+    def _encode_filename(filename):
+        if isinstance(filename, unicode):
+            return filename.encode('utf-8')
+        return filename
+else:
+
+    def _encode_filename(filename):
+        assert ((filename is None) or isinstance(filename, str)), 'filenames must be strings'
+        return filename
+from keyword import iskeyword as is_python_keyword
+FunctionType = type(_func)
+GeneratorType = type(_func())
+MethodType = type(_C.method)
+CodeType = type(_C.method.func_code)
+try:
+    raise TypeError()
+except TypeError:
+    _tb = sys.exc_info()[2]
+    TracebackType = type(_tb)
+    FrameType = type(_tb.tb_frame)
+del _C, _tb, _func
+try:
+    from collections import MutableMapping
+    MutableMapping.register(LRUCache)
+except ImportError:
+    pass
+try:
+    from markupsafe import Markup, escape, soft_unicode
+except ImportError:
+    from jinja2._markupsafe import Markup, escape, soft_unicode
+try:
+    from functools import partial
+except ImportError:
+
+
+    class partial(object):
+
+        def __init__(self, _func, *args, **kwargs):
+            self._func = _func
+            self._args = args
+            self._kwargs = kwargs
+
+        def __call__(self, *args, **kwargs):
+            kwargs.update(self._kwargs)
+            return self._func(*(self._args + args), **kwargs)

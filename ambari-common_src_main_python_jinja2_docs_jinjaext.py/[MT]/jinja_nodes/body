@@ -1,0 +1,26 @@
+def jinja_nodes(dirname, arguments, options, content, lineno, content_offset, block_text, state, state_machine):
+    from jinja2.nodes import Node
+    doc = ViewList()
+
+    def walk(node, indent):
+        p = (' ' * indent)
+        sig = ', '.join(node.fields)
+        doc.append((p + ('.. autoclass:: %s(%s)' % (node.__name__, sig))), '')
+        if node.abstract:
+            members = []
+            for (key, name) in node.__dict__.iteritems():
+                if ((not key.startswith('_')) and (not hasattr(node.__base__, key)) and callable(name)):
+                    members.append(key)
+            if members:
+                members.sort()
+                doc.append(('%s :members: %s' % (p, ', '.join(members))), '')
+        if (node.__base__ != object):
+            doc.append('', '')
+            doc.append(('%s :Node type: :class:`%s`' % (p, node.__base__.__name__)), '')
+        doc.append('', '')
+        children = node.__subclasses__()
+        children.sort(key=(lambda x: x.__name__.lower()))
+        for child in children:
+            walk(child, indent)
+    walk(Node, 0)
+    return parse_rst(state, content_offset, doc)

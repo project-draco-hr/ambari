@@ -1,0 +1,67 @@
+def visit_Template(self, node, frame=None):
+    assert (frame is None), 'no root frame allowed'
+    eval_ctx = EvalContext(self.environment, self.name)
+    from jinja2.runtime import __all__ as exported
+    self.writeline('from __future__ import division')
+    self.writeline(('from jinja2.runtime import ' + ', '.join(exported)))
+    if (not unoptimize_before_dead_code):
+        self.writeline('dummy = lambda *x: None')
+    envenv = (((not self.defer_init) and ', environment=environment') or '')
+    have_extends = (node.find(nodes.Extends) is not None)
+    for block in node.find_all(nodes.Block):
+        if (block.name in self.blocks):
+            self.fail(('block %r defined twice' % block.name), block.lineno)
+        self.blocks[block.name] = block
+    for import_ in node.find_all(nodes.ImportedName):
+        if (import_.importname not in self.import_aliases):
+            imp = import_.importname
+            self.import_aliases[imp] = alias = self.temporary_identifier()
+            if ('.' in imp):
+                (module, obj) = imp.rsplit('.', 1)
+                self.writeline(('from %s import %s as %s' % (module, obj, alias)))
+            else:
+                self.writeline(('import %s as %s' % (imp, alias)))
+    self.writeline(('name = %r' % self.name))
+    self.writeline(('def root(context%s):' % envenv), extra=1)
+    frame = Frame(eval_ctx)
+    frame.inspect(node.body)
+    frame.toplevel = frame.rootlevel = True
+    frame.require_output_check = (have_extends and (not self.has_known_extends))
+    self.indent()
+    if have_extends:
+        self.writeline('parent_template = None')
+    if ('self' in find_undeclared(node.body, ('self',))):
+        frame.identifiers.add_special('self')
+        self.writeline('l_self = TemplateReference(context)')
+    self.pull_locals(frame)
+    self.pull_dependencies(node.body)
+    self.blockvisit(node.body, frame)
+    self.outdent()
+    if have_extends:
+        if (not self.has_known_extends):
+            self.indent()
+            self.writeline('if parent_template is not None:')
+        self.indent()
+        self.writeline('for event in parent_template.root_render_func(context):')
+        self.indent()
+        self.writeline('yield event')
+        self.outdent((2 + (not self.has_known_extends)))
+    for (name, block) in self.blocks.iteritems():
+        block_frame = Frame(eval_ctx)
+        block_frame.inspect(block.body)
+        block_frame.block = name
+        self.writeline(('def block_%s(context%s):' % (name, envenv)), block, 1)
+        self.indent()
+        undeclared = find_undeclared(block.body, ('self', 'super'))
+        if ('self' in undeclared):
+            block_frame.identifiers.add_special('self')
+            self.writeline('l_self = TemplateReference(context)')
+        if ('super' in undeclared):
+            block_frame.identifiers.add_special('super')
+            self.writeline(('l_super = context.super(%r, block_%s)' % (name, name)))
+        self.pull_locals(block_frame)
+        self.pull_dependencies(block.body)
+        self.blockvisit(block.body, block_frame)
+        self.outdent()
+    self.writeline(('blocks = {%s}' % ', '.join((('%r: block_%s' % (x, x)) for x in self.blocks))), extra=1)
+    self.writeline(('debug_info = %r' % '&'.join((('%s=%s' % x) for x in self.debug_info))))
