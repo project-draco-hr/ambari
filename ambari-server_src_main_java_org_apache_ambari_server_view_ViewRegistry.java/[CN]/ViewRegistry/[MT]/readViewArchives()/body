@@ -1,0 +1,37 @@
+{
+  final ExecutorService executorService=getExecutorService(configuration);
+  executorService.submit(new Runnable(){
+    @Override public void run(){
+      try {
+        File viewDir=configuration.getViewsDir();
+        String extractedArchivesPath=viewDir.getAbsolutePath() + File.separator + EXTRACTED_ARCHIVES_DIR;
+        if (ensureExtractedArchiveDirectory(extractedArchivesPath)) {
+          File[] files=viewDir.listFiles();
+          if (files != null) {
+            for (            final File archiveFile : files) {
+              if (!archiveFile.isDirectory()) {
+                final ViewConfig viewConfig=helper.getViewConfigFromArchive(archiveFile);
+                String commonName=viewConfig.getName();
+                String version=viewConfig.getVersion();
+                String viewName=ViewEntity.getViewName(commonName,version);
+                final String archivePath=extractedArchivesPath + File.separator + viewName;
+                final ViewEntity viewDefinition=new ViewEntity(viewConfig,configuration,archivePath);
+                executorService.submit(new Runnable(){
+                  @Override public void run(){
+                    readViewArchive(viewDefinition,archiveFile,archivePath,viewConfig);
+                  }
+                }
+);
+              }
+            }
+            removeUndeployedViews();
+          }
+        }
+      }
+ catch (      Exception e) {
+        LOG.error("Caught exception reading view archives.",e);
+      }
+    }
+  }
+);
+}

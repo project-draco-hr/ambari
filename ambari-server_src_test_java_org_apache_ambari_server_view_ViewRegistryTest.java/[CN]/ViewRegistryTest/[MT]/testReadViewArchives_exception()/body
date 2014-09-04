@@ -1,6 +1,5 @@
 {
   ViewRegistry registry=getRegistry();
-  Configuration configuration=createNiceMock(Configuration.class);
   File viewDir=createNiceMock(File.class);
   File extractedArchiveDir=createNiceMock(File.class);
   File viewArchive=createNiceMock(File.class);
@@ -72,7 +71,13 @@
   expect(viewDAO.findByName("MY_VIEW{1.0.0}")).andThrow(new IllegalArgumentException("Expected exception."));
   replay(configuration,viewDir,extractedArchiveDir,viewArchive,archiveDir,entryFile,classesDir,libDir,fileEntry,viewJarFile,enumeration,jarEntry,is,fos,viewDAO);
   registry.setHelper(new TestViewRegistryHelper(viewConfigs,files,outputStreams,jarFiles));
-  Set<ViewInstanceEntity> instanceEntities=registry.readViewArchives(configuration);
-  Assert.assertEquals(0,instanceEntities.size());
+  registry.readViewArchives();
+  ViewEntity view=null;
+  long timeout=System.currentTimeMillis() + 10000L;
+  while ((view == null || !view.getStatus().equals(ViewDefinition.ViewStatus.ERROR)) && System.currentTimeMillis() < timeout) {
+    view=registry.getDefinition("MY_VIEW","1.0.0");
+  }
+  Assert.assertNotNull(view);
+  Assert.assertEquals(ViewDefinition.ViewStatus.ERROR,view.getStatus());
   verify(configuration,viewDir,extractedArchiveDir,viewArchive,archiveDir,entryFile,classesDir,libDir,fileEntry,viewJarFile,enumeration,jarEntry,is,fos,viewDAO);
 }

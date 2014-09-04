@@ -1,6 +1,5 @@
 {
   ViewRegistry registry=getRegistry();
-  Configuration configuration=createNiceMock(Configuration.class);
   File viewDir=createNiceMock(File.class);
   File extractedArchiveDir=createNiceMock(File.class);
   File viewArchive=createNiceMock(File.class);
@@ -41,6 +40,9 @@
   jarFiles.put(viewArchive,viewJarFile);
   expect(configuration.getViewsDir()).andReturn(viewDir);
   expect(viewDir.getAbsolutePath()).andReturn("/var/lib/ambari-server/resources/views");
+  expect(configuration.getViewExtractionThreadPoolCoreSize()).andReturn(2).anyTimes();
+  expect(configuration.getViewExtractionThreadPoolMaxSize()).andReturn(3).anyTimes();
+  expect(configuration.getViewExtractionThreadPoolTimeout()).andReturn(10000L).anyTimes();
   expect(viewDir.listFiles()).andReturn(new File[]{viewArchive});
   expect(viewArchive.isDirectory()).andReturn(false);
   expect(viewArchive.getAbsolutePath()).andReturn("/var/lib/ambari-server/resources/views/work/MY_VIEW{1.0.0}").anyTimes();
@@ -72,7 +74,14 @@
   expect(viewDAO.findAll()).andReturn(Collections.<ViewEntity>emptyList());
   replay(configuration,viewDir,extractedArchiveDir,viewArchive,archiveDir,entryFile,classesDir,libDir,fileEntry,viewJarFile,enumeration,jarEntry,is,fos,resourceDAO,viewDAO,viewInstanceDAO);
   registry.setHelper(new TestViewRegistryHelper(viewConfigs,files,outputStreams,jarFiles));
-  Set<ViewInstanceEntity> instanceEntities=registry.readViewArchives(configuration);
-  Assert.assertEquals(2,instanceEntities.size());
+  registry.readViewArchives();
+  ViewEntity view=null;
+  long timeout=System.currentTimeMillis() + 10000L;
+  while ((view == null || !view.getStatus().equals(ViewDefinition.ViewStatus.LOADED)) && System.currentTimeMillis() < timeout) {
+    view=registry.getDefinition("MY_VIEW","1.0.0");
+  }
+  Assert.assertNotNull(view);
+  Assert.assertEquals(ViewDefinition.ViewStatus.LOADED,view.getStatus());
+  Assert.assertEquals(2,registry.getInstanceDefinitions(view).size());
   verify(configuration,viewDir,extractedArchiveDir,viewArchive,archiveDir,entryFile,classesDir,libDir,fileEntry,viewJarFile,enumeration,jarEntry,is,fos,resourceDAO,viewDAO,viewInstanceDAO);
 }
