@@ -1,0 +1,43 @@
+{
+  Set<String> requestPropertyIds=getRequestPropertyIds(request,predicate);
+  Set<Resource> results=new HashSet<Resource>();
+  for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+    String clusterName=(String)propertyMap.get(ALERT_CLUSTER_NAME);
+    if (null == clusterName || clusterName.isEmpty()) {
+      throw new IllegalArgumentException("Invalid argument, cluster name is required");
+    }
+    String id=(String)propertyMap.get(ALERT_ID);
+    if (null != id) {
+      AlertCurrentEntity entity=alertsDAO.findCurrentById(Long.parseLong(id));
+      if (null != entity) {
+        results.add(toResource(false,clusterName,entity,requestPropertyIds));
+      }
+    }
+ else {
+      Cluster cluster=null;
+      try {
+        cluster=getManagementController().getClusters().getCluster(clusterName);
+      }
+ catch (      AmbariException e) {
+        throw new NoSuchResourceException("Parent Cluster resource doesn't exist",e);
+      }
+      String serviceName=(String)propertyMap.get(ALERT_SERVICE);
+      String hostName=(String)propertyMap.get(ALERT_HOST);
+      List<AlertCurrentEntity> entities=null;
+      if (null != hostName) {
+        entities=alertsDAO.findCurrentByHost(cluster.getClusterId(),hostName);
+      }
+ else       if (null != serviceName) {
+        entities=alertsDAO.findCurrentByService(cluster.getClusterId(),serviceName);
+      }
+ else {
+        entities=alertsDAO.findCurrentByCluster(cluster.getClusterId());
+      }
+      if (null == entities)       entities=Collections.emptyList();
+      for (      AlertCurrentEntity entity : entities) {
+        results.add(toResource(true,clusterName,entity,requestPropertyIds));
+      }
+    }
+  }
+  return results;
+}
