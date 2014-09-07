@@ -3,10 +3,9 @@ from resource_management import *
 from resource_management.core.system import System
 import os
 config = Script.get_config()
-_authentication = config['configurations']['core-site']['hadoop.security.authentication']
-security_enabled = ((not is_empty(_authentication)) and (_authentication == 'kerberos'))
+security_enabled = config['configurations']['cluster-env']['security_enabled']
 hdfs_user = config['configurations']['hadoop-env']['hdfs_user']
-user_group = config['configurations']['hadoop-env']['user_group']
+user_group = config['configurations']['cluster-env']['user_group']
 hostname = config['hostname']
 ambari_server_hostname = config['clusterHostInfo']['ambari_server_host'][0]
 rm_host = default('/clusterHostInfo/rm_host', [])
@@ -21,6 +20,7 @@ jtnode_host = default('/clusterHostInfo/jtnode_host', [])
 namenode_host = default('/clusterHostInfo/namenode_host', [])
 zk_hosts = default('/clusterHostInfo/zookeeper_hosts', [])
 ganglia_server_hosts = default('/clusterHostInfo/ganglia_server_host', [])
+has_namenode = (not (len(namenode_host) == 0))
 has_resourcemanager = (not (len(rm_host) == 0))
 has_slaves = (not (len(slave_hosts) == 0))
 has_nagios = (not (len(hagios_server_hosts) == 0))
@@ -38,7 +38,8 @@ is_hbase_master = (hostname in hbase_master_hosts)
 is_slave = (hostname in slave_hosts)
 if has_ganglia_server:
     ganglia_server_host = ganglia_server_hosts[0]
-hadoop_tmp_dir = format('/tmp/hadoop-{hdfs_user}')
+if has_namenode:
+    hadoop_tmp_dir = format('/tmp/hadoop-{hdfs_user}')
 hadoop_lib_home = '/usr/lib/hadoop/lib'
 hadoop_conf_dir = '/etc/hadoop/conf'
 hadoop_pid_dir_prefix = config['configurations']['hadoop-env']['hadoop_pid_dir_prefix']
@@ -59,7 +60,7 @@ ambari_db_rca_url = config['hostLevelParams']['ambari_db_rca_url']
 ambari_db_rca_driver = config['hostLevelParams']['ambari_db_rca_driver']
 ambari_db_rca_username = config['hostLevelParams']['ambari_db_rca_username']
 ambari_db_rca_password = config['hostLevelParams']['ambari_db_rca_password']
-if ('rca_enabled' in config['configurations']['mapred-env']):
+if (has_namenode and ('rca_enabled' in config['configurations']['mapred-env'])):
     rca_enabled = config['configurations']['mapred-env']['rca_enabled']
 else:
     rca_enabled = False
@@ -88,7 +89,7 @@ hadoop_libexec_dir = '/usr/lib/hadoop/libexec'
 mapred_log_dir_prefix = hdfs_log_dir_prefix
 mapred_local_dir = '/tmp/hadoop-mapred/mapred/local'
 dfs_hosts = default('/configurations/hdfs-site/dfs.hosts', None)
-rca_properties = format('\n\nlog4j.appender.JHA=org.apache.ambari.log4j.hadoop.mapreduce.jobhistory.JobHistoryAppender\nlog4j.appender.JHA.database={ambari_db_rca_url}\nlog4j.appender.JHA.driver={ambari_db_rca_driver}\nlog4j.appender.JHA.user={ambari_db_rca_username}\nlog4j.appender.JHA.password={ambari_db_rca_password}\n\nlog4j.logger.org.apache.hadoop.mapred.JobHistory$JobHistoryLogger=DEBUG,JHA\nlog4j.additivity.org.apache.hadoop.mapred.JobHistory$JobHistoryLogger=true\n\n')
+rca_properties = format('\nambari.jobhistory.database={ambari_db_rca_url}\nambari.jobhistory.driver={ambari_db_rca_driver}\nambari.jobhistory.user={ambari_db_rca_username}\nambari.jobhistory.password={ambari_db_rca_password}\nambari.jobhistory.logger=${{hadoop.root.logger}}\n\nlog4j.appender.JHA=org.apache.ambari.log4j.hadoop.mapreduce.jobhistory.JobHistoryAppender\nlog4j.appender.JHA.database={ambari_db_rca_url}\nlog4j.appender.JHA.driver={ambari_db_rca_driver}\nlog4j.appender.JHA.user={ambari_db_rca_username}\nlog4j.appender.JHA.password={ambari_db_rca_password}\n\nlog4j.logger.org.apache.hadoop.mapred.JobHistory$JobHistoryLogger=DEBUG,JHA\nlog4j.additivity.org.apache.hadoop.mapred.JobHistory$JobHistoryLogger=true\n\n')
 if (('hdfs-log4j' in config['configurations']) and ('content' in config['configurations']['hdfs-log4j'])):
     log4j_props = config['configurations']['hdfs-log4j']['content']
     if (('mapreduce-log4j' in config['configurations']) and ('content' in config['configurations']['mapreduce-log4j'])):
