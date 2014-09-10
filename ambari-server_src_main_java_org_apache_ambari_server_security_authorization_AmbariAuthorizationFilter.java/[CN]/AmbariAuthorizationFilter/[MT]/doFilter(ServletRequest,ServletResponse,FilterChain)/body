@@ -1,6 +1,7 @@
 {
   HttpServletRequest httpRequest=(HttpServletRequest)request;
   HttpServletResponse httpResponse=(HttpServletResponse)response;
+  String requestURI=httpRequest.getRequestURI();
   SecurityContext context=getSecurityContext();
   Authentication authentication=context.getAuthentication();
   if (authentication == null || !authentication.isAuthenticated()) {
@@ -15,7 +16,6 @@
       if (grantedAuthority instanceof AmbariGrantedAuthority) {
         AmbariGrantedAuthority ambariGrantedAuthority=(AmbariGrantedAuthority)grantedAuthority;
         PrivilegeEntity privilegeEntity=ambariGrantedAuthority.getPrivilegeEntity();
-        String requestURI=httpRequest.getRequestURI();
         Integer permissionId=privilegeEntity.getPermission().getId();
         if (permissionId.equals(PermissionEntity.AMBARI_ADMIN_PERMISSION)) {
           authorized=true;
@@ -41,7 +41,11 @@
         }
       }
     }
-    if (!authorized && !httpRequest.getMethod().equals("GET")) {
+    if (!authorized && requestURI.matches(ViewInstanceEntity.VIEWS_CONTEXT_PATH_PATTERN)) {
+      final ViewInstanceVersionDTO dto=ViewInstanceEntity.parseContextPath(requestURI);
+      authorized=ViewRegistry.getInstance().checkPermission(dto.getViewName(),dto.getVersion(),dto.getInstanceName(),true);
+    }
+    if (!authorized && (!httpRequest.getMethod().equals("GET") || requestURI.matches("/views.*"))) {
       httpResponse.setHeader("WWW-Authenticate","Basic realm=\"" + realm + "\"");
       httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN,"You do not have permissions to access this resource.");
       httpResponse.flushBuffer();

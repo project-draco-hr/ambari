@@ -1,0 +1,24 @@
+{
+  final Set<LdapGroupDto> groups=new HashSet<LdapGroupDto>();
+  final LdapTemplate ldapTemplate=loadLdapTemplate();
+  final EqualsFilter equalsFilter=new EqualsFilter("objectClass",ldapServerProperties.getGroupObjectClass());
+  String baseDn=ldapServerProperties.getBaseDN();
+  ldapTemplate.search(baseDn,equalsFilter.encode(),new ContextMapper(){
+    @Override public Object mapFromContext(    Object ctx){
+      final DirContextAdapter adapter=(DirContextAdapter)ctx;
+      final LdapGroupDto group=new LdapGroupDto();
+      final String groupNameAttribute=adapter.getStringAttribute(ldapServerProperties.getGroupNamingAttr());
+      group.setGroupName(groupNameAttribute.toLowerCase());
+      final String[] uniqueMembers=adapter.getStringAttributes(ldapServerProperties.getGroupMembershipAttr());
+      if (uniqueMembers != null) {
+        for (        String uniqueMember : uniqueMembers) {
+          group.getMemberAttributes().add(uniqueMember.toLowerCase());
+        }
+      }
+      groups.add(group);
+      return null;
+    }
+  }
+);
+  return groups;
+}
