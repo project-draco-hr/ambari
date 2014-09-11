@@ -1,8 +1,21 @@
-def check_database_name_property():
+def check_database_name_property(args, upgrade=False):
+    '\n  :param upgrade: If Ambari is being upgraded.\n  :return:\n  '
     properties = get_ambari_properties()
     if (properties == (-1)):
         print_error_msg('Error getting ambari properties')
         return (-1)
+    version = get_ambari_version(properties)
+    if (upgrade and (compare_versions(version, '1.7.0') >= 0)):
+        expected_db_name = properties[JDBC_DATABASE_NAME_PROPERTY]
+        if ((expected_db_name is None) or (expected_db_name == '')):
+            db_name = properties[JDBC_DATABASE_PROPERTY]
+            if db_name:
+                write_property(JDBC_DATABASE_NAME_PROPERTY, db_name)
+                remove_property(JDBC_DATABASE_PROPERTY)
+                properties = get_ambari_properties()
+            else:
+                err = ('DB Name property not set in config file.\n' + SETUP_OR_UPGRADE_MSG)
+                raise FatalException((-1), ('Upgrade to version %s cannot transform config file.' % str(version)))
     dbname = properties[JDBC_DATABASE_NAME_PROPERTY]
     if ((dbname is None) or (dbname == '')):
         err = ('DB Name property not set in config file.\n' + SETUP_OR_UPGRADE_MSG)
