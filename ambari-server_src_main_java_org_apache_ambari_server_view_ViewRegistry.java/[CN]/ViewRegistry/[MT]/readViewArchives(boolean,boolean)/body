@@ -1,0 +1,51 @@
+{
+  try {
+    File viewDir=configuration.getViewsDir();
+    String extractedArchivesPath=viewDir.getAbsolutePath() + File.separator + EXTRACTED_ARCHIVES_DIR;
+    if (extractor.ensureExtractedArchiveDirectory(extractedArchivesPath)) {
+      File[] files=viewDir.listFiles();
+      if (files != null) {
+        Set<Runnable> extractionRunnables=new HashSet<Runnable>();
+        for (        final File archiveFile : files) {
+          if (!archiveFile.isDirectory()) {
+            final ViewConfig viewConfig=archiveUtility.getViewConfigFromArchive(archiveFile);
+            String commonName=viewConfig.getName();
+            String version=viewConfig.getVersion();
+            String viewName=ViewEntity.getViewName(commonName,version);
+            final String extractedArchiveDirPath=extractedArchivesPath + File.separator + viewName;
+            final File extractedArchiveDirFile=archiveUtility.getFile(extractedArchiveDirPath);
+            final ViewEntity viewDefinition=new ViewEntity(viewConfig,configuration,extractedArchiveDirPath);
+            boolean systemView=viewDefinition.isSystem();
+            if (!systemOnly || systemView) {
+              addDefinition(viewDefinition);
+              if (systemView || !useExecutor || extractedArchiveDirFile.exists()) {
+                readViewArchive(viewDefinition,archiveFile,extractedArchiveDirFile,viewConfig);
+              }
+ else {
+                extractionRunnables.add(new Runnable(){
+                  @Override public void run(){
+                    readViewArchive(viewDefinition,archiveFile,extractedArchiveDirFile,viewConfig);
+                  }
+                }
+);
+              }
+            }
+          }
+        }
+        if (useExecutor && extractionRunnables.size() > 0) {
+          final ExecutorService executorService=getExecutorService(configuration);
+          for (          Runnable runnable : extractionRunnables) {
+            executorService.submit(runnable);
+          }
+        }
+        removeUndeployedViews();
+      }
+    }
+ else {
+      LOG.error("Could not create extracted view archive directory " + extractedArchivesPath + ".");
+    }
+  }
+ catch (  Exception e) {
+    LOG.error("Caught exception reading view archives.",e);
+  }
+}
