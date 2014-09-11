@@ -1,0 +1,32 @@
+{
+  EasyMockSupport mockSupport=new EasyMockSupport();
+  AmbariManagementController mockMgmtController=mockSupport.createMock(AmbariManagementController.class);
+  expect(mockMgmtController.getStackServices(isA(Set.class))).andReturn(Collections.<StackServiceResponse>emptySet());
+  final DependencyInfo yarnClientDependency=new TestDependencyInfo("YARN/YARN_CLIENT");
+  final DependencyInfo tezClientDependency=new TestDependencyInfo("TEZ/TEZ_CLIENT");
+  final DependencyInfo mapReduceTwoClientDependency=new TestDependencyInfo("YARN/MAPREDUCE2_CLIENT");
+  final DependencyInfo oozieClientDependency=new TestDependencyInfo("OOZIE/OOZIE_CLIENT");
+  mockSupport.replayAll();
+  BaseBlueprintProcessor.Stack testStack=new BaseBlueprintProcessor.Stack("HDP","2.1",mockMgmtController){
+    @Override public Collection<DependencyInfo> getDependenciesForComponent(    String component){
+      if (component.equals("NAGIOS_SERVER")) {
+        Set<DependencyInfo> setOfDependencies=new HashSet<DependencyInfo>();
+        setOfDependencies.add(yarnClientDependency);
+        setOfDependencies.add(tezClientDependency);
+        setOfDependencies.add(mapReduceTwoClientDependency);
+        setOfDependencies.add(oozieClientDependency);
+        return setOfDependencies;
+      }
+      return Collections.emptySet();
+    }
+  }
+;
+  assertEquals("Initial conditional dependency map should be empty",0,testStack.getDependencyConditionalServiceMap().size());
+  testStack.registerConditionalDependencies();
+  assertEquals("Set of conditional service mappings is an incorrect size",4,testStack.getDependencyConditionalServiceMap().size());
+  assertEquals("Incorrect service dependency for YARN_CLIENT","YARN",testStack.getDependencyConditionalServiceMap().get(yarnClientDependency));
+  assertEquals("Incorrect service dependency for TEZ_CLIENT","TEZ",testStack.getDependencyConditionalServiceMap().get(tezClientDependency));
+  assertEquals("Incorrect service dependency for MAPREDUCE2_CLIENT","MAPREDUCE2",testStack.getDependencyConditionalServiceMap().get(mapReduceTwoClientDependency));
+  assertEquals("Incorrect service dependency for OOZIE_CLIENT","OOZIE",testStack.getDependencyConditionalServiceMap().get(oozieClientDependency));
+  mockSupport.verifyAll();
+}
