@@ -1,0 +1,65 @@
+{
+  final ConfigGroupConfigMappingDAO confGroupConfMappingDAO=injector.getInstance(ConfigGroupConfigMappingDAO.class);
+  ConfigHelper configHelper=injector.getInstance(ConfigHelper.class);
+  final ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  List<ConfigGroupConfigMappingEntity> configGroupConfigMappingEntities=confGroupConfMappingDAO.findAll();
+  List<ConfigGroupConfigMappingEntity> configGroupsWithGlobalConfigs=new ArrayList<ConfigGroupConfigMappingEntity>();
+  Type type=new TypeToken<Map<String,String>>(){
+  }
+.getType();
+  for (  ConfigGroupConfigMappingEntity entity : configGroupConfigMappingEntities) {
+    if (entity.getConfigType().equals(Configuration.GLOBAL_CONFIG_TAG)) {
+      configGroupsWithGlobalConfigs.add(entity);
+    }
+  }
+  for (  ConfigGroupConfigMappingEntity entity : configGroupsWithGlobalConfigs) {
+    String configData=entity.getClusterConfigEntity().getData();
+    Map<String,String> properties=StageUtils.getGson().fromJson(configData,type);
+    Cluster cluster=ambariManagementController.getClusters().getClusterById(entity.getClusterId());
+    HashMap<String,HashMap<String,String>> configs=new HashMap<String,HashMap<String,String>>();
+    for (    Entry<String,String> property : properties.entrySet()) {
+      Set<String> configTypes=configHelper.findConfigTypesByPropertyName(cluster.getCurrentStackVersion(),property.getKey(),cluster.getClusterName());
+      String configType=configTypes.iterator().next();
+      if (configs.containsKey(configType)) {
+        HashMap<String,String> config=configs.get(configType);
+        config.put(property.getKey(),property.getValue());
+      }
+ else {
+        HashMap<String,String> config=new HashMap<String,String>();
+        config.put(property.getKey(),property.getValue());
+        configs.put(configType,config);
+      }
+    }
+    for (    Entry<String,HashMap<String,String>> config : configs.entrySet()) {
+      String tag;
+      if (cluster.getConfigsByType(config.getKey()) == null) {
+        tag="version1";
+      }
+ else {
+        tag="version" + System.currentTimeMillis();
+      }
+      ClusterConfigEntity clusterConfigEntity=new ClusterConfigEntity();
+      clusterConfigEntity.setClusterEntity(entity.getClusterConfigEntity().getClusterEntity());
+      clusterConfigEntity.setClusterId(cluster.getClusterId());
+      clusterConfigEntity.setType(config.getKey());
+      clusterConfigEntity.setVersion(cluster.getNextConfigVersion(config.getKey()));
+      clusterConfigEntity.setTag(tag);
+      clusterConfigEntity.setTimestamp(new Date().getTime());
+      clusterConfigEntity.setData(StageUtils.getGson().toJson(config.getValue()));
+      clusterDAO.createConfig(clusterConfigEntity);
+      ConfigGroupConfigMappingEntity configGroupConfigMappingEntity=new ConfigGroupConfigMappingEntity();
+      configGroupConfigMappingEntity.setTimestamp(System.currentTimeMillis());
+      configGroupConfigMappingEntity.setClusterId(entity.getClusterId());
+      configGroupConfigMappingEntity.setClusterConfigEntity(clusterConfigEntity);
+      configGroupConfigMappingEntity.setConfigGroupEntity(entity.getConfigGroupEntity());
+      configGroupConfigMappingEntity.setConfigGroupId(entity.getConfigGroupId());
+      configGroupConfigMappingEntity.setConfigType(config.getKey());
+      configGroupConfigMappingEntity.setVersionTag(clusterConfigEntity.getTag());
+      confGroupConfMappingDAO.create(configGroupConfigMappingEntity);
+    }
+  }
+  for (  ConfigGroupConfigMappingEntity entity : configGroupsWithGlobalConfigs) {
+    confGroupConfMappingDAO.remove(entity);
+  }
+}
