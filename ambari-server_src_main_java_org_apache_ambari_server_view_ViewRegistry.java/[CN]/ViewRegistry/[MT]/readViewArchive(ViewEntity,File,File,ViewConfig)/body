@@ -1,0 +1,27 @@
+{
+  setViewStatus(viewDefinition,ViewEntity.ViewStatus.LOADING,"Loading " + extractedArchiveDirFile + ".");
+  String extractedArchiveDirPath=extractedArchiveDirFile.getAbsolutePath();
+  try {
+    ClassLoader cl=extractor.extractViewArchive(viewDefinition,archiveFile,extractedArchiveDirFile);
+    viewConfig=archiveUtility.getViewConfigFromExtractedArchive(extractedArchiveDirPath);
+    setupViewDefinition(viewDefinition,viewConfig,cl);
+    Set<ViewInstanceEntity> instanceDefinitions=new HashSet<ViewInstanceEntity>();
+    for (    InstanceConfig instanceConfig : viewConfig.getInstances()) {
+      ViewInstanceEntity instanceEntity=createViewInstanceDefinition(viewConfig,viewDefinition,instanceConfig);
+      instanceEntity.setXmlDriven(true);
+      instanceDefinitions.add(instanceEntity);
+    }
+    syncView(viewDefinition,instanceDefinitions);
+    onDeploy(viewDefinition);
+    for (    ViewInstanceEntity instanceEntity : instanceDefinitions) {
+      addInstanceDefinition(viewDefinition,instanceEntity);
+      handlerList.addViewInstance(instanceEntity);
+    }
+    setViewStatus(viewDefinition,ViewEntity.ViewStatus.LOADED,"Loaded " + extractedArchiveDirPath + ".");
+  }
+ catch (  Exception e) {
+    String msg="Caught exception loading view " + viewDefinition.getViewName();
+    setViewStatus(viewDefinition,ViewEntity.ViewStatus.ERROR,msg + " : " + e.getMessage());
+    LOG.error(msg,e);
+  }
+}

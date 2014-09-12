@@ -1,5 +1,4 @@
 {
-  ViewRegistry registry=getRegistry();
   File viewDir=createNiceMock(File.class);
   File extractedArchiveDir=createNiceMock(File.class);
   File viewArchive=createNiceMock(File.class);
@@ -40,6 +39,9 @@
   jarFiles.put(viewArchive,viewJarFile);
   expect(configuration.getViewsDir()).andReturn(viewDir);
   expect(viewDir.getAbsolutePath()).andReturn("/var/lib/ambari-server/resources/views");
+  expect(configuration.getViewExtractionThreadPoolCoreSize()).andReturn(2).anyTimes();
+  expect(configuration.getViewExtractionThreadPoolMaxSize()).andReturn(3).anyTimes();
+  expect(configuration.getViewExtractionThreadPoolTimeout()).andReturn(10000L).anyTimes();
   expect(viewDir.listFiles()).andReturn(new File[]{viewArchive});
   expect(viewArchive.isDirectory()).andReturn(false);
   expect(viewArchive.getAbsolutePath()).andReturn("/var/lib/ambari-server/resources/views/work/MY_VIEW{1.0.0}");
@@ -70,7 +72,8 @@
   expect(viewDAO.findAll()).andReturn(Collections.<ViewEntity>emptyList());
   expect(viewDAO.findByName("MY_VIEW{1.0.0}")).andThrow(new IllegalArgumentException("Expected exception."));
   replay(configuration,viewDir,extractedArchiveDir,viewArchive,archiveDir,entryFile,classesDir,libDir,fileEntry,viewJarFile,enumeration,jarEntry,is,fos,viewDAO);
-  registry.setHelper(new TestViewRegistryHelper(viewConfigs,files,outputStreams,jarFiles));
+  TestViewArchiveUtility archiveUtility=new TestViewArchiveUtility(viewConfigs,files,outputStreams,jarFiles);
+  ViewRegistry registry=getRegistry(viewDAO,viewInstanceDAO,userDAO,memberDAO,privilegeDAO,resourceDAO,resourceTypeDAO,securityHelper,handlerList,null,archiveUtility);
   registry.readViewArchives();
   ViewEntity view=null;
   long timeout=System.currentTimeMillis() + 10000L;
