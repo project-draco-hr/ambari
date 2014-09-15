@@ -1,24 +1,16 @@
 {
-  ClassLoader currentClassLoader=Thread.currentThread().getContextClassLoader();
-  Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-  try {
-    Set<String> properties=new HashSet<String>();
-    properties.add("id");
-    properties.add("name");
-    final SliderApp sliderApp=getSliderApp(appId,properties);
-    if (sliderApp == null)     throw new ApplicationNotFoundException(appId);
-    ApplicationId applicationId=UserGroupInformation.getBestUGI(null,"yarn").doAs(new PrivilegedExceptionAction<ApplicationId>(){
-      public ApplicationId run() throws IOException, YarnException {
-        SliderClient sliderClient=getSliderClient();
-        ActionThawArgs thawArgs=new ActionThawArgs();
-        sliderClient.actionThaw(sliderApp.getName(),thawArgs);
-        return sliderClient.applicationId;
-      }
+  ApplicationId applicationId=invokeSliderClientRunnable(new SliderClientContextRunnable<ApplicationId>(){
+    @Override public ApplicationId run(    SliderClient sliderClient) throws YarnException, IOException, InterruptedException {
+      Set<String> properties=new HashSet<String>();
+      properties.add("id");
+      properties.add("name");
+      final SliderApp sliderApp=getSliderApp(appId,properties);
+      if (sliderApp == null)       throw new ApplicationNotFoundException(appId);
+      ActionThawArgs thawArgs=new ActionThawArgs();
+      sliderClient.actionThaw(sliderApp.getName(),thawArgs);
+      return sliderClient.applicationId;
     }
+  }
 );
-    logger.debug("Slider app has been thawed - " + applicationId.toString());
-  }
-  finally {
-    Thread.currentThread().setContextClassLoader(currentClassLoader);
-  }
+  logger.info("Thawed Slider App [" + appId + "] with response: "+ applicationId.toString());
 }

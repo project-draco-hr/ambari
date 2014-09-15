@@ -1,24 +1,16 @@
 {
-  ClassLoader currentClassLoader=Thread.currentThread().getContextClassLoader();
-  Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-  try {
-    Set<String> properties=new HashSet<String>();
-    properties.add("id");
-    properties.add("name");
-    final SliderApp sliderApp=getSliderApp(appId,properties);
-    if (sliderApp == null)     throw new ApplicationNotFoundException(appId);
-    ApplicationId applicationId=UserGroupInformation.getBestUGI(null,"yarn").doAs(new PrivilegedExceptionAction<ApplicationId>(){
-      public ApplicationId run() throws IOException, YarnException {
-        SliderClient sliderClient=getSliderClient();
-        ActionFreezeArgs freezeArgs=new ActionFreezeArgs();
-        sliderClient.actionFreeze(sliderApp.getName(),freezeArgs);
-        return sliderClient.applicationId;
-      }
+  ApplicationId applicationId=invokeSliderClientRunnable(new SliderClientContextRunnable<ApplicationId>(){
+    @Override public ApplicationId run(    SliderClient sliderClient) throws YarnException, IOException, InterruptedException {
+      Set<String> properties=new HashSet<String>();
+      properties.add("id");
+      properties.add("name");
+      final SliderApp sliderApp=getSliderApp(appId,properties);
+      if (sliderApp == null)       throw new ApplicationNotFoundException(appId);
+      ActionFreezeArgs freezeArgs=new ActionFreezeArgs();
+      sliderClient.actionFreeze(sliderApp.getName(),freezeArgs);
+      return sliderClient.applicationId;
     }
+  }
 );
-    logger.debug("Slider app has been frozen - " + applicationId.toString());
-  }
-  finally {
-    Thread.currentThread().setContextClassLoader(currentClassLoader);
-  }
+  logger.info("Frozen Slider App [" + appId + "] with response: "+ applicationId.toString());
 }
