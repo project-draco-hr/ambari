@@ -1,0 +1,30 @@
+{
+  List<AlertNoticeEntity> notices=dispatchDao.findAllNotices();
+  assertEquals(0,notices.size());
+  List<AlertDefinitionEntity> definitions=definitionDao.findAll(clusterId);
+  AlertDefinitionEntity definition=definitions.get(0);
+  AlertHistoryEntity history=new AlertHistoryEntity();
+  history.setServiceName(definition.getServiceName());
+  history.setClusterId(clusterId);
+  history.setAlertDefinition(definition);
+  history.setAlertLabel(definition.getDefinitionName());
+  history.setAlertText(definition.getDefinitionName());
+  history.setAlertTimestamp(System.currentTimeMillis());
+  history.setHostName(HOST1);
+  history.setAlertState(AlertState.OK);
+  dao.create(history);
+  List<AlertHistoryEntity> histories=dao.findAll(clusterId);
+  assertEquals(1,histories.size());
+  AlertTargetEntity target=helper.createAlertTarget();
+  Set<AlertTargetEntity> targets=new HashSet<AlertTargetEntity>();
+  targets.add(target);
+  AlertGroupEntity group=helper.createAlertGroup(clusterId,targets);
+  group.addAlertDefinition(definitions.get(0));
+  dispatchDao.merge(group);
+  Alert alert1=new Alert(ALERT_DEFINITION,null,SERVICE,COMPONENT,HOST1,AlertState.OK);
+  AlertStateChangeEvent event=new AlertStateChangeEvent(clusterId,alert1,histories.get(0),AlertState.CRITICAL);
+  AlertStateChangedListener listener=injector.getInstance(AlertStateChangedListener.class);
+  listener.onAlertEvent(event);
+  notices=dispatchDao.findAllNotices();
+  assertEquals(1,notices.size());
+}

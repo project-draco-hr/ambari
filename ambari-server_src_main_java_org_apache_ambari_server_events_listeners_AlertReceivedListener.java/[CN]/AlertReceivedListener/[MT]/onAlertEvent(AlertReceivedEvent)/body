@@ -1,0 +1,29 @@
+{
+  long clusterId=event.getClusterId();
+  Alert alert=event.getAlert();
+  AlertCurrentEntity current=m_alertsDao.findCurrentByHostAndName(clusterId,alert.getHost(),alert.getName());
+  if (null == current) {
+    AlertDefinitionEntity definition=m_definitionDao.findByName(clusterId,alert.getName());
+    AlertHistoryEntity history=createHistory(clusterId,definition,alert);
+    current=new AlertCurrentEntity();
+    current.setAlertHistory(history);
+    current.setLatestTimestamp(Long.valueOf(alert.getTimestamp()));
+    current.setOriginalTimestamp(Long.valueOf(alert.getTimestamp()));
+    m_alertsDao.create(current);
+  }
+ else   if (alert.getState() == current.getAlertHistory().getAlertState()) {
+    current.setLatestTimestamp(Long.valueOf(alert.getTimestamp()));
+    current.setLatestText(alert.getText());
+    m_alertsDao.merge(current);
+  }
+ else {
+    AlertState oldState=current.getAlertHistory().getAlertState();
+    AlertHistoryEntity history=createHistory(clusterId,current.getAlertHistory().getAlertDefinition(),alert);
+    current.setAlertHistory(history);
+    current.setLatestTimestamp(Long.valueOf(alert.getTimestamp()));
+    current.setOriginalTimestamp(Long.valueOf(alert.getTimestamp()));
+    m_alertsDao.merge(current);
+    AlertStateChangeEvent alertChangedEvent=new AlertStateChangeEvent(event.getClusterId(),event.getAlert(),history,oldState);
+    m_alertEventPublisher.publish(alertChangedEvent);
+  }
+}
