@@ -1,0 +1,35 @@
+{
+  final String expectedHostName="c6401.apache.ambari.org";
+  final String expectedHostNameTwo="c6402.ambari.apache.org";
+  final String expectedHostGroupName="host_group_1";
+  final String expectedHostGroupNameTwo="host_group_2";
+  EasyMockSupport mockSupport=new EasyMockSupport();
+  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
+  HostGroup mockHostGroupTwo=mockSupport.createMock(HostGroup.class);
+  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName,"serverTwo")).atLeastOnce();
+  expect(mockHostGroupTwo.getHostInfo()).andReturn(Arrays.asList(expectedHostNameTwo,"serverTwo")).atLeastOnce();
+  expect(mockHostGroupOne.getName()).andReturn(expectedHostGroupName).atLeastOnce();
+  expect(mockHostGroupTwo.getName()).andReturn(expectedHostGroupNameTwo).atLeastOnce();
+  mockSupport.replayAll();
+  Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
+  Map<String,String> oozieSiteProperties=new HashMap<String,String>();
+  Map<String,String> oozieEnvProperties=new HashMap<String,String>();
+  Map<String,String> coreSiteProperties=new HashMap<String,String>();
+  configProperties.put("oozie-site",oozieSiteProperties);
+  configProperties.put("oozie-env",oozieEnvProperties);
+  configProperties.put("hive-env",oozieEnvProperties);
+  configProperties.put("core-site",coreSiteProperties);
+  oozieSiteProperties.put("oozie.base.url",expectedHostName);
+  oozieSiteProperties.put("oozie.authentication.kerberos.principal",expectedHostName);
+  oozieSiteProperties.put("oozie.service.HadoopAccessorService.kerberos.principal",expectedHostName);
+  oozieEnvProperties.put("oozie_hostname",expectedHostName);
+  coreSiteProperties.put("hadoop.proxyuser.oozie.hosts",expectedHostName + "," + expectedHostNameTwo);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
+  configProcessor.doUpdateForBlueprintExport(Arrays.asList(mockHostGroupOne,mockHostGroupTwo));
+  assertEquals("oozie property not exported correctly",createExportedHostName(expectedHostGroupName),oozieSiteProperties.get("oozie.base.url"));
+  assertEquals("oozie property not exported correctly",createExportedHostName(expectedHostGroupName),oozieSiteProperties.get("oozie.authentication.kerberos.principal"));
+  assertEquals("oozie property not exported correctly",createExportedHostName(expectedHostGroupName),oozieSiteProperties.get("oozie.service.HadoopAccessorService.kerberos.principal"));
+  assertEquals("oozie property not exported correctly",createExportedHostName(expectedHostGroupName),oozieEnvProperties.get("oozie_hostname"));
+  assertEquals("oozie property not exported correctly",createExportedHostName(expectedHostGroupName) + "," + createExportedHostName(expectedHostGroupNameTwo),coreSiteProperties.get("hadoop.proxyuser.oozie.hosts"));
+  mockSupport.verifyAll();
+}
