@@ -3,7 +3,25 @@ def extract_views():
     if (jdk_path is None):
         print_error_msg(('No JDK found, please run the "setup" command to install a JDK automatically or install any JDK manually to ' + JDK_INSTALL_DIR))
         return 1
-    command = VIEW_EXTRACT_CMD.format(jdk_path, get_conf_dir(), get_ambari_classpath())
-    (retcode, stdout, stderr) = run_os_command(command)
-    print_info_msg(('Return code from view extraction: ' + str(retcode)))
-    return retcode
+    properties = get_ambari_properties()
+    if (properties == (-1)):
+        print_error_msg('Error getting ambari properties')
+        return (-1)
+    if (not (VIEWS_DIR_PROPERTY in properties.keys())):
+        vdir = DEFAULT_VIEWS_DIR
+    else:
+        vdir = properties.get_property(VIEWS_DIR_PROPERTY)
+    files = [f for f in os.listdir(vdir) if os.path.isfile(os.path.join(vdir, f))]
+    for f in files:
+        command = VIEW_EXTRACT_CMD.format(jdk_path, get_conf_dir(), get_ambari_classpath(), os.path.join(vdir, f))
+        (retcode, stdout, stderr) = run_os_command(command)
+        if (retcode == 0):
+            sys.stdout.write((f + '\n'))
+        elif (retcode == 2):
+            sys.stdout.write((('Error extracting ' + f) + '\n'))
+        else:
+            sys.stdout.write('.')
+            sys.stdout.flush()
+        print_info_msg(((('Return code from extraction of view archive ' + f) + ': ') + str(retcode)))
+    sys.stdout.write('\n')
+    return 0
