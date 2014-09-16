@@ -37,24 +37,22 @@ synchronized (createAppCounter) {
     createArgs.template=appConfigJsonFile;
     createArgs.resources=resourcesJsonFile;
     createArgs.image=new Path(hdfsLocation + "/user/yarn/agent/slider-agent.tar.gz");
-    ClassLoader currentClassLoader=Thread.currentThread().getContextClassLoader();
-    Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-    try {
-      ApplicationId applicationId=UserGroupInformation.getBestUGI(null,"yarn").doAs(new PrivilegedExceptionAction<ApplicationId>(){
-        public ApplicationId run() throws IOException, YarnException {
-          SliderClient sliderClient=getSliderClient();
-          sliderClient.actionCreate(appName,createArgs);
-          return sliderClient.applicationId;
+    final ActionInstallPackageArgs installArgs=new ActionInstallPackageArgs();
+    installArgs.name=appName;
+    installArgs.packageURI=getAppsFolderPath() + "/" + configs.get("application.def").getAsString();
+    installArgs.replacePkg=true;
+    return invokeSliderClientRunnable(new SliderClientContextRunnable<String>(){
+      @Override public String run(      SliderClient sliderClient) throws YarnException, IOException, InterruptedException {
+        sliderClient.actionInstallPkg(installArgs);
+        sliderClient.actionCreate(appName,createArgs);
+        ApplicationId applicationId=sliderClient.applicationId;
+        if (applicationId != null) {
+          return getApplicationIdString(applicationId);
         }
+        return null;
       }
+    }
 );
-      if (applicationId != null) {
-        return getApplicationIdString(applicationId);
-      }
-    }
-  finally {
-      Thread.currentThread().setContextClassLoader(currentClassLoader);
-    }
   }
   return null;
 }
