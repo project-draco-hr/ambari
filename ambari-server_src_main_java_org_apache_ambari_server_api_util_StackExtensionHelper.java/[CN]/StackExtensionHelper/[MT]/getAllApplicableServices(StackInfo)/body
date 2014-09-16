@@ -6,17 +6,29 @@
   parents.addFirst(stackInfo);
   ListIterator<StackInfo> lt=parents.listIterator(parents.size());
   Map<String,ServiceInfo> serviceInfoMap=new HashMap<String,ServiceInfo>();
+  List<ServiceInfo> serviceInfoList=null;
+  StackInfo parentStack=null;
   while (lt.hasPrevious()) {
-    StackInfo parentStack=lt.previous();
-    List<ServiceInfo> serviceInfoList=parentStack.getServices();
-    mergeStacks(parentStack,stackInfo);
+    if (parentStack == null) {
+      parentStack=lt.previous();
+      serviceInfoList=parentStack.getServices();
+      for (      ServiceInfo service : serviceInfoList) {
+        if (!service.isDeleted()) {
+          serviceInfoMap.put(service.getName(),service);
+        }
+      }
+      continue;
+    }
+    StackInfo currentStackInfo=lt.previous();
+    serviceInfoList=currentStackInfo.getServices();
+    mergeStacks(parentStack,currentStackInfo);
     for (    ServiceInfo service : serviceInfoList) {
       ServiceInfo existingService=serviceInfoMap.get(service.getName());
       if (service.isDeleted()) {
         serviceInfoMap.remove(service.getName());
         continue;
       }
-      if (existingService == null) {
+      if (existingService == null && !service.isDeleted()) {
         serviceInfoMap.put(service.getName(),service);
       }
  else {
@@ -37,6 +49,7 @@
         actionMetadata.addServiceCheckAction(serviceInfo.getName());
       }
     }
+    parentStack=currentStackInfo;
   }
   return new ArrayList<ServiceInfo>(serviceInfoMap.values());
 }
