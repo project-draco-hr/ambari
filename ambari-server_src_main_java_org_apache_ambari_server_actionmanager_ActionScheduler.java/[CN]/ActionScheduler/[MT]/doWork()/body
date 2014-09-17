@@ -16,10 +16,19 @@
     }
     int i_stage=0;
     stages=filterParallelPerHostStages(stages);
+    boolean exclusiveRequestIsGoing=false;
     for (    Stage s : stages) {
       i_stage++;
       long requestId=s.getRequestId();
       LOG.debug("==> STAGE_i = " + i_stage + "(requestId="+ requestId+ ",StageId="+ s.getStageId()+ ")");
+      Request request=db.getRequest(requestId);
+      if (request.isExclusive()) {
+        if (runningRequestIds.size() > 0) {
+          LOG.debug("Stage requires exclusive execution, but other requests are already executing. Stopping for now");
+          break;
+        }
+        exclusiveRequestIsGoing=true;
+      }
       if (runningRequestIds.contains(requestId)) {
         LOG.debug("==> We don't want to process different stages from the same request in parallel");
         continue;
@@ -107,6 +116,10 @@
       LOG.debug("==> Finished.");
       if (!configuration.getParallelStageExecution()) {
         return;
+      }
+      if (exclusiveRequestIsGoing) {
+        LOG.debug("Stage requires exclusive execution, skipping all executing any further stages");
+        break;
       }
     }
     requestsInProgress.retainAll(runningRequestIds);
