@@ -58,17 +58,17 @@ catch (    IOException e) {
           if (appMasterData == null) {
             appMasterData=sliderAppClient.getAppMasterData();
           }
-          if ("urls".equals(property.toLowerCase())) {
+          if (appMasterData != null && "urls".equals(property.toLowerCase())) {
             if (quickLinks.isEmpty()) {
               quickLinks=sliderAppClient.getQuickLinks(appMasterData.publisherUrl);
             }
             app.setUrls(quickLinks);
           }
- else           if ("configs".equals(property.toLowerCase())) {
+ else           if (appMasterData != null && "configs".equals(property.toLowerCase())) {
             Map<String,Map<String,String>> configs=sliderAppClient.getConfigs(appMasterData.publisherUrl);
             app.setConfigs(configs);
           }
- else           if ("jmx".equals(property.toLowerCase())) {
+ else           if (appMasterData != null && "jmx".equals(property.toLowerCase())) {
             if (quickLinks.isEmpty()) {
               quickLinks=sliderAppClient.getQuickLinks(appMasterData.publisherUrl);
             }
@@ -93,7 +93,6 @@ catch (    IOException e) {
           }
  else           if ("components".equals(property.toLowerCase())) {
             try {
-              System.setProperty(SliderKeys.HADOOP_USER_NAME,"yarn");
               ClusterDescription description=sliderClient.getClusterDescription(yarnApp.getName());
               if (description != null && description.status != null && !description.status.isEmpty()) {
                 Map<String,SliderAppComponent> componentTypeMap=new HashMap<String,SliderAppComponent>();
@@ -125,8 +124,15 @@ catch (    IOException e) {
                       }
                     }
                     appComponent.setInstanceCount(appComponent.getActiveContainers().size() + appComponent.getCompletedContainers().size());
+                    if (description.statistics != null && description.statistics.containsKey(componentEntry.getKey())) {
+                      Map<String,Integer> statisticsMap=description.statistics.get(componentEntry.getKey());
+                      if (statisticsMap.containsKey("containers.desired")) {
+                        appComponent.setInstanceCount(statisticsMap.get("containers.desired"));
+                      }
+                    }
                   }
                 }
+                app.setAlerts(sliderAlerts.generateComponentsAlerts(componentTypeMap,app.getType()));
                 app.setComponents(componentTypeMap);
               }
             }
