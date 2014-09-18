@@ -1,0 +1,35 @@
+{
+  List<AlertNoticeEntity> pending=m_dao.findPendingNotices();
+  if (pending.size() == 0) {
+    return;
+  }
+  LOG.info("There are {} pending alert notices about to be dispatched..." + pending.size());
+  Map<AlertTargetEntity,List<AlertNoticeEntity>> aggregateMap=new HashMap<AlertTargetEntity,List<AlertNoticeEntity>>(pending.size());
+  for (  AlertNoticeEntity notice : pending) {
+    AlertTargetEntity target=notice.getAlertTarget();
+    List<AlertNoticeEntity> notices=aggregateMap.get(target);
+    if (null == notices) {
+      notices=new ArrayList<AlertNoticeEntity>();
+      aggregateMap.put(target,notices);
+    }
+    notices.add(notice);
+  }
+  Set<AlertTargetEntity> targets=aggregateMap.keySet();
+  for (  AlertTargetEntity target : targets) {
+    List<AlertNoticeEntity> notices=aggregateMap.get(target);
+    if (null == notices || notices.size() == 0) {
+      continue;
+    }
+    Notification notification=new Notification();
+    notification.Subject=target.getTargetName();
+    notification.Body=target.getDescription();
+    notification.Callback=new AlertNoticeDispatchCallback();
+    notification.CallbackIds=new ArrayList<String>(notices.size());
+    for (    AlertNoticeEntity notice : notices) {
+      notification.CallbackIds.add(notice.getUuid());
+    }
+    NotificationDispatcher dispatcher=m_dispatchFactory.getDispatcher(target.getNotificationType());
+    DispatchRunnable runnable=new DispatchRunnable(dispatcher,notification);
+    m_executor.execute(runnable);
+  }
+}
