@@ -1,0 +1,37 @@
+{
+  Set<String> externalMembers=new HashSet<String>();
+  for (  String memberAttribute : group.getMemberAttributes()) {
+    LdapUserDto groupMember=getLdapUserByMemberAttr(memberAttribute);
+    if (groupMember != null) {
+      externalMembers.add(groupMember.getUserName());
+    }
+  }
+  String groupName=group.getGroupName();
+  final Map<String,User> internalMembers=getInternalMembers(groupName);
+  for (  String externalMember : externalMembers) {
+    if (internalUsers.containsKey(externalMember)) {
+      final User user=internalUsers.get(externalMember);
+      if (user == null) {
+        if (!internalMembers.containsKey(externalMember)) {
+          batchInfo.getMembershipToAdd().add(new LdapUserGroupMemberDto(groupName,externalMember));
+        }
+        continue;
+      }
+      if (!user.isLdapUser()) {
+        batchInfo.getUsersToBecomeLdap().add(externalMember);
+      }
+      if (!internalMembers.containsKey(externalMember)) {
+        batchInfo.getMembershipToAdd().add(new LdapUserGroupMemberDto(groupName,externalMember));
+      }
+      internalMembers.remove(externalMember);
+    }
+ else {
+      batchInfo.getUsersToBeCreated().add(externalMember);
+      batchInfo.getMembershipToAdd().add(new LdapUserGroupMemberDto(groupName,externalMember));
+    }
+  }
+  for (  Entry<String,User> userToBeUnsynced : internalMembers.entrySet()) {
+    final User user=userToBeUnsynced.getValue();
+    batchInfo.getMembershipToRemove().add(new LdapUserGroupMemberDto(groupName,user.getUserName()));
+  }
+}

@@ -1,0 +1,27 @@
+{
+  final Set<LdapGroupDto> specifiedGroups=new HashSet<LdapGroupDto>();
+  for (  String group : groups) {
+    Set<LdapGroupDto> groupDtos=getLdapGroups(group);
+    if (groupDtos.isEmpty()) {
+      throw new AmbariException("Couldn't sync LDAP group " + group + ", it doesn't exist");
+    }
+    specifiedGroups.addAll(groupDtos);
+  }
+  final Map<String,Group> internalGroupsMap=getInternalGroups();
+  final Map<String,User> internalUsersMap=getInternalUsers();
+  for (  LdapGroupDto groupDto : specifiedGroups) {
+    String groupName=groupDto.getGroupName();
+    if (internalGroupsMap.containsKey(groupName)) {
+      final Group group=internalGroupsMap.get(groupName);
+      if (!group.isLdapGroup()) {
+        batchInfo.getGroupsToBecomeLdap().add(groupName);
+      }
+      internalGroupsMap.remove(groupName);
+    }
+ else {
+      batchInfo.getGroupsToBeCreated().add(groupName);
+    }
+    refreshGroupMembers(batchInfo,groupDto,internalUsersMap);
+  }
+  return batchInfo;
+}
