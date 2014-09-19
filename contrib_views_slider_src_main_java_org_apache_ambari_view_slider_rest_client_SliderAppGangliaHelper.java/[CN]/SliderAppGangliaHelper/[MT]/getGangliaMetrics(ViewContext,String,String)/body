@@ -1,0 +1,74 @@
+{
+  Map<String,GangliaMetric> receivedMetrics=new HashMap<String,GangliaMetric>();
+  Map<String,String> headers=new HashMap<String,String>();
+  BufferedReader reader=new BufferedReader(new InputStreamReader(context.getURLStreamProvider().readFrom(spec,"POST",params,headers)));
+  String feedStart=reader.readLine();
+  if (feedStart == null || feedStart.isEmpty()) {
+    logger.info("Empty feed while getting ganglia metrics for spec => " + spec);
+    return null;
+  }
+  int startTime=convertToNumber(feedStart).intValue();
+  String dsName=reader.readLine();
+  if (dsName == null || dsName.isEmpty()) {
+    logger.info("Feed without body while reading ganglia metrics for spec " + "=> " + spec);
+    return null;
+  }
+  while (!"[~EOF]".equals(dsName)) {
+    GangliaMetric metric=new GangliaMetric();
+    List<GangliaMetric.TemporalMetric> listTemporalMetrics=new ArrayList<GangliaMetric.TemporalMetric>();
+    metric.setDs_name(dsName);
+    metric.setCluster_name(reader.readLine());
+    metric.setHost_name(reader.readLine());
+    metric.setMetric_name(reader.readLine());
+    String timeStr=reader.readLine();
+    String stepStr=reader.readLine();
+    if (timeStr == null || timeStr.isEmpty() || stepStr == null || stepStr.isEmpty()) {
+      logger.info("Unexpected end of stream reached while getting ganglia " + "metrics for spec => " + spec);
+      return null;
+    }
+    int time=convertToNumber(timeStr).intValue();
+    int step=convertToNumber(stepStr).intValue();
+    String val=reader.readLine();
+    String lastVal=null;
+    while (val != null && !"[~EOM]".equals(val)) {
+      if (val.startsWith("[~r]")) {
+        Integer repeat=Integer.valueOf(val.substring(4)) - 1;
+        for (int i=0; i < repeat; ++i) {
+          if (!"[~n]".equals(lastVal)) {
+            GangliaMetric.TemporalMetric tm=new GangliaMetric.TemporalMetric(lastVal,time);
+            if (tm.isValid())             listTemporalMetrics.add(tm);
+          }
+          time+=step;
+        }
+      }
+ else {
+        if (!"[~n]".equals(val)) {
+          GangliaMetric.TemporalMetric tm=new GangliaMetric.TemporalMetric(val,time);
+          if (tm.isValid())           listTemporalMetrics.add(tm);
+        }
+        time+=step;
+      }
+      lastVal=val;
+      val=reader.readLine();
+    }
+    metric.setDatapointsFromList(listTemporalMetrics);
+    receivedMetrics.put(metric.getMetric_name(),metric);
+    dsName=reader.readLine();
+    if (dsName == null || dsName.isEmpty()) {
+      logger.info("Unexpected end of stream reached while getting ganglia " + "metrics for spec => " + spec);
+      return null;
+    }
+  }
+  String feedEnd=reader.readLine();
+  if (feedEnd == null || feedEnd.isEmpty()) {
+    logger.info("Error reading end of feed while getting ganglia metrics " + "for spec => " + spec);
+  }
+ else {
+    int endTime=convertToNumber(feedEnd).intValue();
+    int totalTime=endTime - startTime;
+    if (logger.isInfoEnabled() && totalTime > 3) {
+      logger.info("Ganglia resource population time: " + totalTime);
+    }
+  }
+  return receivedMetrics;
+}
