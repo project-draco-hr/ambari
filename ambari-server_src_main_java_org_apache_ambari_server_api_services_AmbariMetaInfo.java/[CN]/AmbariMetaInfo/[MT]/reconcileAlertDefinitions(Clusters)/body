@@ -3,9 +3,7 @@
   if (null == clusterMap || clusterMap.size() == 0) {
     return;
   }
-  Set<Entry<String,Cluster>> clusterEntries=clusterMap.entrySet();
-  for (  Entry<String,Cluster> clusterEntry : clusterEntries) {
-    Cluster cluster=clusterEntry.getValue();
+  for (  Cluster cluster : clusterMap.values()) {
     long clusterId=cluster.getClusterId();
     StackId stackId=cluster.getDesiredStackVersion();
     StackInfo stackInfo=getStackInfo(stackId.getStackName(),stackId.getStackVersion());
@@ -53,6 +51,13 @@
         LOG.info("Merging Alert Definition {} into the database",entity.getDefinitionName());
       }
       alertDefinitionDao.createOrUpdate(entity);
+    }
+    for (    AlertDefinitionEntity def : alertDefinitionDao.findAll(cluster.getClusterId())) {
+      if (def.getSourceType().equals(SourceType.AGGREGATE)) {
+        AlertDefinition realDef=alertDefinitionFactory.coerce(def);
+        AlertAggregateListener listener=injector.getInstance(AlertAggregateListener.class);
+        listener.addAggregateType(cluster.getClusterId(),realDef);
+      }
     }
   }
 }
