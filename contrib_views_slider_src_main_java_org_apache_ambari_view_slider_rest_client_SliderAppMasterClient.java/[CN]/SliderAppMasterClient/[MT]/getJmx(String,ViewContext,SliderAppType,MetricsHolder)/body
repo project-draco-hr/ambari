@@ -1,0 +1,52 @@
+{
+  Map<String,String> jmxProperties=new HashMap<String,String>();
+  if (appType == null || metricsHolder == null || metricsHolder.getJmxMetrics() == null) {
+    logger.info("AppType must be provided and it must contain jmx_metrics.json to extract jmx properties");
+    return jmxProperties;
+  }
+  List<String> components=new ArrayList<String>();
+  for (  SliderAppTypeComponent appTypeComponent : appType.getTypeComponents()) {
+    components.add(appTypeComponent.getName());
+  }
+  Map<String,Map<String,Map<String,Metric>>> metrics=metricsHolder.getJmxMetrics();
+  Map<String,Metric> relevantMetrics=getRelevantMetrics(metrics,components);
+  if (relevantMetrics.size() == 0) {
+    logger.info("No metrics found for components defined in the app.");
+    return jmxProperties;
+  }
+  SliderAppJmxHelper.JMXTypes jmxType=SliderAppJmxHelper.jmxTypeExpected(relevantMetrics);
+  if (jmxType == null) {
+    logger.info("jmx_metrics.json is malformed. It may have mixed metric key types of unsupported metric key types.");
+    return jmxProperties;
+  }
+  try {
+    URLStreamProvider streamProvider=context.getURLStreamProvider();
+    InputStream jmxStream=null;
+    Map<String,String> headers=new HashMap<String,String>();
+    try {
+      jmxStream=streamProvider.readFrom(jmxUrl,"GET",null,headers);
+    }
+ catch (    IOException e) {
+      logger.error(String.format("Unable to access JMX endpoint at %s. Error %s",jmxUrl,e.getMessage()));
+    }
+    if (jmxStream != null) {
+switch (jmxType) {
+case JMX_BEAN:
+        SliderAppJmxHelper.extractMetricsFromJmxBean(jmxStream,jmxUrl,jmxProperties,relevantMetrics);
+      break;
+case JSON:
+    SliderAppJmxHelper.extractMetricsFromJmxJson(jmxStream,jmxUrl,jmxProperties,relevantMetrics);
+  break;
+case XML:
+SliderAppJmxHelper.extractMetricsFromJmxXML(jmxStream,jmxUrl,jmxProperties,relevantMetrics);
+break;
+default :
+logger.info("Unsupported jmx type.");
+}
+}
+}
+ catch (Exception e) {
+logger.info("Failed to extract jmx metrics. " + e.getMessage());
+}
+return jmxProperties;
+}

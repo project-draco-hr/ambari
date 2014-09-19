@@ -1,0 +1,53 @@
+{
+  Map<String,Number[][]> retVal=new HashMap<String,Number[][]>();
+  if (appType == null || metricsHolder == null || metricsHolder.getGangliaMetrics() == null) {
+    logger.info("AppType must be provided and it must contain ganglia_metrics.json to extract jmx properties");
+    return retVal;
+  }
+  Map<String,GangliaMetric> receivedMetrics=null;
+  List<String> components=new ArrayList<String>();
+  for (  SliderAppTypeComponent appTypeComponent : appType.getTypeComponents()) {
+    components.add(appTypeComponent.getName());
+  }
+  Map<String,Map<String,Map<String,Metric>>> metrics=metricsHolder.getGangliaMetrics();
+  Map<String,Metric> relevantMetrics=getRelevantMetrics(metrics,components);
+  Set<String> metricsToRead=new HashSet<String>();
+  Map<String,String> reverseNameLookup=new HashMap<String,String>();
+  for (  String key : relevantMetrics.keySet()) {
+    if (metricsRequested.contains(key)) {
+      String metricName=relevantMetrics.get(key).getMetric();
+      metricsToRead.add(metricName);
+      reverseNameLookup.put(metricName,key);
+    }
+  }
+  if (metricsToRead.size() != 0) {
+    try {
+      String specWithParams=SliderAppGangliaHelper.getSpec(gangliaUrl,metricsToRead,temporalInfo);
+      logger.info("Using spec: " + specWithParams);
+      if (specWithParams != null) {
+        String spec=null;
+        String params=null;
+        String[] tokens=specWithParams.split("\\?",2);
+        try {
+          spec=tokens[0];
+          params=tokens[1];
+        }
+ catch (        ArrayIndexOutOfBoundsException e) {
+          logger.info(e.toString());
+        }
+        receivedMetrics=SliderAppGangliaHelper.getGangliaMetrics(context,spec,params);
+      }
+    }
+ catch (    Exception e) {
+      logger.warn("Unable to retrieve ganglia metrics. " + e.getMessage());
+    }
+  }
+  if (receivedMetrics != null) {
+    for (    GangliaMetric metric : receivedMetrics.values()) {
+      if (reverseNameLookup.containsKey(metric.getMetric_name())) {
+        retVal.put(reverseNameLookup.get(metric.getMetric_name()),metric.getDatapoints());
+      }
+    }
+  }
+  return retVal;
+}
