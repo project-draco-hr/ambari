@@ -1,0 +1,36 @@
+{
+  ConfigHelper configHelper=injector.getInstance(ConfigHelper.class);
+  AmbariManagementController controller=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=controller.getClusters();
+  if (clusters == null) {
+    return;
+  }
+  Map<String,Cluster> clusterMap=clusters.getClusters();
+  if (clusterMap != null && !clusterMap.isEmpty()) {
+    for (    Cluster cluster : clusterMap.values()) {
+      Map<String,Set<String>> newProperties=new HashMap<String,Set<String>>();
+      Set<PropertyInfo> stackProperties=configHelper.getStackProperties(cluster);
+      for (      String serviceName : cluster.getServices().keySet()) {
+        Set<PropertyInfo> properties=configHelper.getServiceProperties(cluster,serviceName);
+        if (properties == null) {
+          continue;
+        }
+        properties.addAll(stackProperties);
+        for (        PropertyInfo property : properties) {
+          String configType=ConfigHelper.fileNameToConfigType(property.getFilename());
+          Config clusterConfigs=cluster.getDesiredConfigByType(configType);
+          if (clusterConfigs == null || !clusterConfigs.getProperties().containsKey(property.getName())) {
+            LOG.info("Config " + property.getName() + " from "+ configType+ " from xml configurations"+ " is not found on the cluster. Adding it...");
+            if (!newProperties.containsKey(configType)) {
+              newProperties.put(configType,new HashSet<String>());
+            }
+            newProperties.get(configType).add(property.getName());
+          }
+        }
+      }
+      for (      Entry<String,Set<String>> newProperty : newProperties.entrySet()) {
+        updateConfigurationPropertiesWithValuesFromXml(newProperty.getKey(),newProperty.getValue(),false,true);
+      }
+    }
+  }
+}

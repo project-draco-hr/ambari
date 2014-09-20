@@ -1,0 +1,44 @@
+{
+  Group group1=createNiceMock(Group.class);
+  Group group2=createNiceMock(Group.class);
+  expect(group1.getGroupName()).andReturn("group1").anyTimes();
+  expect(group2.getGroupName()).andReturn("group2").anyTimes();
+  expect(group1.isLdapGroup()).andReturn(false).anyTimes();
+  expect(group2.isLdapGroup()).andReturn(false).anyTimes();
+  Configuration configuration=createNiceMock(Configuration.class);
+  Users users=createNiceMock(Users.class);
+  LdapTemplate ldapTemplate=createNiceMock(LdapTemplate.class);
+  LdapServerProperties ldapServerProperties=createNiceMock(LdapServerProperties.class);
+  expect(users.getAllGroups()).andReturn(Arrays.asList(group1,group2));
+  expect(users.getAllUsers()).andReturn(Collections.EMPTY_LIST);
+  replay(ldapTemplate,ldapServerProperties,users,configuration);
+  replay(group1,group2);
+  AmbariLdapDataPopulatorTestInstance populator=createMockBuilder(AmbariLdapDataPopulatorTestInstance.class).addMockedMethod("refreshGroupMembers").addMockedMethod("getExternalLdapGroupInfo").withConstructor(configuration,users).createNiceMock();
+  LdapGroupDto externalGroup1=createNiceMock(LdapGroupDto.class);
+  LdapGroupDto externalGroup2=createNiceMock(LdapGroupDto.class);
+  expect(externalGroup1.getGroupName()).andReturn("group4").anyTimes();
+  expect(externalGroup2.getGroupName()).andReturn("group3").anyTimes();
+  LdapBatchDto batchInfo=new LdapBatchDto();
+  Set<LdapGroupDto> externalGroups=createSet(externalGroup1,externalGroup2);
+  for (  LdapGroupDto externalGroup : externalGroups) {
+    populator.refreshGroupMembers(eq(batchInfo),eq(externalGroup),anyObject(Map.class));
+    expectLastCall();
+  }
+  expect(populator.getExternalLdapGroupInfo()).andReturn(externalGroups);
+  replay(externalGroup1,externalGroup2);
+  replay(populator);
+  populator.setLdapTemplate(ldapTemplate);
+  populator.setLdapServerProperties(ldapServerProperties);
+  LdapBatchDto result=populator.synchronizeAllLdapGroups(batchInfo);
+  assertEquals(2,result.getGroupsToBeCreated().size());
+  assertTrue(result.getGroupsToBeCreated().contains("group3"));
+  assertTrue(result.getGroupsToBeCreated().contains("group4"));
+  assertTrue(result.getGroupsToBecomeLdap().isEmpty());
+  assertTrue(result.getGroupsToBeRemoved().isEmpty());
+  assertTrue(result.getUsersToBeCreated().isEmpty());
+  assertTrue(result.getMembershipToAdd().isEmpty());
+  assertTrue(result.getMembershipToRemove().isEmpty());
+  assertTrue(result.getUsersToBecomeLdap().isEmpty());
+  assertTrue(result.getUsersToBeRemoved().isEmpty());
+  verify(populator.loadLdapTemplate(),populator);
+}
