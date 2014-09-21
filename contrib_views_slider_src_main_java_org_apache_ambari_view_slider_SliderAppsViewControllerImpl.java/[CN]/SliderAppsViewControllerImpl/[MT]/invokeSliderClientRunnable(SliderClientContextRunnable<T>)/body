@@ -2,7 +2,18 @@
   ClassLoader currentClassLoader=Thread.currentThread().getContextClassLoader();
   Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
   try {
-    T value=UserGroupInformation.getBestUGI(null,viewContext.getUsername()).doAs(new PrivilegedExceptionAction<T>(){
+    boolean securityEnabled=Boolean.valueOf(viewContext.getProperties().get(PROPERTY_SLIDER_SECURITY_ENABLED));
+    UserGroupInformation sliderUser;
+    if (securityEnabled) {
+      String viewPrincipal=viewContext.getProperties().get(PROPERTY_VIEW_PRINCIPAL);
+      String viewPrincipalKeytab=viewContext.getProperties().get(PROPERTY_VIEW_PRINCIPAL_KEYTAB);
+      UserGroupInformation ambariUser=UserGroupInformation.loginUserFromKeytabAndReturnUGI(viewPrincipal,viewPrincipalKeytab);
+      sliderUser=UserGroupInformation.createProxyUser(getUserToRunAs(),ambariUser);
+    }
+ else {
+      sliderUser=UserGroupInformation.getBestUGI(null,getUserToRunAs());
+    }
+    T value=sliderUser.doAs(new PrivilegedExceptionAction<T>(){
       @Override public T run() throws Exception {
         final SliderClient sliderClient=createSliderClient();
         try {
