@@ -1,5 +1,7 @@
 {
-  LOG.debug(event);
+  if (LOG.isDebugEnabled()) {
+    LOG.debug(event.toString());
+  }
   long clusterId=event.getClusterId();
   Alert alert=event.getAlert();
   AlertCurrentEntity current=null;
@@ -21,16 +23,19 @@
  else   if (alert.getState() == current.getAlertHistory().getAlertState()) {
     current.setLatestTimestamp(Long.valueOf(alert.getTimestamp()));
     current.setLatestText(alert.getText());
-    m_alertsDao.merge(current);
+    current=m_alertsDao.merge(current);
   }
  else {
-    AlertState oldState=current.getAlertHistory().getAlertState();
-    AlertHistoryEntity history=createHistory(clusterId,current.getAlertHistory().getAlertDefinition(),alert);
+    LOG.debug("Alert State Changed: CurrentId {}, CurrentTimestamp {}, HistoryId {}, HistoryState {}",current.getAlertId(),current.getLatestTimestamp(),current.getAlertHistory().getAlertId(),current.getAlertHistory().getAlertState());
+    AlertHistoryEntity oldHistory=current.getAlertHistory();
+    AlertState oldState=oldHistory.getAlertState();
+    AlertHistoryEntity history=createHistory(clusterId,oldHistory.getAlertDefinition(),alert);
     m_alertsDao.create(history);
     current.setAlertHistory(history);
     current.setLatestTimestamp(Long.valueOf(alert.getTimestamp()));
     current.setOriginalTimestamp(Long.valueOf(alert.getTimestamp()));
-    m_alertsDao.merge(current);
+    current=m_alertsDao.merge(current);
+    LOG.debug("Alert State Merged: CurrentId {}, CurrentTimestamp {}, HistoryId {}, HistoryState {}",current.getAlertId(),current.getLatestTimestamp(),current.getAlertHistory().getAlertId(),current.getAlertHistory().getAlertState());
     AlertStateChangeEvent alertChangedEvent=new AlertStateChangeEvent(event.getClusterId(),event.getAlert(),current.getAlertHistory(),oldState);
     m_alertEventPublisher.publish(alertChangedEvent);
   }
