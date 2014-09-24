@@ -8,7 +8,7 @@
   definition.setHash(UUID.randomUUID().toString());
   definition.setScheduleInterval(Integer.valueOf(60));
   definition.setScope(Scope.HOST);
-  definition.setSource("Source");
+  definition.setSource("{\"type\" : \"SCRIPT\"}");
   definition.setSourceType(SourceType.SCRIPT);
   definitionDao.create(definition);
   AlertDefinitionEntity aggDef=new AlertDefinitionEntity();
@@ -67,14 +67,19 @@
   field.set(publisher,new EventBus());
   final AtomicReference<Alert> ref=new AtomicReference<Alert>();
   publisher.register(new TestListener(){
-    @Subscribe public void catchIt(    AlertReceivedEvent event){
+    @Override @Subscribe public void catchIt(    AlertReceivedEvent event){
       ref.set(event.getAlert());
     }
   }
 );
   AlertAggregateListener listener=injector.getInstance(AlertAggregateListener.class);
   AlertDefinitionFactory factory=new AlertDefinitionFactory();
-  listener.addAggregateType(clusterId.longValue(),factory.coerce(aggDef));
+  AggregateDefinitionMapping aggregateMapping=injector.getInstance(AggregateDefinitionMapping.class);
+  AlertDefinition aggregateDefinition=factory.coerce(aggDef);
+  aggregateMapping.addAggregateType(clusterId.longValue(),aggregateDefinition);
+  AggregateSource as=(AggregateSource)aggregateDefinition.getSource();
+  AlertDefinition aggregatedDefinition=aggregateMapping.getAggregateDefinition(clusterId.longValue(),as.getAlertName());
+  assertNotNull(aggregatedDefinition);
   Alert alert=new Alert(definition.getDefinitionName(),null,definition.getServiceName(),definition.getComponentName(),"h1",AlertState.OK);
   AlertReceivedEvent event=new AlertReceivedEvent(clusterId.longValue(),alert);
   listener.onAlertEvent(event);
