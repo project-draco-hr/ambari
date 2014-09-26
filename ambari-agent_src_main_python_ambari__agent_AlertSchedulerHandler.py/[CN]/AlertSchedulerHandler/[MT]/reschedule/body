@@ -1,0 +1,29 @@
+def reschedule(self):
+    '\n    Removes jobs that are scheduled where their UUID no longer is valid. \n    Schedules jobs where the definition UUID is not currently scheduled.\n    '
+    jobs_scheduled = 0
+    jobs_removed = 0
+    definitions = self.__load_definitions()
+    scheduled_jobs = self.__scheduler.get_jobs()
+    for scheduled_job in scheduled_jobs:
+        uuid_valid = False
+        for definition in definitions:
+            definition_uuid = definition.definition_uuid()
+            if (scheduled_job.name == definition_uuid):
+                uuid_valid = True
+                break
+        if (uuid_valid == False):
+            jobs_removed += 1
+            logger.info('Unscheduling {0}'.format(scheduled_job.name))
+            self._collector.remove_by_uuid(scheduled_job.name)
+            self.__scheduler.unschedule_job(scheduled_job)
+    for definition in definitions:
+        definition_scheduled = False
+        for scheduled_job in scheduled_jobs:
+            definition_uuid = definition.definition_uuid()
+            if (definition_uuid == scheduled_job.name):
+                definition_scheduled = True
+                break
+        if (definition_scheduled == False):
+            jobs_scheduled += 1
+            self.schedule_definition(definition)
+    logger.info('Alert Reschedule Summary: {0} rescheduled, {1} unscheduled'.format(str(jobs_scheduled), str(jobs_removed)))
