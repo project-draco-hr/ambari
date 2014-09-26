@@ -1,0 +1,29 @@
+{
+  Set<String> userSet=new HashSet<String>();
+  userSet.add("user1");
+  Set<String> groupSet=new HashSet<String>();
+  groupSet.add("group1");
+  Injector injector=Guice.createInjector(Modules.override(new InMemoryDefaultTestModule()).with(new MockModule()));
+  LdapBatchDto ldapBatchDto=createNiceMock(LdapBatchDto.class);
+  Capture<LdapBatchDto> ldapBatchDtoCapture=new Capture<LdapBatchDto>();
+  expect(ldapDataPopulator.synchronizeAllLdapUsers(capture(ldapBatchDtoCapture))).andReturn(ldapBatchDto);
+  expect(ldapDataPopulator.synchronizeAllLdapGroups(capture(ldapBatchDtoCapture))).andReturn(ldapBatchDto);
+  expect(ldapDataPopulator.synchronizeExistingLdapUsers(capture(ldapBatchDtoCapture))).andReturn(ldapBatchDto);
+  expect(ldapDataPopulator.synchronizeExistingLdapGroups(capture(ldapBatchDtoCapture))).andReturn(ldapBatchDto);
+  expect(ldapDataPopulator.synchronizeLdapUsers(eq(userSet),capture(ldapBatchDtoCapture))).andReturn(ldapBatchDto);
+  expect(ldapDataPopulator.synchronizeLdapGroups(eq(groupSet),capture(ldapBatchDtoCapture))).andReturn(ldapBatchDto);
+  users.processLdapSync(capture(ldapBatchDtoCapture));
+  expectLastCall().anyTimes();
+  replay(ldapDataPopulator,clusters,actionDBAccessor,ambariMetaInfo,users,ldapBatchDto);
+  AmbariManagementControllerImpl controller=injector.getInstance(AmbariManagementControllerImpl.class);
+  LdapSyncRequest userRequest=new LdapSyncRequest(LdapSyncSpecEntity.SyncType.ALL);
+  LdapSyncRequest groupRequest=new LdapSyncRequest(LdapSyncSpecEntity.SyncType.ALL);
+  controller.synchronizeLdapUsersAndGroups(userRequest,groupRequest);
+  userRequest=new LdapSyncRequest(LdapSyncSpecEntity.SyncType.EXISTING);
+  groupRequest=new LdapSyncRequest(LdapSyncSpecEntity.SyncType.EXISTING);
+  controller.synchronizeLdapUsersAndGroups(userRequest,groupRequest);
+  userRequest=new LdapSyncRequest(LdapSyncSpecEntity.SyncType.SPECIFIC,userSet);
+  groupRequest=new LdapSyncRequest(LdapSyncSpecEntity.SyncType.SPECIFIC,groupSet);
+  controller.synchronizeLdapUsersAndGroups(userRequest,groupRequest);
+  verify(ldapDataPopulator,clusters,users,ldapBatchDto);
+}
