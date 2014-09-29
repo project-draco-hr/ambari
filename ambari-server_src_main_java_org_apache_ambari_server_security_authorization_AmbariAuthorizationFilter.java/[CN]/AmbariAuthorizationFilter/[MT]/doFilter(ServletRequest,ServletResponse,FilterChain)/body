@@ -21,19 +21,25 @@
           authorized=true;
           break;
         }
-        if (requestURI.matches("/api/v[0-9]+/clusters.*")) {
+        if (requestURI.matches(API_CLUSTERS_ALL_PATTERN)) {
           if (permissionId.equals(PermissionEntity.CLUSTER_READ_PERMISSION) || permissionId.equals(PermissionEntity.CLUSTER_OPERATE_PERMISSION)) {
             authorized=true;
             break;
           }
         }
- else         if (requestURI.matches("/api/v[0-9]+/views.*")) {
+ else         if (STACK_ADVISOR_REGEX.matcher(requestURI).matches()) {
+          if (permissionId.equals(PermissionEntity.CLUSTER_OPERATE_PERMISSION)) {
+            authorized=true;
+            break;
+          }
+        }
+ else         if (requestURI.matches(API_VIEWS_ALL_PATTERN)) {
           if (permissionId.equals(PermissionEntity.VIEW_USE_PERMISSION)) {
             authorized=true;
             break;
           }
         }
- else         if (requestURI.matches("/api/v[0-9]+/persist.*")) {
+ else         if (requestURI.matches(API_PERSIST_ALL_PATTERN)) {
           if (permissionId.equals(PermissionEntity.CLUSTER_OPERATE_PERMISSION)) {
             authorized=true;
             break;
@@ -41,11 +47,17 @@
         }
       }
     }
-    if (!authorized && requestURI.matches(ViewInstanceEntity.VIEWS_CONTEXT_PATH_PATTERN)) {
-      final ViewInstanceVersionDTO dto=ViewInstanceEntity.parseContextPath(requestURI);
-      authorized=ViewRegistry.getInstance().checkPermission(dto.getViewName(),dto.getVersion(),dto.getInstanceName(),true);
+    if (!authorized && requestURI.matches(VIEWS_CONTEXT_PATH_PATTERN)) {
+      final ViewInstanceVersionDTO dto=parseViewInstanceInfo(requestURI);
+      authorized=getViewRegistry().checkPermission(dto.getViewName(),dto.getVersion(),dto.getInstanceName(),true);
     }
-    if (!authorized && (!httpRequest.getMethod().equals("GET") || requestURI.matches("/views.*"))) {
+    if (!authorized && requestURI.matches(API_USERS_USERNAME_PATTERN)) {
+      final SecurityContext securityContext=getSecurityContext();
+      final String currentUserName=securityContext.getAuthentication().getName();
+      final String urlUserName=parseUserName(requestURI);
+      authorized=currentUserName.equalsIgnoreCase(urlUserName);
+    }
+    if (!authorized && (!httpRequest.getMethod().equals("GET") || requestURI.matches(VIEWS_CONTEXT_ALL_PATTERN) || requestURI.matches(API_USERS_ALL_PATTERN)|| requestURI.matches(API_GROUPS_ALL_PATTERN)|| requestURI.matches(API_LDAP_SYNC_EVENTS_ALL_PATTERN))) {
       httpResponse.setHeader("WWW-Authenticate","Basic realm=\"" + realm + "\"");
       httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN,"You do not have permissions to access this resource.");
       httpResponse.flushBuffer();
