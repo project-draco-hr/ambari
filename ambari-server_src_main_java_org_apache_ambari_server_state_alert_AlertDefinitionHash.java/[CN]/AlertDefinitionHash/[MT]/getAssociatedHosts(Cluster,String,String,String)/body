@@ -1,0 +1,49 @@
+{
+  Map<String,Host> hosts=null;
+  String clusterName=cluster.getClusterName();
+  Set<String> affectedHosts=new HashSet<String>();
+  try {
+    hosts=m_clusters.getHostsForCluster(clusterName);
+  }
+ catch (  AmbariException ambariException) {
+    LOG.error("Unable to lookup hosts for cluster named {}",clusterName,ambariException);
+    return affectedHosts;
+  }
+  if (Services.AMBARI.equals(definitionServiceName) && Components.AMBARI_AGENT.equals(definitionComponentName)) {
+    affectedHosts.addAll(hosts.keySet());
+    return affectedHosts;
+  }
+  for (  String hostName : hosts.keySet()) {
+    List<ServiceComponentHost> hostComponents=cluster.getServiceComponentHosts(hostName);
+    if (null == hostComponents || hostComponents.size() == 0) {
+      continue;
+    }
+    for (    ServiceComponentHost component : hostComponents) {
+      String serviceName=component.getServiceName();
+      String componentName=component.getServiceComponentName();
+      if (serviceName.equals(definitionServiceName) && componentName.equals(definitionComponentName)) {
+        affectedHosts.add(hostName);
+      }
+    }
+  }
+  Map<String,Service> services=cluster.getServices();
+  Service service=services.get(definitionServiceName);
+  if (null == service) {
+    LOG.warn("The alert definition {} has an unknown service of {}",definitionName,definitionServiceName);
+    return affectedHosts;
+  }
+  Map<String,ServiceComponent> components=service.getServiceComponents();
+  if (null != components) {
+    for (    Entry<String,ServiceComponent> component : components.entrySet()) {
+      if (component.getValue().isMasterComponent()) {
+        Map<String,ServiceComponentHost> componentHosts=component.getValue().getServiceComponentHosts();
+        if (null != componentHosts) {
+          for (          String componentHost : componentHosts.keySet()) {
+            affectedHosts.add(componentHost);
+          }
+        }
+      }
+    }
+  }
+  return affectedHosts;
+}
