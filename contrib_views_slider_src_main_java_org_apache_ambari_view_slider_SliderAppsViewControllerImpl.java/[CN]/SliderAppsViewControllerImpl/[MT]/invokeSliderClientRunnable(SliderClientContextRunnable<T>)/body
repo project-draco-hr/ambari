@@ -13,19 +13,29 @@
  else {
       sliderUser=UserGroupInformation.getBestUGI(null,getUserToRunAs());
     }
-    T value=sliderUser.doAs(new PrivilegedExceptionAction<T>(){
-      @Override public T run() throws Exception {
-        final SliderClient sliderClient=createSliderClient();
-        try {
-          return runnable.run(sliderClient);
-        }
+    try {
+      T value=sliderUser.doAs(new PrivilegedExceptionAction<T>(){
+        @Override public T run() throws Exception {
+          final SliderClient sliderClient=createSliderClient();
+          try {
+            return runnable.run(sliderClient);
+          }
   finally {
-          destroySliderClient(sliderClient);
+            destroySliderClient(sliderClient);
+          }
         }
       }
-    }
 );
-    return value;
+      return value;
+    }
+ catch (    UndeclaredThrowableException e) {
+      Throwable cause=e.getCause();
+      if (cause instanceof YarnException) {
+        YarnException ye=(YarnException)cause;
+        throw ye;
+      }
+      throw e;
+    }
   }
   finally {
     Thread.currentThread().setContextClassLoader(currentClassLoader);
