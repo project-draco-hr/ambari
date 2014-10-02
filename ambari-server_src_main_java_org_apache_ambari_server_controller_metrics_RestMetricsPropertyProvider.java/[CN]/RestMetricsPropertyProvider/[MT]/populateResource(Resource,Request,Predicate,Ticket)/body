@@ -1,0 +1,68 @@
+{
+  Set<String> ids=getRequestPropertyIds(request,predicate);
+  Set<String> temporalIds=new HashSet<String>();
+  for (  String id : ids) {
+    if (request.getTemporalInfo(id) != null) {
+      temporalIds.add(id);
+    }
+  }
+  ids.removeAll(temporalIds);
+  if (ids.isEmpty()) {
+    return resource;
+  }
+  if (statePropertyId != null) {
+    String state=(String)resource.getPropertyValue(statePropertyId);
+    if (state != null && !healthyStates.contains(state)) {
+      return resource;
+    }
+  }
+  String componentName=(String)resource.getPropertyValue(componentNamePropertyId);
+  Map<String,PropertyInfo> propertyInfos=getComponentMetrics().get(StackDefinedPropertyProvider.WRAPPED_METRICS_KEY);
+  if (propertyInfos == null) {
+    return resource;
+  }
+  String protocol=resolveProtocol();
+  String port="-1";
+  String hostname=null;
+  try {
+    String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
+    Cluster cluster=clusters.getCluster(clusterName);
+    hostname=getHost(resource,clusterName,componentName);
+    if (hostname == null) {
+      String msg=String.format("Unable to get component REST metrics. " + "No host name for %s.",componentName);
+      LOG.warn(msg);
+      return resource;
+    }
+    port=resolvePort(cluster,hostname,componentName,metricsProperties);
+  }
+ catch (  Exception e) {
+    rethrowSystemException(e);
+  }
+  Set<String> resultIds=new HashSet<String>();
+  for (  String id : ids) {
+    for (    String metricId : propertyInfos.keySet()) {
+      if (metricId.startsWith(id)) {
+        resultIds.add(metricId);
+      }
+    }
+  }
+  HashMap<String,Set<String>> urls=extractPropertyURLs(resultIds,propertyInfos);
+  for (  String url : urls.keySet()) {
+    try {
+      InputStream in=streamProvider.readFrom(getSpec(protocol,hostname,port,url));
+      if (!ticket.isValid()) {
+        return resource;
+      }
+      try {
+        extractValuesFromJSON(in,urls.get(url),resource,propertyInfos);
+      }
+  finally {
+        in.close();
+      }
+    }
+ catch (    IOException e) {
+      logException(e);
+    }
+  }
+  return resource;
+}

@@ -1,0 +1,64 @@
+{
+  Set<String> ids=getRequestPropertyIds(request,predicate);
+  Set<String> unsupportedIds=new HashSet<String>();
+  String componentName=(String)resource.getPropertyValue(componentNamePropertyId);
+  if (getComponentMetrics().get(componentName) == null) {
+    return resource;
+  }
+  for (  String id : ids) {
+    if (request.getTemporalInfo(id) != null) {
+      unsupportedIds.add(id);
+    }
+    if (!isSupportedPropertyId(componentName,id)) {
+      unsupportedIds.add(id);
+    }
+  }
+  ids.removeAll(unsupportedIds);
+  if (ids.isEmpty()) {
+    return resource;
+  }
+  if (statePropertyId != null) {
+    String state=(String)resource.getPropertyValue(statePropertyId);
+    if (state != null && !healthyStates.contains(state)) {
+      return resource;
+    }
+  }
+  String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
+  String port=getPort(clusterName,componentName);
+  if (port == null) {
+    LOG.warn("Unable to get JMX metrics.  No port value for " + componentName);
+    return resource;
+  }
+  Set<String> hostNames=getHosts(resource,clusterName,componentName);
+  if (hostNames == null || hostNames.isEmpty()) {
+    LOG.warn("Unable to get JMX metrics.  No host name for " + componentName);
+    return resource;
+  }
+  String protocol=getJMXProtocol(clusterName,componentName);
+  InputStream in=null;
+  try {
+    try {
+      for (      String hostName : hostNames) {
+        try {
+          in=streamProvider.readFrom(getSpec(protocol,hostName,port,"/jmx"));
+          if (!ticket.isValid()) {
+            return resource;
+          }
+          getHadoopMetricValue(in,ids,resource,request,ticket);
+        }
+ catch (        IOException e) {
+          logException(e);
+        }
+      }
+    }
+  finally {
+      if (in != null) {
+        in.close();
+      }
+    }
+  }
+ catch (  IOException e) {
+    logException(e);
+  }
+  return resource;
+}
