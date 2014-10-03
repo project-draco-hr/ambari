@@ -1,0 +1,76 @@
+{
+  List<AlertCurrentEntity> currentAlerts=m_alertsDao.findCurrent();
+  for (  AlertCurrentEntity currentAlert : currentAlerts) {
+    MaintenanceState currentState=currentAlert.getMaintenanceState();
+    AlertHistoryEntity history=currentAlert.getAlertHistory();
+    AlertDefinitionEntity definition=history.getAlertDefinition();
+    long clusterId=history.getClusterId();
+    String hostName=history.getHostName();
+    String serviceName=history.getServiceName();
+    String componentName=history.getComponentName();
+    try {
+      Cluster cluster=m_clusters.get().getClusterById(clusterId);
+      if (null == cluster) {
+        LOG.warn("Unable to find cluster with ID {}",clusterId);
+        continue;
+      }
+      Service service=cluster.getService(serviceName);
+      if (null == service) {
+        LOG.warn("Unable to find service named {} in cluster {}",serviceName,cluster.getClusterName());
+        continue;
+      }
+      if (null == componentName) {
+        MaintenanceState serviceState=service.getMaintenanceState();
+        if (currentState != serviceState) {
+          currentAlert.setMaintenanceState(serviceState);
+          m_alertsDao.merge(currentAlert);
+        }
+      }
+ else {
+        if (hostName == null) {
+          LOG.warn("The alert {} for component {} must have a host",definition.getDefinitionName(),componentName);
+          continue;
+        }
+        List<ServiceComponentHost> serviceComponentHosts=cluster.getServiceComponentHosts(hostName);
+        if (null == serviceComponentHosts) {
+          LOG.warn("Unable to find service components on host {} for {} in cluster {}",hostName,serviceName,cluster.getClusterName());
+          continue;
+        }
+        ServiceComponentHost serviceComponentHost=null;
+        for (        ServiceComponentHost sch : serviceComponentHosts) {
+          if (componentName.equals(sch.getServiceComponentName())) {
+            serviceComponentHost=sch;
+            break;
+          }
+        }
+        if (null == serviceComponentHost) {
+          LOG.warn("Unable to find component {} of {} on host {}",componentName,serviceName,hostName);
+          continue;
+        }
+        MaintenanceState effectiveState=m_maintenanceHelper.get().getEffectiveState(serviceComponentHost);
+switch (effectiveState) {
+case OFF:
+          if (currentState != MaintenanceState.OFF) {
+            currentAlert.setMaintenanceState(MaintenanceState.OFF);
+            m_alertsDao.merge(currentAlert);
+          }
+        break;
+case ON:
+case IMPLIED_FROM_HOST:
+case IMPLIED_FROM_SERVICE:
+case IMPLIED_FROM_SERVICE_AND_HOST:
+      if (currentState == MaintenanceState.OFF) {
+        currentAlert.setMaintenanceState(MaintenanceState.ON);
+        m_alertsDao.merge(currentAlert);
+      }
+    break;
+default :
+  break;
+}
+}
+}
+ catch (AmbariException ambariException) {
+LOG.error("Unable to put alert '{}' for host {} into maintenance mode",definition.getDefinitionName(),hostName,ambariException);
+}
+}
+}

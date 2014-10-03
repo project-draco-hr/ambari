@@ -1,0 +1,148 @@
+{
+  Cluster cluster=initializeNewCluster();
+  List<AlertCurrentEntity> currents=m_dao.findCurrent();
+  for (  AlertCurrentEntity current : currents) {
+    m_dao.remove(current);
+  }
+  AlertDefinitionEntity namenode=new AlertDefinitionEntity();
+  namenode.setDefinitionName("NAMENODE");
+  namenode.setServiceName("HDFS");
+  namenode.setComponentName("NAMENODE");
+  namenode.setClusterId(cluster.getClusterId());
+  namenode.setHash(UUID.randomUUID().toString());
+  namenode.setScheduleInterval(Integer.valueOf(60));
+  namenode.setScope(Scope.ANY);
+  namenode.setSource("{\"type\" : \"SCRIPT\"}");
+  namenode.setSourceType(SourceType.SCRIPT);
+  m_definitionDao.create(namenode);
+  AlertDefinitionEntity datanode=new AlertDefinitionEntity();
+  datanode.setDefinitionName("DATANODE");
+  datanode.setServiceName("HDFS");
+  datanode.setComponentName("DATANODE");
+  datanode.setClusterId(cluster.getClusterId());
+  datanode.setHash(UUID.randomUUID().toString());
+  datanode.setScheduleInterval(Integer.valueOf(60));
+  datanode.setScope(Scope.HOST);
+  datanode.setSource("{\"type\" : \"SCRIPT\"}");
+  datanode.setSourceType(SourceType.SCRIPT);
+  m_definitionDao.create(datanode);
+  AlertDefinitionEntity aggregate=new AlertDefinitionEntity();
+  aggregate.setDefinitionName("DATANODE_UP");
+  aggregate.setServiceName("HDFS");
+  aggregate.setComponentName(null);
+  aggregate.setClusterId(cluster.getClusterId());
+  aggregate.setHash(UUID.randomUUID().toString());
+  aggregate.setScheduleInterval(Integer.valueOf(60));
+  aggregate.setScope(Scope.SERVICE);
+  aggregate.setSource("{\"type\" : \"SCRIPT\"}");
+  aggregate.setSourceType(SourceType.SCRIPT);
+  m_definitionDao.create(aggregate);
+  AlertHistoryEntity nnHistory=new AlertHistoryEntity();
+  nnHistory.setAlertState(AlertState.OK);
+  nnHistory.setServiceName(namenode.getServiceName());
+  nnHistory.setComponentName(namenode.getComponentName());
+  nnHistory.setClusterId(cluster.getClusterId());
+  nnHistory.setAlertDefinition(namenode);
+  nnHistory.setAlertLabel(namenode.getDefinitionName());
+  nnHistory.setAlertText(namenode.getDefinitionName());
+  nnHistory.setAlertTimestamp(calendar.getTimeInMillis());
+  nnHistory.setHostName(HOSTNAME);
+  m_dao.create(nnHistory);
+  AlertCurrentEntity nnCurrent=new AlertCurrentEntity();
+  nnCurrent.setAlertHistory(nnHistory);
+  nnCurrent.setLatestText(nnHistory.getAlertText());
+  nnCurrent.setMaintenanceState(MaintenanceState.OFF);
+  nnCurrent.setOriginalTimestamp(System.currentTimeMillis());
+  nnCurrent.setLatestTimestamp(System.currentTimeMillis());
+  m_dao.create(nnCurrent);
+  AlertHistoryEntity dnHistory=new AlertHistoryEntity();
+  dnHistory.setAlertState(AlertState.WARNING);
+  dnHistory.setServiceName(datanode.getServiceName());
+  dnHistory.setComponentName(datanode.getComponentName());
+  dnHistory.setClusterId(cluster.getClusterId());
+  dnHistory.setAlertDefinition(datanode);
+  dnHistory.setAlertLabel(datanode.getDefinitionName());
+  dnHistory.setAlertText(datanode.getDefinitionName());
+  dnHistory.setAlertTimestamp(calendar.getTimeInMillis());
+  dnHistory.setHostName(HOSTNAME);
+  m_dao.create(dnHistory);
+  AlertCurrentEntity dnCurrent=new AlertCurrentEntity();
+  dnCurrent.setAlertHistory(dnHistory);
+  dnCurrent.setLatestText(dnHistory.getAlertText());
+  dnCurrent.setMaintenanceState(MaintenanceState.OFF);
+  dnCurrent.setOriginalTimestamp(System.currentTimeMillis());
+  dnCurrent.setLatestTimestamp(System.currentTimeMillis());
+  m_dao.create(dnCurrent);
+  AlertHistoryEntity aggregateHistory=new AlertHistoryEntity();
+  aggregateHistory.setAlertState(AlertState.CRITICAL);
+  aggregateHistory.setServiceName(aggregate.getServiceName());
+  aggregateHistory.setComponentName(aggregate.getComponentName());
+  aggregateHistory.setClusterId(cluster.getClusterId());
+  aggregateHistory.setAlertDefinition(aggregate);
+  aggregateHistory.setAlertLabel(aggregate.getDefinitionName());
+  aggregateHistory.setAlertText(aggregate.getDefinitionName());
+  aggregateHistory.setAlertTimestamp(calendar.getTimeInMillis());
+  m_dao.create(aggregateHistory);
+  AlertCurrentEntity aggregateCurrent=new AlertCurrentEntity();
+  aggregateCurrent.setAlertHistory(aggregateHistory);
+  aggregateCurrent.setLatestText(aggregateHistory.getAlertText());
+  aggregateCurrent.setMaintenanceState(MaintenanceState.OFF);
+  aggregateCurrent.setOriginalTimestamp(System.currentTimeMillis());
+  aggregateCurrent.setLatestTimestamp(System.currentTimeMillis());
+  m_dao.create(aggregateCurrent);
+  currents=m_dao.findCurrent();
+  assertEquals(3,currents.size());
+  for (  AlertCurrentEntity current : currents) {
+    assertEquals(MaintenanceState.OFF,current.getMaintenanceState());
+  }
+  Service hdfs=m_clusters.getClusterById(cluster.getClusterId()).getService("HDFS");
+  hdfs.setMaintenanceState(MaintenanceState.ON);
+  currents=m_dao.findCurrent();
+  assertEquals(3,currents.size());
+  for (  AlertCurrentEntity current : currents) {
+    assertEquals(MaintenanceState.ON,current.getMaintenanceState());
+  }
+  hdfs.setMaintenanceState(MaintenanceState.OFF);
+  currents=m_dao.findCurrent();
+  assertEquals(3,currents.size());
+  for (  AlertCurrentEntity current : currents) {
+    assertEquals(MaintenanceState.OFF,current.getMaintenanceState());
+  }
+  Host host=m_clusters.getHost(HOSTNAME);
+  host.setMaintenanceState(cluster.getClusterId(),MaintenanceState.ON);
+  currents=m_dao.findCurrent();
+  assertEquals(3,currents.size());
+  for (  AlertCurrentEntity current : currents) {
+    if (current.getAlertHistory().getComponentName() != null) {
+      assertEquals(MaintenanceState.ON,current.getMaintenanceState());
+    }
+ else {
+      assertEquals(MaintenanceState.OFF,current.getMaintenanceState());
+    }
+  }
+  host.setMaintenanceState(cluster.getClusterId(),MaintenanceState.OFF);
+  currents=m_dao.findCurrent();
+  assertEquals(3,currents.size());
+  for (  AlertCurrentEntity current : currents) {
+    assertEquals(MaintenanceState.OFF,current.getMaintenanceState());
+  }
+  ServiceComponentHost nnComponent=null;
+  List<ServiceComponentHost> schs=cluster.getServiceComponentHosts(HOSTNAME);
+  for (  ServiceComponentHost sch : schs) {
+    if ("NAMENODE".equals(sch.getServiceComponentName())) {
+      sch.setMaintenanceState(MaintenanceState.ON);
+      nnComponent=sch;
+    }
+  }
+  assertNotNull(nnComponent);
+  currents=m_dao.findCurrent();
+  assertEquals(3,currents.size());
+  for (  AlertCurrentEntity current : currents) {
+    if ("NAMENODE".equals(current.getAlertHistory().getComponentName())) {
+      assertEquals(MaintenanceState.ON,current.getMaintenanceState());
+    }
+ else {
+      assertEquals(MaintenanceState.OFF,current.getMaintenanceState());
+    }
+  }
+}
