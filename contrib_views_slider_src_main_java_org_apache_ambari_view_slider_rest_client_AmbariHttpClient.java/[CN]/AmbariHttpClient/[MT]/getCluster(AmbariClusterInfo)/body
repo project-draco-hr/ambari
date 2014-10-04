@@ -1,18 +1,33 @@
 {
   if (clusterInfo != null) {
     try {
-      JsonElement jsonElement=doGetJson("/api/v1/clusters/" + clusterInfo.getName());
+      JsonElement jsonElement=doGetJson("/api/v1/clusters/" + clusterInfo.getName() + "?fields=services/ServiceInfo,hosts,Clusters");
       if (jsonElement != null) {
         AmbariCluster cluster=new AmbariCluster();
         Map<String,String> desiredConfigs=new HashMap<String,String>();
-        JsonObject desiredConfigsObj=jsonElement.getAsJsonObject().get("Clusters").getAsJsonObject().get("desired_configs").getAsJsonObject();
+        JsonObject jsonObject=jsonElement.getAsJsonObject();
+        JsonObject clustersJsonObject=jsonObject.get("Clusters").getAsJsonObject();
+        JsonObject desiredConfigsObj=clustersJsonObject.get("desired_configs").getAsJsonObject();
         for (        Map.Entry<String,JsonElement> entry : desiredConfigsObj.entrySet()) {
           desiredConfigs.put(entry.getKey(),entry.getValue().getAsJsonObject().get("tag").getAsString());
         }
         cluster.setDesiredConfigs(desiredConfigs);
+        cluster.setName(clustersJsonObject.get("cluster_name").getAsString());
+        cluster.setVersion(clustersJsonObject.get("version").getAsString());
         List<AmbariServiceInfo> services=new ArrayList<AmbariServiceInfo>();
+        for (        JsonElement svcJson : jsonObject.get("services").getAsJsonArray()) {
+          AmbariServiceInfo si=new AmbariServiceInfo();
+          si.setId(svcJson.getAsJsonObject().get("ServiceInfo").getAsJsonObject().get("service_name").getAsString());
+          si.setStarted("STARTED".equals(svcJson.getAsJsonObject().get("ServiceInfo").getAsJsonObject().get("state").getAsString()));
+          services.add(si);
+        }
         cluster.setServices(services);
         List<AmbariHostInfo> hosts=new ArrayList<AmbariHostInfo>();
+        for (        JsonElement hostJson : jsonObject.get("hosts").getAsJsonArray()) {
+          AmbariHostInfo hi=new AmbariHostInfo();
+          hi.setHostName(hostJson.getAsJsonObject().get("Hosts").getAsJsonObject().get("host_name").getAsString());
+          hosts.add(hi);
+        }
         cluster.setHosts(hosts);
         return cluster;
       }
