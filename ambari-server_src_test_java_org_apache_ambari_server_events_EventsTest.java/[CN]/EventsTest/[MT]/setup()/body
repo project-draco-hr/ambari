@@ -1,0 +1,29 @@
+{
+  m_injector=Guice.createInjector(new InMemoryDefaultTestModule());
+  m_injector.getInstance(GuiceJpaInitializer.class);
+  m_eventPublisher=m_injector.getInstance(AmbariEventPublisher.class);
+  EventBus synchronizedBus=new EventBus();
+  m_listener=m_injector.getInstance(MockEventListener.class);
+  synchronizedBus.register(m_listener);
+  Field field=AmbariEventPublisher.class.getDeclaredField("m_eventBus");
+  field.setAccessible(true);
+  field.set(m_eventPublisher,synchronizedBus);
+  m_clusters=m_injector.getInstance(Clusters.class);
+  m_serviceFactory=m_injector.getInstance(ServiceFactory.class);
+  m_componentFactory=m_injector.getInstance(ServiceComponentFactory.class);
+  m_schFactory=m_injector.getInstance(ServiceComponentHostFactory.class);
+  m_clusterName="foo";
+  m_clusters.addCluster(m_clusterName);
+  m_clusters.addHost(HOSTNAME);
+  Host host=m_clusters.getHost(HOSTNAME);
+  Map<String,String> hostAttributes=new HashMap<String,String>();
+  hostAttributes.put("os_family","redhat");
+  hostAttributes.put("os_release_version","6.4");
+  host.setHostAttributes(hostAttributes);
+  host.setState(HostState.HEALTHY);
+  host.persist();
+  m_cluster=m_clusters.getCluster(m_clusterName);
+  m_cluster.setDesiredStackVersion(new StackId("HDP","2.0.6"));
+  Assert.assertNotNull(m_cluster);
+  m_clusters.mapHostToCluster(HOSTNAME,m_clusterName);
+}

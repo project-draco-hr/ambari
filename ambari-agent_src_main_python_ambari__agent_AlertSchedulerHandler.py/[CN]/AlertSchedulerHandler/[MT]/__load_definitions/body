@@ -1,0 +1,27 @@
+def __load_definitions(self):
+    ' loads all alert commands from the file.  all clusters are stored in one file '
+    definitions = []
+    all_commands = None
+    try:
+        with open(os.path.join(self.cachedir, self.FILENAME)) as fp:
+            all_commands = json.load(fp)
+    except:
+        if logger.isEnabledFor(logging.DEBUG):
+            traceback.print_exc()
+        return definitions
+    for command_json in all_commands:
+        clusterName = ('' if (not ('clusterName' in command_json)) else command_json['clusterName'])
+        hostName = ('' if (not ('hostName' in command_json)) else command_json['hostName'])
+        configmap = None
+        self.__config_maps[clusterName] = {}
+        if ('configurations' in command_json):
+            configmap = command_json['configurations']
+        for definition in command_json['alertDefinitions']:
+            obj = self.__json_to_callable(clusterName, hostName, definition)
+            if (obj is None):
+                continue
+            vals = self.__find_config_values(configmap, obj.get_lookup_keys())
+            self.__config_maps[clusterName].update(vals)
+            obj.set_helpers(self._collector, self.__config_maps[clusterName])
+            definitions.append(obj)
+    return definitions

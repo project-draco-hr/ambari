@@ -1,0 +1,122 @@
+{
+  boolean bCreate=true;
+  if (null != entity.getDefinitionId()) {
+    bCreate=false;
+  }
+  String clusterName=(String)requestMap.get(ALERT_DEF_CLUSTER_NAME);
+  String definitionName=(String)requestMap.get(ALERT_DEF_NAME);
+  String serviceName=(String)requestMap.get(ALERT_DEF_SERVICE_NAME);
+  String componentName=(String)requestMap.get(ALERT_DEF_COMPONENT_NAME);
+  String type=(String)requestMap.get(ALERT_DEF_SOURCE_TYPE);
+  String label=(String)requestMap.get(ALERT_DEF_LABEL);
+  String desiredScope=(String)requestMap.get(ALERT_DEF_SCOPE);
+  Integer interval=null;
+  if (requestMap.containsKey(ALERT_DEF_INTERVAL)) {
+    interval=Integer.valueOf((String)requestMap.get(ALERT_DEF_INTERVAL));
+  }
+  Boolean enabled=null;
+  if (requestMap.containsKey(ALERT_DEF_ENABLED)) {
+    enabled=Boolean.parseBoolean((String)requestMap.get(ALERT_DEF_ENABLED));
+  }
+ else   if (bCreate) {
+    enabled=Boolean.TRUE;
+  }
+  Scope scope=null;
+  if (null != desiredScope && desiredScope.length() > 0) {
+    scope=Scope.valueOf(desiredScope);
+  }
+  SourceType sourceType=null;
+  if (null != type && type.length() > 0) {
+    sourceType=SourceType.valueOf(type);
+  }
+  if (null == scope && bCreate) {
+    scope=Scope.ANY;
+  }
+  if (StringUtils.isEmpty(clusterName)) {
+    throw new IllegalArgumentException("Invalid argument, cluster name is required");
+  }
+  if (bCreate && !requestMap.containsKey(ALERT_DEF_INTERVAL)) {
+    throw new IllegalArgumentException("Check interval must be specified");
+  }
+  if (bCreate && StringUtils.isEmpty(definitionName)) {
+    throw new IllegalArgumentException("Definition name must be specified");
+  }
+  if (bCreate && StringUtils.isEmpty(serviceName)) {
+    throw new IllegalArgumentException("Service name must be specified");
+  }
+  if (bCreate && null == sourceType) {
+    throw new IllegalArgumentException(String.format("Source type must be specified and one of %s",EnumSet.allOf(SourceType.class)));
+  }
+  JsonObject source=new JsonObject();
+  JsonObject reporting=new JsonObject();
+  JsonObject reportingOk=new JsonObject();
+  JsonObject reportingWarning=new JsonObject();
+  JsonObject reportingCritical=new JsonObject();
+  for (  Entry<String,Object> entry : requestMap.entrySet()) {
+    String propCat=PropertyHelper.getPropertyCategory(entry.getKey());
+    String propName=PropertyHelper.getPropertyName(entry.getKey());
+    if (propCat.equals(ALERT_DEF) && "source".equals(propName)) {
+      source.addProperty(propName,entry.getValue().toString());
+    }
+    if (propCat.equals(ALERT_DEF_SOURCE)) {
+      source.addProperty(propName,entry.getValue().toString());
+    }
+    if (propCat.equals(ALERT_DEF_SOURCE_REPORTING)) {
+      reporting.addProperty(propName,entry.getValue().toString());
+    }
+    if (propCat.equals(ALERT_DEF_SOURCE_REPORTING_OK)) {
+      reportingOk.addProperty(propName,entry.getValue().toString());
+    }
+    if (propCat.equals(ALERT_DEF_SOURCE_REPORTING_WARNING)) {
+      reportingWarning.addProperty(propName,entry.getValue().toString());
+    }
+    if (propCat.equals(ALERT_DEF_SOURCE_REPORTING_CRITICAL)) {
+      reportingCritical.addProperty(propName,entry.getValue().toString());
+    }
+  }
+  if (reportingOk.entrySet().size() > 0) {
+    reporting.add("ok",reportingOk);
+  }
+  if (reportingWarning.entrySet().size() > 0) {
+    reporting.add("warning",reportingWarning);
+  }
+  if (reportingCritical.entrySet().size() > 0) {
+    reporting.add("critical",reportingCritical);
+  }
+  if (reporting.entrySet().size() > 0) {
+    source.add("reporting",reporting);
+  }
+  if (bCreate && 0 == source.entrySet().size()) {
+    throw new IllegalArgumentException("Source must be specified");
+  }
+  Cluster cluster=getManagementController().getClusters().getCluster(clusterName);
+  entity.setClusterId(Long.valueOf(cluster.getClusterId()));
+  if (null != componentName) {
+    entity.setComponentName(componentName);
+  }
+  if (null != definitionName) {
+    entity.setDefinitionName(definitionName);
+  }
+  if (null != label) {
+    entity.setLabel(label);
+  }
+  if (null != enabled) {
+    entity.setEnabled(enabled.booleanValue());
+  }
+  if (null != interval) {
+    entity.setScheduleInterval(interval);
+  }
+  if (null != serviceName) {
+    entity.setServiceName(serviceName);
+  }
+  if (null != sourceType) {
+    entity.setSourceType(sourceType);
+  }
+  if (null != source) {
+    entity.setSource(source.toString());
+  }
+  if (null != scope) {
+    entity.setScope(scope);
+  }
+  entity.setHash(UUID.randomUUID().toString());
+}

@@ -1,0 +1,24 @@
+{
+  LOG.debug(event);
+  AlertCurrentEntity currentAlert=event.getCurrentAlert();
+  if (null != currentAlert && currentAlert.getMaintenanceState() != MaintenanceState.OFF) {
+    return;
+  }
+  AlertHistoryEntity history=event.getNewHistoricalEntry();
+  AlertDefinitionEntity definition=history.getAlertDefinition();
+  List<AlertGroupEntity> groups=m_alertsDispatchDao.findGroupsByDefinition(definition);
+  for (  AlertGroupEntity group : groups) {
+    Set<AlertTargetEntity> targets=group.getAlertTargets();
+    if (null == targets || targets.size() == 0) {
+      continue;
+    }
+    for (    AlertTargetEntity target : targets) {
+      AlertNoticeEntity notice=new AlertNoticeEntity();
+      notice.setUuid(UUID.randomUUID().toString());
+      notice.setAlertTarget(target);
+      notice.setAlertHistory(event.getNewHistoricalEntry());
+      notice.setNotifyState(NotificationState.PENDING);
+      m_alertsDispatchDao.create(notice);
+    }
+  }
+}

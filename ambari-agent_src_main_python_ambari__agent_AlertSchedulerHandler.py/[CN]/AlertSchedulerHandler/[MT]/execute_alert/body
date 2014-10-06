@@ -1,0 +1,17 @@
+def execute_alert(self, execution_commands):
+    '\n    Executes an alert immediately, ignoring any scheduled jobs. The existing\n    jobs remain untouched. The result of this is stored in the alert\n    collector for tranmission during the next heartbeat\n    '
+    if ((self.__scheduler is None) or (execution_commands is None)):
+        return
+    for execution_command in execution_commands:
+        try:
+            alert_definition = execution_command['alertDefinition']
+            clusterName = ('' if (not ('clusterName' in execution_command)) else execution_command['clusterName'])
+            hostName = ('' if (not ('hostName' in execution_command)) else execution_command['hostName'])
+            alert = self.__json_to_callable(clusterName, hostName, alert_definition)
+            if (alert is None):
+                continue
+            logger.info('Executing on-demand alert {0} ({1})'.format(alert.get_name(), alert.get_uuid()))
+            alert.set_helpers(self._collector, self.__config_maps[clusterName])
+            alert.collect()
+        except:
+            logger.exception('Unable to execute the alert outside of the job scheduler')

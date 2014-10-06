@@ -1,0 +1,80 @@
+{
+  List<AlertNoticeEntity> pending=m_dao.findPendingNotices();
+  if (pending.size() == 0) {
+    return;
+  }
+  LOG.info("There are {} pending alert notices about to be dispatched..." + pending.size());
+  Map<AlertTargetEntity,List<AlertNoticeEntity>> aggregateMap=new HashMap<AlertTargetEntity,List<AlertNoticeEntity>>(pending.size());
+  for (  AlertNoticeEntity notice : pending) {
+    AlertTargetEntity target=notice.getAlertTarget();
+    List<AlertNoticeEntity> notices=aggregateMap.get(target);
+    if (null == notices) {
+      notices=new ArrayList<AlertNoticeEntity>();
+      aggregateMap.put(target,notices);
+    }
+    notices.add(notice);
+  }
+  Set<AlertTargetEntity> targets=aggregateMap.keySet();
+  for (  AlertTargetEntity target : targets) {
+    List<AlertNoticeEntity> notices=aggregateMap.get(target);
+    if (null == notices || notices.size() == 0) {
+      continue;
+    }
+    String propertiesJson=target.getProperties();
+    AlertTargetProperties targetProperties=m_gson.fromJson(propertiesJson,AlertTargetProperties.class);
+    Map<String,String> properties=targetProperties.Properties;
+    Notification notification=new Notification();
+    notification.Callback=new AlertNoticeDispatchCallback();
+    notification.CallbackIds=new ArrayList<String>(notices.size());
+    String subject="OK ({0}), Warning ({1}), Critical ({2})";
+    StringBuilder buffer=new StringBuilder(512);
+    int okCount=0;
+    int warningCount=0;
+    int criticalCount=0;
+    for (    AlertNoticeEntity notice : notices) {
+      AlertHistoryEntity history=notice.getAlertHistory();
+      notification.CallbackIds.add(notice.getUuid());
+      AlertState alertState=history.getAlertState();
+switch (alertState) {
+case CRITICAL:
+        criticalCount++;
+      break;
+case OK:
+    okCount++;
+  break;
+case UNKNOWN:
+break;
+case WARNING:
+warningCount++;
+break;
+default :
+break;
+}
+buffer.append(history.getAlertLabel());
+buffer.append(": ");
+buffer.append(history.getAlertText());
+buffer.append("\n");
+}
+notification.Subject=MessageFormat.format(subject,okCount,warningCount,criticalCount);
+notification.Body=buffer.toString();
+if (properties.containsKey(AMBARI_DISPATCH_CREDENTIAL_USERNAME) && properties.containsKey(AMBARI_DISPATCH_CREDENTIAL_PASSWORD)) {
+DispatchCredentials credentials=new DispatchCredentials();
+credentials.UserName=properties.get(AMBARI_DISPATCH_CREDENTIAL_USERNAME);
+credentials.Password=properties.get(AMBARI_DISPATCH_CREDENTIAL_PASSWORD);
+notification.Credentials=credentials;
+}
+if (null != targetProperties.Recipients) {
+List<Recipient> recipients=new ArrayList<Recipient>(targetProperties.Recipients.size());
+for (String stringRecipient : targetProperties.Recipients) {
+Recipient recipient=new Recipient();
+recipient.Identifier=stringRecipient;
+recipients.add(recipient);
+}
+notification.Recipients=recipients;
+}
+notification.DispatchProperties=properties;
+NotificationDispatcher dispatcher=m_dispatchFactory.getDispatcher(target.getNotificationType());
+DispatchRunnable runnable=new DispatchRunnable(dispatcher,notification);
+m_executor.execute(runnable);
+}
+}

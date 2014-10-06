@@ -1,0 +1,16 @@
+def shutdown(self, wait=True):
+    if self._shutdown:
+        return
+    logging.info('Shutting down thread pool')
+    self._shutdown = True
+    _threadpools.remove(ref(self))
+    self._threads_lock.acquire()
+    for _ in range(self.num_threads):
+        self._queue.put((None, None, None))
+    self._threads_lock.release()
+    if wait:
+        self._threads_lock.acquire()
+        threads = tuple(self._threads)
+        self._threads_lock.release()
+        for thread in threads:
+            thread.join()

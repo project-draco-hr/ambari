@@ -1,0 +1,24 @@
+{
+  Clusters clusters=getManagementController().getClusters();
+  String stringId=(String)propertyMap.get(ALERT_DEF_ID);
+  long id=Long.parseLong(stringId);
+  AlertDefinitionEntity entity=alertDefinitionDAO.findById(id);
+  if (null == entity) {
+    LOG.error("Unable to lookup alert definition with ID {}",id);
+    return;
+  }
+  Cluster cluster=null;
+  try {
+    cluster=clusters.getClusterById(entity.getClusterId());
+  }
+ catch (  AmbariException ambariException) {
+    LOG.error("Unable to lookup cluster with ID {}",entity.getClusterId(),ambariException);
+    return;
+  }
+  Set<String> hostNames=alertDefinitionHash.getAssociatedHosts(cluster,entity.getDefinitionName(),entity.getServiceName(),entity.getComponentName());
+  for (  String hostName : hostNames) {
+    AlertDefinition definition=definitionFactory.coerce(entity);
+    AlertExecutionCommand command=new AlertExecutionCommand(cluster.getClusterName(),hostName,definition);
+    actionQueue.enqueue(hostName,command);
+  }
+}

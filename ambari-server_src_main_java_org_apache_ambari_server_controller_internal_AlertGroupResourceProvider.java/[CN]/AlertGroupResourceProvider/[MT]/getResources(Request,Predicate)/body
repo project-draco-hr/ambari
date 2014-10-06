@@ -1,0 +1,31 @@
+{
+  Set<Resource> results=new HashSet<Resource>();
+  Set<String> requestPropertyIds=getRequestPropertyIds(request,predicate);
+  for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+    String clusterName=(String)propertyMap.get(ALERT_GROUP_CLUSTER_NAME);
+    if (null == clusterName || clusterName.isEmpty()) {
+      throw new IllegalArgumentException("The cluster name is required when retrieving alert groups");
+    }
+    String id=(String)propertyMap.get(ALERT_GROUP_ID);
+    if (null != id) {
+      AlertGroupEntity entity=s_dao.findGroupById(Long.parseLong(id));
+      if (null != entity) {
+        results.add(toResource(false,clusterName,entity,requestPropertyIds));
+      }
+    }
+ else {
+      Cluster cluster=null;
+      try {
+        cluster=getManagementController().getClusters().getCluster(clusterName);
+      }
+ catch (      AmbariException ae) {
+        throw new NoSuchResourceException("Parent Cluster resource doesn't exist",ae);
+      }
+      List<AlertGroupEntity> entities=s_dao.findAllGroups(cluster.getClusterId());
+      for (      AlertGroupEntity entity : entities) {
+        results.add(toResource(true,clusterName,entity,requestPropertyIds));
+      }
+    }
+  }
+  return results;
+}

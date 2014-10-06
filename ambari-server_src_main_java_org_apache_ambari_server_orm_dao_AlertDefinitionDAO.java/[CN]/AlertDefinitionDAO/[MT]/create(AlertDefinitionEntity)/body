@@ -1,3 +1,16 @@
 {
   entityManagerProvider.get().persist(alertDefinition);
+  AlertGroupEntity group=dispatchDao.findDefaultServiceGroup(alertDefinition.getServiceName());
+  if (null != group) {
+    group.addAlertDefinition(alertDefinition);
+    dispatchDao.merge(group);
+  }
+  AlertDefinition coerced=alertDefinitionFactory.coerce(alertDefinition);
+  if (null != coerced) {
+    AlertDefinitionRegistrationEvent event=new AlertDefinitionRegistrationEvent(alertDefinition.getClusterId(),coerced);
+    eventPublisher.publish(event);
+  }
+ else {
+    LOG.warn("Unable to broadcast alert registration event for {}",alertDefinition.getDefinitionName());
+  }
 }
