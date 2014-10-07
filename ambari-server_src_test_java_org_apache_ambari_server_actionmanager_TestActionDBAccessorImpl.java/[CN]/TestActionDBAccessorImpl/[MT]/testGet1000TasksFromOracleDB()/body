@@ -1,0 +1,25 @@
+{
+  Stage s=new Stage(requestId,"/a/b","cluster1",1L,"action db accessor test","clusterHostInfo","commandParamsStage","hostParamsStage");
+  s.setStageId(stageId);
+  for (int i=1000; i < 2002; i++) {
+    String host="host" + i;
+    clusters.addHost(host);
+    clusters.getHost(host).persist();
+    s.addHostRoleExecutionCommand("host" + i,Role.HBASE_MASTER,RoleCommand.START,null,"cluster1","HBASE");
+  }
+  List<Stage> stages=new ArrayList<Stage>();
+  stages.add(s);
+  Request request=new Request(stages,clusters);
+  db.persistActions(request);
+  List<HostRoleCommandEntity> entities=hostRoleCommandDAO.findByRequest(request.getRequestId());
+  assertEquals(1002,entities.size());
+  List<Long> taskIds=new ArrayList<Long>();
+  for (  HostRoleCommandEntity entity : entities) {
+    taskIds.add(entity.getTaskId());
+  }
+  TestDBAccessorImpl testDBAccessorImpl=(TestDBAccessorImpl)injector.getInstance(DBAccessor.class);
+  testDBAccessorImpl.setDbTypeOverride(ORACLE);
+  assertEquals(ORACLE,injector.getInstance(DBAccessor.class).getDbType());
+  entities=hostRoleCommandDAO.findByPKs(taskIds);
+  assertEquals("Tasks returned from DB match the ones created",taskIds.size(),entities.size());
+}
