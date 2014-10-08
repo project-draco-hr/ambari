@@ -1,12 +1,19 @@
 {
-  Runtime runtime=Runtime.getRuntime();
-  Process process=runtime.exec(commandLine);
+  ProcessBuilder builder=new ProcessBuilder(Arrays.asList(commandLine.split("\\s+")));
+  builder.redirectErrorStream(true);
+  Process process=builder.start();
   CommandLineThread commandLineThread=new CommandLineThread(process);
+  LogStreamReader logStream=new LogStreamReader(process.getInputStream());
+  Thread logStreamThread=new Thread(logStream,"LogStreamReader");
+  logStreamThread.start();
   commandLineThread.start();
   try {
     commandLineThread.join(timeout);
-    if (commandLineThread.exit != null)     return commandLineThread.exit;
- else     throw new TimeoutException();
+    logStreamThread.join(timeout);
+    Integer returnCode=commandLineThread.getReturnCode();
+    if (returnCode == null)     throw new TimeoutException();
+ else     if (returnCode != 0)     throw new ExecutionException(String.format("Execution of \"%s\" returned %d.",commandLine,returnCode),new Throwable(logStream.getOutput()));
+ else     return commandLineThread.returnCode;
   }
  catch (  InterruptedException ex) {
     commandLineThread.interrupt();
