@@ -20,6 +20,10 @@
         AmbariCluster cluster=ambariClient.getCluster(clusterInfo);
         AmbariServiceInfo hdfsServiceInfo=null;
         AmbariServiceInfo yarnServiceInfo=null;
+        Validation validateStackVersion=validateStackVersion(clusterInfo.getVersion());
+        if (validateStackVersion != null) {
+          status.getValidations().add(validateStackVersion);
+        }
         for (        AmbariServiceInfo svc : cluster.getServices()) {
           if ("HDFS".equals(svc.getId())) {
             hdfsServiceInfo=svc;
@@ -52,10 +56,22 @@
           Map<String,String> clusterEnvConfigs=ambariClient.getConfiguration(cluster,"cluster-env",cluster.getDesiredConfigs().get("cluster-env"));
           newHadoopConfigs.put("security_enabled",clusterEnvConfigs.get("security_enabled"));
         }
+        if (cluster.getDesiredConfigs().containsKey("hdfs-site")) {
+          Map<String,String> hdfsSiteConfigs=ambariClient.getConfiguration(cluster,"hdfs-site",cluster.getDesiredConfigs().get("hdfs-site"));
+          newHadoopConfigs.putAll(hdfsSiteConfigs);
+        }
         if (cluster.getDesiredConfigs().containsKey("yarn-site")) {
           Map<String,String> yarnSiteConfigs=ambariClient.getConfiguration(cluster,"yarn-site",cluster.getDesiredConfigs().get("yarn-site"));
           newHadoopConfigs.putAll(yarnSiteConfigs);
           status.getParameters().put(PROPERTY_YARN_RM_WEBAPP_URL,newHadoopConfigs.get("yarn.resourcemanager.webapp.address"));
+        }
+        if (cluster.getDesiredConfigs().containsKey("yarn-env")) {
+          Map<String,String> yarnEnvConfigs=ambariClient.getConfiguration(cluster,"yarn-env",cluster.getDesiredConfigs().get("yarn-env"));
+          String yarnUser=yarnEnvConfigs.get("yarn_user");
+          if (yarnUser == null || yarnUser.trim().length() < 1) {
+            yarnUser="yarn";
+          }
+          newHadoopConfigs.put("yarn_user",yarnUser);
         }
         if (cluster.getDesiredConfigs().containsKey("zookeeper-env")) {
           Map<String,String> zkEnvConfigs=ambariClient.getConfiguration(cluster,"zookeeper-env",cluster.getDesiredConfigs().get("zookeeper-env"));
@@ -92,6 +108,10 @@
           }
           newHadoopConfigs.put(PROPERTY_GANGLIA_CUSTOM_CLUSTERS,clustersCsv);
           status.getParameters().put(PROPERTY_GANGLIA_CUSTOM_CLUSTERS,clustersCsv);
+        }
+        Validation validateHDFSAccess=validateHDFSAccess(newHadoopConfigs,hdfsServiceInfo);
+        if (validateHDFSAccess != null) {
+          status.getValidations().add(validateHDFSAccess);
         }
       }
  else {
