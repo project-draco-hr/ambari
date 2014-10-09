@@ -2,16 +2,23 @@
   ClassLoader currentClassLoader=Thread.currentThread().getContextClassLoader();
   Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
   try {
-    boolean securityEnabled=Boolean.valueOf(getHadoopConfigs().get(PROPERTY_SLIDER_SECURITY_ENABLED));
+    boolean securityEnabled=Boolean.valueOf(getHadoopConfigs().get("security_enabled"));
+    UserGroupInformation.setConfiguration(getSliderClientConfiguration());
     UserGroupInformation sliderUser;
+    String loggedInUser=getUserToRunAs();
     if (securityEnabled) {
       String viewPrincipal=getViewParameterValue(PARAM_VIEW_PRINCIPAL);
       String viewPrincipalKeytab=getViewParameterValue(PARAM_VIEW_PRINCIPAL_KEYTAB);
       UserGroupInformation ambariUser=UserGroupInformation.loginUserFromKeytabAndReturnUGI(viewPrincipal,viewPrincipalKeytab);
-      sliderUser=UserGroupInformation.createProxyUser(getUserToRunAs(),ambariUser);
+      if (loggedInUser.equals(ambariUser.getShortUserName())) {
+        sliderUser=ambariUser;
+      }
+ else {
+        sliderUser=UserGroupInformation.createProxyUser(loggedInUser,ambariUser);
+      }
     }
  else {
-      sliderUser=UserGroupInformation.getBestUGI(null,getUserToRunAs());
+      sliderUser=UserGroupInformation.getBestUGI(null,loggedInUser);
     }
     try {
       T value=sliderUser.doAs(new PrivilegedExceptionAction<T>(){

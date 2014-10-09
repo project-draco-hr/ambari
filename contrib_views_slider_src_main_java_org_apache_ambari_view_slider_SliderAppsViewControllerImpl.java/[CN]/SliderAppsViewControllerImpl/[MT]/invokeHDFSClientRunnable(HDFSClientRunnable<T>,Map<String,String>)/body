@@ -3,20 +3,38 @@
   Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
   try {
     boolean securityEnabled=Boolean.valueOf(hadoopConfigs.get("security_enabled"));
+    final HdfsConfiguration hdfsConfiguration=new HdfsConfiguration();
+    for (    Entry<String,String> entry : hadoopConfigs.entrySet()) {
+      hdfsConfiguration.set(entry.getKey(),entry.getValue());
+    }
+    UserGroupInformation.setConfiguration(hdfsConfiguration);
     UserGroupInformation sliderUser;
+    String loggedInUser=getUserToRunAs(hadoopConfigs);
     if (securityEnabled) {
       String viewPrincipal=getViewParameterValue(PARAM_VIEW_PRINCIPAL);
       String viewPrincipalKeytab=getViewParameterValue(PARAM_VIEW_PRINCIPAL_KEYTAB);
       UserGroupInformation ambariUser=UserGroupInformation.loginUserFromKeytabAndReturnUGI(viewPrincipal,viewPrincipalKeytab);
-      sliderUser=UserGroupInformation.createProxyUser(getUserToRunAs(),ambariUser);
+      if (loggedInUser.equals(ambariUser.getShortUserName())) {
+        sliderUser=ambariUser;
+      }
+ else {
+        sliderUser=UserGroupInformation.createProxyUser(loggedInUser,ambariUser);
+      }
     }
  else {
-      sliderUser=UserGroupInformation.getBestUGI(null,getUserToRunAs());
+      sliderUser=UserGroupInformation.getBestUGI(null,loggedInUser);
     }
     try {
       T value=sliderUser.doAs(new PrivilegedExceptionAction<T>(){
         @Override public T run() throws Exception {
-          return runnable.run();
+          String fsPath=hadoopConfigs.get("fs.defaultFS");
+          FileSystem fs=FileSystem.get(URI.create(fsPath),hdfsConfiguration);
+          try {
+            return runnable.run(fs);
+          }
+  finally {
+            fs.close();
+          }
         }
       }
 );
