@@ -1,0 +1,53 @@
+{
+  String propertyId=predicate.getPropertyId();
+  List<? extends SingularAttribute<?,?>> singularAttributes=getPredicateMapping(propertyId);
+  if (null == singularAttributes || singularAttributes.size() == 0) {
+    return;
+  }
+  SingularAttribute<?,?> lastSingularAttribute=null;
+  Path<Comparable> path=null;
+  for (  SingularAttribute<?,?> singularAttribute : singularAttributes) {
+    lastSingularAttribute=singularAttribute;
+    if (null == path) {
+      path=m_root.get(singularAttribute.getName());
+    }
+ else {
+      path=path.get(singularAttribute.getName());
+    }
+  }
+  if (null == path) {
+    return;
+  }
+  String operator=predicate.getOperator();
+  Comparable<?> value=predicate.getValue();
+  Class<?> clazz=lastSingularAttribute.getJavaType();
+  if (clazz.isEnum()) {
+    Class<? extends Enum> enumClass=(Class<? extends Enum>)clazz;
+    value=Enum.valueOf(enumClass,value.toString());
+  }
+  javax.persistence.criteria.Predicate jpaPredicate=null;
+  if ("=".equals(operator)) {
+    jpaPredicate=m_builder.equal(path,value);
+  }
+ else   if ("<".equals(operator)) {
+    jpaPredicate=m_builder.lessThan(path,value);
+  }
+ else   if ("<=".equals(operator)) {
+    jpaPredicate=m_builder.lessThanOrEqualTo(path,value);
+  }
+ else   if (">".equals(operator)) {
+    jpaPredicate=m_builder.greaterThan(path,value);
+  }
+ else   if (">=".equals(operator)) {
+    jpaPredicate=m_builder.greaterThanOrEqualTo(path,value);
+  }
+  if (null == jpaPredicate) {
+    return;
+  }
+  if (null == m_queue.peekLast()) {
+    m_lastPredicate=jpaPredicate;
+  }
+ else {
+    m_queue.peekLast().add(jpaPredicate);
+  }
+}

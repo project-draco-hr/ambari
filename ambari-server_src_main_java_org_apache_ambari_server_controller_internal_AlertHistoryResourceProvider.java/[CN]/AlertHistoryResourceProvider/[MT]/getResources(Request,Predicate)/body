@@ -1,0 +1,35 @@
+{
+  Cluster cluster=null;
+  Set<String> requestPropertyIds=getRequestPropertyIds(request,predicate);
+  Set<Resource> results=new LinkedHashSet<Resource>();
+  Set<Map<String,Object>> propertyMaps=getPropertyMaps(predicate);
+  for (  Map<String,Object> propertyMap : propertyMaps) {
+    String clusterName=(String)propertyMap.get(ALERT_HISTORY_CLUSTER_NAME);
+    if (null == clusterName || clusterName.isEmpty()) {
+      throw new IllegalArgumentException("Invalid argument, cluster name is required");
+    }
+    if (null == cluster) {
+      try {
+        cluster=getManagementController().getClusters().getCluster(clusterName);
+      }
+ catch (      AmbariException e) {
+        throw new NoSuchResourceException("Parent Cluster resource doesn't exist",e);
+      }
+    }
+    String id=(String)propertyMap.get(ALERT_HISTORY_ID);
+    if (null != id) {
+      AlertHistoryEntity entity=s_dao.findById(Long.parseLong(id));
+      if (null != entity) {
+        results.add(toResource(clusterName,entity,requestPropertyIds));
+        continue;
+      }
+    }
+    AlertHistoryRequest historyRequest=new AlertHistoryRequest();
+    historyRequest.Predicate=predicate;
+    List<AlertHistoryEntity> entities=s_dao.findAll(historyRequest);
+    for (    AlertHistoryEntity entity : entities) {
+      results.add(toResource(cluster.getClusterName(),entity,requestPropertyIds));
+    }
+  }
+  return results;
+}
