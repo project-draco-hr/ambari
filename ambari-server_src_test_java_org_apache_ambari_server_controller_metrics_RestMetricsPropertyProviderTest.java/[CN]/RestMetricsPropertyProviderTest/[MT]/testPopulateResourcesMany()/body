@@ -1,0 +1,32 @@
+{
+  MetricDefinition metricDefinition=createNiceMock(MetricDefinition.class);
+  expect(metricDefinition.getMetrics()).andReturn(componentMetrics);
+  expect(metricDefinition.getType()).andReturn("org.apache.ambari.server.controller.metrics.RestMetricsPropertyProvider");
+  expect(metricDefinition.getProperties()).andReturn(metricsProperties);
+  replay(metricDefinition);
+  Map<String,PropertyInfo> metrics=StackDefinedPropertyProvider.getPropertyInfo(metricDefinition);
+  HashMap<String,Map<String,PropertyInfo>> componentMetrics=new HashMap<String,Map<String,PropertyInfo>>();
+  componentMetrics.put(WRAPPED_METRICS_KEY,metrics);
+  TestStreamProvider streamProvider=new TestStreamProvider();
+  TestMetricsHostProvider metricsHostProvider=new TestMetricsHostProvider();
+  Set<Resource> resources=new HashSet<Resource>();
+  RestMetricsPropertyProvider restMetricsPropertyProvider=new RestMetricsPropertyProvider(injector,metricDefinition.getProperties(),componentMetrics,streamProvider,metricsHostProvider,PropertyHelper.getPropertyId("HostRoles","cluster_name"),PropertyHelper.getPropertyId("HostRoles","host_name"),PropertyHelper.getPropertyId("HostRoles","component_name"),PropertyHelper.getPropertyId("HostRoles","state"),"STORM_REST_API");
+  for (int i=0; i < NUMBER_OF_RESOURCES; ++i) {
+    Resource resource=new ResourceImpl(Resource.Type.HostComponent);
+    resource.setProperty("HostRoles/cluster_name","c1");
+    resource.setProperty(HOST_COMPONENT_HOST_NAME_PROPERTY_ID,"domu-12-31-39-0e-34-e1.compute-1.internal");
+    resource.setProperty(HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID,"STORM_REST_API");
+    resource.setProperty(HOST_COMPONENT_STATE_PROPERTY_ID,"STARTED");
+    resource.setProperty("unique_id",i);
+    resources.add(resource);
+  }
+  Request request=PropertyHelper.getReadRequest(Collections.<String>emptySet());
+  Set<Resource> resourceSet=restMetricsPropertyProvider.populateResources(resources,request,null);
+  Assert.assertEquals(NUMBER_OF_RESOURCES,resourceSet.size());
+  for (  Resource resource : resourceSet) {
+    Assert.assertEquals(28.0,resource.getPropertyValue(PropertyHelper.getPropertyId("metrics/api/cluster/summary","tasks.total")));
+    Assert.assertEquals(8.0,resource.getPropertyValue(PropertyHelper.getPropertyId("metrics/api/cluster/summary","slots.total")));
+    Assert.assertEquals(5.0,resource.getPropertyValue(PropertyHelper.getPropertyId("metrics/api/cluster/summary","slots.free")));
+    Assert.assertEquals(2.0,resource.getPropertyValue(PropertyHelper.getPropertyId("metrics/api/cluster/summary","supervisors")));
+  }
+}
