@@ -3,15 +3,20 @@ def main():
     parser = optparse.OptionParser()
     parser.add_option('-H', '--host', dest='host', default='localhost', help='NameNode host')
     parser.add_option('-p', '--port', dest='port', default='50070', help='NameNode jmx port')
+    parser.add_option('-s', '--ssl-enabled', dest='is_ssl_enabled', default=False, help='SSL Enabled')
     parser.add_option('-w', '--warning', dest='warning', default='200', help='Percent for warning alert')
     parser.add_option('-c', '--critical', dest='crit', default='200', help='Percent for critical alert')
     parser.add_option('-t', '--period', dest='period', default='21600', help='Period time')
     parser.add_option('-x', '--txns', dest='txns', default='1000000', help="CheckpointNode will create a checkpoint of the namespace every 'dfs.namenode.checkpoint.txns'")
     (options, args) = parser.parse_args()
-    host = get_available_nn_host(options)
-    last_checkpoint_time_qry = 'http://{host}:{port}/jmx?qry=Hadoop:service=NameNode,name=FSNamesystem'.format(host=host, port=options.port)
+    scheme = 'http'
+    if (options.is_ssl_enabled == 'true'):
+        scheme = 'https'
+    host = get_available_nn_host(options, scheme)
+    last_checkpoint_time_qry = '{scheme}://{host}:{port}/jmx?qry=Hadoop:service=NameNode,name=FSNamesystem'.format(scheme=scheme, host=host, port=options.port)
+    print last_checkpoint_time_qry
     last_checkpoint_time = int(get_value_from_jmx(last_checkpoint_time_qry, 'LastCheckpointTime'))
-    journal_transaction_info_qry = 'http://{host}:{port}/jmx?qry=Hadoop:service=NameNode,name=NameNodeInfo'.format(host=host, port=options.port)
+    journal_transaction_info_qry = '{scheme}://{host}:{port}/jmx?qry=Hadoop:service=NameNode,name=NameNodeInfo'.format(scheme=scheme, host=host, port=options.port)
     journal_transaction_info = get_value_from_jmx(journal_transaction_info_qry, 'JournalTransactionInfo')
     journal_transaction_info_dict = json.loads(journal_transaction_info)
     last_txid = int(journal_transaction_info_dict['LastAppliedOrWrittenTxId'])
