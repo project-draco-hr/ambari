@@ -1,34 +1,44 @@
 {
-  Set<Resource> resources;
   ResourceProvider provider=ensureResourceProvider(type);
   ResourcePredicateEvaluator evaluator=provider instanceof ResourcePredicateEvaluator ? (ResourcePredicateEvaluator)provider : DEFAULT_RESOURCE_PREDICATE_EVALUATOR;
   int totalCount=0;
+  Set<Resource> resources=providerResources;
   if (!providerResources.isEmpty()) {
+    Request.PageInfo pageInfo=request.getPageInfo();
+    Request.SortInfo sortInfo=request.getSortInfo();
+    boolean providerAlreadyPaged=(null != pageInfo && pageInfo.isResponsePaged());
+    boolean providerAlreadySorted=(null != sortInfo && sortInfo.isResponseSorted());
     Comparator<Resource> resourceComparator=comparator;
-    if (sortRequest != null) {
+    if (null != sortRequest) {
       checkSortRequestProperties(sortRequest,type,provider);
       resourceComparator=new ResourceComparator(sortRequest);
     }
-    TreeSet<Resource> sortedResources=new TreeSet<Resource>(resourceComparator);
-    sortedResources.addAll(providerResources);
-    totalCount=sortedResources.size();
-    if (pageRequest != null) {
+    if (!providerAlreadySorted) {
+      TreeSet<Resource> sortedResources=new TreeSet<Resource>(resourceComparator);
+      sortedResources.addAll(providerResources);
+      resources=sortedResources;
+    }
+    totalCount=resources.size();
+    if (null != pageRequest && !providerAlreadyPaged) {
 switch (pageRequest.getStartingPoint()) {
 case Beginning:
-        return getPageFromOffset(pageRequest.getPageSize(),0,sortedResources,predicate,evaluator);
+        return getPageFromOffset(pageRequest.getPageSize(),0,resources,predicate,evaluator);
 case End:
-      return getPageToOffset(pageRequest.getPageSize(),-1,sortedResources,predicate,evaluator);
+      return getPageToOffset(pageRequest.getPageSize(),-1,resources,predicate,evaluator);
 case OffsetStart:
-    return getPageFromOffset(pageRequest.getPageSize(),pageRequest.getOffset(),sortedResources,predicate,evaluator);
+    return getPageFromOffset(pageRequest.getPageSize(),pageRequest.getOffset(),resources,predicate,evaluator);
 case OffsetEnd:
-  return getPageToOffset(pageRequest.getPageSize(),pageRequest.getOffset(),sortedResources,predicate,evaluator);
+  return getPageToOffset(pageRequest.getPageSize(),pageRequest.getOffset(),resources,predicate,evaluator);
+case PredicateStart:
+case PredicateEnd:
+break;
+default :
+break;
 }
 }
-resources=sortedResources;
+ else if (providerAlreadyPaged) {
+totalCount=pageInfo.getTotalCount();
 }
- else {
-resources=providerResources;
-totalCount=providerResources.size();
 }
 return new PageResponseImpl(new ResourceIterable(resources,predicate,evaluator),0,null,null,totalCount);
 }
