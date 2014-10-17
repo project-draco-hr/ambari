@@ -1,7 +1,9 @@
 {
   Injector injector=createStrictMock(Injector.class);
   Capture<AmbariManagementController> controllerCapture=new Capture<AmbariManagementController>();
+  Clusters clusters=createNiceMock(Clusters.class);
   StackId stack=createNiceMock(StackId.class);
+  AmbariMetaInfo metaInfo=createStrictMock(AmbariMetaInfo.class);
   Cluster cluster=createNiceMock(Cluster.class);
   final Host host=createNiceMock(Host.class);
   Service service=createNiceMock(Service.class);
@@ -27,7 +29,7 @@
   expect(cluster.getDesiredStackVersion()).andReturn(stack);
   expect(stack.getStackName()).andReturn("stackName");
   expect(stack.getStackVersion()).andReturn("stackVersion");
-  expect(ambariMetaInfo.getComponentToService("stackName","stackVersion","component1")).andReturn("service1");
+  expect(metaInfo.getComponentToService("stackName","stackVersion","component1")).andReturn("service1");
   expect(cluster.getService("service1")).andReturn(service);
   expect(service.getServiceComponent("component1")).andReturn(component);
   expect(component.getName()).andReturn("component1");
@@ -40,12 +42,15 @@
   expect(componentHost.convertToResponse()).andReturn(response);
   expect(componentHost.getHostName()).andReturn("host1").anyTimes();
   expect(maintHelper.getEffectiveState(componentHost,host)).andReturn(MaintenanceState.OFF);
-  replay(maintHelper,injector,clusters,cluster,host,response,stack,ambariMetaInfo,service,component,componentHost);
+  replay(maintHelper,injector,clusters,cluster,host,response,stack,metaInfo,service,component,componentHost);
   AmbariManagementController controller=new AmbariManagementControllerImpl(null,clusters,injector);
-  setAmbariMetaInfo(ambariMetaInfo,controller);
+  Class<?> c=controller.getClass();
+  Field f=c.getDeclaredField("ambariMetaInfo");
+  f.setAccessible(true);
+  f.set(controller,metaInfo);
   Set<ServiceComponentHostResponse> setResponses=controller.getHostComponents(setRequests);
   assertSame(controller,controllerCapture.getValue());
   assertEquals(1,setResponses.size());
   assertTrue(setResponses.contains(response));
-  verify(injector,clusters,cluster,host,response,stack,ambariMetaInfo,service,component,componentHost);
+  verify(injector,clusters,cluster,host,response,stack,metaInfo,service,component,componentHost);
 }

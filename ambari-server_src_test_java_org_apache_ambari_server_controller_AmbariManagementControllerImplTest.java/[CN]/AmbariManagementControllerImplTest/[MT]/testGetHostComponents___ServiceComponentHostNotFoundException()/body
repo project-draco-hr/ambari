@@ -1,7 +1,9 @@
 {
   Injector injector=createStrictMock(Injector.class);
   Capture<AmbariManagementController> controllerCapture=new Capture<AmbariManagementController>();
+  Clusters clusters=createNiceMock(Clusters.class);
   StackId stack=createNiceMock(StackId.class);
+  AmbariMetaInfo metaInfo=createStrictMock(AmbariMetaInfo.class);
   Cluster cluster=createNiceMock(Cluster.class);
   Host host=createNiceMock(Host.class);
   Service service=createNiceMock(Service.class);
@@ -18,14 +20,17 @@
   expect(cluster.getDesiredStackVersion()).andReturn(stack);
   expect(stack.getStackName()).andReturn("stackName");
   expect(stack.getStackVersion()).andReturn("stackVersion");
-  expect(ambariMetaInfo.getComponentToService("stackName","stackVersion","component1")).andReturn("service1");
+  expect(metaInfo.getComponentToService("stackName","stackVersion","component1")).andReturn("service1");
   expect(cluster.getService("service1")).andReturn(service);
   expect(service.getServiceComponent("component1")).andReturn(component);
   expect(component.getName()).andReturn("component1").anyTimes();
   expect(component.getServiceComponentHosts()).andReturn(null);
-  replay(maintHelper,injector,clusters,cluster,host,stack,ambariMetaInfo,service,component);
+  replay(maintHelper,injector,clusters,cluster,host,stack,metaInfo,service,component);
   AmbariManagementController controller=new AmbariManagementControllerImpl(null,clusters,injector);
-  setAmbariMetaInfo(ambariMetaInfo,controller);
+  Class<?> c=controller.getClass();
+  Field f=c.getDeclaredField("ambariMetaInfo");
+  f.setAccessible(true);
+  f.set(controller,metaInfo);
   try {
     controller.getHostComponents(setRequests);
     fail("expected ServiceComponentHostNotFoundException");
@@ -33,5 +38,5 @@
  catch (  ServiceComponentHostNotFoundException e) {
   }
   assertSame(controller,controllerCapture.getValue());
-  verify(injector,clusters,cluster,host,stack,ambariMetaInfo,service,component);
+  verify(injector,clusters,cluster,host,stack,metaInfo,service,component);
 }
