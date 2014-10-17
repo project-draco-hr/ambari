@@ -3,7 +3,6 @@
     final String appType=json.get("typeName").getAsString();
     final String appName=json.get("name").getAsString();
     final String queueName=json.has("queue") ? json.get("queue").getAsString() : null;
-    final boolean securityEnabled=Boolean.valueOf(getHadoopConfigs().get("security_enabled"));
     JsonObject configs=json.get("typeConfigs").getAsJsonObject();
     JsonObject resourcesObj=json.get("resources").getAsJsonObject();
     JsonArray componentsArray=resourcesObj.get("components").getAsJsonArray();
@@ -34,7 +33,7 @@ synchronized (createAppCounter) {
     appCreateFolder.mkdirs();
     File appConfigJsonFile=new File(appCreateFolder,"appConfig.json");
     File resourcesJsonFile=new File(appCreateFolder,"resources.json");
-    saveAppConfigs(configs,componentsArray,appName,securityEnabled,appConfigJsonFile);
+    saveAppConfigs(configs,componentsArray,appConfigJsonFile);
     saveAppResources(resourcesObj,resourcesJsonFile);
     final ActionCreateArgs createArgs=new ActionCreateArgs();
     createArgs.template=appConfigJsonFile;
@@ -48,14 +47,8 @@ synchronized (createAppCounter) {
     installArgs.name=appType;
     installArgs.packageURI=getAppsFolderPath() + "/" + localAppPackageFileName;
     installArgs.replacePkg=true;
-    final ActionInstallKeytabArgs keytabArgs=new ActionInstallKeytabArgs();
-    keytabArgs.keytabUri=getUserToRunAsKeytab();
-    keytabArgs.folder=appName;
     return invokeSliderClientRunnable(new SliderClientContextRunnable<String>(){
       @Override public String run(      SliderClient sliderClient) throws YarnException, IOException, InterruptedException {
-        if (securityEnabled) {
-          sliderClient.actionInstallKeytab(keytabArgs);
-        }
         sliderClient.actionInstallPkg(installArgs);
         sliderClient.actionCreate(appName,createArgs);
         ApplicationId applicationId=sliderClient.applicationId;
