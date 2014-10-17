@@ -1,0 +1,23 @@
+def interpret_dynamic_version_property(property_value, tarball_prefix, delimiter=','):
+    '\n  :param property_value: Value to scan for dynamic variables\n  :param tarball_prefix:  Prefix of the tarball must be one of tez, hive, mr, pig\n  :param delimiter: Delimiter character used in the property value, typically a comma or colon\n  :return: Returns a tuple of (x, y), where x is a bool indicating if at least one variable was substituted, and y\n  is the interpretation of the property value if an interpretation could be done, otherwise it remains unchanged.\n\n  Notice that params must have the rpm_version attribute.\n  '
+    import params
+    found_at_least_one_replacement = False
+    versioned_tarball = __map_local_file_to_hdfs_file(tarball_prefix)
+    if (versioned_tarball and (versioned_tarball != '')):
+        property_value = ('' if ((property_value is None) or (property_value.strip() == '')) else property_value)
+        if property_value:
+            elements = []
+            for elem in property_value.split(delimiter):
+                elem = elem.strip()
+                if __contains_dynamic_variable(elem):
+                    elem_pattern = __create_regex_pattern(elem, params.rpm_version).replace('.', '\\.').replace('*', '.*')
+                    p = re.compile(elem_pattern)
+                    m = p.match(versioned_tarball)
+                    if m:
+                        elements.append(versioned_tarball)
+                        found_at_least_one_replacement = True
+                else:
+                    elements.append(elem)
+            if found_at_least_one_replacement:
+                property_value = ','.join(elements)
+    return (found_at_least_one_replacement, property_value)

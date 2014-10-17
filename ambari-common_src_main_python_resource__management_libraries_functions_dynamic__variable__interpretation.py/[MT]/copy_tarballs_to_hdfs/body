@@ -1,0 +1,29 @@
+def copy_tarballs_to_hdfs(tarball_prefix, component_user, file_owner):
+    '\n  :param tarball_prefix: Prefix of the tarball must be one of tez, hive, mr, pig\n  :param component_user: User that will execute the Hadoop commands\n  :param file_owner: Owner of the files copied to HDFS\n  :return: Returns 0 on success, 1 if no files were copied, and in some cases may raise an exception.\n\n  In order to call this function, params.py must have all of the following,\n  rpm_version, kinit_path_local, security_enabled, hdfs_user, hdfs_principal_name, hdfs_user_keytab,\n  hadoop_bin_dir, hadoop_conf_dir, and HdfsDirectory as a partial function.\n  '
+    import params
+    if ((not hasattr(params, 'rpm_version')) or (params.rpm_version is None)):
+        Logger.warning('cluster-env.xml does not have rpm_version')
+        return 1
+    (component_tar_source_file, component_tar_destination_folder) = __get_tar_source_and_dest_folder(tarball_prefix)
+    if ((not component_tar_source_file) or (not component_tar_destination_folder)):
+        return 1
+    source_file_pattern = __create_regex_pattern(component_tar_source_file, params.rpm_version)
+    file_name_pattern = source_file_pattern.split('/')[(-1):][0]
+    tar_destination_folder_pattern = __create_regex_pattern(component_tar_destination_folder, params.rpm_version)
+    hdfs_file_pattern = os.path.join(tar_destination_folder_pattern, file_name_pattern)
+    does_hdfs_file_exist_cmd = ('fs -ls %s' % hdfs_file_pattern)
+    kinit_if_needed = ''
+    if params.security_enabled:
+        kinit_if_needed = format('{kinit_path_local} -kt {hdfs_user_keytab} {hdfs_principal_name};')
+    if kinit_if_needed:
+        Execute(kinit_if_needed, user=component_user, path='/bin')
+    does_hdfs_file_exist = False
+    try:
+        ExecuteHadoop(does_hdfs_file_exist_cmd, user=component_user, logoutput=True, conf_dir=params.hadoop_conf_dir, bin_dir=params.hadoop_bin_dir)
+        does_hdfs_file_exist = True
+    except Fail:
+        pass
+    if (not does_hdfs_file_exist):
+        source_and_dest_pairs = __populate_source_and_dests(tarball_prefix, source_file_pattern, component_tar_destination_folder, params.rpm_version)
+        return __copy_files(source_and_dest_pairs, file_owner, kinit_if_needed)
+    return 1

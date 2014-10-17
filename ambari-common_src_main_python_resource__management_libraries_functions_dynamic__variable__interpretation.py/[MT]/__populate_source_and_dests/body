@@ -1,0 +1,29 @@
+def __populate_source_and_dests(tarball_prefix, source_file_pattern, component_tar_destination_folder, rpm_version):
+    '\n  :param tarball_prefix: Prefix of the tarball must be one of tez, hive, mr, pig\n  :param source_file_pattern: Regex pattern of the source file from the local file system\n  :param component_tar_destination_folder: Destination folder to copy the file to in HDFS\n  :param rpm_version: Stack version number without the build version. E.g., 2.2.0.0\n  :return: Returns a list of tuples (x, y), where x is the source file in the local file system,\n  and y is the destination file path in HDFS\n  '
+    source_and_dest_pairs = []
+    for file in glob.glob(source_file_pattern):
+        file_base_name = os.path.basename(file)
+        component_version = None
+        hdp_build_version = None
+        pattern = ('%s-(.*)\\.%s-([0-9\\.]*)\\..*' % (tarball_prefix, str(rpm_version).replace('.', '\\.')))
+        m = re.search(pattern, file_base_name)
+        if (m and (len(m.groups()) == 2)):
+            component_version = str(m.group(1))
+            hdp_build_version = str(m.group(2))
+        missing_a_variable = False
+        destination_file_path = os.path.join(component_tar_destination_folder, file_base_name)
+        if ('{{ component_version }}' in destination_file_path):
+            if component_version:
+                destination_file_path = destination_file_path.replace('{{ component_version }}', component_version)
+            else:
+                missing_a_variable = True
+        if ('{{ hdp_stack_version }}' in destination_file_path):
+            if hdp_build_version:
+                destination_file_path = destination_file_path.replace('{{ hdp_stack_version }}', ('%s-%s' % (rpm_version, hdp_build_version)))
+            else:
+                missing_a_variable = True
+        if missing_a_variable:
+            print ('WARNING. Could not identify HDP stack version or Component version in file %s , so will not copy to HDFS.' % str(file))
+        else:
+            source_and_dest_pairs.append((file, destination_file_path))
+    return source_and_dest_pairs
