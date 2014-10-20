@@ -11,20 +11,20 @@ def createComponentLayoutRecommendations(self, services, hosts):
             componentName = component['StackServiceComponents']['component_name']
             if self.isComponentHostsPopulated(component):
                 hostsForComponent = component['StackServiceComponents']['hostnames']
-            elif ((len(hostsList) > 1) and self.isMasterComponentWithMultipleInstances(component)):
-                hostsCount = self.getMinComponentCount(component)
-                if (hostsCount > 1):
-                    hostsForComponent = []
-                    hostIndex = 0
-                    while ((hostsCount > len(hostsForComponent)) and (hostIndex < len(hostsList))):
-                        currentHost = hostsList[hostIndex]
-                        if self.isHostSuitableForComponent(currentHost, component):
-                            hostsForComponent.append(currentHost)
-                        hostIndex += 1
-                else:
-                    hostsForComponent = [self.getHostForComponent(component, hostsList)]
             else:
-                hostsForComponent = [self.getHostForComponent(component, hostsList)]
+                availableHosts = hostsList
+                if ((len(hostsList) > 1) and self.isComponentNotPreferableOnAmbariServerHost(component)):
+                    availableHosts = [hostName for hostName in hostsList if (not self.isLocalHost(hostName))]
+                if self.isMasterComponentWithMultipleInstances(component):
+                    hostsCount = self.getMinComponentCount(component)
+                    if (hostsCount > 1):
+                        if (len(availableHosts) < hostsCount):
+                            hostsCount = len(availableHosts)
+                        hostsForComponent = availableHosts[:hostsCount]
+                    else:
+                        hostsForComponent = [self.getHostForComponent(component, availableHosts)]
+                else:
+                    hostsForComponent = [self.getHostForComponent(component, availableHosts)]
             for hostName in hostsForComponent:
                 hostsComponentsMap[hostName].append({'name': componentName, })
     componentsListList = [service['components'] for service in services['services']]
@@ -57,5 +57,5 @@ def createComponentLayoutRecommendations(self, services, hosts):
         index += 1
         host_group_name = 'host-group-{0}'.format(index)
         host_groups.append({'name': host_group_name, 'components': hostsComponentsMap[key], })
-        bindings.append({'name': host_group_name, 'hosts': [{'fqdn': key, }], })
+        bindings.append({'name': host_group_name, 'hosts': [{'fqdn': socket.getfqdn(key), }], })
     return recommendations
