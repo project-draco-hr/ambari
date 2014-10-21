@@ -1,9 +1,7 @@
 {
   Injector injector=createStrictMock(Injector.class);
   Capture<AmbariManagementController> controllerCapture=new Capture<AmbariManagementController>();
-  Clusters clusters=createNiceMock(Clusters.class);
   StackId stack=createNiceMock(StackId.class);
-  AmbariMetaInfo metaInfo=createNiceMock(AmbariMetaInfo.class);
   Cluster cluster=createNiceMock(Cluster.class);
   final Host host=createNiceMock(Host.class);
   Service service=createNiceMock(Service.class);
@@ -37,7 +35,7 @@
   expect(cluster.getDesiredStackVersion()).andReturn(stack).anyTimes();
   expect(stack.getStackName()).andReturn("stackName").anyTimes();
   expect(stack.getStackVersion()).andReturn("stackVersion").anyTimes();
-  expect(metaInfo.getComponentToService("stackName","stackVersion","component1")).andReturn("service1");
+  expect(ambariMetaInfo.getComponentToService("stackName","stackVersion","component1")).andReturn("service1");
   expect(cluster.getService("service1")).andReturn(service);
   expect(service.getServiceComponent("component1")).andReturn(component);
   expect(component.getName()).andReturn("component1");
@@ -45,24 +43,21 @@
   expect(componentHost1.convertToResponse()).andReturn(response1);
   expect(componentHost1.getHostName()).andReturn("host1");
   expect(clusters.getClustersForHost("host2")).andThrow(new HostNotFoundException("host2"));
-  expect(metaInfo.getComponentToService("stackName","stackVersion","component3")).andReturn("service1");
+  expect(ambariMetaInfo.getComponentToService("stackName","stackVersion","component3")).andReturn("service1");
   expect(cluster.getService("service1")).andReturn(service);
   expect(service.getServiceComponent("component3")).andReturn(component3);
   expect(component3.getName()).andReturn("component3");
   expect(component3.getServiceComponentHosts()).andReturn(Collections.singletonMap("foo",componentHost2));
   expect(componentHost2.convertToResponse()).andReturn(response2);
   expect(componentHost2.getHostName()).andReturn("host1");
-  replay(maintHelper,injector,clusters,cluster,host,stack,metaInfo,service,service2,component,component2,component3,componentHost1,componentHost2,response1,response2);
+  replay(maintHelper,injector,clusters,cluster,host,stack,ambariMetaInfo,service,service2,component,component2,component3,componentHost1,componentHost2,response1,response2);
   AmbariManagementController controller=new AmbariManagementControllerImpl(null,clusters,injector);
-  Class<?> c=controller.getClass();
-  Field f=c.getDeclaredField("ambariMetaInfo");
-  f.setAccessible(true);
-  f.set(controller,metaInfo);
+  setAmbariMetaInfo(ambariMetaInfo,controller);
   Set<ServiceComponentHostResponse> setResponses=controller.getHostComponents(setRequests);
   Assert.assertNotNull(setResponses);
   assertSame(controller,controllerCapture.getValue());
   assertEquals(2,setResponses.size());
   assertTrue(setResponses.contains(response1));
   assertTrue(setResponses.contains(response2));
-  verify(injector,clusters,cluster,host,stack,metaInfo,service,service2,component,component2,component3,componentHost1,componentHost2,response1,response2);
+  verify(injector,clusters,cluster,host,stack,ambariMetaInfo,service,service2,component,component2,component3,componentHost1,componentHost2,response1,response2);
 }
