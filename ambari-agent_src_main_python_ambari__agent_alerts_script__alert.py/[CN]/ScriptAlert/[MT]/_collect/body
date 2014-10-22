@@ -1,16 +1,9 @@
 def _collect(self):
-    if ((self.path is None) and (self.stack_path is None)):
-        raise Exception("The attribute 'path' must be specified")
-    path_to_script = self.path
-    if ((not os.path.exists(self.path)) and (self.stacks_dir is not None)):
-        paths = self.path.split('/')
-        path_to_script = os.path.join(self.stacks_dir, *paths)
-    if ((not os.path.exists(path_to_script)) or (not os.path.isfile(path_to_script))):
-        raise Exception("Resolved script '{0}' does not appear to be a script".format(path_to_script))
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug('Executing script check {0}'.format(path_to_script))
-    if path_to_script.endswith('.py'):
-        cmd_module = imp.load_source(self._find_value('name'), path_to_script)
-        return cmd_module.execute()
+    cmd_module = self._load_source()
+    if (cmd_module is not None):
+        parameters = {}
+        for key in self.config_value_dict:
+            parameters[(('{{' + key) + '}}')] = self.config_value_dict[key]
+        return cmd_module.execute(parameters)
     else:
-        return (self.RESULT_UNKNOWN, ['could not execute script {0}'.format(path_to_script)])
+        return (self.RESULT_UNKNOWN, ['Unable to execute script {0}'.format(self.path)])
