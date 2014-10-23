@@ -2,11 +2,20 @@
   if (LOG.isDebugEnabled()) {
     LOG.debug("readFrom spec:" + spec);
   }
-  HttpURLConnection connection=spec.startsWith("https") ? (HttpURLConnection)getSSLConnection(spec) : (HttpURLConnection)getConnection(spec);
+  HttpURLConnection connection=spec.startsWith("https") ? getSSLConnection(spec) : getConnection(spec);
+  AppCookieManager appCookieManager=getAppCookieManager();
   String appCookie=appCookieManager.getCachedAppCookie(spec);
   if (appCookie != null) {
     LOG.debug("Using cached app cookie for URL:" + spec);
-    connection.setRequestProperty(COOKIE,appCookie);
+    if (headers == null || headers.isEmpty()) {
+      headers=Collections.singletonMap(COOKIE,Collections.singletonList(appCookie));
+    }
+ else {
+      headers=new HashMap<String,List<String>>(headers);
+      List<String> cookieList=headers.get(COOKIE);
+      String cookies=cookieList.isEmpty() ? null : cookieList.get(0);
+      headers.put(COOKIE,Collections.singletonList(appendCookie(cookies,appCookie)));
+    }
   }
   connection.setConnectTimeout(connTimeout);
   connection.setReadTimeout(readTimeout);
@@ -35,7 +44,7 @@
       LOG.info("Received WWW-Authentication header:" + wwwAuthHeader + ", for URL:"+ spec);
     }
     if (wwwAuthHeader != null && wwwAuthHeader.trim().startsWith(NEGOTIATE)) {
-      connection=spec.startsWith("https") ? (HttpURLConnection)getSSLConnection(spec) : (HttpURLConnection)getConnection(spec);
+      connection=spec.startsWith("https") ? getSSLConnection(spec) : getConnection(spec);
       appCookie=appCookieManager.getAppCookie(spec,true);
       connection.setRequestProperty(COOKIE,appCookie);
       connection.setConnectTimeout(connTimeout);
