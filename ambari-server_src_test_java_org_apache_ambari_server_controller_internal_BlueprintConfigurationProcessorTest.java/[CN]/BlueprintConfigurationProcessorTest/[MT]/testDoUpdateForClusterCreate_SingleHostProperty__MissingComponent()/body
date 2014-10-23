@@ -1,7 +1,11 @@
 {
+  EasyMockSupport mockSupport=new EasyMockSupport();
+  AmbariManagementController mockMgmtController=mockSupport.createMock(AmbariManagementController.class);
+  expect(mockMgmtController.getStackServices(isA(Set.class))).andReturn(Collections.<StackServiceResponse>emptySet());
   Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
   Map<String,String> typeProps=new HashMap<String,String>();
   typeProps.put("yarn.resourcemanager.hostname","localhost");
+  typeProps.put("yarn.timeline-service.address","localhost");
   properties.put("yarn-site",typeProps);
   Collection<String> hgComponents=new HashSet<String>();
   hgComponents.add("NAMENODE");
@@ -15,8 +19,22 @@
   Map<String,HostGroup> hostGroups=new HashMap<String,HostGroup>();
   hostGroups.put(group1.getName(),group1);
   hostGroups.put(group2.getName(),group2);
+  mockSupport.replayAll();
+  Stack testStackDefinition=new Stack("HDP","2.1",mockMgmtController){
+    @Override public Cardinality getCardinality(    String component){
+      if (component.equals("APP_TIMELINE_SERVER")) {
+        return new Cardinality("1");
+      }
+      return null;
+    }
+  }
+;
   BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(properties);
-  Map<String,Map<String,String>> updatedProperties=updater.doUpdateForClusterCreate(hostGroups,null);
-  String updatedVal=updatedProperties.get("yarn-site").get("yarn.resourcemanager.hostname");
-  assertEquals("testhost",updatedVal);
+  try {
+    updater.doUpdateForClusterCreate(hostGroups,testStackDefinition);
+    fail("IllegalArgumentException should have been thrown");
+  }
+ catch (  IllegalArgumentException illegalArgumentException) {
+  }
+  mockSupport.verifyAll();
 }
