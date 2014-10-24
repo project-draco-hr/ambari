@@ -1,0 +1,18 @@
+def get_url_open_side_effect(self, response_mapping):
+
+    def urlopen_side_effect(request):
+        response = MagicMock()
+        request_type = request.get_method()
+        request_url = request.get_full_url()
+        if (request_type in response_mapping):
+            req_type = response_mapping[request_type]
+            type_responses = req_type.get('body', None)
+            if (type_responses is not None):
+                response_data = type_responses[request_url]
+                response.read.side_effect = [response_data]
+            request_check = req_type.get('request_assertion', None)
+            if (request_check is not None):
+                request_body = json.loads(request.get_data())
+                request_check.get(request_url, (lambda x: None))(request_body)
+        return response
+    return urlopen_side_effect
