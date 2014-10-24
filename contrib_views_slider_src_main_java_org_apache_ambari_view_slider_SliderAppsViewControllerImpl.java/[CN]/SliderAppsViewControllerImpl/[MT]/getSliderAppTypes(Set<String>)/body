@@ -1,6 +1,56 @@
 {
+  Map<String,String> hadoopConfigs=getHadoopConfigs();
+  if (hadoopConfigs == null || hadoopConfigs.isEmpty()) {
+    try {
+      getViewStatus();
+    }
+ catch (    Throwable t) {
+    }
+  }
+  final boolean securityEnabled=Boolean.valueOf(hadoopConfigs.get("security_enabled"));
   if (appTypes == null) {
     appTypes=loadAppTypes();
+  }
+  if (appTypes != null) {
+    for (    SliderAppType appType : appTypes) {
+      Map<String,String> configs=appType.typeConfigsUnsecured;
+      JsonObject resourcesObj=appType.resourcesUnsecured;
+      if (securityEnabled) {
+        configs=appType.typeConfigsSecured;
+        if (configs == null || configs.isEmpty()) {
+          configs=appType.typeConfigsUnsecured;
+        }
+      }
+      if (securityEnabled) {
+        resourcesObj=appType.resourcesSecured;
+        if (resourcesObj == null) {
+          resourcesObj=appType.resourcesUnsecured;
+        }
+      }
+      Map<String,String> appTypeConfigs=new HashMap<String,String>();
+      for (      Entry<String,String> e : configs.entrySet()) {
+        String valueString=e.getValue();
+        if (valueString != null && valueString.contains("${USER_NAME}")) {
+          valueString=valueString.replace("${USER_NAME}",getUserToRunAs(hadoopConfigs));
+        }
+        appTypeConfigs.put(e.getKey(),valueString);
+      }
+      appType.setTypeConfigs(appTypeConfigs);
+      if (resourcesObj != null) {
+        for (        SliderAppTypeComponent component : appType.getTypeComponents()) {
+          JsonElement componentJson=resourcesObj.get(component.getName());
+          if (componentJson != null && componentJson.isJsonObject()) {
+            JsonObject componentObj=componentJson.getAsJsonObject();
+            if (componentObj.has("yarn.role.priority")) {
+              component.setPriority(Integer.parseInt(componentObj.get("yarn.role.priority").getAsString()));
+            }
+            if (componentObj.has("yarn.memory")) {
+              component.setYarnMemory(Integer.parseInt(componentObj.get("yarn.memory").getAsString()));
+            }
+          }
+        }
+      }
+    }
   }
   return appTypes;
 }

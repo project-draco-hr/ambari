@@ -13,34 +13,29 @@
           if (metainfo.getApplication() != null) {
             Application application=metainfo.getApplication();
             ZipEntry appConfigZipEntry=zipFile.getEntry("appConfig-default.json");
+            ZipEntry appConfigSecuredZipEntry=zipFile.getEntry("appConfig-secured-default.json");
             if (appConfigZipEntry == null) {
               throw new IllegalStateException("Slider App package '" + appZip.getName() + "' does not contain 'appConfig-default.json' file");
             }
             ZipEntry resourcesZipEntry=zipFile.getEntry("resources-default.json");
+            ZipEntry resourcesSecuredZipEntry=zipFile.getEntry("resources-secured-default.json");
             if (resourcesZipEntry == null) {
               throw new IllegalStateException("Slider App package '" + appZip.getName() + "' does not contain 'resources-default.json' file");
             }
-            String appConfigJsonString=IOUtils.toString(zipFile.getInputStream(appConfigZipEntry),"UTF-8");
-            String resourcesJsonString=IOUtils.toString(zipFile.getInputStream(resourcesZipEntry),"UTF-8");
-            JsonElement appConfigJson=new JsonParser().parse(appConfigJsonString);
-            JsonElement resourcesJson=new JsonParser().parse(resourcesJsonString);
             SliderAppType appType=new SliderAppType();
             appType.setId(application.getName());
             appType.setTypeName(application.getName());
             appType.setTypeDescription(application.getComment());
             appType.setTypeVersion(application.getVersion());
             appType.setTypePackageFileName(appZip.getName());
-            Map<String,String> configsMap=new HashMap<String,String>();
-            JsonObject appTypeGlobalJson=appConfigJson.getAsJsonObject().get("global").getAsJsonObject();
-            for (            Entry<String,JsonElement> e : appTypeGlobalJson.entrySet()) {
-              String key=e.getKey();
-              String valueString=e.getValue().getAsString();
-              if ("application.def".equals(key)) {
-                valueString=String.format(".slider/package/%s/%s",application.getName(),appZip.getName());
-              }
-              configsMap.put(key,valueString);
+            appType.typeConfigsUnsecured=parseAppTypeConfigs(zipFile,appConfigZipEntry,appZip.getName(),application.getName());
+            if (appConfigSecuredZipEntry != null) {
+              appType.typeConfigsSecured=parseAppTypeConfigs(zipFile,appConfigSecuredZipEntry,appZip.getName(),application.getName());
             }
-            appType.setTypeConfigs(configsMap);
+            appType.resourcesUnsecured=parseAppTypeResources(zipFile,resourcesZipEntry);
+            if (resourcesSecuredZipEntry != null) {
+              appType.resourcesSecured=parseAppTypeResources(zipFile,resourcesSecuredZipEntry);
+            }
             ArrayList<SliderAppTypeComponent> appTypeComponentList=new ArrayList<SliderAppTypeComponent>();
             for (            Component component : application.getComponents()) {
               if ("CLIENT".equals(component.getCategory())) {
@@ -58,18 +53,6 @@
               }
               if (component.getMaxInstanceCount() != null) {
                 appTypeComponent.setMaxInstanceCount(Integer.parseInt(component.getMaxInstanceCount()));
-              }
-              if (resourcesJson != null) {
-                JsonElement componentJson=resourcesJson.getAsJsonObject().get("components").getAsJsonObject().get(component.getName());
-                if (componentJson != null && componentJson.isJsonObject()) {
-                  JsonObject componentObj=componentJson.getAsJsonObject();
-                  if (componentObj.has("yarn.role.priority")) {
-                    appTypeComponent.setPriority(Integer.parseInt(componentObj.get("yarn.role.priority").getAsString()));
-                  }
-                  if (componentObj.has("yarn.memory")) {
-                    appTypeComponent.setYarnMemory(Integer.parseInt(componentObj.get("yarn.memory").getAsString()));
-                  }
-                }
               }
               appTypeComponent.setCategory(component.getCategory());
               appTypeComponentList.add(appTypeComponent);
