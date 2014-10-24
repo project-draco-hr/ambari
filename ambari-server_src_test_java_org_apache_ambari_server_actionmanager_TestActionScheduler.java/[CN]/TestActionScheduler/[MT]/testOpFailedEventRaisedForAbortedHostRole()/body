@@ -30,7 +30,7 @@
   when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
   when(serviceObj.getCluster()).thenReturn(oneClusterMock);
   final List<Stage> stages=new ArrayList<Stage>();
-  Stage stage=new Stage(1,"/tmp","cluster1",1L,"stageWith2Tasks",CLUSTER_HOST_INFO,"","");
+  Stage stage=new Stage(1,"/tmp","cluster1",1L,"stageWith2Tasks",CLUSTER_HOST_INFO,"{\"command_param\":\"param_value\"}","{\"host_param\":\"param_value\"}");
   addInstallTaskToStage(stage,hostname1,"cluster1",Role.DATANODE,RoleCommand.INSTALL,Service.Type.HDFS,1);
   addInstallTaskToStage(stage,hostname2,"cluster1",Role.NAMENODE,RoleCommand.INSTALL,Service.Type.HDFS,2);
   stages.add(stage);
@@ -72,9 +72,9 @@
   ArgumentCaptor<ServiceComponentHostEvent> eventsCapture2=ArgumentCaptor.forClass(ServiceComponentHostEvent.class);
   ActionScheduler scheduler=new ActionScheduler(100,50000,db,aq,fsm,3,new HostsMap((String)null),null,unitOfWork,conf);
   scheduler.setTaskTimeoutAdjustment(false);
-  scheduler.start();
-  while (!stages.get(0).getHostRoleStatus(hostname1,"DATANODE").equals(HostRoleStatus.TIMEDOUT) && !stages.get(0).getHostRoleStatus(hostname2,"NAMENODE").equals(HostRoleStatus.ABORTED)) {
-    Thread.sleep(100L);
+  int cycleCount=0;
+  while (!(stages.get(0).getHostRoleStatus(hostname1,"DATANODE").equals(HostRoleStatus.TIMEDOUT) && stages.get(0).getHostRoleStatus(hostname2,"NAMENODE").equals(HostRoleStatus.ABORTED)) && cycleCount++ <= MAX_CYCLE_ITERATIONS) {
+    scheduler.doWork();
   }
   Assert.assertEquals(HostRoleStatus.TIMEDOUT,stages.get(0).getHostRoleStatus(hostname1,"DATANODE"));
   Assert.assertEquals(HostRoleStatus.ABORTED,stages.get(0).getHostRoleStatus(hostname2,"NAMENODE"));
@@ -98,5 +98,4 @@
   }
   Assert.assertNotNull("Datanode should be in Install failed state.",datanodeFailedEvent);
   Assert.assertNotNull("Namenode should be in Install failed state.",namenodeFailedEvent);
-  scheduler.stop();
 }
