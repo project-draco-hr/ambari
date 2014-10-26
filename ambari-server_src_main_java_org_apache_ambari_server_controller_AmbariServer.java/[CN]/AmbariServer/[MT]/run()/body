@@ -47,7 +47,12 @@
       root.addFilter(new FilterHolder(springSecurityFilter),"/api/*",1);
       root.addFilter(new FilterHolder(springSecurityFilter),"/proxy/*",1);
     }
-    SslSelectChannelConnector sslConnectorTwoWay=new SslSelectChannelConnector();
+    SslContextFactory contextFactoryTwoWay=new SslContextFactory();
+    if (!configs.getSrvrDisabledCiphers().isEmpty()) {
+      String[] masks=configs.getSrvrDisabledCiphers().split(DISABLED_CIPHERS_SPLITTER);
+      contextFactoryTwoWay.setExcludeCipherSuites(masks);
+    }
+    SslSelectChannelConnector sslConnectorTwoWay=new SslSelectChannelConnector(contextFactoryTwoWay);
     sslConnectorTwoWay.setPort(configs.getTwoWayAuthPort());
     Map<String,String> configsMap=configs.getConfigsMap();
     String keystore=configsMap.get(Configuration.SRVR_KSTR_DIR_KEY) + File.separator + configsMap.get(Configuration.KSTR_NAME_KEY);
@@ -60,16 +65,20 @@
     sslConnectorTwoWay.setKeystoreType("PKCS12");
     sslConnectorTwoWay.setTruststoreType("PKCS12");
     sslConnectorTwoWay.setNeedClientAuth(configs.getTwoWaySsl());
-    SslContextFactory contextFactory=new SslContextFactory(true);
-    contextFactory.setKeyStorePath(keystore);
-    contextFactory.setTrustStore(keystore);
-    contextFactory.setKeyStorePassword(srvrCrtPass);
-    contextFactory.setKeyManagerPassword(srvrCrtPass);
-    contextFactory.setTrustStorePassword(srvrCrtPass);
-    contextFactory.setKeyStoreType("PKCS12");
-    contextFactory.setTrustStoreType("PKCS12");
-    contextFactory.setNeedClientAuth(false);
-    SslSelectChannelConnector sslConnectorOneWay=new SslSelectChannelConnector(contextFactory);
+    SslContextFactory contextFactoryOneWay=new SslContextFactory(true);
+    contextFactoryOneWay.setKeyStorePath(keystore);
+    contextFactoryOneWay.setTrustStore(keystore);
+    contextFactoryOneWay.setKeyStorePassword(srvrCrtPass);
+    contextFactoryOneWay.setKeyManagerPassword(srvrCrtPass);
+    contextFactoryOneWay.setTrustStorePassword(srvrCrtPass);
+    contextFactoryOneWay.setKeyStoreType("PKCS12");
+    contextFactoryOneWay.setTrustStoreType("PKCS12");
+    contextFactoryOneWay.setNeedClientAuth(false);
+    if (!configs.getSrvrDisabledCiphers().isEmpty()) {
+      String[] masks=configs.getSrvrDisabledCiphers().split(DISABLED_CIPHERS_SPLITTER);
+      contextFactoryOneWay.setExcludeCipherSuites(masks);
+    }
+    SslSelectChannelConnector sslConnectorOneWay=new SslSelectChannelConnector(contextFactoryOneWay);
     sslConnectorOneWay.setPort(configs.getOneWayAuthPort());
     sslConnectorOneWay.setAcceptors(2);
     sslConnectorTwoWay.setAcceptors(2);
@@ -117,7 +126,12 @@
       String httpsKeystore=configsMap.get(Configuration.CLIENT_API_SSL_KSTR_DIR_NAME_KEY) + File.separator + configsMap.get(Configuration.CLIENT_API_SSL_KSTR_NAME_KEY);
       LOG.info("API SSL Authentication is turned on. Keystore - " + httpsKeystore);
       String httpsCrtPass=configsMap.get(Configuration.CLIENT_API_SSL_CRT_PASS_KEY);
-      SslSelectChannelConnector sapiConnector=new SslSelectChannelConnector();
+      SslContextFactory contextFactoryApi=new SslContextFactory();
+      if (!configs.getSrvrDisabledCiphers().isEmpty()) {
+        String[] masks=configs.getSrvrDisabledCiphers().split(DISABLED_CIPHERS_SPLITTER);
+        contextFactoryApi.setExcludeCipherSuites(masks);
+      }
+      SslSelectChannelConnector sapiConnector=new SslSelectChannelConnector(contextFactoryApi);
       sapiConnector.setPort(configs.getClientSSLApiPort());
       sapiConnector.setKeystore(httpsKeystore);
       sapiConnector.setTruststore(httpsKeystore);
