@@ -1,0 +1,51 @@
+import subprocess, time, sys
+import json
+from optparse import OptionParser
+SKIP_TEST = '-DskipTests'
+AMBARI_AUTH_HEADERS = "--header 'Authorization:Basic YWRtaW46YWRtaW4=' --header 'X-Requested-By: PIVOTAL'"
+AMBARI_BUILD_DOCKER_ROOT = '/tmp/ambari-build-docker'
+NO_EXIT_SLEEP_TIME = 60
+RETRY_MAX = 20
+if (__name__ == '__main__'):
+    if (len(sys.argv) == 1):
+        print 'specify one of test, server, agent or deploy'
+        sys.exit(1)
+    parsed_args = parse(sys.argv[1:])
+    if parsed_args.is_test:
+        retcode = ambariUnitTest()
+        sys.exit(retcode)
+    if parsed_args.is_rebuild:
+        retcode = buildAmbari(parsed_args.stack_distribution)
+        if (retcode != 0):
+            sys.exit(retcode)
+    if parsed_args.is_install_server:
+        retcode = install_ambari_server()
+        if (retcode != 0):
+            sys.exit(retcode)
+        retcode = setup_ambari_server()
+        if (retcode != 0):
+            sys.exit(retcode)
+        retcode = start_ambari_server()
+        if (retcode != 0):
+            sys.exit(retcode)
+        retcode = start_dependant_services()
+        if (retcode != 0):
+            sys.exit(retcode)
+    if parsed_args.is_install_agent:
+        retcode = install_ambari_agent()
+        if (retcode != 0):
+            sys.exit(retcode)
+        retcode = configure_ambari_agent()
+        if (retcode != 0):
+            sys.exit(retcode)
+        retcode = start_ambari_agent()
+        if (retcode != 0):
+            sys.exit(retcode)
+    if parsed_args.is_deploy:
+        retcode = post_blueprint()
+        if (retcode != 0):
+            sys.exit(retcode)
+        retcode = create_cluster()
+        if (retcode != 0):
+            sys.exit(retcode)
+    no_exit()
