@@ -3,21 +3,12 @@ def _collect(self):
         raise Exception('Could not determine result. URL(s) were not defined.')
     alert_uri = self._get_uri_from_structure(self.uri_property_keys)
     logger.debug('Calculated web URI to be {0} (ssl={1})'.format(alert_uri.uri, str(alert_uri.is_ssl_enabled)))
-    host = BaseAlert.get_host_from_url(alert_uri.uri)
-    if (host is None):
-        host = self.host_name
-    port = 80
-    if alert_uri.is_ssl_enabled:
-        port = 443
-    try:
-        port = int(get_port_from_url(alert_uri.uri))
-    except:
-        pass
-    web_response = self._make_web_request(host, port, alert_uri.is_ssl_enabled)
+    url = self._build_web_query(alert_uri)
+    web_response = self._make_web_request(url)
     status_code = web_response.status_code
     time_seconds = (web_response.time_millis / 1000)
     if (status_code == 0):
-        return (self.RESULT_CRITICAL, [status_code, host, port, time_seconds])
-    if (status_code <= 401):
-        return (self.RESULT_OK, [status_code, host, port, time_seconds])
-    return (self.RESULT_WARNING, [status_code, host, port, time_seconds])
+        return (self.RESULT_CRITICAL, [status_code, url, time_seconds])
+    if (status_code < 400):
+        return (self.RESULT_OK, [status_code, url, time_seconds])
+    return (self.RESULT_WARNING, [status_code, url, time_seconds])

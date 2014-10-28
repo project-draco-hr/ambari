@@ -1,6 +1,6 @@
 @patch.object(WebAlert, '_make_web_request')
 def test_web_alert(self, wa_make_web_request_mock):
-    json = {'name': 'webalert_test', 'service': 'HDFS', 'component': 'DATANODE', 'label': 'WebAlert Test', 'interval': 1, 'scope': 'HOST', 'enabled': True, 'uuid': 'c1f73191-4481-4435-8dae-fd380e4c0be1', 'source': {'type': 'WEB', 'uri': {'http': '{{hdfs-site/dfs.datanode.http.address}}', 'https': '{{hdfs-site/dfs.datanode.https.address}}', 'https_property': '{{hdfs-site/dfs.http.policy}}', 'https_property_value': 'HTTPS_ONLY', }, 'reporting': {'ok': {'text': 'ok: {0}', }, 'warning': {'text': 'warning: {0}', }, 'critical': {'text': 'critical: {1}:{2}', }, }, }, }
+    json = {'name': 'webalert_test', 'service': 'HDFS', 'component': 'DATANODE', 'label': 'WebAlert Test', 'interval': 1, 'scope': 'HOST', 'enabled': True, 'uuid': 'c1f73191-4481-4435-8dae-fd380e4c0be1', 'source': {'type': 'WEB', 'uri': {'http': '{{hdfs-site/dfs.datanode.http.address}}', 'https': '{{hdfs-site/dfs.datanode.https.address}}', 'https_property': '{{hdfs-site/dfs.http.policy}}', 'https_property_value': 'HTTPS_ONLY', }, 'reporting': {'ok': {'text': 'ok: {0}', }, 'warning': {'text': 'warning: {0}', }, 'critical': {'text': 'critical: {1}', }, }, }, }
     WebResponse = namedtuple('WebResponse', 'status_code time_millis')
     wa_make_web_request_mock.return_value = WebResponse(200, 1.234)
     collector = AlertCollector()
@@ -22,4 +22,10 @@ def test_web_alert(self, wa_make_web_request_mock):
     alert.set_helpers(collector, {'hdfs-site/dfs.datanode.http.address': '1.2.3.4:80', })
     alert.collect()
     self.assertEquals('CRITICAL', collector.alerts()[0]['state'])
-    self.assertEquals('critical: 1.2.3.4:80', collector.alerts()[0]['text'])
+    self.assertEquals('critical: http://1.2.3.4:80', collector.alerts()[0]['text'])
+    collector = AlertCollector()
+    alert = WebAlert(json, json['source'])
+    alert.set_helpers(collector, {'hdfs-site/dfs.datanode.http.address': '1.2.3.4:80', 'hdfs-site/dfs.datanode.https.address': '1.2.3.4:8443', 'hdfs-site/dfs.http.policy': 'HTTPS_ONLY', })
+    alert.collect()
+    self.assertEquals('CRITICAL', collector.alerts()[0]['state'])
+    self.assertEquals('critical: https://1.2.3.4:8443', collector.alerts()[0]['text'])
