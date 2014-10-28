@@ -34,7 +34,7 @@ synchronized (createAppCounter) {
     appCreateFolder.mkdirs();
     File appConfigJsonFile=new File(appCreateFolder,"appConfig.json");
     File resourcesJsonFile=new File(appCreateFolder,"resources.json");
-    saveAppConfigs(configs,componentsArray,appName,securityEnabled,appConfigJsonFile);
+    saveAppConfigs(configs,componentsArray,appName,appType,securityEnabled,appConfigJsonFile);
     saveAppResources(resourcesObj,resourcesJsonFile);
     final ActionCreateArgs createArgs=new ActionCreateArgs();
     createArgs.template=appConfigJsonFile;
@@ -48,10 +48,14 @@ synchronized (createAppCounter) {
     installArgs.name=appType;
     installArgs.packageURI=getAppsFolderPath() + "/" + localAppPackageFileName;
     installArgs.replacePkg=true;
-    final ActionInstallKeytabArgs keytabArgs=new ActionInstallKeytabArgs();
+    final List<ActionInstallKeytabArgs> installKeytabActions=new ArrayList<ActionInstallKeytabArgs>();
     if (securityEnabled) {
-      keytabArgs.keytabUri=getUserToRunAsKeytab();
-      keytabArgs.folder=appName;
+      for (      String keytab : getUserToRunAsKeytabs(appType)) {
+        ActionInstallKeytabArgs keytabArgs=new ActionInstallKeytabArgs();
+        keytabArgs.keytabUri=keytab;
+        keytabArgs.folder=appName;
+        installKeytabActions.add(keytabArgs);
+      }
     }
     return invokeSliderClientRunnable(new SliderClientContextRunnable<String>(){
       @Override public String run(      SliderClient sliderClient) throws YarnException, IOException, InterruptedException {
@@ -68,7 +72,12 @@ synchronized (createAppCounter) {
           logger.warn("Unable to determine 'slider.libdir' path",t);
         }
         if (securityEnabled) {
-          sliderClient.actionInstallKeytab(keytabArgs);
+          for (          ActionInstallKeytabArgs keytabArgs : installKeytabActions) {
+            if (logger.isDebugEnabled()) {
+              logger.debug("Installing keytab " + keytabArgs.keytabUri);
+            }
+            sliderClient.actionInstallKeytab(keytabArgs);
+          }
         }
         sliderClient.actionInstallPkg(installArgs);
         sliderClient.actionCreate(appName,createArgs);
