@@ -1,0 +1,23 @@
+def execute(parameters=None, host_name=None):
+    '\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  parameters (dictionary): a mapping of parameter key to value\n  host_name (string): the name of this host where the alert is running\n  '
+    if (parameters is None):
+        return ('UNKNOWN', ['There were no parameters supplied to the script.'])
+    mapreduce_local_directories = None
+    if (MAPREDUCE_LOCAL_DIR_KEY in parameters):
+        mapreduce_local_directories = parameters[MAPREDUCE_LOCAL_DIR_KEY]
+    if (MAPREDUCE_LOCAL_DIR_KEY is None):
+        return ('UNKNOWN', ['The MapReduce Local Directory is required.'])
+    directory_list = mapreduce_local_directories.split(',')
+    for directory in directory_list:
+        disk_usage = None
+        try:
+            disk_usage = _get_disk_usage(directory)
+        except NotImplementedError as platform_error:
+            return (RESULT_CODE_UNKNOWN, [str(platform_error)])
+        if ((disk_usage is None) or (disk_usage.total == 0)):
+            return (RESULT_CODE_UNKNOWN, ['Unable to determine the disk usage.'])
+        percent = ((disk_usage.used / float(disk_usage.total)) * 100)
+        if (percent > 85):
+            message = 'The disk usage of {0} is {1:d}%'.format(directory, percent)
+            return (RESULT_CODE_CRITICAL, [message])
+    return (RESULT_CODE_OK, ['All MapReduce local directories have sufficient space.'])
