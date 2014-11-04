@@ -4,7 +4,13 @@
   ResultSet resultSet=createNiceMock(ResultSet.class);
   expect(configuration.getDatabaseUrl()).andReturn(Configuration.JDBC_IN_MEMORY_URL).anyTimes();
   Capture<DBAccessor.DBColumnInfo> alertDefinitionIgnoreColumnCapture=new Capture<DBAccessor.DBColumnInfo>();
+  Capture<DBAccessor.DBColumnInfo> hostComponentStateColumnCapture=new Capture<DBAccessor.DBColumnInfo>();
+  Capture<List<DBAccessor.DBColumnInfo>> clusterVersionCapture=new Capture<List<DBAccessor.DBColumnInfo>>();
+  Capture<List<DBAccessor.DBColumnInfo>> hostVersionCapture=new Capture<List<DBAccessor.DBColumnInfo>>();
   dbAccessor.addColumn(eq("alert_definition"),capture(alertDefinitionIgnoreColumnCapture));
+  dbAccessor.addColumn(eq("hostcomponentstate"),capture(hostComponentStateColumnCapture));
+  dbAccessor.createTable(eq("cluster_version"),capture(clusterVersionCapture),eq("id"));
+  dbAccessor.createTable(eq("host_version"),capture(hostVersionCapture),eq("id"));
   replay(dbAccessor,configuration,resultSet);
   AbstractUpgradeCatalog upgradeCatalog=getUpgradeCatalog(dbAccessor);
   Class<?> c=AbstractUpgradeCatalog.class;
@@ -14,4 +20,12 @@
   upgradeCatalog.executeDDLUpdates();
   verify(dbAccessor,configuration,resultSet);
   verifyAlertDefinitionIgnoreColumn(alertDefinitionIgnoreColumnCapture);
+  DBAccessor.DBColumnInfo upgradeStateColumn=hostComponentStateColumnCapture.getValue();
+  assertEquals("upgrade_state",upgradeStateColumn.getName());
+  assertEquals(32,(int)upgradeStateColumn.getLength());
+  assertEquals(String.class,upgradeStateColumn.getType());
+  assertEquals("NONE",upgradeStateColumn.getDefaultValue());
+  assertFalse(upgradeStateColumn.isNullable());
+  assertEquals(8,clusterVersionCapture.getValue().size());
+  assertEquals(5,hostVersionCapture.getValue().size());
 }
