@@ -1,12 +1,19 @@
 {
   String buildDir=tmpFolder.getRoot().getAbsolutePath();
-  AmbariMetaInfo ambariMetaInfo=setupTempAmbariMetaInfo(buildDir);
+  TestAmbariMetaInfo ambariMetaInfo=setupTempAmbariMetaInfo(buildDir,true);
   String newBaseUrl="http://myprivate-repo-1.hortonworks.com/HDP/centos6/2.x/updates/2.0.6.0";
   ambariMetaInfo.updateRepoBaseURL(STACK_NAME_HDP,"2.1.1","redhat6",STACK_NAME_HDP + "-2.1.1",newBaseUrl);
   RepositoryInfo repoInfo=ambariMetaInfo.getRepository(STACK_NAME_HDP,"2.1.1","redhat6",STACK_NAME_HDP + "-2.1.1");
   assertEquals(newBaseUrl,repoInfo.getBaseUrl());
   String prevBaseUrl=repoInfo.getDefaultBaseUrl();
+  MetainfoDAO metainfoDAO=ambariMetaInfo.metaInfoDAO;
+  reset(metainfoDAO);
+  MetainfoEntity entity=createNiceMock(MetainfoEntity.class);
+  expect(metainfoDAO.findByKey("repo:/HDP/2.1.1/redhat6/HDP-2.1.1:baseurl")).andReturn(entity).atLeastOnce();
+  expect(entity.getMetainfoValue()).andReturn(newBaseUrl).atLeastOnce();
+  replay(metainfoDAO,entity);
   ambariMetaInfo.init();
+  waitForAllReposToBeResolved(ambariMetaInfo);
   List<RepositoryInfo> redhat6Repo=ambariMetaInfo.getRepositories(STACK_NAME_HDP,"2.1.1","redhat6");
   assertNotNull(redhat6Repo);
   for (  RepositoryInfo ri : redhat6Repo) {
