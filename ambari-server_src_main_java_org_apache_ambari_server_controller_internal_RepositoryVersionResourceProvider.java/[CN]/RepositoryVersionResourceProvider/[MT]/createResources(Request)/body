@@ -1,0 +1,32 @@
+{
+  for (  final Map<String,Object> properties : request.getProperties()) {
+    createResources(new Command<Void>(){
+      @Override public Void invoke() throws AmbariException {
+        final RepositoryVersionEntity entity=new RepositoryVersionEntity();
+        final String[] requiredProperties={REPOSITORY_VERSION_DISPLAY_NAME_PROPERTY_ID,REPOSITORY_VERSION_REPOSITORIES_PROPERTY_ID,REPOSITORY_VERSION_STACK_PROPERTY_ID,REPOSITORY_VERSION_UPGRADE_PACK_PROPERTY_ID,REPOSITORY_VERSION_VERSION_PROPERTY_ID};
+        for (        String propertyName : requiredProperties) {
+          if (properties.get(propertyName) == null) {
+            throw new AmbariException("Property " + propertyName + " should be provided");
+          }
+        }
+        entity.setDisplayName(properties.get(REPOSITORY_VERSION_DISPLAY_NAME_PROPERTY_ID).toString());
+        entity.setStack(properties.get(REPOSITORY_VERSION_STACK_PROPERTY_ID).toString());
+        entity.setUpgradePackage(properties.get(REPOSITORY_VERSION_UPGRADE_PACK_PROPERTY_ID).toString());
+        entity.setVersion(properties.get(REPOSITORY_VERSION_VERSION_PROPERTY_ID).toString());
+        final Object repositories=properties.get(REPOSITORY_VERSION_REPOSITORIES_PROPERTY_ID);
+        entity.setRepositories(new Gson().toJson(repositories));
+        if (repositoryVersionDAO.findByDisplayName(entity.getDisplayName()) != null) {
+          throw new AmbariException("Repository version with name " + entity.getDisplayName() + " already exists");
+        }
+        if (repositoryVersionDAO.findByStackAndVersion(entity.getStack(),entity.getVersion()) != null) {
+          throw new AmbariException("Repository version for stack " + entity.getStack() + " and version "+ entity.getVersion()+ " already exists");
+        }
+        repositoryVersionDAO.create(entity);
+        notifyCreate(Resource.Type.RepositoryVersion,request);
+        return null;
+      }
+    }
+);
+  }
+  return getRequestStatus(null);
+}
