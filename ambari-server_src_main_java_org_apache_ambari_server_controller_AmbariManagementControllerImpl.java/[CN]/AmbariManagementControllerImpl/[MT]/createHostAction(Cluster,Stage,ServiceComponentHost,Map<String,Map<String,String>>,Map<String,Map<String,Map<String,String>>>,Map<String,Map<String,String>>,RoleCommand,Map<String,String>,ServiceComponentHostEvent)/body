@@ -25,14 +25,15 @@
   if (commandParams == null) {
     commandParams=new TreeMap<String,String>();
   }
-  String commandTimeout=configs.getDefaultAgentTaskTimeout();
+  String agentDefaultCommandTimeout=configs.getDefaultAgentTaskTimeout();
+  String scriptCommandTimeout="";
   CommandScriptDefinition script=componentInfo.getCommandScript();
   if (serviceInfo.getSchemaVersion().equals(AmbariMetaInfo.SCHEMA_VERSION_2)) {
     if (script != null) {
       commandParams.put(SCRIPT,script.getScript());
       commandParams.put(SCRIPT_TYPE,script.getScriptType().toString());
       if (script.getTimeout() > 0) {
-        commandTimeout=String.valueOf(script.getTimeout());
+        scriptCommandTimeout=String.valueOf(script.getTimeout());
       }
     }
  else {
@@ -40,7 +41,11 @@
       throw new AmbariException(message);
     }
   }
-  commandParams.put(COMMAND_TIMEOUT,commandTimeout);
+  String actualTimeout=(!scriptCommandTimeout.equals("") ? scriptCommandTimeout : agentDefaultCommandTimeout);
+  if (roleCommand.equals(RoleCommand.INSTALL) && !agentDefaultCommandTimeout.equals("") && Integer.parseInt(actualTimeout) < Integer.parseInt(agentDefaultCommandTimeout)) {
+    scriptCommandTimeout=agentDefaultCommandTimeout;
+  }
+  commandParams.put(COMMAND_TIMEOUT,scriptCommandTimeout);
   commandParams.put(SERVICE_PACKAGE_FOLDER,serviceInfo.getServicePackageFolder());
   commandParams.put(HOOKS_FOLDER,stackInfo.getStackHooksFolder());
   execCmd.setCommandParams(commandParams);
