@@ -1,0 +1,71 @@
+{
+  TreeNode<Resource> resultTree=queryResult.getResultTree();
+  Result summary=new ResultImpl(true);
+  int ok=0;
+  int warning=0;
+  int critical=0;
+  int unknown=0;
+  long mostRecentOK=0;
+  long mostRecentWarning=0;
+  long mostRecentCritical=0;
+  long mostRecentUnknown=0;
+  for (  TreeNode<Resource> node : resultTree.getChildren()) {
+    Resource resource=node.getObject();
+    AlertState state=(AlertState)resource.getPropertyValue(AlertResourceProvider.ALERT_STATE);
+    Long originalTimestampObject=(Long)resource.getPropertyValue(AlertResourceProvider.ALERT_ORIGINAL_TIMESTAMP);
+    if (null == state) {
+      state=AlertState.UNKNOWN;
+    }
+    long originalTimestamp=0;
+    if (null != originalTimestampObject) {
+      originalTimestamp=originalTimestampObject.longValue();
+    }
+switch (state) {
+case CRITICAL:
+{
+        critical++;
+        if (originalTimestamp > mostRecentCritical) {
+          mostRecentCritical=originalTimestamp;
+        }
+        break;
+      }
+case OK:
+{
+      ok++;
+      if (originalTimestamp > mostRecentOK) {
+        mostRecentOK=originalTimestamp;
+      }
+      break;
+    }
+case WARNING:
+{
+    warning++;
+    if (originalTimestamp > mostRecentWarning) {
+      mostRecentWarning=originalTimestamp;
+    }
+    break;
+  }
+default :
+case UNKNOWN:
+{
+  unknown++;
+  if (originalTimestamp > mostRecentUnknown) {
+    mostRecentUnknown=originalTimestamp;
+  }
+  break;
+}
+}
+}
+Resource resource=new ResourceImpl(Resource.Type.Alert);
+resource.setProperty(OK_COUNT_PROPERTY,ok);
+resource.setProperty(WARN_COUNT_PROPERTY,warning);
+resource.setProperty(CRITICAL_COUNT_PROPERTY,critical);
+resource.setProperty(UNKNOWN_COUNT_PROPERTY,unknown);
+resource.setProperty(OK_TIMESTAMP_PROPERTY,mostRecentOK);
+resource.setProperty(WARN_TIMESTAMP_PROPERTY,mostRecentWarning);
+resource.setProperty(CRITICAL_TIMESTAMP_PROPERTY,mostRecentCritical);
+resource.setProperty(UNKNOWN_TIMESTAMP_PROPERTY,mostRecentUnknown);
+TreeNode<Resource> summaryTree=summary.getResultTree();
+summaryTree.addChild(resource,"alerts_summary");
+return summary;
+}
