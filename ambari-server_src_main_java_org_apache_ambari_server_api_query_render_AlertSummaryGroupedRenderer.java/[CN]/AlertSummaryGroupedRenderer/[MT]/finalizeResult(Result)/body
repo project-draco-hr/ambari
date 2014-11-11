@@ -1,0 +1,71 @@
+{
+  TreeNode<Resource> resultTree=queryResult.getResultTree();
+  Map<String,AlertDefinitionSummary> summaries=new HashMap<String,AlertDefinitionSummary>();
+  for (  TreeNode<Resource> node : resultTree.getChildren()) {
+    Resource resource=node.getObject();
+    Long definitionId=(Long)resource.getPropertyValue(AlertResourceProvider.ALERT_ID);
+    String definitionName=(String)resource.getPropertyValue(AlertResourceProvider.ALERT_NAME);
+    AlertState state=(AlertState)resource.getPropertyValue(AlertResourceProvider.ALERT_STATE);
+    Long originalTimestampObject=(Long)resource.getPropertyValue(AlertResourceProvider.ALERT_ORIGINAL_TIMESTAMP);
+    if (null == state) {
+      state=AlertState.UNKNOWN;
+    }
+    long originalTimestamp=0;
+    if (null != originalTimestampObject) {
+      originalTimestamp=originalTimestampObject.longValue();
+    }
+    AlertDefinitionSummary groupSummaryInfo=summaries.get(definitionName);
+    if (null == groupSummaryInfo) {
+      groupSummaryInfo=new AlertDefinitionSummary();
+      groupSummaryInfo.Id=definitionId;
+      groupSummaryInfo.Name=definitionName;
+      summaries.put(definitionName,groupSummaryInfo);
+    }
+switch (state) {
+case CRITICAL:
+{
+        groupSummaryInfo.State.Critical.Count++;
+        if (originalTimestamp > groupSummaryInfo.State.Critical.Timestamp) {
+          groupSummaryInfo.State.Critical.Timestamp=originalTimestamp;
+        }
+        break;
+      }
+case OK:
+{
+      groupSummaryInfo.State.Ok.Count++;
+      if (originalTimestamp > groupSummaryInfo.State.Ok.Timestamp) {
+        groupSummaryInfo.State.Ok.Timestamp=originalTimestamp;
+      }
+      break;
+    }
+case WARNING:
+{
+    groupSummaryInfo.State.Warning.Count++;
+    if (originalTimestamp > groupSummaryInfo.State.Warning.Timestamp) {
+      groupSummaryInfo.State.Warning.Timestamp=originalTimestamp;
+    }
+    break;
+  }
+default :
+case UNKNOWN:
+{
+  groupSummaryInfo.State.Unknown.Count++;
+  if (originalTimestamp > groupSummaryInfo.State.Unknown.Timestamp) {
+    groupSummaryInfo.State.Unknown.Timestamp=originalTimestamp;
+  }
+  break;
+}
+}
+}
+Set<Entry<String,AlertDefinitionSummary>> entrySet=summaries.entrySet();
+List<AlertDefinitionSummary> groupedResources=new ArrayList<AlertDefinitionSummary>(entrySet.size());
+for (Entry<String,AlertDefinitionSummary> entry : entrySet) {
+groupedResources.add(entry.getValue());
+}
+Result groupedSummary=new ResultImpl(true);
+TreeNode<Resource> summaryTree=groupedSummary.getResultTree();
+Resource resource=new ResourceImpl(Resource.Type.Alert);
+summaryTree.addChild(resource,ALERTS_SUMMARY_GROUP);
+resource.setProperty(ALERTS_SUMMARY_GROUP,groupedResources);
+return groupedSummary;
+}
