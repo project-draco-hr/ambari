@@ -1,0 +1,29 @@
+{
+  Map<String,ValidationResult> propertyResults=new HashMap<String,ValidationResult>();
+  if (context.equals(Validator.ValidationContext.PRE_CREATE) || context.equals(Validator.ValidationContext.PRE_UPDATE)) {
+    Set<String> requiredParameterNames=new HashSet<String>();
+    for (    ViewParameterEntity parameter : viewEntity.getParameters()) {
+      if (parameter.isRequired()) {
+        requiredParameterNames.add(parameter.getName());
+      }
+    }
+    Collection<ViewInstancePropertyEntity> propertyEntities=getProperties();
+    for (    ViewInstancePropertyEntity property : propertyEntities) {
+      requiredParameterNames.remove(property.getName());
+    }
+    for (    String requiredParameterName : requiredParameterNames) {
+      propertyResults.put(requiredParameterName,new ValidationResultImpl(false,"No property values exist for the required parameter " + requiredParameterName + "."));
+    }
+  }
+  ValidationResult instanceResult=null;
+  Validator validator=viewEntity.getValidator();
+  if (validator != null) {
+    instanceResult=validator.validateInstance(this,context);
+    for (    String property : getPropertyMap().keySet()) {
+      if (!propertyResults.containsKey(property)) {
+        propertyResults.put(property,ValidationResultImpl.create(validator.validateProperty(property,this,context)));
+      }
+    }
+  }
+  return new InstanceValidationResultImpl(ValidationResultImpl.create(instanceResult),propertyResults);
+}
