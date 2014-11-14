@@ -1,0 +1,72 @@
+'\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
+import glob
+import optparse
+import os
+import re
+import socket
+from ambari_commons.exceptions import *
+from ambari_commons.logging_utils import *
+from ambari_commons.os_linux import run_os_command
+from ambari_server.dbConfiguration_linux import SERVICE_CMD, PG_HBA_CONF_FILE_BACKUP
+from ambari_server.serverConfiguration import *
+from ambari_server.serverConfiguration_linux import JAVA_SHARE_PATH
+from ambari_server.setupSecurity import *
+from ambari_server.userInput import get_YN_input, get_validated_string_input
+from ambari_server import utils
+GET_SE_LINUX_ST_CMD = utils.locate_file('sestatus', '/usr/sbin')
+SE_SETENFORCE_CMD = 'setenforce 0'
+SE_STATUS_DISABLED = 'disabled'
+SE_STATUS_ENABLED = 'enabled'
+SE_MODE_ENFORCING = 'enforcing'
+SE_MODE_PERMISSIVE = 'permissive'
+NR_USER_COMMENT = 'Ambari user'
+NR_GET_OWNER_CMD = 'stat -c "%U" {0}'
+NR_USERADD_CMD = ('useradd -M --comment "{1}" --shell %s -d /var/lib/ambari-server/keys/ {0}' % utils.locate_file('nologin', '/sbin'))
+NR_SET_USER_COMMENT_CMD = 'usermod -c "{0}" {1}'
+NR_USER_CHANGE_PROMPT = "Ambari-server daemon is configured to run under user '{0}'. Change this setting [y/n] (n)? "
+NR_USER_CUSTOMIZE_PROMPT = 'Customize user account for ambari-server daemon [y/n] (n)? '
+NR_DEFAULT_USER = 'root'
+JDK_URL_PROPERTIES = ['jdk1.7.url', 'jdk1.6.url']
+JCE_URL_PROPERTIES = ['jce_policy1.7.url', 'jce_policy1.6.url']
+JDK_VERSION_REs = ['(jdk.*)/jre', 'Creating (jdk.*)/jre']
+JDK_CHOICE_PROMPT = '[1] - Oracle JDK 1.7\n[2] - Oracle JDK 1.6\n[3] - Custom JDK\n==============================================================================\nEnter choice ({0}): '
+JDK_VALID_CHOICES = '^[123]$'
+CUSTOM_JDK_NUMBER = '3'
+JDK_MIN_FILESIZE = 5000
+CREATE_JDK_DIR_CMD = '/bin/mkdir -p {0}'
+MAKE_FILE_EXECUTABLE_CMD = 'chmod a+x {0}'
+JDK_DOWNLOAD_CMD = 'curl --create-dirs -o {0} {1}'
+JDK_DOWNLOAD_SIZE_CMD = 'curl -I {0}'
+UNTAR_JDK_ARCHIVE = 'tar --no-same-owner -xvf {0}'
+DATABASE_INDEX = 0
+USERNAME_PATTERN = '^[a-zA-Z_][a-zA-Z0-9_\\-]*$'
+DATABASE_NAMES = ['postgres', 'oracle', 'mysql']
+DATABASE_STORAGE_NAMES = ['Database', 'Service', 'Database']
+DATABASE_PORTS = ['5432', '1521', '3306']
+DATABASE_DRIVER_NAMES = ['org.postgresql.Driver', 'oracle.jdbc.driver.OracleDriver', 'com.mysql.jdbc.Driver']
+DATABASE_CONNECTION_STRINGS = ['jdbc:postgresql://{0}:{1}/{2}', 'jdbc:oracle:thin:@{0}:{1}/{2}', 'jdbc:mysql://{0}:{1}/{2}']
+DATABASE_CONNECTION_STRINGS_ALT = ['jdbc:postgresql://{0}:{1}/{2}', 'jdbc:oracle:thin:@{0}:{1}:{2}', 'jdbc:mysql://{0}:{1}/{2}']
+ORACLE_SID_PATTERN = 'jdbc:oracle:thin:@.+:.+/.+'
+ORACLE_SNAME_PATTERN = 'jdbc:oracle:thin:@.+:.+:.+'
+DATABASE_CLI_TOOLS = [['psql'], ['sqlplus', 'sqlplus64'], ['mysql']]
+DATABASE_CLI_TOOLS_DESC = ['psql', 'sqlplus', 'mysql']
+DATABASE_CLI_TOOLS_USAGE = ['su -postgres --command=psql -f {0} -v username=\'"{1}"\' -v password="\'{2}\'"', 'sqlplus {1}/{2} < {0} ', 'mysql --user={1} --password={2} {3}<{0}']
+MYSQL_INIT_SCRIPT = '/var/lib/ambari-server/resources/Ambari-DDL-MySQL-CREATE.sql'
+DATABASE_INIT_SCRIPTS = ['/var/lib/ambari-server/resources/Ambari-DDL-Postgres-CREATE.sql', '/var/lib/ambari-server/resources/Ambari-DDL-Oracle-CREATE.sql', MYSQL_INIT_SCRIPT]
+DATABASE_DROP_SCRIPTS = ['/var/lib/ambari-server/resources/Ambari-DDL-Postgres-DROP.sql', '/var/lib/ambari-server/resources/Ambari-DDL-Oracle-DROP.sql', '/var/lib/ambari-server/resources/Ambari-DDL-MySQL-DROP.sql']
+JDBC_PROPERTIES_PREFIX = 'server.jdbc.properties.'
+DATABASE_JDBC_PROPERTIES = [[], [['oracle.net.CONNECT_TIMEOUT', '2000'], ['oracle.net.READ_TIMEOUT', '2000'], ['oracle.jdbc.ReadTimeout', '8000']], []]
+POSTGRES_EXEC_ARGS = "-h {0} -p {1} -d {2} -U {3} -f {4} -v username='{3}'"
+ORACLE_EXEC_ARGS = "-S -L '{0}/{1}@(description=(address=(protocol=TCP)(host={2})(port={3}))(connect_data=({6}={4})))' @{5} {0}"
+MYSQL_EXEC_ARGS_WITH_USER_VARS = '--host={0} --port={1} --user={2} --password={3} {4} -e"set @schema=\'{4}\'; set @username=\'{2}\'; source {5};"'
+MYSQL_EXEC_ARGS_WO_USER_VARS = '--force --host={0} --port={1} --user={2} --password={3} --database={4} < {5} 2> /dev/null'
+MYSQL_UPGRADE_STACK_ARGS = '--host={0} --port={1} --user={2} --password={3} --database={4} -e"set @stackName=\'{6}\'; set @stackVersion=\'{7}\'; source {5};"'
+ORACLE_UPGRADE_STACK_ARGS = "-S -L '{0}/{1}@(description=(address=(protocol=TCP)(host={2})(port={3}))(connect_data=({6}={4})))' @{5} {7} {8}"
+JDBC_PATTERNS = {'oracle': '*ojdbc*.jar', 'mysql': '*mysql*.jar', }
+DATABASE_FULL_NAMES = {'oracle': 'Oracle', 'mysql': 'MySQL', 'postgres': 'PostgreSQL', }
+JDBC_DB_OPTION_VALUES = ['postgres', 'mysql', 'oracle']
+JDBC_DB_DEFAULT_DRIVER = {'postgresql': 'postgresql-jdbc.jar', 'mysql': 'mysql-connector-java.jar', 'oracle': 'ojdbc6.jar', }
+ORACLE_DB_ID_TYPES = ['Service Name', 'SID']
+DEFAULT_DB_NAME = 'ambari'
+MESSAGE_ERROR_NOT_ROOT = 'Ambari-server setup should be run with root-level privileges'
+MESSAGE_CHECK_FIREWALL = 'Checking iptables...'

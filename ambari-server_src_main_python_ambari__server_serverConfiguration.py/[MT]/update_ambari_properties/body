@@ -1,0 +1,37 @@
+def update_ambari_properties():
+    prev_conf_file = search_file(AMBARI_PROPERTIES_BACKUP_FILE, get_conf_dir())
+    conf_file = search_file(AMBARI_PROPERTIES_FILE, get_conf_dir())
+    if ((not prev_conf_file) or (prev_conf_file is None)):
+        print_warning_msg('Can not find ambari.properties.backup file from previous version, skipping import of settings')
+        return 0
+    try:
+        old_properties = Properties()
+        old_properties.load(open(prev_conf_file))
+    except Exception as e:
+        print ('Could not read "%s": %s' % (prev_conf_file, e))
+        return (-1)
+    try:
+        new_properties = Properties()
+        new_properties.load(open(conf_file))
+        for (prop_key, prop_value) in old_properties.getPropertyDict().items():
+            if ('agent.fqdn.service.url' == prop_key):
+                new_properties.process_pair(GET_FQDN_SERVICE_URL, prop_value)
+            elif ('server.os_type' == prop_key):
+                new_properties.process_pair(OS_TYPE_PROPERTY, (OS_FAMILY + OS_VERSION))
+            else:
+                new_properties.process_pair(prop_key, prop_value)
+        if (not (NR_USER_PROPERTY in new_properties.keys())):
+            new_properties.process_pair(NR_USER_PROPERTY, 'root')
+        isJDK16Installed = (new_properties.get_property(JAVA_HOME_PROPERTY) == DEFAULT_JDK16_LOCATION)
+        if ((not (JDK_NAME_PROPERTY in new_properties.keys())) and isJDK16Installed):
+            new_properties.process_pair(JDK_NAME_PROPERTY, JDK_NAMES[1])
+        if ((not (JCE_NAME_PROPERTY in new_properties.keys())) and isJDK16Installed):
+            new_properties.process_pair(JCE_NAME_PROPERTY, JCE_POLICY_FILENAMES[1])
+        new_properties.store(open(conf_file, 'w'))
+    except Exception as e:
+        print ('Could not write "%s": %s' % (conf_file, e))
+        return (-1)
+    timestamp = datetime.datetime.now()
+    format = '%Y%m%d%H%M%S'
+    os.rename(prev_conf_file, ((prev_conf_file + '.') + timestamp.strftime(format)))
+    return 0

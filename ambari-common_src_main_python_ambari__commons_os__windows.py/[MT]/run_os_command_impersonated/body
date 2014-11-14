@@ -1,0 +1,26 @@
+def run_os_command_impersonated(cmd, user, password, domain='.'):
+    si = STARTUPINFO()
+    (out_handle, err_handle, out_file, err_file) = _create_tmp_files()
+    (ok, si.hStdInput) = _safe_duplicate_handle(GetStdHandle(STD_INPUT_HANDLE))
+    if (not ok):
+        raise Exception('Unable to create StdInput for child process')
+    (ok, si.hStdOutput) = _safe_duplicate_handle(out_handle)
+    if (not ok):
+        raise Exception('Unable to create StdOut for child process')
+    (ok, si.hStdError) = _safe_duplicate_handle(err_handle)
+    if (not ok):
+        raise Exception('Unable to create StdErr for child process')
+    si.dwFlags = STARTF_USESTDHANDLES
+    si.lpDesktop = ''
+    user_token = LogonUser(user, domain, password, win32con.LOGON32_LOGON_SERVICE, win32con.LOGON32_PROVIDER_DEFAULT)
+    primary_token = DuplicateTokenEx(user_token, SecurityImpersonation, 0, TokenPrimary)
+    info = CreateProcessAsUser(primary_token, None, cmd, None, None, 1, 0, None, None, si)
+    (hProcess, hThread, dwProcessId, dwThreadId) = info
+    hThread.Close()
+    try:
+        WaitForSingleObject(hProcess, INFINITE)
+    except KeyboardInterrupt:
+        pass
+    (out, err) = _get_files_output(out_file, err_file)
+    exitcode = GetExitCodeProcess(hProcess)
+    return (exitcode, out, err)

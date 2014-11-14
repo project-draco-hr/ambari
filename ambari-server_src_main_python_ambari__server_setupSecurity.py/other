@@ -1,0 +1,74 @@
+'\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
+import datetime
+import fileinput
+import random
+import socket
+import stat
+import sys
+import urllib2
+from ambari_commons.exceptions import *
+from serverConfiguration import *
+from setupActions import *
+from userInput import *
+SSL_PASSWORD_FILE = 'pass.txt'
+SSL_PASSIN_FILE = 'passin.txt'
+VALIDATE_KEYSTORE_CMD = "openssl pkcs12 -info -in '{0}' -password file:'{1}' -passout file:'{2}'"
+EXPRT_KSTR_CMD = "openssl pkcs12 -export -in '{0}' -inkey '{1}' -certfile '{0}' -out '{4}' -password file:'{2}' -passin file:'{3}'"
+CHANGE_KEY_PWD_CND = 'openssl rsa -in {0} -des3 -out {0}.secured -passout pass:{1}'
+GET_CRT_INFO_CMD = 'openssl x509 -dates -subject -in {0}'
+keytool_bin = 'keytool'
+if OSCheck.is_windows_os():
+    keytool_bin = 'keytool.exe'
+KEYTOOL_IMPORT_CERT_CMD = ((((('{0}' + os.sep) + 'bin') + os.sep) + keytool_bin) + " -import -alias '{1}' -storetype '{2}' -file '{3}' -storepass '{4}' -noprompt")
+KEYTOOL_DELETE_CERT_CMD = ((((('{0}' + os.sep) + 'bin') + os.sep) + keytool_bin) + " -delete -alias '{1}' -storepass '{2}' -noprompt")
+KEYTOOL_KEYSTORE = " -keystore '{0}'"
+java_bin = 'java'
+if OSCheck.is_windows_os():
+    java_bin = 'java.exe'
+SECURITY_PROVIDER_GET_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider GET {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_PUT_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider PUT {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_KEY_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.MasterKeyServiceImpl {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
+SSL_KEY_DIR = 'security.server.keys_dir'
+SSL_API_PORT = 'client.api.ssl.port'
+SSL_API = 'api.ssl'
+SSL_SERVER_CERT_NAME = 'client.api.ssl.cert_name'
+SSL_SERVER_KEY_NAME = 'client.api.ssl.key_name'
+SSL_CERT_FILE_NAME = 'https.crt'
+SSL_KEY_FILE_NAME = 'https.key'
+SSL_KEYSTORE_FILE_NAME = 'https.keystore.p12'
+SSL_KEY_PASSWORD_FILE_NAME = 'https.pass.txt'
+SSL_KEY_PASSWORD_LENGTH = 50
+DEFAULT_SSL_API_PORT = 8443
+SSL_DATE_FORMAT = '%b  %d %H:%M:%S %Y GMT'
+COMMON_NAME_ATTR = 'CN'
+NOT_BEFORE_ATTR = 'notBefore'
+NOT_AFTER_ATTR = 'notAfter'
+SRVR_TWO_WAY_SSL_PORT_PROPERTY = 'security.server.two_way_ssl.port'
+SRVR_TWO_WAY_SSL_PORT = '8441'
+SRVR_ONE_WAY_SSL_PORT_PROPERTY = 'security.server.one_way_ssl.port'
+SRVR_ONE_WAY_SSL_PORT = '8440'
+SECURITY_KEYS_DIR = 'security.server.keys_dir'
+SECURITY_MASTER_KEY_LOCATION = 'security.master.key.location'
+SECURITY_KEY_IS_PERSISTED = 'security.master.key.ispersisted'
+SECURITY_KEY_ENV_VAR_NAME = 'AMBARI_SECURITY_MASTER_KEY'
+SECURITY_MASTER_KEY_FILENAME = 'master'
+SECURITY_IS_ENCRYPTION_ENABLED = 'security.passwords.encryption.enabled'
+SECURITY_KERBEROS_JASS_FILENAME = 'krb5JAASLogin.conf'
+GANGLIA_HTTPS = 'ganglia.https'
+NAGIOS_HTTPS = 'nagios.https'
+SSL_TRUSTSTORE_PASSWORD_ALIAS = 'ambari.ssl.trustStore.password'
+SSL_TRUSTSTORE_PATH_PROPERTY = 'ssl.trustStore.path'
+SSL_TRUSTSTORE_PASSWORD_PROPERTY = 'ssl.trustStore.password'
+SSL_TRUSTSTORE_TYPE_PROPERTY = 'ssl.trustStore.type'
+DEFAULT_PASSWORD = 'bigdata'
+PASSWORD_PATTERN = '^[a-zA-Z0-9_-]*$'
+LDAP_MGR_PASSWORD_ALIAS = 'ambari.ldap.manager.password'
+LDAP_MGR_PASSWORD_PROPERTY = 'authentication.ldap.managerPassword'
+LDAP_MGR_USERNAME_PROPERTY = 'authentication.ldap.managerDn'
+REGEX_IP_ADDRESS = '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+REGEX_HOSTNAME = '^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$'
+REGEX_HOSTNAME_PORT = '^(.*:[0-9]{1,5}$)'
+REGEX_TRUE_FALSE = '^(true|false)?$'
+REGEX_ANYTHING = '.*'
+CLIENT_SECURITY_KEY = 'client.security'
+NR_ADJUST_OWNERSHIP_LIST = [('/var/log/ambari-server', '644', '{0}', True), ('/var/log/ambari-server', '755', '{0}', False), ('/var/run/ambari-server', '644', '{0}', True), ('/var/run/ambari-server', '755', '{0}', False), ('/var/run/ambari-server/bootstrap', '755', '{0}', False), ('/var/lib/ambari-server/ambari-env.sh', '700', '{0}', False), ('/var/lib/ambari-server/keys', '600', '{0}', True), ('/var/lib/ambari-server/keys', '700', '{0}', False), ('/var/lib/ambari-server/keys/db', '700', '{0}', False), ('/var/lib/ambari-server/keys/db/newcerts', '700', '{0}', False), ('/var/lib/ambari-server/keys/.ssh', '700', '{0}', False), ('/var/lib/ambari-server/resources/stacks/', '755', '{0}', True), ('/var/lib/ambari-server/resources/custom_actions/', '755', '{0}', True), ('/etc/ambari-server/conf', '644', '{0}', True), ('/etc/ambari-server/conf', '755', '{0}', False), ('/etc/ambari-server/conf/password.dat', '640', '{0}', False)]

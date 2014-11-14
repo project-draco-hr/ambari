@@ -1,0 +1,74 @@
+def server_process_main(options, scmStatus=None):
+    try:
+        global VERBOSE
+        VERBOSE = options.verbose
+    except AttributeError:
+        pass
+    try:
+        global SILENT
+        SILENT = options.silent
+    except AttributeError:
+        pass
+    try:
+        global DEBUG_MODE
+        DEBUG_MODE = options.debug
+    except AttributeError:
+        pass
+    try:
+        global SUSPEND_START_MODE
+        SUSPEND_START_MODE = options.suspend_start
+    except AttributeError:
+        pass
+    if (not utils.check_reverse_lookup()):
+        print_warning_msg('The hostname was not found in the reverse DNS lookup. This may result in incorrect behavior. Please check the DNS setup and fix the issue.')
+    properties = get_ambari_properties()
+    print_info_msg('Ambari Server is not running...')
+    conf_dir = get_conf_dir()
+    jdk_path = find_jdk()
+    if (jdk_path is None):
+        err = ('No JDK found, please run the "ambari-server setup" command to install a JDK automatically or install any JDK manually to ' + JDK_INSTALL_DIR)
+        raise FatalException(1, err)
+    result = ensure_dbms_is_running(options, properties, scmStatus)
+    if (result == (-1)):
+        raise FatalException((-1), 'Unable to connect to the database')
+    if (scmStatus is not None):
+        scmStatus.reportStartPending()
+    ensure_resources_are_organized(properties)
+    if (scmStatus is not None):
+        scmStatus.reportStartPending()
+    environ = os.environ.copy()
+    ensure_server_security_is_configured(properties, environ)
+    if (scmStatus is not None):
+        scmStatus.reportStartPending()
+    conf_dir = ((os.path.abspath(conf_dir) + os.pathsep) + get_ambari_classpath())
+    if (conf_dir.find(' ') != (-1)):
+        conf_dir = (('"' + conf_dir) + '"')
+    java_exe = ((jdk_path + os.sep) + JAVA_EXE_SUBPATH)
+    pidfile = ((PID_DIR + os.sep) + PID_NAME)
+    command_base = (SERVER_START_CMD_DEBUG if (DEBUG_MODE or SERVER_START_DEBUG) else SERVER_START_CMD)
+    suspend_mode = ('y' if SUSPEND_START_MODE else 'n')
+    command = command_base.format(conf_dir, suspend_mode)
+    if (not os.path.exists(PID_DIR)):
+        os.makedirs(PID_DIR, 493)
+    set_open_files_limit(get_ulimit_open_files())
+    param_list = ((java_exe + ' ') + command)
+    print_info_msg(('Running server: ' + str(param_list)))
+    procJava = subprocess.Popen(param_list, env=environ)
+    print 'Waiting for server start...'
+    pidJava = procJava.pid
+    if (pidJava <= 0):
+        procJava.terminate()
+        exitcode = procJava.returncode
+        exitfile = os.path.join(PID_DIR, EXITCODE_NAME)
+        utils.save_pid(exitcode, exitfile)
+        if (scmStatus is not None):
+            scmStatus.reportStopPending()
+        raise FatalException((-1), AMBARI_SERVER_DIE_MSG.format(exitcode, SERVER_OUT_FILE))
+    else:
+        utils.save_pid(pidJava, pidfile)
+        print ('Server PID at: ' + pidfile)
+        print ('Server out at: ' + SERVER_OUT_FILE)
+        print ('Server log at: ' + SERVER_LOG_FILE)
+    if (scmStatus is not None):
+        scmStatus.reportStarted()
+    return procJava

@@ -1,0 +1,46 @@
+def agent_main():
+    parser = init_options_parser()
+    (options, args) = parser.parse_args()
+    options.warnings = []
+    if (len(args) == 0):
+        print parser.print_help()
+        parser.error('No action entered')
+    action = args[0]
+    possible_args_numbers = [1]
+    matches = 0
+    for args_number_required in possible_args_numbers:
+        matches += int((len(args) == args_number_required))
+    if (matches == 0):
+        print parser.print_help()
+        possible_args = ' or '.join((str(x) for x in possible_args_numbers))
+        parser.error(((('Invalid number of arguments. Entered: ' + str(len(args))) + ', required: ') + possible_args))
+    options.exit_message = ("Ambari Agent '%s' completed successfully." % action)
+    try:
+        if (action == SETUP_ACTION):
+            svcsetup()
+        elif (action == START_ACTION):
+            svcstart(options)
+        elif (action == DEBUG_ACTION):
+            svcdebug(options)
+        elif (action == STOP_ACTION):
+            svcstop(options)
+        elif (action == STATUS_ACTION):
+            svcstatus(options)
+        else:
+            parser.error('Invalid action')
+        if options.warnings:
+            for warning in options.warnings:
+                print_warning_msg(warning)
+                pass
+            options.exit_message = ("Ambari Agent '%s' completed with warnings." % action)
+            pass
+    except FatalException as e:
+        if (e.reason is not None):
+            print_error_msg('Exiting with exit code {0}. \nREASON: {1}'.format(e.code, e.reason))
+        sys.exit(e.code)
+    except NonFatalException as e:
+        options.exit_message = ("Ambari Agent '%s' completed with warnings." % action)
+        if (e.reason is not None):
+            print_warning_msg(e.reason)
+    if (options.exit_message is not None):
+        print options.exit_message

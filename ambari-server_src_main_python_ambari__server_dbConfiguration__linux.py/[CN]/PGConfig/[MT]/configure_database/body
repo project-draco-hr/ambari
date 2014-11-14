@@ -1,0 +1,38 @@
+def configure_database(self, args):
+    prompt_db_properties(args)
+    if is_local_database(args):
+        is_user_changed = is_jdbc_user_changed(args)
+        print 'Default properties detected. Using built-in database.'
+        store_local_properties(args)
+        print 'Checking PostgreSQL...'
+        retcode = check_postgre_up()
+        if (not (retcode == 0)):
+            err = 'Unable to start PostgreSQL server. Exiting'
+            raise FatalException(retcode, err)
+        print 'Configuring local database...'
+        (retcode, outdata, errdata) = setup_db(args)
+        if (not (retcode == 0)):
+            err = 'Running database init script was failed. Exiting.'
+            raise FatalException(retcode, err)
+        if is_user_changed:
+            remove_file(PG_HBA_CONF_FILE_BACKUP)
+        print 'Configuring PostgreSQL...'
+        retcode = configure_postgres()
+        if (not (retcode == 0)):
+            err = 'Unable to configure PostgreSQL server. Exiting'
+            raise FatalException(retcode, err)
+    else:
+        retcode = self._store_remote_properties(args)
+        if (retcode != 0):
+            err = 'Unable to save config file'
+            raise FatalException(retcode, err)
+        check_jdbc_drivers(args)
+        print 'Configuring remote database connection properties...'
+        retcode = setup_remote_db(args)
+        if (retcode == (-1)):
+            err = 'Remote database setup aborted.'
+            raise NonFatalException(err)
+        if (not (retcode == 0)):
+            err = 'Error while configuring connection properties. Exiting'
+            raise FatalException(retcode, err)
+        check_jdbc_drivers(args)

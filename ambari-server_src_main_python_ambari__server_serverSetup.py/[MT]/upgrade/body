@@ -1,0 +1,24 @@
+def upgrade(args):
+    if (not is_root()):
+        err = 'Ambari-server upgrade should be run with root-level privileges'
+        raise FatalException(4, err)
+    print (('Updating properties in ' + AMBARI_PROPERTIES_FILE) + ' ...')
+    retcode = update_ambari_properties()
+    if (not (retcode == 0)):
+        err = (AMBARI_PROPERTIES_FILE + " file can't be updated. Exiting")
+        raise FatalException(retcode, err)
+    try:
+        update_database_name_property()
+    except FatalException:
+        return (-1)
+    parse_properties_file(args)
+    retcode = run_schema_upgrade()
+    if (not (retcode == 0)):
+        print_error_msg('Ambari server upgrade failed. Please look at /var/log/ambari-server/ambari-server.log, for more details.')
+        raise FatalException(11, 'Schema upgrade failed.')
+    user = read_ambari_user()
+    if (user is None):
+        warn = ('Can not determine custom ambari user.\n' + SETUP_OR_UPGRADE_MSG)
+        print_warning_msg(warn)
+    else:
+        adjust_directory_permissions(user)

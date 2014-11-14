@@ -1,4 +1,4 @@
-def main():
+def main(heartbeat_stop_callback=None):
     global config
     parser = OptionParser()
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', help='verbose log output', default=False)
@@ -8,18 +8,19 @@ def main():
     setup_logging(options.verbose)
     default_cfg = {'agent': {'prefix': '/home/ambari', }, }
     config.load(default_cfg)
-    bind_signal_handlers()
+    bind_signal_handlers(agentPid)
     if ((len(sys.argv) > 1) and (sys.argv[1] == 'stop')):
         stop_agent()
     if ((len(sys.argv) > 2) and (sys.argv[1] == 'reset')):
         reset_agent(sys.argv)
-    config = resolve_ambari_config()
+    resolve_ambari_config()
     data_cleaner = None
-    if (int(config.get('agent', 'data_cleanup_interval')) > 0):
+    if (config.has_option('agent', 'data_cleanup_interval') and (int(config.get('agent', 'data_cleanup_interval')) > 0)):
         data_cleaner = DataCleaner(config)
         data_cleaner.start()
     perform_prestart_checks(expected_hostname)
-    daemonize()
+    if (not IS_WINDOWS):
+        daemonize()
     try:
         ping_port_listener = PingPortListener(config)
     except Exception as ex:
@@ -36,10 +37,12 @@ def main():
         logger.info('Connecting to Ambari server at %s (%s)', server_url, server_ip)
     except socket.error:
         logger.warn("Unable to determine the IP address of the Ambari server '%s'", server_hostname)
-    netutil = NetUtil()
-    netutil.try_to_connect(server_url, (-1), logger)
-    controller = Controller(config)
-    controller.start()
-    controller.join()
-    stop_agent()
+    netutil = NetUtil(heartbeat_stop_callback)
+    (retries, connected) = netutil.try_to_connect(server_url, (-1), logger)
+    if connected:
+        controller = Controller(config, heartbeat_stop_callback)
+        controller.start()
+        controller.join()
+    if (not IS_WINDOWS):
+        stop_agent()
     logger.info('finished')

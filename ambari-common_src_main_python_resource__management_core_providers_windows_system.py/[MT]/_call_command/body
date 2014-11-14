@@ -1,0 +1,54 @@
+def _call_command(command, logoutput=False, cwd=None, env=None, wait_for_finish=True, timeout=None, user=None):
+    Logger.info(('Executing %s' % command))
+    if user:
+        proc_token = OpenProcessToken(GetCurrentProcess(), (TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES))
+        old_states = []
+        privileges = [SE_ASSIGNPRIMARYTOKEN_NAME, SE_INCREASE_QUOTA_NAME]
+        for priv in privileges:
+            old_states.append(QueryPrivilegeState(proc_token, priv))
+            AdjustPrivilege(proc_token, priv)
+            QueryPrivilegeState(proc_token, priv)
+        user_token = LogonUser(user, '.', Script.get_password(user), win32con.LOGON32_LOGON_SERVICE, win32con.LOGON32_PROVIDER_DEFAULT)
+        env_token = DuplicateTokenEx(user_token, SecurityIdentification, TOKEN_QUERY, TokenPrimary)
+        current_env = CreateEnvironmentBlock(env_token, False)
+        current_env = _merge_env(current_env, env)
+        si = STARTUPINFO()
+        (out_handle, err_handle, out_file, err_file) = _create_tmp_files(current_env)
+        (ok, si.hStdInput) = _safe_duplicate_handle(GetStdHandle(STD_INPUT_HANDLE))
+        if (not ok):
+            raise Exception('Unable to create StdInput for child process')
+        (ok, si.hStdOutput) = _safe_duplicate_handle(out_handle)
+        if (not ok):
+            raise Exception('Unable to create StdOut for child process')
+        (ok, si.hStdError) = _safe_duplicate_handle(err_handle)
+        if (not ok):
+            raise Exception('Unable to create StdErr for child process')
+        Logger.debug("Redirecting stdout to '{}', stderr to '{}'".format(out_file.name, err_file.name))
+        si.dwFlags = win32con.STARTF_USESTDHANDLES
+        si.lpDesktop = ''
+        try:
+            info = CreateProcessAsUser(user_token, None, command, None, None, 1, win32con.CREATE_NO_WINDOW, current_env, cwd, si)
+            (hProcess, hThread, dwProcessId, dwThreadId) = info
+            hThread.Close()
+            try:
+                WaitForSingleObject(hProcess, INFINITE)
+            except KeyboardInterrupt:
+                pass
+            (out, err) = _get_files_output(out_file, err_file)
+            code = GetExitCodeProcess(hProcess)
+        finally:
+            for priv in privileges:
+                old_state = old_states.pop(0)
+                AdjustPrivilege(proc_token, priv, old_state)
+    else:
+        cur_token = OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY)
+        current_env = CreateEnvironmentBlock(cur_token, False)
+        current_env = _merge_env(current_env, env)
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd, env=current_env, shell=False)
+        (out, err) = proc.communicate()
+        code = proc.returncode
+    if (logoutput and out):
+        Logger.info(out)
+    if (logoutput and err):
+        Logger.info(err)
+    return (code, out, err)
