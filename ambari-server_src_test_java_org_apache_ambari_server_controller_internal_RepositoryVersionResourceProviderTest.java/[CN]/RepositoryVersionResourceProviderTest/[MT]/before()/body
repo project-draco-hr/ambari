@@ -1,4 +1,63 @@
 {
-  injector=Guice.createInjector(new InMemoryDefaultTestModule());
+  final Set<String> validVersions=Sets.newHashSet("1.1.1.1","1.1.343432.2","1.1.343432.2-234234324");
+  final AmbariMetaInfo ambariMetaInfo=Mockito.mock(AmbariMetaInfo.class);
+  final AbstractModule injectorModule=new InMemoryDefaultTestModule(){
+    protected void configure(){
+      super.configure();
+      bind(AmbariMetaInfo.class).toInstance(ambariMetaInfo);
+    }
+  }
+;
+  injector=Guice.createInjector(injectorModule);
+  final StackInfo stackInfo=new StackInfo(){
+    @Override public Map<String,UpgradePack> getUpgradePacks(){
+      final Map<String,UpgradePack> map=new HashMap<String,UpgradePack>();
+      final UpgradePack pack1=new UpgradePack(){
+        @Override public String getTarget(){
+          return "1.1.*.*";
+        }
+      }
+;
+      final UpgradePack pack2=new UpgradePack(){
+        @Override public String getTarget(){
+          return "1.1.*.*";
+        }
+      }
+;
+      map.put("pack1",pack1);
+      map.put("pack2",pack2);
+      return map;
+    }
+  }
+;
+  Mockito.when(ambariMetaInfo.getStack(Mockito.anyString(),Mockito.anyString())).thenAnswer(new Answer<StackInfo>(){
+    @Override public StackInfo answer(    InvocationOnMock invocation) throws Throwable {
+      final String stack=invocation.getArguments()[0].toString();
+      final String version=invocation.getArguments()[1].toString();
+      if (stack.equals("HDP") && validVersions.contains(version)) {
+        return stackInfo;
+      }
+ else {
+        throw new Exception("error");
+      }
+    }
+  }
+);
+  final HashSet<OperatingSystemInfo> osInfos=new HashSet<OperatingSystemInfo>();
+  osInfos.add(new OperatingSystemInfo("redhat6"));
+  osInfos.add(new OperatingSystemInfo("redhat7"));
+  Mockito.when(ambariMetaInfo.getOperatingSystems(Mockito.anyString(),Mockito.anyString())).thenAnswer(new Answer<Set<OperatingSystemInfo>>(){
+    @Override public Set<OperatingSystemInfo> answer(    InvocationOnMock invocation) throws Throwable {
+      final String stack=invocation.getArguments()[0].toString();
+      final String version=invocation.getArguments()[1].toString();
+      if (stack.equals("HDP") && validVersions.contains(version)) {
+        return osInfos;
+      }
+ else {
+        return new HashSet<OperatingSystemInfo>();
+      }
+    }
+  }
+);
   injector.getInstance(GuiceJpaInitializer.class);
 }
