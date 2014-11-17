@@ -1,0 +1,29 @@
+{
+  AmbariManagementController amc=createMock(AmbariManagementController.class);
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createCluster();
+  expect(amc.getClusters()).andReturn(clusters).atLeastOnce();
+  expect(clusters.getCluster((String)anyObject())).andReturn(cluster).atLeastOnce();
+  RepositoryVersionEntity repoVersionEntity=new RepositoryVersionEntity();
+  repoVersionEntity.setUpgradePackage("upgrade_test");
+  expect(repoVersionDao.findByStackAndVersion((String)anyObject(),(String)anyObject())).andReturn(repoVersionEntity).atLeastOnce();
+  Capture<UpgradeEntity> entityCapture=new Capture<UpgradeEntity>();
+  upgradeDao.create(capture(entityCapture));
+  expectLastCall();
+  replay(amc,clusters,cluster,upgradeDao,repoVersionDao);
+  UpgradeResourceProvider provider=createProvider(amc);
+  Map<String,Object> requestProps=new HashMap<String,Object>();
+  requestProps.put(UpgradeResourceProvider.UPGRADE_CLUSTER_NAME,"c1");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_VERSION,"2.2.2.2");
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  provider.createResources(request);
+  assertTrue(entityCapture.hasCaptured());
+  UpgradeEntity entity=entityCapture.getValue();
+  assertNotNull(entity);
+  assertEquals(Long.valueOf(1),entity.getClusterId());
+  assertEquals(3,entity.getUpgradeItems().size());
+  assertTrue(entity.getUpgradeItems().get(0).getText().contains("Preparing"));
+  assertTrue(entity.getUpgradeItems().get(1).getText().contains("Restarting"));
+  assertTrue(entity.getUpgradeItems().get(2).getText().contains("Finalizing"));
+  verify(amc,clusters,cluster,upgradeDao);
+}

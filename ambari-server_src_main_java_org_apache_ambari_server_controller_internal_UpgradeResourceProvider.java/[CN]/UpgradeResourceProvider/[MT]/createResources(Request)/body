@@ -1,15 +1,18 @@
 {
-  UpgradeEntity entity=new UpgradeEntity();
-  m_dao.create(entity);
-  List<UpgradeItemEntity> items=new ArrayList<UpgradeItemEntity>();
-  UpgradeItemEntity item=new UpgradeItemEntity();
-  item.setId(Long.valueOf(entity.getId().longValue() + 1000));
-  item.setState(UpgradeState.IN_PROGRESS);
-  items.add(item);
-  item=new UpgradeItemEntity();
-  item.setId(Long.valueOf(entity.getId().longValue() + 1001));
-  item.setState(UpgradeState.PENDING);
-  items.add(item);
-  entity.setUpgradeItems(items);
+  Set<Map<String,Object>> requestMaps=request.getProperties();
+  if (requestMaps.size() > 1) {
+    throw new SystemException("Can only initiate one upgrade per request.");
+  }
+  for (  final Map<String,Object> requestMap : requestMaps) {
+    createResources(new Command<Void>(){
+      @Override public Void invoke() throws AmbariException {
+        UpgradePack up=validateRequest(requestMap);
+        createUpgrade(up,requestMap);
+        return null;
+      }
+    }
+);
+  }
+  notifyCreate(Resource.Type.Upgrade,request);
   return getRequestStatus(null);
 }

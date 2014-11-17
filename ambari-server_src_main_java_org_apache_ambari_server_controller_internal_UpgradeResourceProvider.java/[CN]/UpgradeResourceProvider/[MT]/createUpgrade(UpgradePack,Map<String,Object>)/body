@@ -1,0 +1,58 @@
+{
+  String clusterName=(String)requestMap.get(UPGRADE_CLUSTER_NAME);
+  if (null == clusterName) {
+    throw new AmbariException(String.format("%s is required",UPGRADE_CLUSTER_NAME));
+  }
+  Cluster cluster=getManagementController().getClusters().getCluster(clusterName);
+  Map<String,Service> clusterServices=cluster.getServices();
+  Map<String,Map<String,ProcessingComponent>> tasks=pack.getTasks();
+  List<StageHolder> preUpgrades=new ArrayList<StageHolder>();
+  List<StageHolder> restart=new ArrayList<StageHolder>();
+  List<StageHolder> postUpgrades=new ArrayList<StageHolder>();
+  for (  Entry<String,List<String>> entry : pack.getOrder().entrySet()) {
+    String serviceName=entry.getKey();
+    List<String> componentNames=entry.getValue();
+    if (!tasks.containsKey(serviceName)) {
+      continue;
+    }
+    if (!clusterServices.containsKey(serviceName)) {
+      continue;
+    }
+    Service service=clusterServices.get(serviceName);
+    Map<String,ServiceComponent> components=service.getServiceComponents();
+    for (    String componentName : componentNames) {
+      if (!tasks.get(serviceName).containsKey(componentName)) {
+        continue;
+      }
+      if (!components.containsKey(componentName)) {
+        continue;
+      }
+      ProcessingComponent pc=tasks.get(serviceName).get(componentName);
+      List<Set<String>> groupings=computeHostGroupings(pc,components.get(componentName).getServiceComponentHosts().keySet());
+      preUpgrades.addAll(buildUpgradeStages(pc,true,groupings));
+      restart.addAll(buildRollingRestart(pc,groupings));
+      postUpgrades.addAll(buildUpgradeStages(pc,false,groupings));
+    }
+  }
+  Gson gson=new Gson();
+  UpgradeEntity entity=new UpgradeEntity();
+  List<UpgradeItemEntity> items=new ArrayList<UpgradeItemEntity>();
+  for (  StageHolder holder : preUpgrades) {
+    holder.upgradeItemEntity.setHosts(gson.toJson(holder.hosts));
+    holder.upgradeItemEntity.setTasks(gson.toJson(holder.taskHolder.tasks));
+    items.add(holder.upgradeItemEntity);
+  }
+  for (  StageHolder holder : restart) {
+    holder.upgradeItemEntity.setHosts(gson.toJson(holder.hosts));
+    items.add(holder.upgradeItemEntity);
+  }
+  for (  StageHolder holder : postUpgrades) {
+    holder.upgradeItemEntity.setHosts(gson.toJson(holder.hosts));
+    holder.upgradeItemEntity.setTasks(gson.toJson(holder.taskHolder.tasks));
+    items.add(holder.upgradeItemEntity);
+  }
+  entity.setClusterId(Long.valueOf(cluster.getClusterId()));
+  entity.setUpgradeItems(items);
+  m_upgradeDAO.create(entity);
+  return entity;
+}
