@@ -1,0 +1,23 @@
+{
+  final Request request=createMockRequest();
+  final Stage s=getStageWithServerAction(1,977,new HashMap<String,String>(){
+{
+      put(MockServerAction.PAYLOAD_FORCE_FAIL,"exception");
+    }
+  }
+,"test",1);
+  final List<Stage> stages=new ArrayList<Stage>(){
+{
+      add(s);
+    }
+  }
+;
+  ActionDBAccessor db=createMockActionDBAccessor(request,stages);
+  ServerActionExecutor executor=new ServerActionExecutor(db,10000);
+  s.getHostRoleCommand(SERVER_HOST_NAME,Role.AMBARI_SERVER_ACTION.toString()).setStatus(HostRoleStatus.QUEUED);
+  int cycleCount=0;
+  while (!getTaskStatus(s).isCompletedState() && (cycleCount++ <= MAX_CYCLE_ITERATIONS)) {
+    executor.doWork();
+  }
+  assertEquals(HostRoleStatus.FAILED,getTaskStatus(s));
+}

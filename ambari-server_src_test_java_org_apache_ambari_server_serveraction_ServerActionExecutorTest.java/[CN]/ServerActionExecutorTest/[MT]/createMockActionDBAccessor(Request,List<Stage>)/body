@@ -1,0 +1,43 @@
+{
+  ActionDBAccessor db=mock(ActionDBAccessor.class);
+  when(db.getStagesInProgress()).thenReturn(stages);
+  doAnswer(new Answer(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      RequestStatus status=(RequestStatus)invocation.getArguments()[0];
+      if (status == RequestStatus.IN_PROGRESS) {
+        return Arrays.asList(request);
+      }
+ else {
+        return Collections.emptyList();
+      }
+    }
+  }
+).when(db).getRequestsByStatus(any(RequestStatus.class),anyInt(),anyBoolean());
+  doAnswer(new Answer(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      String host=(String)invocation.getArguments()[0];
+      String role=(String)invocation.getArguments()[3];
+      CommandReport commandReport=(CommandReport)invocation.getArguments()[4];
+      HostRoleCommand command=stages.get(0).getHostRoleCommand(host,role);
+      command.setStatus(HostRoleStatus.valueOf(commandReport.getStatus()));
+      return null;
+    }
+  }
+).when(db).updateHostRoleState(anyString(),anyLong(),anyLong(),anyString(),any(CommandReport.class));
+  doAnswer(new Answer(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      String host=(String)invocation.getArguments()[0];
+      String role=(String)invocation.getArguments()[1];
+      HostRoleStatus status=(HostRoleStatus)invocation.getArguments()[2];
+      HostRoleCommand task=stages.get(0).getHostRoleCommand(host,role);
+      if (task.getStatus() == status) {
+        return Arrays.asList(task);
+      }
+ else {
+        return null;
+      }
+    }
+  }
+).when(db).getTasksByHostRoleAndStatus(anyString(),anyString(),any(HostRoleStatus.class));
+  return db;
+}

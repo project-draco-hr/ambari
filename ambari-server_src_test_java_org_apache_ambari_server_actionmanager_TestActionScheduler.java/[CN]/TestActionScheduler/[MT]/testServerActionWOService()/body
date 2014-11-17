@@ -14,14 +14,12 @@
   when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
   when(serviceObj.getCluster()).thenReturn(oneClusterMock);
   HashMap<String,ServiceComponentHost> hosts=new HashMap<String,ServiceComponentHost>();
-  hosts.put(hostname,sch);
+  hosts.put(serverHostname,sch);
   when(scomp.getServiceComponentHosts()).thenReturn(hosts);
   List<Stage> stages=new ArrayList<Stage>();
   Map<String,String> payload=new HashMap<String,String>();
-  payload.put(ServerAction.PayloadName.CLUSTER_NAME,"cluster1");
-  payload.put(ServerAction.PayloadName.CURRENT_STACK_VERSION,"HDP-0.2");
-  final Stage s=getStageWithServerAction(1,977,hostname,payload,"test");
-  s.getExecutionCommands().get("ahost.ambari.apache.org").get(0).getExecutionCommand().setServiceName(null);
+  final Stage s=getStageWithServerAction(1,977,payload,"test",300);
+  s.getExecutionCommands().get(serverHostname).get(0).getExecutionCommand().setServiceName(null);
   stages.add(s);
   ActionDBAccessor db=mock(ActionDBAccessor.class);
   Request request=mock(Request.class);
@@ -39,10 +37,32 @@
     }
   }
 ).when(db).updateHostRoleState(anyString(),anyLong(),anyLong(),anyString(),any(CommandReport.class));
-  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),new ServerActionManagerImpl(fsm),unitOfWork,conf);
-  int cycleCount=0;
-  while (!stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION").equals(HostRoleStatus.COMPLETED) && cycleCount <= MAX_CYCLE_ITERATIONS) {
-    scheduler.doWork();
+  doAnswer(new Answer(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      String host=(String)invocation.getArguments()[0];
+      String role=(String)invocation.getArguments()[1];
+      HostRoleStatus status=(HostRoleStatus)invocation.getArguments()[2];
+      HostRoleCommand task=s.getHostRoleCommand(host,role);
+      if (task.getStatus() == status) {
+        return Arrays.asList(task);
+      }
+ else {
+        return null;
+      }
+    }
   }
-  assertEquals(stages.get(0).getHostRoleStatus(hostname,"AMBARI_SERVER_ACTION"),HostRoleStatus.COMPLETED);
+).when(db).getTasksByHostRoleAndStatus(anyString(),anyString(),any(HostRoleStatus.class));
+  doAnswer(new Answer(){
+    @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
+      return s.getHostRoleCommand(serverHostname,"AMBARI_SERVER_ACTION");
+    }
+  }
+).when(db).getTask(anyLong());
+  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),unitOfWork,conf);
+  int cycleCount=0;
+  while (!stages.get(0).getHostRoleStatus(serverHostname,"AMBARI_SERVER_ACTION").equals(HostRoleStatus.COMPLETED) && cycleCount++ <= MAX_CYCLE_ITERATIONS) {
+    scheduler.doWork();
+    scheduler.getServerActionExecutor().doWork();
+  }
+  assertEquals(stages.get(0).getHostRoleStatus(serverHostname,"AMBARI_SERVER_ACTION"),HostRoleStatus.COMPLETED);
 }

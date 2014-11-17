@@ -1,0 +1,49 @@
+{
+  List<HostRoleCommand> tasks=db.getTasksByHostRoleAndStatus(serverHostName,Role.AMBARI_SERVER_ACTION.toString(),HostRoleStatus.QUEUED);
+  if ((tasks != null) && !tasks.isEmpty()) {
+    for (    HostRoleCommand task : tasks) {
+      Long taskId=task.getTaskId();
+      LOG.debug("Processing task #{}",taskId);
+      if (task.getStatus() == HostRoleStatus.QUEUED) {
+        ExecutionCommandWrapper executionWrapper=task.getExecutionCommandWrapper();
+        if (executionWrapper != null) {
+          ExecutionCommand executionCommand=executionWrapper.getExecutionCommand();
+          if (executionCommand != null) {
+            Worker worker=new Worker(task,executionCommand);
+            Thread workerThread=new Thread(worker,String.format("Server Action Executor Worker %s",taskId));
+            Long timeout=determineTimeout(executionCommand);
+            updateHostRoleState(task,executionCommand,createInProgressReport());
+            LOG.debug("Starting Server Action Executor Worker thread for task #{}.",taskId);
+            workerThread.start();
+            try {
+              workerThread.join(timeout);
+            }
+ catch (            InterruptedException e) {
+              workerThread.interrupt();
+              throw e;
+            }
+            if (workerThread.isAlive()) {
+              LOG.debug("Server Action Executor Worker thread for task #{} timed out - it failed to complete within {} ms.",taskId,timeout);
+              workerThread.interrupt();
+              updateHostRoleState(task,executionCommand,createTimedOutReport());
+            }
+ else {
+              LOG.debug("Server Action Executor Worker thread for task #{} exited on its own.",taskId);
+              updateHostRoleState(task,executionCommand,worker.getCommandReport());
+            }
+          }
+ else {
+            LOG.warn("Task #{} failed to produce an ExecutionCommand, skipping.",taskId);
+          }
+        }
+ else {
+          LOG.warn("Task #{} failed to produce an ExecutionCommandWrapper, skipping.",taskId);
+        }
+      }
+ else {
+        LOG.warn("Queued task #{} is expected to have a status of {} but has a status of {}, skipping.",taskId,HostRoleStatus.QUEUED,task.getStatus());
+      }
+    }
+  }
+  cleanRequestShareDataContexts();
+}
