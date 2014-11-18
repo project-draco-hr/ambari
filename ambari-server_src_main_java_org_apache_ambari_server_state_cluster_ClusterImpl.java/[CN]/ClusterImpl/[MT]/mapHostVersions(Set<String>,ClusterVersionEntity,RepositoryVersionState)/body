@@ -1,0 +1,43 @@
+{
+  if (currentClusterVersion == null) {
+    throw new AmbariException("Could not find current stack version of cluster " + this.getClusterName());
+  }
+  final Set<RepositoryVersionState> validStates=new HashSet<RepositoryVersionState>(){
+{
+      add(RepositoryVersionState.CURRENT);
+      add(RepositoryVersionState.UPGRADING);
+    }
+  }
+;
+  if (!validStates.contains(desiredState)) {
+    throw new AmbariException("The state must be one of [" + StringUtils.join(validStates,", ") + "]");
+  }
+  clusterGlobalLock.readLock().lock();
+  try {
+    readWriteLock.writeLock().lock();
+    try {
+      Set<String> existingHostsWithClusterStackAndVersion=new HashSet<String>();
+      List<HostVersionEntity> existingHostVersionEntities=hostVersionDAO.findByClusterStackAndVersion(this.getClusterName(),currentClusterVersion.getStack(),currentClusterVersion.getVersion());
+      if (existingHostVersionEntities != null) {
+        for (        HostVersionEntity entity : existingHostVersionEntities) {
+          existingHostsWithClusterStackAndVersion.add(entity.getHostName());
+        }
+      }
+      Sets.SetView<String> intersection=Sets.intersection(existingHostsWithClusterStackAndVersion,hostNames);
+      for (      String hostname : hostNames) {
+        if (!intersection.contains(hostname)) {
+          HostEntity hostEntity=hostDAO.findByName(hostname);
+          HostVersionEntity hostVersionEntity=new HostVersionEntity(hostname,currentClusterVersion.getStack(),currentClusterVersion.getVersion(),desiredState);
+          hostVersionEntity.setHostEntity(hostEntity);
+          hostVersionDAO.create(hostVersionEntity);
+        }
+      }
+    }
+  finally {
+      readWriteLock.writeLock().unlock();
+    }
+  }
+  finally {
+    clusterGlobalLock.readLock().unlock();
+  }
+}

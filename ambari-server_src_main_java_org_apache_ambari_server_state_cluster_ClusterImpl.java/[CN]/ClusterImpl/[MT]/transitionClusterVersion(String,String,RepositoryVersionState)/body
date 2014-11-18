@@ -1,0 +1,51 @@
+{
+  Set<RepositoryVersionState> allowedStates=new HashSet<RepositoryVersionState>();
+  clusterGlobalLock.readLock().lock();
+  try {
+    readWriteLock.writeLock().lock();
+    try {
+      ClusterVersionEntity existingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(this.getClusterName(),stack,version);
+      if (existingClusterVersion == null) {
+        throw new AmbariException("Existing cluster version not found for cluster=" + this.getClusterName() + ", stack="+ stack+ ", version="+ version);
+      }
+      if (existingClusterVersion.getState() != state) {
+switch (existingClusterVersion.getState()) {
+case CURRENT:
+          allowedStates.add(RepositoryVersionState.INSTALLED);
+case INSTALLED:
+        allowedStates.add(RepositoryVersionState.CURRENT);
+case UPGRADING:
+      allowedStates.add(RepositoryVersionState.CURRENT);
+    allowedStates.add(RepositoryVersionState.UPGRADE_FAILED);
+case UPGRADE_FAILED:
+  allowedStates.add(RepositoryVersionState.UPGRADING);
+}
+if (!allowedStates.contains(state)) {
+throw new AmbariException("Invalid cluster version transition from " + existingClusterVersion.getState() + " to "+ state);
+}
+if (state == RepositoryVersionState.CURRENT) {
+ClusterVersionEntity currentVersion=clusterVersionDAO.findByClusterAndStateCurrent(this.getClusterName());
+if (currentVersion == null) {
+  throw new AmbariException("Unable to find CURRENT cluster version for cluster " + this.getClusterName());
+}
+currentVersion.setState(RepositoryVersionState.INSTALLED);
+clusterVersionDAO.merge(currentVersion);
+}
+existingClusterVersion.setState(state);
+existingClusterVersion.setEndTime(System.currentTimeMillis());
+clusterVersionDAO.merge(existingClusterVersion);
+}
+}
+ catch (RollbackException e) {
+String message="Unable to transition stack " + stack + " at version "+ version+ " for cluster "+ getClusterName()+ " to state "+ state;
+LOG.warn(message);
+throw new AmbariException(message,e);
+}
+ finally {
+readWriteLock.writeLock().unlock();
+}
+}
+  finally {
+clusterGlobalLock.readLock().unlock();
+}
+}

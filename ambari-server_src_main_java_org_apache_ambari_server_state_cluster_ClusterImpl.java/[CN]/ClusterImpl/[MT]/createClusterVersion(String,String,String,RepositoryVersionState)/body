@@ -1,0 +1,30 @@
+{
+  clusterGlobalLock.readLock().lock();
+  try {
+    readWriteLock.writeLock().lock();
+    try {
+      RepositoryVersionState allowedState;
+      if (this.clusterEntity.getClusterVersionEntities() == null || this.clusterEntity.getClusterVersionEntities().isEmpty()) {
+        allowedState=RepositoryVersionState.CURRENT;
+      }
+ else {
+        allowedState=RepositoryVersionState.UPGRADING;
+      }
+      if (allowedState != state) {
+        throw new AmbariException("The allowed state for a new cluster version must be " + allowedState);
+      }
+      ClusterVersionEntity existing=clusterVersionDAO.findByClusterAndStackAndVersion(this.getClusterName(),stack,version);
+      if (existing != null) {
+        throw new DuplicateResourceException("Duplicate item, a cluster version with stack=" + stack + ", version="+ version+ " for cluster "+ this.getClusterName()+ " already exists");
+      }
+      ClusterVersionEntity clusterVersionEntity=new ClusterVersionEntity(this.clusterEntity,stack,version,state,System.currentTimeMillis(),System.currentTimeMillis(),userName);
+      clusterVersionDAO.create(clusterVersionEntity);
+    }
+  finally {
+      readWriteLock.writeLock().unlock();
+    }
+  }
+  finally {
+    clusterGlobalLock.readLock().unlock();
+  }
+}
