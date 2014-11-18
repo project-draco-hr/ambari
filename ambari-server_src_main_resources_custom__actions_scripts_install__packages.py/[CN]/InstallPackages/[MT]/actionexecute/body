@@ -1,0 +1,28 @@
+def actionexecute(self, env):
+    delayed_fail = False
+    package_install_result = False
+    config = Script.get_config()
+    base_urls = json.loads(config['commandParams']['base_urls'])
+    package_list = json.loads(config['commandParams']['package_list'])
+    installed_repositories = []
+    try:
+        for url_info in base_urls:
+            self.install_repository(url_info)
+        installed_repositories = list_ambari_managed_repos()
+    except Exception as err:
+        print 'Can not distribute repositories.'
+        print traceback.format_exc()
+        delayed_fail = True
+    if (not delayed_fail):
+        try:
+            for package in package_list:
+                Package(package)
+            package_install_result = True
+        except Exception as err:
+            print 'Can not install packages.'
+            print traceback.format_exc()
+            delayed_fail = True
+    structured_output = {'ambari_repositories': installed_repositories, 'package_installation_result': ('SUCCESS' if package_install_result else 'FAIL'), }
+    self.put_structured_out(structured_output)
+    if delayed_fail:
+        raise Fail('Failed to distribute repositories/install packages')
