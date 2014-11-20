@@ -1,34 +1,58 @@
 {
-  final StackInfo stackInfo=ambariMetaInfo.getStack(repositoryVersion.getStack(),repositoryVersion.getVersion());
-  if (stackInfo == null) {
-    throw new AmbariException("Stack " + repositoryVersion.getStack() + " "+ repositoryVersion.getVersion()+ " is not found");
+  final StackId requiredStack=new StackId(repositoryVersion.getStack());
+  final String stackName=requiredStack.getStackName();
+  final String stackMajorVersion=requiredStack.getStackVersion();
+  final String stackFullName=requiredStack.getStackId();
+  final StackInfo stackInfo=ambariMetaInfo.getStack(stackName,stackMajorVersion);
+  if (stackInfo.getUpgradePacks() == null) {
+    throw new AmbariException("Stack " + stackFullName + " doesn't have upgrade packages");
   }
-  final UpgradePack upgradePack=stackInfo.getUpgradePacks().get(repositoryVersion.getUpgradePackage());
-  if (upgradePack == null) {
-    throw new AmbariException("Upgrade pack " + repositoryVersion.getUpgradePackage() + " is not available for stack "+ repositoryVersion.getStack()+ " "+ repositoryVersion.getVersion());
+  ProcessingReport jsonValidationReport;
+  JsonNode repositoriesJson;
+  try {
+    repositoriesJson=JsonLoader.fromString(repositoryVersion.getRepositories());
+    jsonValidationReport=repositoriesJsonSchema.validate(repositoriesJson);
+  }
+ catch (  Exception ex) {
+    throw new AmbariException("Could not process repositories json");
+  }
+  if (!jsonValidationReport.isSuccess()) {
+    final StringBuilder errors=new StringBuilder();
+    final Iterator<ProcessingMessage> iterator=jsonValidationReport.iterator();
+    while (iterator.hasNext()) {
+      errors.append(iterator.next().toString());
+    }
+    throw new AmbariException("Failed to validate repositories json: " + errors.toString());
   }
   final Set<String> osSupported=new HashSet<String>();
-  for (  OperatingSystemInfo osInfo : ambariMetaInfo.getOperatingSystems(repositoryVersion.getStack(),repositoryVersion.getVersion())) {
+  for (  OperatingSystemInfo osInfo : ambariMetaInfo.getOperatingSystems(stackName,stackMajorVersion)) {
     osSupported.add(osInfo.getOsType());
   }
   final Set<String> osRepositoryVersion=new HashSet<String>();
-  final Matcher osMatcher=Pattern.compile("\"os\":\\s*\"(.+)\"").matcher(new Gson().fromJson(repositoryVersion.getRepositories(),Object.class).toString());
-  while (osMatcher.find()) {
-    osRepositoryVersion.add(osMatcher.group(1));
+  final Iterator<JsonNode> repositoriesIterator=repositoriesJson.elements();
+  while (repositoriesIterator.hasNext()) {
+    osRepositoryVersion.add(repositoriesIterator.next().get("os").asText());
   }
   if (osRepositoryVersion.isEmpty()) {
     throw new AmbariException("At least one set of repositories for OS should be provided");
   }
   for (  String os : osRepositoryVersion) {
     if (!osSupported.contains(os)) {
-      throw new AmbariException("Operating system type " + os + " is not supported by stack "+ repositoryVersion.getStack()+ " "+ repositoryVersion.getVersion());
+      throw new AmbariException("Operating system type " + os + " is not supported by stack "+ stackFullName);
     }
+  }
+  final UpgradePack upgradePack=stackInfo.getUpgradePacks().get(repositoryVersion.getUpgradePackage());
+  if (upgradePack == null) {
+    throw new AmbariException("Upgrade pack " + repositoryVersion.getUpgradePackage() + " is not available for stack "+ stackFullName);
+  }
+  if (StringUtils.isBlank(upgradePack.getTarget())) {
+    throw new AmbariException("Upgrade pack " + repositoryVersion.getUpgradePackage() + " is corrupted, it should contain <target> node");
   }
   String regexPattern=upgradePack.getTarget();
   regexPattern=regexPattern.replaceAll("\\.","\\\\.");
-  regexPattern=regexPattern.replaceAll("\\*","\\\\d+");
+  regexPattern=regexPattern.replaceAll("\\\\\\.\\*","(\\\\\\.\\\\d+)?");
   regexPattern=regexPattern.concat("(-\\d+)?");
   if (!Pattern.matches(regexPattern,repositoryVersion.getVersion())) {
-    throw new AmbariException("Upgrade pack " + repositoryVersion.getUpgradePackage() + " can't be applied to stack "+ repositoryVersion.getStack()+ " "+ repositoryVersion.getVersion());
+    throw new AmbariException("Upgrade pack " + repositoryVersion.getUpgradePackage() + " can't be applied to stack "+ stackFullName);
   }
 }
