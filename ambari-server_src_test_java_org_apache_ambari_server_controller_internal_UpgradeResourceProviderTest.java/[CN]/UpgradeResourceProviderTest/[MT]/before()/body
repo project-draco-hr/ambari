@@ -1,12 +1,30 @@
 {
-  upgradeDao=createStrictMock(UpgradeDAO.class);
-  repoVersionDao=createStrictMock(RepositoryVersionDAO.class);
-  m_injector=Guice.createInjector(Modules.override(new InMemoryDefaultTestModule()).with(new Module(){
-    @Override public void configure(    Binder binder){
-      binder.bind(UpgradeDAO.class).toInstance(upgradeDao);
-      binder.bind(RepositoryVersionDAO.class).toInstance(repoVersionDao);
-    }
-  }
-));
-  m_injector.getInstance(GuiceJpaInitializer.class);
+  injector=Guice.createInjector(new InMemoryDefaultTestModule());
+  injector.getInstance(GuiceJpaInitializer.class);
+  upgradeDao=injector.getInstance(UpgradeDAO.class);
+  repoVersionDao=injector.getInstance(RepositoryVersionDAO.class);
+  RepositoryVersionEntity repoVersionEntity=new RepositoryVersionEntity();
+  repoVersionEntity.setDisplayName("My New Version");
+  repoVersionEntity.setRepositories("");
+  repoVersionEntity.setStack("HDP-2.1.1");
+  repoVersionEntity.setUpgradePackage("upgrade_test");
+  repoVersionEntity.setVersion("2.2.2.2");
+  repoVersionDao.create(repoVersionEntity);
+  clusters=injector.getInstance(Clusters.class);
+  clusters.addCluster("c1");
+  Cluster cluster=clusters.getCluster("c1");
+  cluster.setDesiredStackVersion(new StackId("HDP-2.1.1"));
+  clusters.addHost("h1");
+  Host host=clusters.getHost("h1");
+  Map<String,String> hostAttributes=new HashMap<String,String>();
+  hostAttributes.put("os_family","redhat");
+  hostAttributes.put("os_release_version","6.3");
+  host.setHostAttributes(hostAttributes);
+  host.persist();
+  clusters.mapHostToCluster("h1","c1");
+  Service service=cluster.addService("ZOOKEEPER");
+  service.setDesiredStackVersion(cluster.getDesiredStackVersion());
+  service.persist();
+  ServiceComponent component=service.addServiceComponent("ZOOKEEPER_SERVER");
+  component.addServiceComponentHost("h1");
 }
