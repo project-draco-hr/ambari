@@ -1,6 +1,6 @@
 {
   ClassPathScanningCandidateComponentProvider scanner=new ClassPathScanningCandidateComponentProvider(false);
-  @SuppressWarnings("unchecked") List<Class<? extends Annotation>> classes=Arrays.asList(EagerSingleton.class,StaticallyInject.class);
+  List<Class<? extends Annotation>> classes=Arrays.asList(EagerSingleton.class,StaticallyInject.class,AmbariService.class);
   for (  Class<? extends Annotation> cls : classes) {
     scanner.addIncludeFilter(new AnnotationTypeFilter(cls));
   }
@@ -9,6 +9,7 @@
     LOG.warn("No instances of {} found to register",classes);
     return;
   }
+  Set<com.google.common.util.concurrent.Service> services=new HashSet<com.google.common.util.concurrent.Service>();
   for (  BeanDefinition beanDefinition : beanDefinitions) {
     String className=beanDefinition.getBeanClassName();
     Class<?> clazz=ClassUtils.resolveClassName(className,ClassUtils.getDefaultClassLoader());
@@ -20,5 +21,25 @@
       requestStaticInjection(clazz);
       LOG.debug("Statically injecting {} ",clazz);
     }
+    if (null != clazz.getAnnotation(AmbariService.class)) {
+      if (!AbstractScheduledService.class.isAssignableFrom(clazz)) {
+        String message=MessageFormat.format("Unable to register service {0} because it is not an AbstractScheduledService",clazz);
+        LOG.warn(message);
+        throw new RuntimeException(message);
+      }
+      AbstractScheduledService service=null;
+      try {
+        service=(AbstractScheduledService)clazz.newInstance();
+        bind((Class<AbstractScheduledService>)clazz).toInstance(service);
+        services.add(service);
+        LOG.debug("Registering service {} ",clazz);
+      }
+ catch (      Exception exception) {
+        LOG.error("Unable to register {} as a service",clazz,exception);
+        throw new RuntimeException(exception);
+      }
+    }
   }
+  ServiceManager manager=new ServiceManager(services);
+  bind(ServiceManager.class).toInstance(manager);
 }
