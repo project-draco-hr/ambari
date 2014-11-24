@@ -1,0 +1,64 @@
+{
+  String clusterName=alert.getCluster();
+  String serviceName=alert.getService();
+  String componentName=alert.getComponent();
+  String hostName=alert.getHost();
+  if (null == clusterName) {
+    return true;
+  }
+  String ambariServiceName=Services.AMBARI.name();
+  if (ambariServiceName.equals(serviceName)) {
+    return true;
+  }
+  final Cluster cluster;
+  try {
+    cluster=m_clusters.get().getCluster(clusterName);
+    if (null == cluster) {
+      LOG.error("Unable to process alert {} for an invalid cluster named {}",alert.getName(),clusterName);
+      return false;
+    }
+  }
+ catch (  AmbariException ambariException) {
+    LOG.error("Unable to process alert {} for an invalid cluster named {}",alert.getName(),clusterName,ambariException);
+    return false;
+  }
+  Map<String,Service> services=cluster.getServices();
+  Service service=services.get(serviceName);
+  if (null == service) {
+    LOG.error("Unable to process alert {} for an invalid service named {}",alert.getName(),serviceName);
+    return false;
+  }
+  if (null != hostName) {
+    List<Host> hosts=m_clusters.get().getHosts();
+    if (null == hosts) {
+      LOG.error("Unable to process alert {} for an invalid host named {}",alert.getName(),hostName);
+      return false;
+    }
+    boolean validHost=false;
+    for (    Host host : hosts) {
+      if (hostName.equals(host.getHostName())) {
+        validHost=true;
+        break;
+      }
+    }
+    if (!validHost) {
+      LOG.error("Unable to process alert {} for an invalid host named {}",alert.getName(),hostName);
+      return false;
+    }
+  }
+  if (null != hostName && null != componentName) {
+    boolean validServiceComponentHost=false;
+    List<ServiceComponentHost> serviceComponentHosts=cluster.getServiceComponentHosts(hostName);
+    for (    ServiceComponentHost serviceComponentHost : serviceComponentHosts) {
+      if (componentName.equals(serviceComponentHost.getServiceComponentName())) {
+        validServiceComponentHost=true;
+        break;
+      }
+    }
+    if (!validServiceComponentHost) {
+      LOG.warn("Unable to process alert {} for an invalid service {} and component {} on host {}",alert.getName(),serviceName,componentName,hostName);
+      return false;
+    }
+  }
+  return true;
+}

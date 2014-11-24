@@ -1,0 +1,38 @@
+{
+  clusters=EasyMock.createNiceMock(Clusters.class);
+  cluster=EasyMock.createNiceMock(Cluster.class);
+  injector=Guice.createInjector(Modules.override(new InMemoryDefaultTestModule()).with(new MockModule()));
+  injector.getInstance(GuiceJpaInitializer.class);
+  helper=injector.getInstance(OrmTestHelper.class);
+  clusterId=helper.createCluster();
+  dao=injector.getInstance(AlertsDAO.class);
+  definitionDao=injector.getInstance(AlertDefinitionDAO.class);
+  List<Host> hosts=new ArrayList<Host>();
+  Host host=EasyMock.createNiceMock(Host.class);
+  EasyMock.expect(host.getHostName()).andReturn(HOST1).anyTimes();
+  hosts.add(host);
+  Map<String,Service> services=new HashMap<String,Service>();
+  services.put("Service 1",EasyMock.createNiceMock(Service.class));
+  List<ServiceComponentHost> schs=new ArrayList<ServiceComponentHost>();
+  ServiceComponentHost sch=EasyMock.createNiceMock(ServiceComponentHost.class);
+  EasyMock.expect(sch.getServiceComponentName()).andReturn("Component 1").anyTimes();
+  schs.add(sch);
+  EasyMock.expect(clusters.getCluster(CLUSTER_NAME)).andReturn(cluster).anyTimes();
+  EasyMock.expect(clusters.getHosts()).andReturn(hosts).anyTimes();
+  EasyMock.expect(cluster.getServices()).andReturn(services).anyTimes();
+  EasyMock.expect(cluster.getServiceComponentHosts(HOST1)).andReturn(schs).anyTimes();
+  EasyMock.replay(clusters,cluster,sch,host);
+  for (int i=0; i < 5; i++) {
+    AlertDefinitionEntity definition=new AlertDefinitionEntity();
+    definition.setDefinitionName(ALERT_DEFINITION + i);
+    definition.setServiceName(SERVICE + " " + i);
+    definition.setComponentName(COMPONENT + " " + i);
+    definition.setClusterId(clusterId);
+    definition.setHash(UUID.randomUUID().toString());
+    definition.setScheduleInterval(Integer.valueOf(60));
+    definition.setScope(Scope.SERVICE);
+    definition.setSource("{\"type\" : \"SCRIPT\"}");
+    definition.setSourceType(SourceType.SCRIPT);
+    definitionDao.create(definition);
+  }
+}

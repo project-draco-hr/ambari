@@ -1,4 +1,5 @@
 {
+  boolean fireRemovalEvent=false;
   clusterGlobalLock.writeLock().lock();
   try {
     writeLock.lock();
@@ -6,13 +7,12 @@
       if (persisted) {
         removeEntities();
         persisted=false;
+        fireRemovalEvent=true;
       }
       clusters.getCluster(getClusterName()).removeServiceComponentHost(this);
     }
  catch (    AmbariException ex) {
-      if (LOG.isDebugEnabled()) {
-        LOG.error(ex.getMessage());
-      }
+      LOG.error("Unable to remove a service component from a host",ex);
     }
  finally {
       writeLock.unlock();
@@ -20,5 +20,16 @@
   }
   finally {
     clusterGlobalLock.writeLock().unlock();
+  }
+  if (fireRemovalEvent) {
+    long clusterId=getClusterId();
+    StackId stackId=getStackVersion();
+    String stackVersion=stackId.getStackVersion();
+    String stackName=stackId.getStackName();
+    String serviceName=getServiceName();
+    String componentName=getServiceComponentName();
+    String hostName=getHostName();
+    ServiceComponentUninstalledEvent event=new ServiceComponentUninstalledEvent(clusterId,stackName,stackVersion,serviceName,componentName,hostName);
+    eventPublisher.publish(event);
   }
 }

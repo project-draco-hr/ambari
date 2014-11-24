@@ -1,0 +1,30 @@
+{
+  if (null == clusterName) {
+    LOG.warn("Unable to create alert definition agent commands because of a null cluster name");
+    return;
+  }
+  if (null == hosts || hosts.size() == 0) {
+    return;
+  }
+  try {
+    m_actionQueueLock.lock();
+    for (    String hostName : hosts) {
+      List<AlertDefinition> definitions=getAlertDefinitions(clusterName,hostName);
+      String hash=getHash(clusterName,hostName);
+      AlertDefinitionCommand command=new AlertDefinitionCommand(clusterName,hostName,hash,definitions);
+      try {
+        Cluster cluster=m_clusters.get().getCluster(clusterName);
+        command.addConfigs(m_configHelper.get(),cluster);
+      }
+ catch (      AmbariException ae) {
+        LOG.warn("Unable to add configurations to alert definition command",ae);
+      }
+      m_actionQueue.dequeue(hostName,AgentCommandType.ALERT_DEFINITION_COMMAND);
+      m_actionQueue.dequeue(hostName,AgentCommandType.ALERT_EXECUTION_COMMAND);
+      m_actionQueue.enqueue(hostName,command);
+    }
+  }
+  finally {
+    m_actionQueueLock.unlock();
+  }
+}
