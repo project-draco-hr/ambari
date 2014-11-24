@@ -1,0 +1,42 @@
+{
+  Set<Resource> providerResources=queryResponse.getResources();
+  ExtendedResourceProviderWrapper provider=ensureResourceProviderWrapper(type);
+  int totalCount=0;
+  Set<Resource> resources=providerResources;
+  if (!providerResources.isEmpty()) {
+    boolean providerAlreadyPaged=queryResponse.isPagedResponse();
+    boolean providerAlreadySorted=queryResponse.isSortedResponse();
+    Comparator<Resource> resourceComparator=comparator;
+    if (null != sortRequest) {
+      checkSortRequestProperties(sortRequest,type,provider);
+      resourceComparator=new ResourceComparator(sortRequest);
+    }
+    if (!providerAlreadySorted) {
+      TreeSet<Resource> sortedResources=new TreeSet<Resource>(resourceComparator);
+      sortedResources.addAll(providerResources);
+      resources=sortedResources;
+    }
+    totalCount=resources.size();
+    if (null != pageRequest && !providerAlreadyPaged) {
+switch (pageRequest.getStartingPoint()) {
+case Beginning:
+        return getPageFromOffset(pageRequest.getPageSize(),0,resources,predicate,provider);
+case End:
+      return getPageToOffset(pageRequest.getPageSize(),-1,resources,predicate,provider);
+case OffsetStart:
+    return getPageFromOffset(pageRequest.getPageSize(),pageRequest.getOffset(),resources,predicate,provider);
+case OffsetEnd:
+  return getPageToOffset(pageRequest.getPageSize(),pageRequest.getOffset(),resources,predicate,provider);
+case PredicateStart:
+case PredicateEnd:
+break;
+default :
+break;
+}
+}
+ else if (providerAlreadyPaged) {
+totalCount=queryResponse.getTotalResourceCount();
+}
+}
+return new PageResponseImpl(new ResourceIterable(resources,predicate,provider),0,null,null,totalCount);
+}
