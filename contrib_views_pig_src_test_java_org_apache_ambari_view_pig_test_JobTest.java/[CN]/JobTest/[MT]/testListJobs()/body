@@ -1,0 +1,30 @@
+{
+  HdfsApi hdfsApi=createNiceMock(HdfsApi.class);
+  expect(hdfsApi.copy(eq("/tmp/script.pig"),startsWith("/tmp/.pigjobs/"))).andReturn(true).anyTimes();
+  ByteArrayOutputStream do_stream=new ByteArrayOutputStream();
+  FSDataOutputStream stream=new FSDataOutputStream(do_stream);
+  expect(hdfsApi.create(anyString(),eq(true))).andReturn(stream).anyTimes();
+  replay(hdfsApi);
+  HdfsApi.setInstance(context,hdfsApi);
+  TempletonApi api=createNiceMock(TempletonApi.class);
+  jobService.getResourceManager().setTempletonApi(api);
+  TempletonApi.JobData data=api.new JobData();
+  expect(api.runPigQuery((File)anyObject(),anyString(),(String)isNull())).andReturn(data).anyTimes();
+  replay(api);
+  Response response=doCreateJob("Test","/tmp/script.pig",null,null,"x42",jobService);
+  Assert.assertEquals(201,response.getStatus());
+  response=doCreateJob("Test","/tmp/script.pig",null,null,"x42",jobService);
+  Assert.assertEquals(201,response.getStatus());
+  response=doCreateJob("Test","/tmp/script.pig",null,null,"100",jobService);
+  Assert.assertEquals(201,response.getStatus());
+  response=jobService.getJobList("x42");
+  Assert.assertEquals(200,response.getStatus());
+  JSONObject obj=(JSONObject)response.getEntity();
+  Assert.assertTrue(obj.containsKey("jobs"));
+  Assert.assertEquals(2,((List)obj.get("jobs")).size());
+  response=jobService.getJobList(null);
+  Assert.assertEquals(200,response.getStatus());
+  obj=(JSONObject)response.getEntity();
+  Assert.assertTrue(obj.containsKey("jobs"));
+  Assert.assertTrue(((List)obj.get("jobs")).size() > 2);
+}

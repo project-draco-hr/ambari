@@ -1,28 +1,36 @@
 {
-  LOG.debug("Polling job status " + job.getJobId() + " #"+ job.getId());
   try {
-    job=getResourceManager().read(job.getId());
+    resourceManager.ignorePermissions(new Callable<Void>(){
+      @Override public Void call() throws Exception {
+        LOG.debug("Polling job status " + job.getJobId() + " #"+ job.getId());
+        try {
+          job=resourceManager.read(job.getId());
+        }
+ catch (        ItemNotFound itemNotFound) {
+          LOG.error("Job " + job.getId() + " does not exist! Polling canceled");
+          thisFuture.cancel(false);
+          return null;
+        }
+        resourceManager.retrieveJobStatus(job);
+        Long time=System.currentTimeMillis() / 1000L;
+        if (time - job.getDateStarted() > LONG_JOB_THRESHOLD) {
+          LOG.debug("Job becomes long.. Rescheduling polling to longer period");
+          thisFuture.cancel(false);
+          scheduleJobPolling(true);
+        }
+        if (job.getStatus().equals(PigJob.PIG_JOB_STATE_SUBMIT_FAILED) || job.getStatus().equals(PigJob.PIG_JOB_STATE_COMPLETED) || job.getStatus().equals(PigJob.PIG_JOB_STATE_FAILED)|| job.getStatus().equals(PigJob.PIG_JOB_STATE_KILLED)) {
+          LOG.debug("Job finished. Polling canceled");
+          thisFuture.cancel(false);
+        }
+ else {
+        }
+        return null;
+      }
+    }
+);
   }
- catch (  ItemNotFound itemNotFound) {
-    LOG.error("Job " + job.getJobId() + " does not exist! Polling canceled");
-    thisFuture.cancel(false);
-    return;
+ catch (  Exception e) {
+    LOG.error("Exception during handling job polling: " + e.getMessage());
+    e.printStackTrace();
   }
-  getResourceManager().retrieveJobStatus(job);
-  Long time=System.currentTimeMillis() / 1000L;
-  if (time - job.getDateStarted() > LONG_JOB_THRESHOLD) {
-    LOG.debug("Job becomes long.. Rescheduling polling to longer period");
-    thisFuture.cancel(false);
-    scheduleJobPolling(true);
-  }
-switch (job.getStatus()) {
-case SUBMIT_FAILED:
-case COMPLETED:
-case FAILED:
-case KILLED:
-    LOG.debug("Job finished. Polling canceled");
-  thisFuture.cancel(false);
-break;
-default :
-}
 }

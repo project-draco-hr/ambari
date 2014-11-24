@@ -1,22 +1,27 @@
 {
   String date=new SimpleDateFormat("dd-MM-yyyy-HH-mm-ss").format(new Date());
-  String statusdir=String.format(context.getProperties().get("dataworker.jobs.path") + "/%s/%s_%s",getUsername(),job.getTitle().toLowerCase().replaceAll("[^a-zA-Z0-9 ]+","").replace(" ","_"),date);
-  String newPigScriptPath=statusdir + "/script.pig";
-  String newSourceFilePath=statusdir + "/source.pig";
-  String newPythonScriptPath=statusdir + "/udf.py";
-  String templetonParamsFilePath=statusdir + "/params";
+  String jobsBaseDir=context.getProperties().get("jobs.dir");
+  String storeBaseDir=context.getProperties().get("store.dir");
+  if (storeBaseDir == null || storeBaseDir.compareTo("null") == 0 || storeBaseDir.compareTo("") == 0)   storeBaseDir=context.getProperties().get("jobs.dir");
+  String jobNameCleaned=job.getTitle().toLowerCase().replaceAll("[^a-zA-Z0-9 ]+","").replace(" ","_");
+  String storedir=String.format(storeBaseDir + "/%s_%s",jobNameCleaned,date);
+  String statusdir=String.format(jobsBaseDir + "/%s_%s",jobNameCleaned,date);
+  String newPigScriptPath=storedir + "/script.pig";
+  String newSourceFilePath=storedir + "/source.pig";
+  String newPythonScriptPath=storedir + "/udf.py";
+  String templetonParamsFilePath=storedir + "/params";
   try {
     if (job.getSourceFileContent() != null && !job.getSourceFileContent().isEmpty()) {
       String sourceFileContent=job.getSourceFileContent();
       job.setSourceFileContent(null);
       save(job);
-      FSDataOutputStream stream=BaseService.getHdfsApi(context).create(newSourceFilePath,true);
+      FSDataOutputStream stream=HdfsApi.getInstance(context).create(newSourceFilePath,true);
       stream.writeBytes(sourceFileContent);
       stream.close();
     }
  else {
       if (job.getSourceFile() != null && !job.getSourceFile().isEmpty()) {
-        if (!BaseService.getHdfsApi(context).copy(job.getSourceFile(),newSourceFilePath)) {
+        if (!HdfsApi.getInstance(context).copy(job.getSourceFile(),newSourceFilePath)) {
           throw new ServiceFormattedException("Can't copy source file from " + job.getSourceFile() + " to "+ newPigScriptPath);
         }
       }
@@ -31,15 +36,15 @@ catch (  InterruptedException e) {
   try {
     if (job.getForcedContent() != null && !job.getForcedContent().isEmpty()) {
       String forcedContent=job.getForcedContent();
-      forcedContent=forcedContent.replace("${sourceFile}",context.getProperties().get("dataworker.defaultFs") + newSourceFilePath);
+      forcedContent=forcedContent.replace("${sourceFile}",context.getProperties().get("webhdfs.url") + newSourceFilePath);
       job.setForcedContent(null);
       save(job);
-      FSDataOutputStream stream=BaseService.getHdfsApi(context).create(newPigScriptPath,true);
+      FSDataOutputStream stream=HdfsApi.getInstance(context).create(newPigScriptPath,true);
       stream.writeBytes(forcedContent);
       stream.close();
     }
  else {
-      if (!BaseService.getHdfsApi(context).copy(job.getPigScript(),newPigScriptPath)) {
+      if (!HdfsApi.getInstance(context).copy(job.getPigScript(),newPigScriptPath)) {
         throw new ServiceFormattedException("Can't copy pig script file from " + job.getPigScript() + " to "+ newPigScriptPath);
       }
     }
@@ -52,7 +57,7 @@ catch (  InterruptedException e) {
   }
   if (job.getPythonScript() != null && !job.getPythonScript().isEmpty()) {
     try {
-      if (!BaseService.getHdfsApi(context).copy(job.getPythonScript(),newPythonScriptPath)) {
+      if (!HdfsApi.getInstance(context).copy(job.getPythonScript(),newPythonScriptPath)) {
         throw new ServiceFormattedException("Can't copy python udf script file from " + job.getPythonScript() + " to "+ newPythonScriptPath);
       }
     }
@@ -64,7 +69,7 @@ catch (    InterruptedException e) {
     }
   }
   try {
-    FSDataOutputStream stream=BaseService.getHdfsApi(context).create(templetonParamsFilePath,true);
+    FSDataOutputStream stream=HdfsApi.getInstance(context).create(templetonParamsFilePath,true);
     if (job.getTempletonArguments() != null) {
       stream.writeBytes(job.getTempletonArguments());
     }
@@ -89,5 +94,5 @@ catch (  InterruptedException e) {
     throw new ServiceFormattedException(msg,templetonBadResponse);
   }
   job.setJobId(data.id);
-  JobPolling.pollJob(context,job);
+  JobPolling.pollJob(this,job);
 }
