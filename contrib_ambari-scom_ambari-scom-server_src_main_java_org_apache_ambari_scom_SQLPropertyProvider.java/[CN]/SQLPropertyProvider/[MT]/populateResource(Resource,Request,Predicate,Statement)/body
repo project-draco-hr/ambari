@@ -4,6 +4,7 @@
     return true;
   }
   String componentName=(String)resource.getPropertyValue(componentNamePropertyId);
+  String serviceName=(String)resource.getPropertyValue(serviceNamePropertyId);
   if (getComponentMetrics().get(componentName) == null) {
     return true;
   }
@@ -18,6 +19,9 @@
     for (    Map.Entry<String,PropertyInfo> entry : propertyInfoMap.entrySet()) {
       String propertyKey=entry.getKey();
       PropertyInfo propertyInfo=entry.getValue();
+      if (containsArguments(propertyKey)) {
+        propertyInfo=updatePropertyInfo(propertyKey,id,propertyInfo);
+      }
       String propertyId=propertyInfo.getPropertyId();
       TemporalInfo temporalInfo=request.getTemporalInfo(id);
       if ((propertyInfo.isPointInTime() && temporalInfo == null) || (propertyInfo.isTemporal() && temporalInfo != null)) {
@@ -32,10 +36,24 @@
           startTime=0L;
           endTime=Long.MAX_VALUE;
         }
-        String[] parts=propertyId.split("\\.");
-        int size=parts.length;
-        if (size >= 3) {
-          metricsDefinitionSet.add(new MetricDefinition(startTime,endTime,parts[size - 3],parts[size - 2],parts[size - 1],componentName.toLowerCase(),hostName,propertyKey,temporalInfo));
+        String category="";
+        String recordTypeContext="";
+        String recordTypeName="";
+        String metricName="";
+        String tagPairsPattern="";
+        int dotIndex=propertyId.lastIndexOf('.');
+        if (dotIndex != -1) {
+          category=propertyId.substring(0,dotIndex);
+          metricName=propertyId.substring(dotIndex + 1);
+        }
+        String[] parts=category.split("\\.");
+        if (parts.length >= 2) {
+          recordTypeContext=parts[0];
+          recordTypeName=parts[1];
+          if (containsArguments(propertyKey) && parts.length > 2) {
+            tagPairsPattern=StringUtils.join(Arrays.copyOfRange(parts,2,parts.length),".");
+          }
+          metricsDefinitionSet.add(new MetricDefinition(startTime,endTime,recordTypeContext,recordTypeName,tagPairsPattern,metricName,serviceName != null && serviceName.toLowerCase().equals("hbase") ? serviceName.toLowerCase() : componentName.toLowerCase(),hostName,propertyKey,id,temporalInfo));
         }
  else {
           if (LOG.isWarnEnabled()) {
@@ -50,6 +68,7 @@
     List<DataPoint> dataPoints=results.containsKey(metricDefinition) ? results.get(metricDefinition) : new ArrayList<DataPoint>();
     TemporalInfo temporalInfo=metricDefinition.getTemporalInfo();
     String propertyKey=metricDefinition.getPropertyKey();
+    String requestedPropertyKey=metricDefinition.getRequestedPropertyKey();
     if (dataPoints != null) {
       if (temporalInfo == null) {
         int length=dataPoints.size();
@@ -60,9 +79,14 @@
         Number[][] dp=new Number[dataPoints.size()][2];
         for (int i=0; i < dp.length; i++) {
           dp[i][0]=dataPoints.get(i).getValue();
-          dp[i][1]=dataPoints.get(i).getTimestamp();
+          dp[i][1]=dataPoints.get(i).getTimestamp() / 1000;
         }
-        resource.setProperty(propertyKey,dp);
+        if (containsArguments(propertyKey)) {
+          resource.setProperty(requestedPropertyKey,dp);
+        }
+ else {
+          resource.setProperty(propertyKey,dp);
+        }
       }
     }
   }

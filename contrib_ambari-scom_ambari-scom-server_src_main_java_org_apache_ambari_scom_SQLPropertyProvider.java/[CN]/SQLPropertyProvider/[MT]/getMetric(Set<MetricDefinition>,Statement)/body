@@ -4,6 +4,7 @@
     StringBuilder query=new StringBuilder();
     Set<String> recordTypeContexts=new HashSet<String>();
     Set<String> recordTypeNamess=new HashSet<String>();
+    Set<String> tagPairsPatterns=new HashSet<String>();
     Set<String> nodeNames=new HashSet<String>();
     Set<String> serviceNames=new HashSet<String>();
     Set<String> metricNames=new HashSet<String>();
@@ -14,17 +15,26 @@
       }
       recordTypeContexts.add(metricDefinition.getRecordTypeContext());
       recordTypeNamess.add(metricDefinition.getRecordTypeName());
+      tagPairsPatterns.add(metricDefinition.getTagPairsPattern());
       nodeNames.add(metricDefinition.getNodeName());
       serviceNames.add(metricDefinition.getServiceName());
       metricNames.add(metricDefinition.getMetricName());
       startTime=metricDefinition.getStartTime();
       endTime=metricDefinition.getEndTime();
     }
-    query.append(String.format(GET_METRICS_STATEMENT,"'" + StringUtils.join(recordTypeContexts,"','") + "'","'" + StringUtils.join(recordTypeNamess,"','") + "'","'" + StringUtils.join(nodeNames,"','") + "'","'" + StringUtils.join(serviceNames,"','") + "'",startTime,endTime,"'" + StringUtils.join(metricNames,"','") + "'"));
-    ResultSet rs=statement.executeQuery(query.toString());
+    for (    String tagPairsPattern : tagPairsPatterns) {
+      if (query.length() != 0) {
+        query.append("\nUNION\n");
+      }
+      query.append(String.format(GET_METRICS_STATEMENT,"'" + StringUtils.join(recordTypeContexts,"','") + "'","'" + StringUtils.join(recordTypeNamess,"','") + "'","'%" + tagPairsPattern + "%'","'" + StringUtils.join(nodeNames,"','") + "'","'" + StringUtils.join(serviceNames,"','") + "'",startTime,endTime,"'" + StringUtils.join(metricNames,"','") + "'"));
+    }
+    ResultSet rs=null;
+    if (query.length() != 0) {
+      rs=statement.executeQuery(query.toString());
+    }
     if (rs != null) {
       while (rs.next()) {
-        MetricDefinition metricDefinition=new MetricDefinition(rs.getString("RecordTypeContext"),rs.getString("RecordTypeName"),rs.getString("MetricName"),rs.getString("ServiceName"),rs.getString("NodeName"));
+        MetricDefinition metricDefinition=new MetricDefinition(rs.getString("RecordTypeContext"),rs.getString("RecordTypeName"),rs.getString("TagPairs"),rs.getString("MetricName"),rs.getString("ServiceName"),rs.getString("NodeName"));
         ParsePosition parsePosition=new ParsePosition(0);
         NumberFormat numberFormat=NumberFormat.getInstance();
         Number parsedNumber=numberFormat.parse(rs.getNString("MetricValue"),parsePosition);
