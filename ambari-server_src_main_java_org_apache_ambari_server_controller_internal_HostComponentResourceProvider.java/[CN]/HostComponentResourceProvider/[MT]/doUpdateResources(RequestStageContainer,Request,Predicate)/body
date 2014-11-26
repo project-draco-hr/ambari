@@ -1,0 +1,25 @@
+{
+  final Set<ServiceComponentHostRequest> requests=new HashSet<ServiceComponentHostRequest>();
+  final boolean runSmokeTest="true".equals(getQueryParameterValue(QUERY_PARAMETERS_RUN_SMOKE_TEST_ID,predicate));
+  Set<String> queryIds=Collections.singleton(HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID);
+  Request queryRequest=PropertyHelper.getReadRequest(queryIds);
+  Set<Resource> matchingResources=getResources(queryRequest,predicate);
+  for (  Resource queryResource : matchingResources) {
+    if (predicate.evaluate(queryResource)) {
+      Map<String,Object> updateRequestProperties=new HashMap<String,Object>();
+      updateRequestProperties.putAll(PropertyHelper.getProperties(queryResource));
+      if (request.getProperties() != null && request.getProperties().size() != 0) {
+        updateRequestProperties.putAll(request.getProperties().iterator().next());
+      }
+      requests.add(getRequest(updateRequestProperties));
+    }
+  }
+  RequestStageContainer requestStages=modifyResources(new Command<RequestStageContainer>(){
+    @Override public RequestStageContainer invoke() throws AmbariException {
+      return updateHostComponents(stages,requests,request.getRequestInfoProperties(),runSmokeTest);
+    }
+  }
+);
+  notifyUpdate(Resource.Type.HostComponent,request,predicate);
+  return requestStages;
+}
