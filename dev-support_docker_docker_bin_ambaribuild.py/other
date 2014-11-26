@@ -1,5 +1,6 @@
 import subprocess, time, sys
 import json
+import datetime
 from optparse import OptionParser
 SKIP_TEST = '-DskipTests'
 AMBARI_AUTH_HEADERS = "--header 'Authorization:Basic YWRtaW46YWRtaW4=' --header 'X-Requested-By: PIVOTAL'"
@@ -10,9 +11,17 @@ if (__name__ == '__main__'):
     if (len(sys.argv) == 1):
         print 'specify one of test, server, agent or deploy'
         sys.exit(1)
+    start = datetime.datetime.utcnow()
     parsed_args = parse(sys.argv[1:])
+    if parsed_args.is_deep_clean:
+        retcode = git_deep_cleaning()
+        if (retcode != 0):
+            sys.exit(retcode)
     if parsed_args.is_test:
         retcode = ambariUnitTest()
+        end = datetime.datetime.utcnow()
+        print ''
+        print (('Duration: ' + str((end - start).seconds)) + ' seconds')
         sys.exit(retcode)
     if parsed_args.is_rebuild:
         retcode = buildAmbari(parsed_args.stack_distribution)
@@ -25,7 +34,7 @@ if (__name__ == '__main__'):
         retcode = setup_ambari_server()
         if (retcode != 0):
             sys.exit(retcode)
-        retcode = start_ambari_server()
+        retcode = start_ambari_server(parsed_args.is_server_debug)
         if (retcode != 0):
             sys.exit(retcode)
         retcode = start_dependant_services()
@@ -48,4 +57,8 @@ if (__name__ == '__main__'):
         retcode = create_cluster()
         if (retcode != 0):
             sys.exit(retcode)
+    end = datetime.datetime.utcnow()
+    print ''
+    print (('Duration: ' + str((end - start).seconds)) + ' seconds')
+    print ('Parameters: ' + str(sys.argv))
     no_exit()
