@@ -1,5 +1,6 @@
 {
-  Cluster cluster=initializeNewCluster();
+  m_synchronizedBus.register(m_injector.getInstance(AlertMaintenanceModeListener.class));
+  m_helper.installHdfsService(m_cluster,m_serviceFactory,m_componentFactory,m_schFactory,HOSTNAME);
   List<AlertCurrentEntity> currents=m_dao.findCurrent();
   for (  AlertCurrentEntity current : currents) {
     m_dao.remove(current);
@@ -8,7 +9,7 @@
   namenode.setDefinitionName("NAMENODE");
   namenode.setServiceName("HDFS");
   namenode.setComponentName("NAMENODE");
-  namenode.setClusterId(cluster.getClusterId());
+  namenode.setClusterId(m_cluster.getClusterId());
   namenode.setHash(UUID.randomUUID().toString());
   namenode.setScheduleInterval(Integer.valueOf(60));
   namenode.setScope(Scope.ANY);
@@ -19,7 +20,7 @@
   datanode.setDefinitionName("DATANODE");
   datanode.setServiceName("HDFS");
   datanode.setComponentName("DATANODE");
-  datanode.setClusterId(cluster.getClusterId());
+  datanode.setClusterId(m_cluster.getClusterId());
   datanode.setHash(UUID.randomUUID().toString());
   datanode.setScheduleInterval(Integer.valueOf(60));
   datanode.setScope(Scope.HOST);
@@ -30,7 +31,7 @@
   aggregate.setDefinitionName("DATANODE_UP");
   aggregate.setServiceName("HDFS");
   aggregate.setComponentName(null);
-  aggregate.setClusterId(cluster.getClusterId());
+  aggregate.setClusterId(m_cluster.getClusterId());
   aggregate.setHash(UUID.randomUUID().toString());
   aggregate.setScheduleInterval(Integer.valueOf(60));
   aggregate.setScope(Scope.SERVICE);
@@ -41,7 +42,7 @@
   nnHistory.setAlertState(AlertState.OK);
   nnHistory.setServiceName(namenode.getServiceName());
   nnHistory.setComponentName(namenode.getComponentName());
-  nnHistory.setClusterId(cluster.getClusterId());
+  nnHistory.setClusterId(m_cluster.getClusterId());
   nnHistory.setAlertDefinition(namenode);
   nnHistory.setAlertLabel(namenode.getDefinitionName());
   nnHistory.setAlertText(namenode.getDefinitionName());
@@ -59,7 +60,7 @@
   dnHistory.setAlertState(AlertState.WARNING);
   dnHistory.setServiceName(datanode.getServiceName());
   dnHistory.setComponentName(datanode.getComponentName());
-  dnHistory.setClusterId(cluster.getClusterId());
+  dnHistory.setClusterId(m_cluster.getClusterId());
   dnHistory.setAlertDefinition(datanode);
   dnHistory.setAlertLabel(datanode.getDefinitionName());
   dnHistory.setAlertText(datanode.getDefinitionName());
@@ -77,7 +78,7 @@
   aggregateHistory.setAlertState(AlertState.CRITICAL);
   aggregateHistory.setServiceName(aggregate.getServiceName());
   aggregateHistory.setComponentName(aggregate.getComponentName());
-  aggregateHistory.setClusterId(cluster.getClusterId());
+  aggregateHistory.setClusterId(m_cluster.getClusterId());
   aggregateHistory.setAlertDefinition(aggregate);
   aggregateHistory.setAlertLabel(aggregate.getDefinitionName());
   aggregateHistory.setAlertText(aggregate.getDefinitionName());
@@ -95,7 +96,7 @@
   for (  AlertCurrentEntity current : currents) {
     assertEquals(MaintenanceState.OFF,current.getMaintenanceState());
   }
-  Service hdfs=m_clusters.getClusterById(cluster.getClusterId()).getService("HDFS");
+  Service hdfs=m_clusters.getClusterById(m_cluster.getClusterId()).getService("HDFS");
   hdfs.setMaintenanceState(MaintenanceState.ON);
   currents=m_dao.findCurrent();
   assertEquals(3,currents.size());
@@ -109,7 +110,7 @@
     assertEquals(MaintenanceState.OFF,current.getMaintenanceState());
   }
   Host host=m_clusters.getHost(HOSTNAME);
-  host.setMaintenanceState(cluster.getClusterId(),MaintenanceState.ON);
+  host.setMaintenanceState(m_cluster.getClusterId(),MaintenanceState.ON);
   currents=m_dao.findCurrent();
   assertEquals(3,currents.size());
   for (  AlertCurrentEntity current : currents) {
@@ -120,14 +121,14 @@
       assertEquals(MaintenanceState.OFF,current.getMaintenanceState());
     }
   }
-  host.setMaintenanceState(cluster.getClusterId(),MaintenanceState.OFF);
+  host.setMaintenanceState(m_cluster.getClusterId(),MaintenanceState.OFF);
   currents=m_dao.findCurrent();
   assertEquals(3,currents.size());
   for (  AlertCurrentEntity current : currents) {
     assertEquals(MaintenanceState.OFF,current.getMaintenanceState());
   }
   ServiceComponentHost nnComponent=null;
-  List<ServiceComponentHost> schs=cluster.getServiceComponentHosts(HOSTNAME);
+  List<ServiceComponentHost> schs=m_cluster.getServiceComponentHosts(HOSTNAME);
   for (  ServiceComponentHost sch : schs) {
     if ("NAMENODE".equals(sch.getServiceComponentName())) {
       sch.setMaintenanceState(MaintenanceState.ON);

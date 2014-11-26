@@ -2,7 +2,6 @@
   m_injector=Guice.createInjector(new InMemoryDefaultTestModule());
   m_injector.getInstance(GuiceJpaInitializer.class);
   m_helper=m_injector.getInstance(OrmTestHelper.class);
-  m_clusterId=m_helper.createCluster();
   m_dao=m_injector.getInstance(AlertsDAO.class);
   m_definitionDao=m_injector.getInstance(AlertDefinitionDAO.class);
   m_serviceFactory=m_injector.getInstance(ServiceFactory.class);
@@ -11,17 +10,20 @@
   m_eventPublisher=m_injector.getInstance(AmbariEventPublisher.class);
   m_clusters=m_injector.getInstance(Clusters.class);
   m_alertHelper=m_injector.getInstance(AlertDaoHelper.class);
-  EventBus synchronizedBus=new EventBus();
-  synchronizedBus.register(m_injector.getInstance(AlertMaintenanceModeListener.class));
+  m_synchronizedBus=new EventBus();
   Field field=AmbariEventPublisher.class.getDeclaredField("m_eventBus");
   field.setAccessible(true);
-  field.set(m_eventPublisher,synchronizedBus);
+  field.set(m_eventPublisher,m_synchronizedBus);
+  m_cluster=m_clusters.getClusterById(m_helper.createCluster());
+  m_helper.initializeClusterWithStack(m_cluster);
+  m_helper.addHost(m_clusters,m_cluster,HOSTNAME);
+  m_helper.installYarnService(m_cluster,m_serviceFactory,m_componentFactory,m_schFactory,HOSTNAME);
   for (int i=0; i < 5; i++) {
     AlertDefinitionEntity definition=new AlertDefinitionEntity();
     definition.setDefinitionName("Alert Definition " + i);
-    definition.setServiceName("Service " + i);
-    definition.setComponentName(null);
-    definition.setClusterId(m_clusterId);
+    definition.setServiceName("YARN");
+    definition.setComponentName("Component " + i);
+    definition.setClusterId(m_cluster.getClusterId());
     definition.setHash(UUID.randomUUID().toString());
     definition.setScheduleInterval(Integer.valueOf(60));
     definition.setScope(Scope.SERVICE);
@@ -38,13 +40,13 @@
     for (int i=0; i < 10; i++) {
       AlertHistoryEntity history=new AlertHistoryEntity();
       history.setServiceName(definition.getServiceName());
-      history.setClusterId(m_clusterId);
+      history.setClusterId(m_cluster.getClusterId());
       history.setAlertDefinition(definition);
       history.setAlertLabel(definition.getDefinitionName() + " " + i);
       history.setAlertText(definition.getDefinitionName() + " " + i);
       history.setAlertTimestamp(calendar.getTimeInMillis());
+      history.setComponentName(definition.getComponentName());
       history.setHostName("h1");
-      history.setComponentName("Component " + i);
       history.setAlertState(AlertState.OK);
       if (i == 0 || i == 5) {
         history.setAlertState(AlertState.CRITICAL);

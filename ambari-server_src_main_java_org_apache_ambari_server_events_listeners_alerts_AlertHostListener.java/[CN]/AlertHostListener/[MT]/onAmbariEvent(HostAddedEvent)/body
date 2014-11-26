@@ -1,0 +1,25 @@
+{
+  LOG.debug("Received event {}",event);
+  long clusterId=event.getClusterId();
+  List<AlertDefinition> agentDefinitions=m_agentAlertDefinitions.getDefinitions();
+  m_hostAlertLock.lock();
+  try {
+    for (    AlertDefinition agentDefinition : agentDefinitions) {
+      AlertDefinitionEntity definition=m_alertDefinitionDao.findByName(clusterId,agentDefinition.getName());
+      if (null == definition) {
+        definition=m_alertDefinitionFactory.coerce(clusterId,agentDefinition);
+        try {
+          m_alertDefinitionDao.create(definition);
+        }
+ catch (        AmbariException ambariException) {
+          LOG.error("Unable to create a host alert definition name {} in cluster {}",definition.getDefinitionName(),definition.getClusterId(),ambariException);
+        }
+      }
+    }
+  }
+  finally {
+    m_hostAlertLock.unlock();
+  }
+  AlertHashInvalidationEvent invalidationEvent=new AlertHashInvalidationEvent(event.getClusterId(),Collections.singletonList(event.getHostName()));
+  m_eventPublisher.publish(invalidationEvent);
+}
