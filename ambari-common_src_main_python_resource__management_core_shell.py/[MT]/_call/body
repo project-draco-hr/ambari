@@ -1,16 +1,18 @@
-def _call(command, logoutput=False, throw_on_failure=True, cwd=None, env=None, preexec_fn=None, user=None, wait_for_finish=True, timeout=None, path=None, sudo=False):
+def _call(command, logoutput=False, throw_on_failure=True, cwd=None, env={}, preexec_fn=None, user=None, wait_for_finish=True, timeout=None, path=None, output_file=None, sudo=False):
     "\n  Execute shell command\n  \n  @param command: list/tuple of arguments (recommended as more safe - don't need to escape) \n  or string of the command to execute\n  @param logoutput: boolean, whether command output should be logged of not\n  @param throw_on_failure: if true, when return code is not zero exception is thrown\n  \n  @return: retrun_code, stdout\n  "
     if isinstance(command, (list, tuple)):
-        command = ' '.join((quote_bash_args(x) for x in command))
-    export_command = ((reduce((lambda str, x: '{0} {1}={2}'.format(str, x, quote_bash_args(env[x]))), env, 'export') + '; ') if env else '')
-    if user:
-        bash_run_command = '/usr/bin/sudo -Hsu {0} <<< {1}'.format(quote_bash_args(user), quote_bash_args((export_command + command)))
-        cwd = (os.path.expanduser(('~' + user)) if ((not cwd) and os.path.exists(os.path.expanduser(('~' + user)))) else cwd)
+        command = string_cmd_from_args_list(command)
     elif sudo:
-        bash_run_command = '/usr/bin/sudo -s <<< {0}'.format(quote_bash_args((export_command + command)))
+        err_msg = Logger.get_protected_text(("String command '%s' cannot be run as sudo. Please supply the command as a tuple of arguments" % command))
+        raise Fail(err_msg)
+    environment_str = reduce((lambda str, x: '{0} {1}={2}'.format(str, x, quote_bash_args(env[x]))), env, '')
+    command = command.replace(SUDO_ENVIRONMENT_PLACEHOLDER, environment_str, 1)
+    bash_run_command = (command if (not sudo) else '/usr/bin/sudo {0} -Hi {1}'.format(environment_str, command))
+    if user:
+        su_export_command = ('export {0} ; '.format(environment_str) if environment_str else '')
+        subprocess_command = ['/usr/bin/sudo', '-Hi', 'su', '-', user, '-s', '/bin/bash', '-c', (su_export_command + bash_run_command)]
     else:
-        bash_run_command = command
-    subprocess_command = ['/bin/bash', '--login', '-c', bash_run_command]
+        subprocess_command = ['/bin/bash', '--login', '-c', bash_run_command]
     proc = subprocess.Popen(subprocess_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd, env=env, shell=False, preexec_fn=preexec_fn)
     if (not wait_for_finish):
         return (None, None)
