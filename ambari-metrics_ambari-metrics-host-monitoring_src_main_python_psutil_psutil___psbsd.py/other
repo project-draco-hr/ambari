@@ -1,0 +1,47 @@
+'FreeBSD platform implementation.'
+import errno
+import os
+import sys
+from psutil import _common
+from psutil import _psposix
+from psutil._common import conn_tmap, usage_percent
+from psutil._compat import namedtuple, wraps
+import _psutil_bsd as cext
+import _psutil_posix
+__extra__all__ = []
+PROC_STATUSES = {cext.SSTOP: _common.STATUS_STOPPED, cext.SSLEEP: _common.STATUS_SLEEPING, cext.SRUN: _common.STATUS_RUNNING, cext.SIDL: _common.STATUS_IDLE, cext.SWAIT: _common.STATUS_WAITING, cext.SLOCK: _common.STATUS_LOCKED, cext.SZOMB: _common.STATUS_ZOMBIE, }
+TCP_STATUSES = {cext.TCPS_ESTABLISHED: _common.CONN_ESTABLISHED, cext.TCPS_SYN_SENT: _common.CONN_SYN_SENT, cext.TCPS_SYN_RECEIVED: _common.CONN_SYN_RECV, cext.TCPS_FIN_WAIT_1: _common.CONN_FIN_WAIT1, cext.TCPS_FIN_WAIT_2: _common.CONN_FIN_WAIT2, cext.TCPS_TIME_WAIT: _common.CONN_TIME_WAIT, cext.TCPS_CLOSED: _common.CONN_CLOSE, cext.TCPS_CLOSE_WAIT: _common.CONN_CLOSE_WAIT, cext.TCPS_LAST_ACK: _common.CONN_LAST_ACK, cext.TCPS_LISTEN: _common.CONN_LISTEN, cext.TCPS_CLOSING: _common.CONN_CLOSING, cext.PSUTIL_CONN_NONE: _common.CONN_NONE, }
+PAGESIZE = os.sysconf('SC_PAGE_SIZE')
+svmem = namedtuple('svmem', ['total', 'available', 'percent', 'used', 'free', 'active', 'inactive', 'buffers', 'cached', 'shared', 'wired'])
+scputimes = namedtuple('scputimes', ['user', 'nice', 'system', 'idle', 'irq'])
+pextmem = namedtuple('pextmem', ['rss', 'vms', 'text', 'data', 'stack'])
+pmmap_grouped = namedtuple('pmmap_grouped', 'path rss, private, ref_count, shadow_count')
+pmmap_ext = namedtuple('pmmap_ext', 'addr, perms path rss, private, ref_count, shadow_count')
+NoSuchProcess = None
+AccessDenied = None
+TimeoutExpired = None
+if hasattr(cext, 'per_cpu_times'):
+
+    def per_cpu_times():
+        'Return system CPU times as a named tuple'
+        ret = []
+        for cpu_t in cext.per_cpu_times():
+            (user, nice, system, idle, irq) = cpu_t
+            item = scputimes(user, nice, system, idle, irq)
+            ret.append(item)
+        return ret
+else:
+
+    def per_cpu_times():
+        if (cpu_count_logical() == 1):
+            return [cpu_times()]
+        if per_cpu_times.__called__:
+            raise NotImplementedError('supported only starting from FreeBSD 8')
+        per_cpu_times.__called__ = True
+        return [cpu_times()]
+    per_cpu_times.__called__ = False
+pids = cext.pids
+pid_exists = _psposix.pid_exists
+disk_usage = _psposix.disk_usage
+net_io_counters = cext.net_io_counters
+disk_io_counters = cext.disk_io_counters

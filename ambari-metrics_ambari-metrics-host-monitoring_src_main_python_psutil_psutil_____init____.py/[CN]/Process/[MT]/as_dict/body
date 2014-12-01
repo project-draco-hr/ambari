@@ -1,0 +1,38 @@
+def as_dict(self, attrs=[], ad_value=None):
+    "Utility method returning process information as a\n        hashable dictionary.\n\n        If 'attrs' is specified it must be a list of strings\n        reflecting available Process class' attribute names\n        (e.g. ['cpu_times', 'name']) else all public (read\n        only) attributes are assumed.\n\n        'ad_value' is the value which gets assigned in case\n        AccessDenied  exception is raised when retrieving that\n        particular process information.\n        "
+    excluded_names = set(['send_signal', 'suspend', 'resume', 'terminate', 'kill', 'wait', 'is_running', 'as_dict', 'parent', 'children', 'rlimit'])
+    retdict = dict()
+    ls = set((attrs or [x for x in dir(self) if (not x.startswith('get'))]))
+    for name in ls:
+        if name.startswith('_'):
+            continue
+        if name.startswith('set_'):
+            continue
+        if name.startswith('get_'):
+            msg = ('%s() is deprecated; use %s() instead' % (name, name[4:]))
+            warnings.warn(msg, category=DeprecationWarning, stacklevel=2)
+            name = name[4:]
+            if (name in ls):
+                continue
+        if (name == 'getcwd'):
+            msg = 'getcwd() is deprecated; use cwd() instead'
+            warnings.warn(msg, category=DeprecationWarning, stacklevel=2)
+            name = 'cwd'
+            if (name in ls):
+                continue
+        if (name in excluded_names):
+            continue
+        try:
+            attr = getattr(self, name)
+            if callable(attr):
+                ret = attr()
+            else:
+                ret = attr
+        except AccessDenied:
+            ret = ad_value
+        except NotImplementedError:
+            if attrs:
+                raise
+            continue
+        retdict[name] = ret
+    return retdict

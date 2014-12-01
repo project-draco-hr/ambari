@@ -1,0 +1,17 @@
+def wrap_exceptions(fun):
+    'Decorator which translates bare OSError exceptions into\n    NoSuchProcess and AccessDenied.\n    '
+
+    @wraps(fun)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return fun(self, *args, **kwargs)
+        except OSError:
+            if ((NoSuchProcess is None) or (AccessDenied is None)):
+                raise
+            err = sys.exc_info()[1]
+            if (err.errno == errno.ESRCH):
+                raise NoSuchProcess(self.pid, self._name)
+            if (err.errno in (errno.EPERM, errno.EACCES)):
+                raise AccessDenied(self.pid, self._name)
+            raise
+    return wrapper

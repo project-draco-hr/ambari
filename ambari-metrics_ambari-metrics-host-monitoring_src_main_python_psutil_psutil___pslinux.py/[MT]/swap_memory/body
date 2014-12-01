@@ -1,0 +1,22 @@
+def swap_memory():
+    (_, _, _, _, total, free) = cext.linux_sysinfo()
+    used = (total - free)
+    percent = usage_percent(used, total, _round=1)
+    f = open('/proc/vmstat', 'rb')
+    (SIN, SOUT) = (b('pswpin'), b('pswpout'))
+    sin = sout = None
+    try:
+        for line in f:
+            if line.startswith(SIN):
+                sin = ((int(line.split(b(' '))[1]) * 4) * 1024)
+            elif line.startswith(SOUT):
+                sout = ((int(line.split(b(' '))[1]) * 4) * 1024)
+            if ((sin is not None) and (sout is not None)):
+                break
+        else:
+            msg = "'sin' and 'sout' swap memory stats couldn't be determined and were set to 0"
+            warnings.warn(msg, RuntimeWarning)
+            sin = sout = 0
+    finally:
+        f.close()
+    return _common.sswap(total, used, free, percent, sin, sout)

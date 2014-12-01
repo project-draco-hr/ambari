@@ -1,0 +1,46 @@
+{
+  Connection conn=null;
+  Statement stmt=null;
+  String encoding=metricsConf.get(HBASE_ENCODING_SCHEME,DEFAULT_ENCODING);
+  String compression=metricsConf.get(HBASE_COMPRESSION_SCHEME,DEFAULT_TABLE_COMPRESSION);
+  String precisionTtl=metricsConf.get(PRECISION_TABLE_TTL,"86400");
+  String hostMinTtl=metricsConf.get(HOST_MINUTE_TABLE_TTL,"604800");
+  String hostHourTtl=metricsConf.get(HOST_HOUR_TABLE_TTL,"2592000");
+  String clusterMinTtl=metricsConf.get(CLUSTER_MINUTE_TABLE_TTL,"2592000");
+  String clusterHourTtl=metricsConf.get(CLUSTER_HOUR_TABLE_TTL,"31536000");
+  try {
+    LOG.info("Initializing metrics schema...");
+    conn=getConnectionRetryingOnException();
+    stmt=conn.createStatement();
+    stmt.executeUpdate(String.format(CREATE_METRICS_TABLE_SQL,encoding,precisionTtl,compression));
+    stmt.executeUpdate(String.format(CREATE_METRICS_AGGREGATE_HOURLY_TABLE_SQL,encoding,hostHourTtl,compression));
+    stmt.executeUpdate(String.format(CREATE_METRICS_AGGREGATE_MINUTE_TABLE_SQL,encoding,hostMinTtl,compression));
+    stmt.executeUpdate(String.format(CREATE_METRICS_CLUSTER_AGGREGATE_TABLE_SQL,encoding,clusterMinTtl,compression));
+    stmt.executeUpdate(String.format(CREATE_METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_SQL,encoding,clusterHourTtl,compression));
+    conn.commit();
+  }
+ catch (  SQLException sql) {
+    LOG.warn("Error creating Metrics Schema in HBase using Phoenix.",sql);
+    throw new MetricsInitializationException("Error creating Metrics Schema in HBase using Phoenix.",sql);
+  }
+catch (  InterruptedException e) {
+    LOG.warn("Error creating Metrics Schema in HBase using Phoenix.",e);
+    throw new MetricsInitializationException("Error creating Metrics Schema in HBase using Phoenix.",e);
+  }
+ finally {
+    if (stmt != null) {
+      try {
+        stmt.close();
+      }
+ catch (      SQLException e) {
+      }
+    }
+    if (conn != null) {
+      try {
+        conn.close();
+      }
+ catch (      SQLException e) {
+      }
+    }
+  }
+}

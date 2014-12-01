@@ -1,0 +1,28 @@
+def process_iter():
+    "Return a generator yielding a Process instance for all\n    running processes.\n\n    Every new Process instance is only created once and then cached\n    into an internal table which is updated every time this is used.\n\n    Cached Process instances are checked for identity so that you're\n    safe in case a PID has been reused by another process, in which\n    case the cached instance is updated.\n\n    The sorting order in which processes are yielded is based on\n    their PIDs.\n    "
+
+    def add(pid):
+        proc = Process(pid)
+        _pmap[proc.pid] = proc
+        return proc
+
+    def remove(pid):
+        _pmap.pop(pid, None)
+    a = set(pids())
+    b = set(_pmap.keys())
+    new_pids = (a - b)
+    gone_pids = (b - a)
+    for pid in gone_pids:
+        remove(pid)
+    for (pid, proc) in sorted((list(_pmap.items()) + list(dict.fromkeys(new_pids).items()))):
+        try:
+            if (proc is None):
+                yield add(pid)
+            elif proc.is_running():
+                yield proc
+            else:
+                yield add(pid)
+        except NoSuchProcess:
+            remove(pid)
+        except AccessDenied:
+            yield proc

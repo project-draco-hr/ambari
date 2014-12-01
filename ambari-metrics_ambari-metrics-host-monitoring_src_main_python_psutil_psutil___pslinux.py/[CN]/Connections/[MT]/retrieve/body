@@ -1,0 +1,22 @@
+def retrieve(self, kind, pid=None):
+    if (kind not in self.tmap):
+        raise ValueError(('invalid %r kind argument; choose between %s' % (kind, ', '.join([repr(x) for x in self.tmap]))))
+    if (pid is not None):
+        inodes = self.get_proc_inodes(pid)
+        if (not inodes):
+            return []
+    else:
+        inodes = self.get_all_inodes()
+    ret = []
+    for (f, family, type_) in self.tmap[kind]:
+        if (family in (socket.AF_INET, socket.AF_INET6)):
+            ls = self.process_inet(('/proc/net/%s' % f), family, type_, inodes, filter_pid=pid)
+        else:
+            ls = self.process_unix(('/proc/net/%s' % f), family, inodes, filter_pid=pid)
+        for (fd, family, type_, laddr, raddr, status, bound_pid) in ls:
+            if pid:
+                conn = _common.pconn(fd, family, type_, laddr, raddr, status)
+            else:
+                conn = _common.sconn(fd, family, type_, laddr, raddr, status, bound_pid)
+            ret.append(conn)
+    return ret

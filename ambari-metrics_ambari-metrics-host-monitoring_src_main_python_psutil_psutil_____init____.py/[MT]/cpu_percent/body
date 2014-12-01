@@ -1,0 +1,36 @@
+def cpu_percent(interval=None, percpu=False):
+    'Return a float representing the current system-wide CPU\n    utilization as a percentage.\n\n    When interval is > 0.0 compares system CPU times elapsed before\n    and after the interval (blocking).\n\n    When interval is 0.0 or None compares system CPU times elapsed\n    since last call or module import, returning immediately (non\n    blocking). That means the first time this is called it will\n    return a meaningless 0.0 value which you should ignore.\n    In this case is recommended for accuracy that this function be\n    called with at least 0.1 seconds between calls.\n\n    When percpu is True returns a list of floats representing the\n    utilization as a percentage for each CPU.\n    First element of the list refers to first CPU, second element\n    to second CPU and so on.\n    The order of the list is consistent across calls.\n\n    Examples:\n\n      >>> # blocking, system-wide\n      >>> psutil.cpu_percent(interval=1)\n      2.0\n      >>>\n      >>> # blocking, per-cpu\n      >>> psutil.cpu_percent(interval=1, percpu=True)\n      [2.0, 1.0]\n      >>>\n      >>> # non-blocking (percentage since last call)\n      >>> psutil.cpu_percent(interval=None)\n      2.9\n      >>>\n    '
+    global _last_cpu_times
+    global _last_per_cpu_times
+    blocking = ((interval is not None) and (interval > 0.0))
+
+    def calculate(t1, t2):
+        t1_all = sum(t1)
+        t1_busy = (t1_all - t1.idle)
+        t2_all = sum(t2)
+        t2_busy = (t2_all - t2.idle)
+        if (t2_busy <= t1_busy):
+            return 0.0
+        busy_delta = (t2_busy - t1_busy)
+        all_delta = (t2_all - t1_all)
+        busy_perc = ((busy_delta / all_delta) * 100)
+        return round(busy_perc, 1)
+    if (not percpu):
+        if blocking:
+            t1 = cpu_times()
+            time.sleep(interval)
+        else:
+            t1 = _last_cpu_times
+        _last_cpu_times = cpu_times()
+        return calculate(t1, _last_cpu_times)
+    else:
+        ret = []
+        if blocking:
+            tot1 = cpu_times(percpu=True)
+            time.sleep(interval)
+        else:
+            tot1 = _last_per_cpu_times
+        _last_per_cpu_times = cpu_times(percpu=True)
+        for (t1, t2) in zip(tot1, _last_per_cpu_times):
+            ret.append(calculate(t1, t2))
+        return ret

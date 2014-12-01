@@ -1,0 +1,42 @@
+def cpu_times_percent(interval=None, percpu=False):
+    "Same as cpu_percent() but provides utilization percentages\n    for each specific CPU time as is returned by cpu_times().\n    For instance, on Linux we'll get:\n\n      >>> cpu_times_percent()\n      cpupercent(user=4.8, nice=0.0, system=4.8, idle=90.5, iowait=0.0,\n                 irq=0.0, softirq=0.0, steal=0.0, guest=0.0, guest_nice=0.0)\n      >>>\n\n    interval and percpu arguments have the same meaning as in\n    cpu_percent().\n    "
+    global _last_cpu_times_2
+    global _last_per_cpu_times_2
+    blocking = ((interval is not None) and (interval > 0.0))
+
+    def calculate(t1, t2):
+        nums = []
+        all_delta = (sum(t2) - sum(t1))
+        for field in t1._fields:
+            field_delta = (getattr(t2, field) - getattr(t1, field))
+            try:
+                field_perc = ((100 * field_delta) / all_delta)
+            except ZeroDivisionError:
+                field_perc = 0.0
+            field_perc = round(field_perc, 1)
+            if _WINDOWS:
+                if (field_perc > 100.0):
+                    field_perc = 100.0
+                elif (field_perc < 0.0):
+                    field_perc = 0.0
+            nums.append(field_perc)
+        return _psplatform.scputimes(*nums)
+    if (not percpu):
+        if blocking:
+            t1 = cpu_times()
+            time.sleep(interval)
+        else:
+            t1 = _last_cpu_times_2
+        _last_cpu_times_2 = cpu_times()
+        return calculate(t1, _last_cpu_times_2)
+    else:
+        ret = []
+        if blocking:
+            tot1 = cpu_times(percpu=True)
+            time.sleep(interval)
+        else:
+            tot1 = _last_per_cpu_times_2
+        _last_per_cpu_times_2 = cpu_times(percpu=True)
+        for (t1, t2) in zip(tot1, _last_per_cpu_times_2):
+            ret.append(calculate(t1, t2))
+        return ret

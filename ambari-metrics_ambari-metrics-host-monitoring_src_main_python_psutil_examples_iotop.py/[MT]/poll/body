@@ -1,0 +1,29 @@
+def poll(interval):
+    'Calculate IO usage by comparing IO statics before and\n    after the interval.\n    Return a tuple including all currently running processes\n    sorted by IO activity and total disks I/O activity.\n    '
+    procs = [p for p in psutil.process_iter()]
+    for p in procs[:]:
+        try:
+            p._before = p.io_counters()
+        except psutil.Error:
+            procs.remove(p)
+            continue
+    disks_before = psutil.disk_io_counters()
+    time.sleep(interval)
+    for p in procs[:]:
+        try:
+            p._after = p.io_counters()
+            p._cmdline = ' '.join(p.cmdline())
+            if (not p._cmdline):
+                p._cmdline = p.name()
+            p._username = p.username()
+        except psutil.NoSuchProcess:
+            procs.remove(p)
+    disks_after = psutil.disk_io_counters()
+    for p in procs:
+        p._read_per_sec = (p._after.read_bytes - p._before.read_bytes)
+        p._write_per_sec = (p._after.write_bytes - p._before.write_bytes)
+        p._total = (p._read_per_sec + p._write_per_sec)
+    disks_read_per_sec = (disks_after.read_bytes - disks_before.read_bytes)
+    disks_write_per_sec = (disks_after.write_bytes - disks_before.write_bytes)
+    processes = sorted(procs, key=(lambda p: p._total), reverse=True)
+    return (processes, disks_read_per_sec, disks_write_per_sec)

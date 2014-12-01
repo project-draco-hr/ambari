@@ -1,0 +1,42 @@
+'Linux platform implementation.'
+from __future__ import division
+import base64
+import errno
+import os
+import re
+import socket
+import struct
+import sys
+import warnings
+from psutil import _common
+from psutil import _psposix
+from psutil._common import isfile_strict, usage_percent, deprecated
+from psutil._compat import PY3, xrange, namedtuple, wraps, b, defaultdict
+import _psutil_linux as cext
+import _psutil_posix
+__extra__all__ = ['IOPRIO_CLASS_NONE', 'IOPRIO_CLASS_RT', 'IOPRIO_CLASS_BE', 'IOPRIO_CLASS_IDLE', 'CONN_ESTABLISHED', 'CONN_SYN_SENT', 'CONN_SYN_RECV', 'CONN_FIN_WAIT1', 'CONN_FIN_WAIT2', 'CONN_TIME_WAIT', 'CONN_CLOSE', 'CONN_CLOSE_WAIT', 'CONN_LAST_ACK', 'CONN_LISTEN', 'CONN_CLOSING', 'phymem_buffers', 'cached_phymem']
+HAS_PRLIMIT = hasattr(cext, 'linux_prlimit')
+if HAS_PRLIMIT:
+    for name in dir(cext):
+        if name.startswith('RLIM'):
+            __extra__all__.append(name)
+CLOCK_TICKS = os.sysconf('SC_CLK_TCK')
+PAGESIZE = os.sysconf('SC_PAGE_SIZE')
+BOOT_TIME = None
+DEFAULT_ENCODING = sys.getdefaultencoding()
+IOPRIO_CLASS_NONE = 0
+IOPRIO_CLASS_RT = 1
+IOPRIO_CLASS_BE = 2
+IOPRIO_CLASS_IDLE = 3
+PROC_STATUSES = {'R': _common.STATUS_RUNNING, 'S': _common.STATUS_SLEEPING, 'D': _common.STATUS_DISK_SLEEP, 'T': _common.STATUS_STOPPED, 't': _common.STATUS_TRACING_STOP, 'Z': _common.STATUS_ZOMBIE, 'X': _common.STATUS_DEAD, 'x': _common.STATUS_DEAD, 'K': _common.STATUS_WAKE_KILL, 'W': _common.STATUS_WAKING, }
+TCP_STATUSES = {'01': _common.CONN_ESTABLISHED, '02': _common.CONN_SYN_SENT, '03': _common.CONN_SYN_RECV, '04': _common.CONN_FIN_WAIT1, '05': _common.CONN_FIN_WAIT2, '06': _common.CONN_TIME_WAIT, '07': _common.CONN_CLOSE, '08': _common.CONN_CLOSE_WAIT, '09': _common.CONN_LAST_ACK, '0A': _common.CONN_LISTEN, '0B': _common.CONN_CLOSING, }
+NoSuchProcess = None
+AccessDenied = None
+TimeoutExpired = None
+scputimes = namedtuple('scputimes', _get_cputimes_fields())
+svmem = namedtuple('svmem', ['total', 'available', 'percent', 'used', 'free', 'active', 'inactive', 'buffers', 'cached'])
+pextmem = namedtuple('pextmem', 'rss vms shared text lib data dirty')
+pmmap_grouped = namedtuple('pmmap_grouped', ['path', 'rss', 'size', 'pss', 'shared_clean', 'shared_dirty', 'private_clean', 'private_dirty', 'referenced', 'anonymous', 'swap'])
+pmmap_ext = namedtuple('pmmap_ext', ('addr perms ' + ' '.join(pmmap_grouped._fields)))
+_connections = Connections()
+disk_usage = _psposix.disk_usage

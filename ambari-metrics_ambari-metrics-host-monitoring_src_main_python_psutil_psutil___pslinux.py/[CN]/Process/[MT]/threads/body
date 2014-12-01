@@ -1,0 +1,28 @@
+@wrap_exceptions
+def threads(self):
+    thread_ids = os.listdir(('/proc/%s/task' % self.pid))
+    thread_ids.sort()
+    retlist = []
+    hit_enoent = False
+    for thread_id in thread_ids:
+        try:
+            f = open(('/proc/%s/task/%s/stat' % (self.pid, thread_id)), 'rb')
+        except EnvironmentError:
+            err = sys.exc_info()[1]
+            if (err.errno == errno.ENOENT):
+                hit_enoent = True
+                continue
+            raise
+        try:
+            st = f.read().strip()
+        finally:
+            f.close()
+        st = st[(st.find(b(')')) + 2):]
+        values = st.split(b(' '))
+        utime = (float(values[11]) / CLOCK_TICKS)
+        stime = (float(values[12]) / CLOCK_TICKS)
+        ntuple = _common.pthread(int(thread_id), utime, stime)
+        retlist.append(ntuple)
+    if hit_enoent:
+        os.stat(('/proc/%s' % self.pid))
+    return retlist

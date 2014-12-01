@@ -1,0 +1,54 @@
+@_assert_pid_not_reused
+def children(self, recursive=False):
+    "Return the children of this process as a list of Process\n        instances, pre-emptively checking whether PID has been reused.\n        If recursive is True return all the parent descendants.\n\n        Example (A == this process):\n\n         A \xe2\x94\x80\xe2\x94\x90\n            \xe2\x94\x82\n            \xe2\x94\x9c\xe2\x94\x80 B (child) \xe2\x94\x80\xe2\x94\x90\n            \xe2\x94\x82             \xe2\x94\x94\xe2\x94\x80 X (grandchild) \xe2\x94\x80\xe2\x94\x90\n            \xe2\x94\x82                                \xe2\x94\x94\xe2\x94\x80 Y (great grandchild)\n            \xe2\x94\x9c\xe2\x94\x80 C (child)\n            \xe2\x94\x94\xe2\x94\x80 D (child)\n\n        >>> import psutil\n        >>> p = psutil.Process()\n        >>> p.children()\n        B, C, D\n        >>> p.children(recursive=True)\n        B, X, Y, C, D\n\n        Note that in the example above if process X disappears\n        process Y won't be listed as the reference to process A\n        is lost.\n        "
+    if hasattr(_psplatform, 'ppid_map'):
+        ppid_map = _psplatform.ppid_map()
+    else:
+        ppid_map = None
+    ret = []
+    if (not recursive):
+        if (ppid_map is None):
+            for p in process_iter():
+                try:
+                    if (p.ppid() == self.pid):
+                        if (self.create_time() <= p.create_time()):
+                            ret.append(p)
+                except NoSuchProcess:
+                    pass
+        else:
+            for (pid, ppid) in ppid_map.items():
+                if (ppid == self.pid):
+                    try:
+                        child = Process(pid)
+                        if (self.create_time() <= child.create_time()):
+                            ret.append(child)
+                    except NoSuchProcess:
+                        pass
+    else:
+        table = defaultdict(list)
+        if (ppid_map is None):
+            for p in process_iter():
+                try:
+                    table[p.ppid()].append(p)
+                except NoSuchProcess:
+                    pass
+        else:
+            for (pid, ppid) in ppid_map.items():
+                try:
+                    p = Process(pid)
+                    table[ppid].append(p)
+                except NoSuchProcess:
+                    pass
+        checkpids = [self.pid]
+        for pid in checkpids:
+            for child in table[pid]:
+                try:
+                    intime = (self.create_time() <= child.create_time())
+                except NoSuchProcess:
+                    pass
+                else:
+                    if intime:
+                        ret.append(child)
+                        if (child.pid not in checkpids):
+                            checkpids.append(child.pid)
+    return ret

@@ -1,0 +1,60 @@
+{
+  if (records == null || records.isEmpty()) {
+    LOG.debug("Empty aggregate records.");
+    return;
+  }
+  long start=System.currentTimeMillis();
+  Connection conn=getConnection();
+  PreparedStatement stmt=null;
+  try {
+    stmt=conn.prepareStatement(String.format(UPSERT_CLUSTER_AGGREGATE_TIME_SQL,tableName));
+    int rowCount=0;
+    for (    Map.Entry<TimelineClusterMetric,MetricHostAggregate> aggregateEntry : records.entrySet()) {
+      TimelineClusterMetric clusterMetric=aggregateEntry.getKey();
+      MetricHostAggregate aggregate=aggregateEntry.getValue();
+      LOG.trace("clusterMetric = " + clusterMetric + ", "+ "aggregate = "+ aggregate);
+      rowCount++;
+      stmt.clearParameters();
+      stmt.setString(1,clusterMetric.getMetricName());
+      stmt.setString(2,clusterMetric.getAppId());
+      stmt.setString(3,clusterMetric.getInstanceId());
+      stmt.setLong(4,clusterMetric.getTimestamp());
+      stmt.setString(5,clusterMetric.getType());
+      stmt.setDouble(6,aggregate.getSum());
+      stmt.setLong(7,aggregate.getNumberOfSamples());
+      stmt.setDouble(8,aggregate.getMax());
+      stmt.setDouble(9,aggregate.getMin());
+      try {
+        stmt.executeUpdate();
+      }
+ catch (      SQLException sql) {
+        LOG.error(sql);
+      }
+      if (rowCount >= PHOENIX_MAX_MUTATION_STATE_SIZE - 1) {
+        conn.commit();
+        rowCount=0;
+      }
+    }
+    conn.commit();
+  }
+  finally {
+    if (stmt != null) {
+      try {
+        stmt.close();
+      }
+ catch (      SQLException e) {
+      }
+    }
+    if (conn != null) {
+      try {
+        conn.close();
+      }
+ catch (      SQLException sql) {
+      }
+    }
+  }
+  long end=System.currentTimeMillis();
+  if ((end - start) > 60000l) {
+    LOG.info("Time to save: " + (end - start) + ", "+ "thread = "+ Thread.currentThread().getName());
+  }
+}

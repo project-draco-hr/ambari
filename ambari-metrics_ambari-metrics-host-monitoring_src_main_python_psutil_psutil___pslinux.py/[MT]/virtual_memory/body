@@ -1,0 +1,25 @@
+def virtual_memory():
+    (total, free, buffers, shared, _, _) = cext.linux_sysinfo()
+    cached = active = inactive = None
+    f = open('/proc/meminfo', 'rb')
+    (CACHED, ACTIVE, INACTIVE) = (b('Cached:'), b('Active:'), b('Inactive:'))
+    try:
+        for line in f:
+            if line.startswith(CACHED):
+                cached = (int(line.split()[1]) * 1024)
+            elif line.startswith(ACTIVE):
+                active = (int(line.split()[1]) * 1024)
+            elif line.startswith(INACTIVE):
+                inactive = (int(line.split()[1]) * 1024)
+            if ((cached is not None) and (active is not None) and (inactive is not None)):
+                break
+        else:
+            msg = "'cached', 'active' and 'inactive' memory stats couldn't be determined and were set to 0"
+            warnings.warn(msg, RuntimeWarning)
+            cached = active = inactive = 0
+    finally:
+        f.close()
+    avail = ((free + buffers) + cached)
+    used = (total - free)
+    percent = usage_percent((total - avail), total, _round=1)
+    return svmem(total, avail, percent, used, free, active, inactive, buffers, cached)

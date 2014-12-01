@@ -1,0 +1,83 @@
+'psutil is a cross-platform library for retrieving information on\nrunning processes and system utilization (CPU, memory, disks, network)\nin Python.\n'
+from __future__ import division
+__author__ = "Giampaolo Rodola'"
+__version__ = '2.1.1'
+version_info = tuple([int(num) for num in __version__.split('.')])
+__all__ = ['Error', 'NoSuchProcess', 'AccessDenied', 'TimeoutExpired', 'version_info', '__version__', 'STATUS_RUNNING', 'STATUS_IDLE', 'STATUS_SLEEPING', 'STATUS_DISK_SLEEP', 'STATUS_STOPPED', 'STATUS_TRACING_STOP', 'STATUS_ZOMBIE', 'STATUS_DEAD', 'STATUS_WAKING', 'STATUS_LOCKED', 'STATUS_WAITING', 'STATUS_LOCKED', 'CONN_ESTABLISHED', 'CONN_SYN_SENT', 'CONN_SYN_RECV', 'CONN_FIN_WAIT1', 'CONN_FIN_WAIT2', 'CONN_TIME_WAIT', 'CONN_CLOSE', 'CONN_CLOSE_WAIT', 'CONN_LAST_ACK', 'CONN_LISTEN', 'CONN_CLOSING', 'CONN_NONE', 'Process', 'Popen', 'pid_exists', 'pids', 'process_iter', 'wait_procs', 'virtual_memory', 'swap_memory', 'cpu_times', 'cpu_percent', 'cpu_times_percent', 'cpu_count', 'net_io_counters', 'net_connections', 'disk_io_counters', 'disk_partitions', 'disk_usage', 'users', 'boot_time']
+import sys
+import os
+import time
+import signal
+import warnings
+import errno
+import subprocess
+try:
+    import pwd
+except ImportError:
+    pwd = None
+from psutil._common import memoize
+from psutil._compat import property, callable, defaultdict
+from psutil._compat import wraps as _wraps, PY3 as _PY3
+from psutil._common import deprecated_method as _deprecated_method, deprecated as _deprecated, sdiskio as _nt_sys_diskio, snetio as _nt_sys_netio
+from psutil._common import STATUS_RUNNING, STATUS_SLEEPING, STATUS_DISK_SLEEP, STATUS_STOPPED, STATUS_TRACING_STOP, STATUS_ZOMBIE, STATUS_DEAD, STATUS_WAKING, STATUS_LOCKED, STATUS_IDLE, STATUS_WAITING, STATUS_LOCKED
+from psutil._common import CONN_ESTABLISHED, CONN_SYN_SENT, CONN_SYN_RECV, CONN_FIN_WAIT1, CONN_FIN_WAIT2, CONN_TIME_WAIT, CONN_CLOSE, CONN_CLOSE_WAIT, CONN_LAST_ACK, CONN_LISTEN, CONN_CLOSING, CONN_NONE
+if sys.platform.startswith('linux'):
+    import psutil._pslinux as _psplatform
+    from psutil._pslinux import phymem_buffers, cached_phymem
+    from psutil._pslinux import IOPRIO_CLASS_NONE, IOPRIO_CLASS_RT, IOPRIO_CLASS_BE, IOPRIO_CLASS_IDLE
+    if _psplatform.HAS_PRLIMIT:
+        from _psutil_linux import RLIM_INFINITY, RLIMIT_AS, RLIMIT_CORE, RLIMIT_CPU, RLIMIT_DATA, RLIMIT_FSIZE, RLIMIT_LOCKS, RLIMIT_MEMLOCK, RLIMIT_NOFILE, RLIMIT_NPROC, RLIMIT_RSS, RLIMIT_STACK
+        import _psutil_linux
+        try:
+            RLIMIT_MSGQUEUE = _psutil_linux.RLIMIT_MSGQUEUE
+        except AttributeError:
+            pass
+        try:
+            RLIMIT_NICE = _psutil_linux.RLIMIT_NICE
+        except AttributeError:
+            pass
+        try:
+            RLIMIT_RTPRIO = _psutil_linux.RLIMIT_RTPRIO
+        except AttributeError:
+            pass
+        try:
+            RLIMIT_RTTIME = _psutil_linux.RLIMIT_RTTIME
+        except AttributeError:
+            pass
+        try:
+            RLIMIT_SIGPENDING = _psutil_linux.RLIMIT_SIGPENDING
+        except AttributeError:
+            pass
+        del _psutil_linux
+elif sys.platform.startswith('win32'):
+    import psutil._pswindows as _psplatform
+    from _psutil_windows import ABOVE_NORMAL_PRIORITY_CLASS, BELOW_NORMAL_PRIORITY_CLASS, HIGH_PRIORITY_CLASS, IDLE_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS, REALTIME_PRIORITY_CLASS
+    from psutil._pswindows import CONN_DELETE_TCB
+elif sys.platform.startswith('darwin'):
+    import psutil._psosx as _psplatform
+elif sys.platform.startswith('freebsd'):
+    import psutil._psbsd as _psplatform
+elif sys.platform.startswith('sunos'):
+    import psutil._pssunos as _psplatform
+    from psutil._pssunos import CONN_IDLE, CONN_BOUND
+else:
+    raise NotImplementedError(('platform %s is not supported' % sys.platform))
+__all__.extend(_psplatform.__extra__all__)
+_TOTAL_PHYMEM = None
+_POSIX = (os.name == 'posix')
+_WINDOWS = (os.name == 'nt')
+_timer = getattr(time, 'monotonic', time.time)
+_psplatform.NoSuchProcess = NoSuchProcess
+_psplatform.AccessDenied = AccessDenied
+_psplatform.TimeoutExpired = TimeoutExpired
+_pmap = {}
+_last_cpu_times = cpu_times()
+_last_per_cpu_times = cpu_times(percpu=True)
+_last_cpu_times_2 = _last_cpu_times
+_last_per_cpu_times_2 = _last_per_cpu_times
+_replace_module()
+del property, memoize, division, _replace_module
+if (sys.version_info < (3, 0)):
+    del num
+if (__name__ == '__main__'):
+    test()

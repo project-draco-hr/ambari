@@ -1,0 +1,43 @@
+{
+  Map<String,Map<TemporalInfo,MetricsRequest>> requestMap=new HashMap<String,Map<TemporalInfo,MetricsRequest>>();
+  String collectorHostName=null;
+  String collectorPort=null;
+  for (  Resource resource : resources) {
+    String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
+    Map<TemporalInfo,MetricsRequest> requests=requestMap.get(clusterName);
+    if (requests == null) {
+      requests=new HashMap<TemporalInfo,MetricsRequest>();
+      requestMap.put(clusterName,requests);
+    }
+    if (collectorHostName == null) {
+      collectorHostName=hostProvider.getCollectorHostName(clusterName,TIMELINE_METRICS);
+    }
+    if (collectorPort == null) {
+      collectorPort=hostProvider.getCollectorPortName(clusterName,TIMELINE_METRICS);
+    }
+    for (    String id : ids) {
+      Map<String,PropertyInfo> propertyInfoMap=new HashMap<String,PropertyInfo>();
+      String componentName=getOverridenComponentName(resource);
+      Map<String,PropertyInfo> componentMetricMap=getComponentMetrics().get(componentName);
+      if (componentMetricMap != null && !componentMetricMap.containsKey(id)) {
+        updateComponentMetricMap(componentMetricMap,id);
+      }
+      getPropertyInfoMap(componentName,id,propertyInfoMap);
+      for (      Map.Entry<String,PropertyInfo> entry : propertyInfoMap.entrySet()) {
+        String propertyId=entry.getKey();
+        PropertyInfo propertyInfo=entry.getValue();
+        TemporalInfo temporalInfo=request.getTemporalInfo(id);
+        if ((temporalInfo == null && propertyInfo.isPointInTime()) || (temporalInfo != null && propertyInfo.isTemporal())) {
+          MetricsRequest metricsRequest=requests.get(temporalInfo);
+          if (metricsRequest == null) {
+            metricsRequest=new MetricsRequest(temporalInfo,getUriBuilder(collectorHostName,collectorPort != null ? Integer.parseInt(collectorPort) : 8188));
+            requests.put(temporalInfo,metricsRequest);
+          }
+          metricsRequest.putResource(getHostName(resource),resource);
+          metricsRequest.putPropertyId(propertyInfo.getPropertyId(),propertyId);
+        }
+      }
+    }
+  }
+  return requestMap;
+}

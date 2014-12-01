@@ -1,0 +1,23 @@
+@wrap_exceptions
+def open_files(self):
+    retlist = []
+    files = os.listdir(('/proc/%s/fd' % self.pid))
+    hit_enoent = False
+    for fd in files:
+        file = ('/proc/%s/fd/%s' % (self.pid, fd))
+        if os.path.islink(file):
+            try:
+                file = os.readlink(file)
+            except OSError:
+                err = sys.exc_info()[1]
+                if (err.errno == errno.ENOENT):
+                    hit_enoent = True
+                    continue
+                raise
+            else:
+                if (file.startswith('/') and isfile_strict(file)):
+                    ntuple = _common.popenfile(file, int(fd))
+                    retlist.append(ntuple)
+    if hit_enoent:
+        os.stat(('/proc/%s' % self.pid))
+    return retlist

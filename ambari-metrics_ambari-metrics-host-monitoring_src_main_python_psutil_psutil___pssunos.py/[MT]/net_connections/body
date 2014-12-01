@@ -1,0 +1,23 @@
+def net_connections(kind, _pid=(-1)):
+    'Return socket connections.  If pid == -1 return system-wide\n    connections (as opposed to connections opened by one process only).\n    Only INET sockets are returned (UNIX are not).\n    '
+    cmap = _common.conn_tmap.copy()
+    if (_pid == (-1)):
+        cmap.pop('unix', 0)
+    if (kind not in cmap):
+        raise ValueError(('invalid %r kind argument; choose between %s' % (kind, ', '.join([repr(x) for x in cmap]))))
+    (families, types) = _common.conn_tmap[kind]
+    rawlist = cext.net_connections(_pid, families, types)
+    ret = []
+    for item in rawlist:
+        (fd, fam, type_, laddr, raddr, status, pid) = item
+        if (fam not in families):
+            continue
+        if (type_ not in types):
+            continue
+        status = TCP_STATUSES[status]
+        if (_pid == (-1)):
+            nt = _common.sconn(fd, fam, type_, laddr, raddr, status, pid)
+        else:
+            nt = _common.pconn(fd, fam, type_, laddr, raddr, status)
+        ret.append(nt)
+    return ret

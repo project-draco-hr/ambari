@@ -1,0 +1,32 @@
+def disk_io_counters():
+    'Return disk I/O statistics for every disk installed on the\n    system as a dict of raw tuples.\n    '
+    SECTOR_SIZE = 512
+    partitions = []
+    f = open('/proc/partitions', 'rt')
+    try:
+        lines = f.readlines()[2:]
+    finally:
+        f.close()
+    for line in reversed(lines):
+        (_, _, _, name) = line.split()
+        if name[(-1)].isdigit():
+            partitions.append(name)
+        elif ((not partitions) or (not partitions[(-1)].startswith(name))):
+            partitions.append(name)
+    retdict = {}
+    f = open('/proc/diskstats', 'rt')
+    try:
+        lines = f.readlines()
+    finally:
+        f.close()
+    for line in lines:
+        (_, _, name, reads, _, rbytes, rtime, writes, _, wbytes, wtime) = line.split()[:11]
+        if (name in partitions):
+            rbytes = (int(rbytes) * SECTOR_SIZE)
+            wbytes = (int(wbytes) * SECTOR_SIZE)
+            reads = int(reads)
+            writes = int(writes)
+            rtime = int(rtime)
+            wtime = int(wtime)
+            retdict[name] = (reads, writes, rbytes, wbytes, rtime, wtime)
+    return retdict

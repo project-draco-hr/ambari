@@ -1,0 +1,22 @@
+def swap_memory():
+    (sin, sout) = cext.swap_mem()
+    p = subprocess.Popen(['swap', '-l', '-k'], stdout=subprocess.PIPE)
+    (stdout, stderr) = p.communicate()
+    if PY3:
+        stdout = stdout.decode(sys.stdout.encoding)
+    if (p.returncode != 0):
+        raise RuntimeError(("'swap -l -k' failed (retcode=%s)" % p.returncode))
+    lines = stdout.strip().split('\n')[1:]
+    if (not lines):
+        raise RuntimeError('no swap device(s) configured')
+    total = free = 0
+    for line in lines:
+        line = line.split()
+        (t, f) = line[(-2):]
+        t = t.replace('K', '')
+        f = f.replace('K', '')
+        total += int((int(t) * 1024))
+        free += int((int(f) * 1024))
+    used = (total - free)
+    percent = usage_percent(used, total, _round=1)
+    return _common.sswap(total, used, free, percent, (sin * PAGE_SIZE), (sout * PAGE_SIZE))

@@ -1,0 +1,31 @@
+{
+  Configuration config=new YarnConfiguration();
+  UserGroupInformation ugi=UserGroupInformation.createUserForTesting("ambari",new String[]{"ambari"});
+  mockStatic(UserGroupInformation.class);
+  expect(UserGroupInformation.getCurrentUser()).andReturn(ugi).anyTimes();
+  expect(UserGroupInformation.isSecurityEnabled()).andReturn(false).anyTimes();
+  config.set(YarnConfiguration.APPLICATION_HISTORY_STORE,"org.apache.hadoop.yarn.server.applicationhistoryservice.NullApplicationHistoryStore");
+  Connection connection=createNiceMock(Connection.class);
+  Statement stmt=createNiceMock(Statement.class);
+  mockStatic(DriverManager.class);
+  expect(DriverManager.getConnection("jdbc:phoenix:localhost:2181:/hbase")).andReturn(connection).anyTimes();
+  expect(connection.createStatement()).andReturn(stmt).anyTimes();
+  suppress(method(Statement.class,"executeUpdate",String.class));
+  connection.close();
+  expectLastCall();
+  EasyMock.replay(connection,stmt);
+  replayAll();
+  historyServer=new ApplicationHistoryServer();
+  historyServer.init(config);
+  verifyAll();
+  assertEquals(STATE.INITED,historyServer.getServiceState());
+  assertEquals(4,historyServer.getServices().size());
+  ApplicationHistoryClientService historyService=historyServer.getClientService();
+  assertNotNull(historyServer.getClientService());
+  assertEquals(STATE.INITED,historyService.getServiceState());
+  historyServer.start();
+  assertEquals(STATE.STARTED,historyServer.getServiceState());
+  assertEquals(STATE.STARTED,historyService.getServiceState());
+  historyServer.stop();
+  assertEquals(STATE.STOPPED,historyServer.getServiceState());
+}

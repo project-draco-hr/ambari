@@ -1,0 +1,63 @@
+{
+  if (temporalInfo == null || temporalInfo.getStartTime() == null || temporalInfo.getEndTime() == null) {
+    return Collections.emptySet();
+  }
+  for (  Map.Entry<String,Set<Resource>> resourceEntry : resources.entrySet()) {
+    String hostname=resourceEntry.getKey();
+    Set<Resource> resourceSet=resourceEntry.getValue();
+    for (    Resource resource : resourceSet) {
+      String metricsParam=getSetString(metrics.keySet(),-1);
+      uriBuilder.removeQuery();
+      if (metricsParam.length() > 0) {
+        uriBuilder.setParameter("metricNames",metricsParam);
+      }
+      if (hostname != null && !hostname.isEmpty() && !hostname.equals(dummyHostName)) {
+        uriBuilder.setParameter("hostname",hostname);
+      }
+      String componentName=getComponentName(resource);
+      if (componentName != null && !componentName.isEmpty()) {
+        if (TIMLINE_APPID_MAP.containsKey(componentName)) {
+          componentName=TIMLINE_APPID_MAP.get(componentName);
+        }
+        uriBuilder.setParameter("appId",componentName);
+      }
+      long startTime=temporalInfo.getStartTime();
+      if (startTime != -1) {
+        uriBuilder.setParameter("startTime",String.valueOf(startTime));
+      }
+      long endTime=temporalInfo.getEndTime();
+      if (endTime != -1) {
+        uriBuilder.setParameter("endTime",String.valueOf(endTime));
+      }
+      BufferedReader reader=null;
+      String spec=uriBuilder.toString();
+      try {
+        LOG.debug("Metrics request url =" + spec);
+        reader=new BufferedReader(new InputStreamReader(streamProvider.readFrom(spec)));
+        TimelineMetrics timelineMetrics=timelineObjectReader.readValue(reader);
+        LOG.debug("Timeline metrics response => " + timelineMetrics);
+        for (        TimelineMetric metric : timelineMetrics.getMetrics()) {
+          if (metric.getMetricName() != null && metric.getMetricValues() != null) {
+            populateResource(resource,metric);
+          }
+        }
+      }
+ catch (      IOException io) {
+        LOG.warn("Error getting timeline metrics.",io);
+      }
+ finally {
+        if (reader != null) {
+          try {
+            reader.close();
+          }
+ catch (          IOException e) {
+            if (LOG.isWarnEnabled()) {
+              LOG.warn("Unable to close http input steam : spec=" + spec,e);
+            }
+          }
+        }
+      }
+    }
+  }
+  return Collections.emptySet();
+}

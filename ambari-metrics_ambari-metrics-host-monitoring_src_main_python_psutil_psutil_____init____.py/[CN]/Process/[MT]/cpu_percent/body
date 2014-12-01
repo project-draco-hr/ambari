@@ -1,0 +1,33 @@
+def cpu_percent(self, interval=None):
+    'Return a float representing the current process CPU\n        utilization as a percentage.\n\n        When interval is 0.0 or None (default) compares process times\n        to system CPU times elapsed since last call, returning\n        immediately (non-blocking). That means that the first time\n        this is called it will return a meaningful 0.0 value.\n\n        When interval is > 0.0 compares process times to system CPU\n        times elapsed before and after the interval (blocking).\n\n        In this case is recommended for accuracy that this function\n        be called with at least 0.1 seconds between calls.\n\n        Examples:\n\n          >>> import psutil\n          >>> p = psutil.Process(os.getpid())\n          >>> # blocking\n          >>> p.cpu_percent(interval=1)\n          2.0\n          >>> # non-blocking (percentage since last call)\n          >>> p.cpu_percent(interval=None)\n          2.9\n          >>>\n        '
+    blocking = ((interval is not None) and (interval > 0.0))
+    num_cpus = cpu_count()
+    if _POSIX:
+        timer = (lambda : (_timer() * num_cpus))
+    else:
+        timer = (lambda : sum(cpu_times()))
+    if blocking:
+        st1 = timer()
+        pt1 = self._proc.cpu_times()
+        time.sleep(interval)
+        st2 = timer()
+        pt2 = self._proc.cpu_times()
+    else:
+        st1 = self._last_sys_cpu_times
+        pt1 = self._last_proc_cpu_times
+        st2 = timer()
+        pt2 = self._proc.cpu_times()
+        if ((st1 is None) or (pt1 is None)):
+            self._last_sys_cpu_times = st2
+            self._last_proc_cpu_times = pt2
+            return 0.0
+    delta_proc = ((pt2.user - pt1.user) + (pt2.system - pt1.system))
+    delta_time = (st2 - st1)
+    self._last_sys_cpu_times = st2
+    self._last_proc_cpu_times = pt2
+    try:
+        overall_percent = (((delta_proc / delta_time) * 100) * num_cpus)
+    except ZeroDivisionError:
+        return 0.0
+    else:
+        return round(overall_percent, 1)
