@@ -18,26 +18,20 @@ def service(action=None, name=None, user=None, create_pid_dir=False, create_log_
         if ((action == 'stop') and ((params.hdp_stack_version != '') and (compare_versions(params.hdp_stack_version, '2.2') >= 0)) and os.path.isfile(hadoop_secure_dn_pid_file)):
             user = 'root'
             try:
-                with open(hadoop_secure_dn_pid_file, 'r') as f:
-                    pid = f.read()
-                os.kill(int(pid), 0)
+                check_process_status()
                 custom_export = {'HADOOP_SECURE_DN_USER': params.hdfs_user, }
                 hadoop_env_exports.update(custom_export)
-            except IOError:
-                pass
-            except ValueError:
-                pass
-            except OSError:
+            except ComponentIsNotRunning:
                 pass
     hadoop_env_exports_str = ''
     for exp in hadoop_env_exports.items():
         hadoop_env_exports_str += 'export {0}={1} && '.format(exp[0], exp[1])
     hadoop_daemon = format('{hadoop_env_exports_str}{hadoop_bin}/hadoop-daemon.sh')
     cmd = format('{hadoop_daemon} --config {hadoop_conf_dir}')
-    daemon_cmd = format("{ulimit_cmd} su -s /bin/bash - {user} -c '{cmd} {action} {name}'")
+    daemon_cmd = format('{ulimit_cmd} {cmd} {action} {name}')
     service_is_up = (check_process if (action == 'start') else None)
     File(pid_file, action='delete', not_if=check_process)
-    Execute(daemon_cmd, not_if=service_is_up)
+    Execute(daemon_cmd, not_if=service_is_up, user=user)
     if (action == 'start'):
         Execute('hdfs dfsadmin -report -live', user=(params.hdfs_principal_name if params.security_enabled else params.hdfs_user))
     if (action == 'stop'):

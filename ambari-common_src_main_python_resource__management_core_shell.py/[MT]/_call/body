@@ -5,12 +5,19 @@ def _call(command, logoutput=False, throw_on_failure=True, cwd=None, env={}, pre
     elif sudo:
         err_msg = Logger.get_protected_text(("String command '%s' cannot be run as sudo. Please supply the command as a tuple of arguments" % command))
         raise Fail(err_msg)
+    if ('PATH' in env):
+        env['PATH'] = os.pathsep.join([os.environ['PATH'], env['PATH']])
+    if path:
+        if (not ('PATH' in env)):
+            env['PATH'] = ''
+        path = (os.pathsep.join(path) if isinstance(path, (list, tuple)) else path)
+        env['PATH'] = os.pathsep.join([os.environ['PATH'], path])
     environment_str = reduce((lambda str, x: '{0} {1}={2}'.format(str, x, quote_bash_args(env[x]))), env, '')
     command = command.replace(SUDO_ENVIRONMENT_PLACEHOLDER, environment_str, 1)
     bash_run_command = (command if (not sudo) else '/usr/bin/sudo {0} -Hi {1}'.format(environment_str, command))
     if user:
         su_export_command = ('export {0} ; '.format(environment_str) if environment_str else '')
-        subprocess_command = ['/usr/bin/sudo', '-Hi', 'su', '-', user, '-s', '/bin/bash', '-c', (su_export_command + bash_run_command)]
+        subprocess_command = ['/usr/bin/sudo', '-Hi', 'su', user, '-', '-s', '/bin/bash', '-c', (su_export_command + bash_run_command)]
     else:
         subprocess_command = ['/bin/bash', '--login', '-c', bash_run_command]
     proc = subprocess.Popen(subprocess_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd, env=env, shell=False, preexec_fn=preexec_fn)
