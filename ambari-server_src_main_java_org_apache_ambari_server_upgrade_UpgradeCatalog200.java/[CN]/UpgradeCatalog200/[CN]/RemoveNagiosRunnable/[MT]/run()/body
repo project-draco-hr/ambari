@@ -1,0 +1,40 @@
+{
+  ClusterDAO clusterDao=injector.getInstance(ClusterDAO.class);
+  ClusterServiceDAO clusterServiceDao=injector.getInstance(ClusterServiceDAO.class);
+  ServiceComponentDesiredStateDAO componentDesiredStateDao=injector.getInstance(ServiceComponentDesiredStateDAO.class);
+  ServiceDesiredStateDAO desiredStateDao=injector.getInstance(ServiceDesiredStateDAO.class);
+  HostComponentDesiredStateDAO hostComponentDesiredStateDao=injector.getInstance(HostComponentDesiredStateDAO.class);
+  HostComponentStateDAO hostComponentStateDao=injector.getInstance(HostComponentStateDAO.class);
+  List<ClusterEntity> clusters=clusterDao.findAll();
+  if (null == clusters) {
+    return;
+  }
+  for (  ClusterEntity cluster : clusters) {
+    ClusterServiceEntity nagios=clusterServiceDao.findByClusterAndServiceNames(cluster.getClusterName(),"NAGIOS");
+    if (null == nagios) {
+      continue;
+    }
+    Collection<ServiceComponentDesiredStateEntity> serviceComponentDesiredStates=nagios.getServiceComponentDesiredStateEntities();
+    ServiceDesiredStateEntity serviceDesiredState=nagios.getServiceDesiredStateEntity();
+    for (    ServiceComponentDesiredStateEntity componentDesiredState : serviceComponentDesiredStates) {
+      Collection<HostComponentStateEntity> hostComponentStateEntities=componentDesiredState.getHostComponentStateEntities();
+      Collection<HostComponentDesiredStateEntity> hostComponentDesiredStateEntities=componentDesiredState.getHostComponentDesiredStateEntities();
+      for (      HostComponentStateEntity hostComponentState : hostComponentStateEntities) {
+        hostComponentStateDao.remove(hostComponentState);
+      }
+      for (      HostComponentDesiredStateEntity hostComponentDesiredState : hostComponentDesiredStateEntities) {
+        hostComponentDesiredStateDao.remove(hostComponentDesiredState);
+      }
+      ServiceComponentDesiredStateEntityPK primaryKey=new ServiceComponentDesiredStateEntityPK();
+      primaryKey.setClusterId(nagios.getClusterId());
+      primaryKey.setComponentName(componentDesiredState.getComponentName());
+      primaryKey.setServiceName(componentDesiredState.getServiceName());
+      componentDesiredStateDao.removeByPK(primaryKey);
+    }
+    desiredStateDao.remove(serviceDesiredState);
+    ClusterServiceEntityPK primaryKey=new ClusterServiceEntityPK();
+    primaryKey.setClusterId(nagios.getClusterId());
+    primaryKey.setServiceName(nagios.getServiceName());
+    clusterServiceDao.removeByPK(primaryKey);
+  }
+}
