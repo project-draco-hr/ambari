@@ -1,0 +1,38 @@
+{
+  int count=Double.valueOf(Math.ceil((double)batch.percent / 100 * hosts.size())).intValue();
+  int i=0;
+  for (  String host : hosts) {
+    Map<String,List<TaskProxy>> targetMap=((i++) < count) ? initialBatch : finalBatches;
+    List<TaskProxy> targetList=targetMap.get(host);
+    if (null == targetList) {
+      targetList=new ArrayList<TaskProxy>();
+      targetMap.put(host,targetList);
+    }
+    TaskProxy proxy=null;
+    if (null != pc.preTasks && pc.preTasks.size() > 0) {
+      proxy=new TaskProxy();
+      proxy.message=getStageText("Preparing",pc.name,Collections.singleton(host));
+      proxy.tasks.add(new TaskWrapper(service,pc.name,Collections.singleton(host),pc.preTasks));
+      proxy.component=pc.name;
+      targetList.add(proxy);
+    }
+    if (null != pc.tasks && 1 == pc.tasks.size()) {
+      Task t=pc.tasks.get(0);
+      if (RestartTask.class.isInstance(t)) {
+        proxy=new TaskProxy();
+        proxy.tasks.add(new TaskWrapper(service,pc.name,Collections.singleton(host),t));
+        proxy.restart=true;
+        proxy.component=pc.name;
+        proxy.message=getStageText("Restarting ",pc.name,Collections.singleton(host));
+        targetList.add(proxy);
+      }
+    }
+    if (null != pc.postTasks && pc.postTasks.size() > 0) {
+      proxy=new TaskProxy();
+      proxy.component=pc.name;
+      proxy.tasks.add(new TaskWrapper(service,pc.name,Collections.singleton(host),pc.postTasks));
+      proxy.message=getStageText("Completing",pc.name,Collections.singleton(host));
+      targetList.add(proxy);
+    }
+  }
+}

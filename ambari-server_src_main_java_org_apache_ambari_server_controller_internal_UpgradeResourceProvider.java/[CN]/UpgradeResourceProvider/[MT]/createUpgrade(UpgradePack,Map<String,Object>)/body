@@ -5,70 +5,30 @@
   }
   Cluster cluster=getManagementController().getClusters().getCluster(clusterName);
   ConfigHelper configHelper=getManagementController().getConfigHelper();
-  Map<String,Service> clusterServices=cluster.getServices();
-  Map<String,Map<String,ProcessingComponent>> tasks=pack.getTasks();
-  List<StageHolder> preUpgrades=new ArrayList<StageHolder>();
-  List<StageHolder> restart=new ArrayList<StageHolder>();
-  List<StageHolder> postUpgrades=new ArrayList<StageHolder>();
-  for (  Entry<String,List<String>> entry : pack.getOrder().entrySet()) {
-    String serviceName=entry.getKey();
-    List<String> componentNames=entry.getValue();
-    if (!tasks.containsKey(serviceName)) {
-      continue;
-    }
-    if (!clusterServices.containsKey(serviceName)) {
-      continue;
-    }
-    Service service=clusterServices.get(serviceName);
-    Map<String,ServiceComponent> components=service.getServiceComponents();
-    for (    String componentName : componentNames) {
-      if (!tasks.get(serviceName).containsKey(componentName)) {
-        continue;
-      }
-      if (!components.containsKey(componentName)) {
-        continue;
-      }
-      ProcessingComponent pc=tasks.get(serviceName).get(componentName);
-      List<Set<String>> groupings=computeHostGroupings(pc,components.get(componentName).getServiceComponentHosts().keySet());
-      preUpgrades.addAll(buildUpgradeStages(pc,true,groupings));
-      restart.addAll(buildRollingRestart(serviceName,pc,groupings));
-      postUpgrades.addAll(buildUpgradeStages(pc,false,groupings));
-    }
-  }
-  Gson gson=new Gson();
-  UpgradeEntity entity=new UpgradeEntity();
-  List<UpgradeItemEntity> items=new ArrayList<UpgradeItemEntity>();
-  for (  StageHolder holder : preUpgrades) {
-    holder.upgradeItemEntity.setHosts(gson.toJson(holder.hosts));
-    holder.upgradeItemEntity.setTasks(gson.toJson(holder.taskHolder.tasks));
-    items.add(holder.upgradeItemEntity);
-  }
-  for (  StageHolder holder : restart) {
-    holder.upgradeItemEntity.setHosts(gson.toJson(holder.hosts));
-    items.add(holder.upgradeItemEntity);
-  }
-  for (  StageHolder holder : postUpgrades) {
-    holder.upgradeItemEntity.setHosts(gson.toJson(holder.hosts));
-    holder.upgradeItemEntity.setTasks(gson.toJson(holder.taskHolder.tasks));
-    items.add(holder.upgradeItemEntity);
-  }
-  items=injectVariables(configHelper,cluster,items);
-  entity.setClusterId(Long.valueOf(cluster.getClusterId()));
-  UpgradeGroupEntity group=new UpgradeGroupEntity();
-  group.setName("CLUSTER_UPGRADE");
-  group.setTitle("Cluster Upgrade");
-  group.setItems(items);
-  entity.setUpgradeGroups(Collections.singletonList(group));
+  UpgradeHelper helper=new UpgradeHelper();
+  List<UpgradeGroupHolder> groups=helper.createUpgrade(cluster,pack);
+  List<UpgradeGroupEntity> groupEntities=new ArrayList<UpgradeGroupEntity>();
   RequestStageContainer req=createRequest((String)requestMap.get(UPGRADE_VERSION));
-  for (  StageHolder holder : preUpgrades) {
-    createUpgradeTaskStage(cluster,req,holder);
+  for (  UpgradeGroupHolder group : groups) {
+    UpgradeGroupEntity groupEntity=new UpgradeGroupEntity();
+    groupEntity.setName(group.name);
+    groupEntity.setTitle(group.title);
+    List<UpgradeItemEntity> itemEntities=new ArrayList<UpgradeItemEntity>();
+    for (    StageWrapper wrapper : group.items) {
+      UpgradeItemEntity itemEntity=new UpgradeItemEntity();
+      itemEntity.setText(wrapper.getText());
+      itemEntity.setTasks(wrapper.getHostsJson());
+      itemEntity.setHosts(wrapper.getTasksJson());
+      itemEntities.add(itemEntity);
+      createStage(cluster,req,itemEntity,wrapper);
+    }
+    itemEntities=injectVariables(configHelper,cluster,itemEntities);
+    groupEntity.setItems(itemEntities);
+    groupEntities.add(groupEntity);
   }
-  for (  StageHolder holder : restart) {
-    createRestartStage(cluster,req,holder);
-  }
-  for (  StageHolder holder : postUpgrades) {
-    createUpgradeTaskStage(cluster,req,holder);
-  }
+  UpgradeEntity entity=new UpgradeEntity();
+  entity.setUpgradeGroups(groupEntities);
+  entity.setClusterId(Long.valueOf(cluster.getClusterId()));
   req.getRequestStatusResponse();
   entity.setRequestId(req.getId());
   req.persist();
