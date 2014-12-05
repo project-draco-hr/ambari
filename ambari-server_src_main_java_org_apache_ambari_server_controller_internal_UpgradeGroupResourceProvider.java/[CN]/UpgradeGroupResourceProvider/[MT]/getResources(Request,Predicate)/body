@@ -2,16 +2,25 @@
   Set<Resource> results=new HashSet<Resource>();
   Set<String> requestPropertyIds=getRequestPropertyIds(request,predicate);
   for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
-    String upgradeIdStr=(String)propertyMap.get(UPGRADE_ID);
+    String upgradeIdStr=(String)propertyMap.get(UPGRADE_REQUEST_ID);
+    String clusterName=(String)propertyMap.get(UPGRADE_CLUSTER_NAME);
     if (null == upgradeIdStr || upgradeIdStr.isEmpty()) {
       throw new IllegalArgumentException("The upgrade id is required when querying for upgrades");
     }
-    long upgradeId=Long.parseLong(upgradeIdStr);
-    UpgradeEntity upgrade=m_dao.findUpgrade(upgradeId);
+    Long upgradeId=Long.valueOf(upgradeIdStr);
+    UpgradeEntity upgrade=m_dao.findUpgradeByRequestId(upgradeId);
     List<UpgradeGroupEntity> groups=upgrade.getUpgradeGroups();
     if (null != groups) {
+      UpgradeHelper helper=new UpgradeHelper();
       for (      UpgradeGroupEntity group : upgrade.getUpgradeGroups()) {
-        results.add(toResource(upgrade,group,requestPropertyIds));
+        Resource r=toResource(upgrade,group,requestPropertyIds);
+        List<Long> stageIds=new ArrayList<Long>();
+        for (        UpgradeItemEntity itemEntity : group.getItems()) {
+          stageIds.add(itemEntity.getStageId());
+        }
+        Set<Resource> stages=helper.getStageResources(clusterName,upgrade.getRequestId(),stageIds);
+        aggregate(r,stages,requestPropertyIds);
+        results.add(r);
       }
     }
   }
