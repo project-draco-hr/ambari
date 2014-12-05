@@ -1,0 +1,45 @@
+{
+  HadoopTimelineMetricsSink sink=new HadoopTimelineMetricsSink();
+  SubsetConfiguration conf=createNiceMock(SubsetConfiguration.class);
+  expect(conf.getString(eq("slave.host.name"))).andReturn("testhost").anyTimes();
+  expect(conf.getParent()).andReturn(null).anyTimes();
+  expect(conf.getPrefix()).andReturn("service").anyTimes();
+  expect(conf.getString(eq(COLLECTOR_HOST_PROPERTY))).andReturn("localhost:63188").anyTimes();
+  expect(conf.getInt(eq(MAX_METRIC_ROW_CACHE_SIZE),anyInt())).andReturn(10).anyTimes();
+  expect(conf.getInt(eq(METRICS_SEND_INTERVAL),anyInt())).andReturn(1000).anyTimes();
+  conf.setListDelimiter(eq(','));
+  expectLastCall().anyTimes();
+  expect(conf.getKeys()).andReturn(new Iterator(){
+    @Override public boolean hasNext(){
+      return false;
+    }
+    @Override public Object next(){
+      return null;
+    }
+    @Override public void remove(){
+    }
+  }
+).once();
+  HttpClient httpClient=createNiceMock(HttpClient.class);
+  expect(httpClient.executeMethod(anyObject(PostMethod.class))).andReturn(200).once();
+  AbstractMetric metric=createNiceMock(AbstractMetric.class);
+  expect(metric.name()).andReturn("metricName").anyTimes();
+  expect(metric.value()).andReturn(9.5687).anyTimes();
+  MetricsRecord record=createNiceMock(MetricsRecord.class);
+  expect(record.name()).andReturn("testName").anyTimes();
+  expect(record.context()).andReturn("testContext").anyTimes();
+  expect(record.timestamp()).andAnswer(new IAnswer<Long>(){
+    @Override public Long answer() throws Throwable {
+      return System.currentTimeMillis();
+    }
+  }
+).anyTimes();
+  expect(record.metrics()).andReturn(Arrays.asList(metric)).anyTimes();
+  replay(conf,httpClient,record,metric);
+  sink.setHttpClient(httpClient);
+  sink.init(conf);
+  sink.putMetrics(record);
+  Thread.sleep(1500L);
+  sink.putMetrics(record);
+  verify(conf,httpClient,record,metric);
+}
