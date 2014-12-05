@@ -1,0 +1,40 @@
+{
+  try {
+    String recordName=record.name();
+    String contextName=record.context();
+    StringBuilder sb=new StringBuilder();
+    sb.append(contextName);
+    sb.append('.');
+    sb.append(recordName);
+    appendPrefix(record,sb);
+    sb.append(".");
+    int sbBaseLen=sb.length();
+    Collection<AbstractMetric> metrics=(Collection<AbstractMetric>)record.metrics();
+    List<TimelineMetric> metricList=new ArrayList<TimelineMetric>();
+    for (    AbstractMetric metric : metrics) {
+      sb.append(metric.name());
+      String name=sb.toString();
+      TimelineMetric timelineMetric=new TimelineMetric();
+      timelineMetric.setMetricName(name);
+      timelineMetric.setHostName(hostName);
+      timelineMetric.setAppId(serviceName);
+      timelineMetric.setStartTime(record.timestamp());
+      timelineMetric.setType(ClassUtils.getShortCanonicalName(metric.value(),"Number"));
+      timelineMetric.getMetricValues().put(record.timestamp(),metric.value().doubleValue());
+      metricsCache.putTimelineMetric(timelineMetric);
+      TimelineMetric cachedMetric=metricsCache.getTimelineMetric(name);
+      if (cachedMetric != null) {
+        metricList.add(cachedMetric);
+      }
+      sb.setLength(sbBaseLen);
+    }
+    TimelineMetrics timelineMetrics=new TimelineMetrics();
+    timelineMetrics.setMetrics(metricList);
+    if (!metricList.isEmpty()) {
+      emitMetrics(timelineMetrics);
+    }
+  }
+ catch (  IOException io) {
+    throw new MetricsException("Failed to putMetrics",io);
+  }
+}

@@ -1,0 +1,51 @@
+{
+  LOG.info("Initializing Timeline metrics sink.");
+  if (conf.getString("slave.host.name") != null) {
+    hostName=conf.getString("slave.host.name");
+  }
+ else {
+    try {
+      hostName=DNS.getDefaultHost(conf.getString("dfs.datanode.dns.interface","default"),conf.getString("dfs.datanode.dns.nameserver","default"));
+    }
+ catch (    UnknownHostException uhe) {
+      LOG.error(uhe);
+      hostName="UNKNOWN.example.com";
+    }
+  }
+  serviceName=getFirstConfigPrefix(conf);
+  metricsServers=Servers.parse(conf.getString(COLLECTOR_HOST_PROPERTY),8188);
+  if (metricsServers == null || metricsServers.isEmpty()) {
+    LOG.error("No Metric collector configured.");
+  }
+ else {
+    collectorUri="http://" + conf.getString(COLLECTOR_HOST_PROPERTY).trim() + "/ws/v1/timeline/metrics";
+  }
+  int maxRowCacheSize=conf.getInt(MAX_METRIC_ROW_CACHE_SIZE,TimelineMetricsCache.MAX_RECS_PER_NAME_DEFAULT);
+  int metricsSendInterval=conf.getInt(METRICS_SEND_INTERVAL,TimelineMetricsCache.MAX_EVICTION_TIME_MILLIS);
+  metricsCache=new TimelineMetricsCache(maxRowCacheSize,metricsSendInterval);
+  conf.setListDelimiter(',');
+  Iterator<String> it=(Iterator<String>)conf.getKeys();
+  while (it.hasNext()) {
+    String propertyName=it.next();
+    if (propertyName != null && propertyName.startsWith(TAGS_FOR_PREFIX_PROPERTY_PREFIX)) {
+      String contextName=propertyName.substring(TAGS_FOR_PREFIX_PROPERTY_PREFIX.length());
+      String[] tags=conf.getStringArray(propertyName);
+      boolean useAllTags=false;
+      Set<String> set=null;
+      if (tags.length > 0) {
+        set=new HashSet<String>();
+        for (        String tag : tags) {
+          tag=tag.trim();
+          useAllTags|=tag.equals("*");
+          if (tag.length() > 0) {
+            set.add(tag);
+          }
+        }
+        if (useAllTags) {
+          set=null;
+        }
+      }
+      useTagsMap.put(contextName,set);
+    }
+  }
+}
