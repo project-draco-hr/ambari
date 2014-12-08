@@ -2,10 +2,6 @@
   LOG.debug("==> Collecting commands to schedule...");
   Map<String,RoleStats> roleStats=initRoleStats(s);
   long now=System.currentTimeMillis();
-  long taskTimeout=actionTimeout;
-  if (taskTimeoutAdjustment) {
-    taskTimeout=actionTimeout + s.getStageTimeout();
-  }
   Cluster cluster=null;
   if (null != s.getClusterName()) {
     cluster=fsmObject.getCluster(s.getClusterName());
@@ -47,13 +43,25 @@
           LOG.warn(message);
         }
       }
+      long commandTimeout=actionTimeout;
+      if (taskTimeoutAdjustment) {
+        Map<String,String> commandParams=c.getCommandParams();
+        String timeoutKey=ExecutionCommand.KeyNames.COMMAND_TIMEOUT;
+        if (commandParams != null && commandParams.containsKey(timeoutKey)) {
+          String timeoutStr=commandParams.get(timeoutKey);
+          commandTimeout+=Long.parseLong(timeoutStr) * 1000;
+        }
+ else {
+          LOG.error("Execution command has no timeout parameter" + c.toString());
+        }
+      }
       if (hostDeleted) {
         String message=String.format("Host not found when trying to schedule an execution command. " + "The most probable reason for that is that host or host component " + "has been deleted recently. The command has been aborted and dequeued."+ "Execution command details: "+ "cmdId: %s; taskId: %s; roleCommand: %s",c.getCommandId(),c.getTaskId(),c.getRoleCommand());
         LOG.warn("Host {} has been detected as non-available. {}",host,message);
         db.abortHostRole(host,s.getRequestId(),s.getStageId(),c.getRole(),message);
         status=HostRoleStatus.ABORTED;
       }
- else       if (timeOutActionNeeded(status,s,hostObj,roleStr,now,taskTimeout)) {
+ else       if (timeOutActionNeeded(status,s,hostObj,roleStr,now,commandTimeout)) {
         LOG.info("Host:" + host + ", role:"+ roleStr+ ", actionId:"+ s.getActionId()+ " timed out");
         if (s.getAttemptCount(host,roleStr) >= maxAttempts) {
           LOG.warn("Host:" + host + ", role:"+ roleStr+ ", actionId:"+ s.getActionId()+ " expired");
