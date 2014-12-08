@@ -8,11 +8,11 @@
     throw new UnsupportedOperationException("Multiple requests cannot be executed at the same time.");
   }
   Map<String,Object> propertyMap=iterator.next();
-  if (!propertyMap.containsKey(CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID) || !propertyMap.containsKey(STACK_VERSION_REPO_VERSION_PROPERTY_ID)) {
-    throw new IllegalArgumentException(String.format("%s or %s not defined",CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID,STACK_VERSION_REPO_VERSION_PROPERTY_ID));
+  if (!propertyMap.containsKey(CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID) || !propertyMap.containsKey(CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID)) {
+    throw new IllegalArgumentException(String.format("%s or %s not defined",CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID,CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID));
   }
   clName=(String)propertyMap.get(CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID);
-  desiredRepoVersion=(String)propertyMap.get(STACK_VERSION_REPO_VERSION_PROPERTY_ID);
+  desiredRepoVersion=(String)propertyMap.get(CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID);
   Cluster cluster;
   Map<String,Host> hostsForCluster;
   AmbariManagementController managementController=getManagementController();
@@ -25,9 +25,9 @@
     throw new NoSuchParentResourceException(e.getMessage(),e);
   }
   String stackId;
-  if (propertyMap.containsKey(STACK_VERSION_STACK_PROPERTY_ID) && propertyMap.containsKey(STACK_VERSION_VERSION_PROPERTY_ID)) {
-    stackName=(String)propertyMap.get(STACK_VERSION_STACK_PROPERTY_ID);
-    stackVersion=(String)propertyMap.get(STACK_VERSION_VERSION_PROPERTY_ID);
+  if (propertyMap.containsKey(CLUSTER_STACK_VERSION_STACK_PROPERTY_ID) && propertyMap.containsKey(CLUSTER_STACK_VERSION_VERSION_PROPERTY_ID)) {
+    stackName=(String)propertyMap.get(CLUSTER_STACK_VERSION_STACK_PROPERTY_ID);
+    stackVersion=(String)propertyMap.get(CLUSTER_STACK_VERSION_VERSION_PROPERTY_ID);
     stackId=new StackId(stackName,stackVersion).getStackId();
     if (!ami.isSupportedStack(stackName,stackVersion)) {
       throw new NoSuchParentResourceException(String.format("Stack %s is not supported",stackId));
@@ -102,6 +102,14 @@
   }
   try {
     req.persist();
+    try {
+      cluster.createClusterVersion(stackId,desiredRepoVersion,managementController.getAuthName(),RepositoryVersionState.INSTALLED);
+      ClusterVersionEntity newCSVer=clusterVersionDAO.findByClusterAndStackAndVersion(clName,stackId,desiredRepoVersion);
+      cluster.initHostVersions(newCSVer);
+    }
+ catch (    AmbariException e) {
+      throw new SystemException(String.format("Can not create cluster stack version %s for cluster %s",desiredRepoVersion,clName),e);
+    }
   }
  catch (  AmbariException e) {
     throw new SystemException("Can not persist request",e);
