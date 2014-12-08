@@ -1,0 +1,33 @@
+{
+  CommandReport commandReport=null;
+  Map<String,String> principalPasswordMap=getPrincipalPasswordMap(requestSharedDataContext);
+  String password=principalPasswordMap.get(evaluatedPrincipal);
+  if (password == null) {
+    password=operationHandler.createSecurePassword();
+    if (operationHandler.principalExists(evaluatedPrincipal)) {
+      LOG.warn("Principal already exists, setting new password - {}",evaluatedPrincipal);
+      if (operationHandler.setPrincipalPassword(evaluatedPrincipal,password)) {
+        principalPasswordMap.put(evaluatedPrincipal,password);
+        LOG.debug("Successfully set password for principal {}",evaluatedPrincipal);
+      }
+ else {
+        String message=String.format("Failed to set password for principal %s, unknown reason",evaluatedPrincipal);
+        LOG.error(message);
+        commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}","",message);
+      }
+    }
+ else {
+      LOG.debug("Creating new principal - {}",evaluatedPrincipal);
+      if (operationHandler.createServicePrincipal(evaluatedPrincipal,password)) {
+        principalPasswordMap.put(evaluatedPrincipal,password);
+        LOG.debug("Successfully created new principal {}",evaluatedPrincipal);
+      }
+ else {
+        String message=String.format("Failed to create principal %s, unknown reason",evaluatedPrincipal);
+        LOG.error(message);
+        commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}","",message);
+      }
+    }
+  }
+  return commandReport;
+}

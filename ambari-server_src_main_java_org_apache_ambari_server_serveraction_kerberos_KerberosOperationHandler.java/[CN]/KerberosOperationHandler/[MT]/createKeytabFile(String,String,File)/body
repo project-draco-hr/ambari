@@ -1,0 +1,52 @@
+{
+  boolean success=false;
+  if ((principal == null) || principal.isEmpty()) {
+    throw new AmbariException("Failed to create keytab file, missing principal");
+  }
+ else   if (password == null) {
+    throw new AmbariException(String.format("Failed to create keytab file for %s, missing password",principal));
+  }
+ else   if (keytabFile == null) {
+    throw new AmbariException(String.format("Failed to create keytab file for %s, missing file path",principal));
+  }
+ else {
+    Map<EncryptionType,EncryptionKey> keys=KerberosKeyFactory.getKerberosKeys(principal,password);
+    if (keys != null) {
+      KerberosTime timestamp=new KerberosTime();
+      List<KeytabEntry> keytabEntries=new ArrayList<KeytabEntry>();
+      Keytab keytab;
+      if (keytabFile.exists() && keytabFile.canRead() && (keytabFile.length() > 0)) {
+        try {
+          keytab=Keytab.read(keytabFile);
+        }
+ catch (        IOException e) {
+          keytab=new Keytab();
+        }
+        List<KeytabEntry> existingEntries=keytab.getEntries();
+        if ((existingEntries != null) && !existingEntries.isEmpty()) {
+          keytabEntries.addAll(existingEntries);
+        }
+      }
+ else {
+        keytab=new Keytab();
+      }
+      for (      EncryptionKey encryptionKey : keys.values()) {
+        keytabEntries.add(new KeytabEntry(principal,1,timestamp,(byte)0,encryptionKey));
+      }
+      keytab.setEntries(keytabEntries);
+      try {
+        keytab.write(keytabFile);
+        success=true;
+      }
+ catch (      IOException e) {
+        String message=String.format("Failed to export keytab file for %s",principal);
+        LOG.error(message,e);
+        if (!keytabFile.delete()) {
+          keytabFile.deleteOnExit();
+        }
+        throw new AmbariException(message,e);
+      }
+    }
+  }
+  return success;
+}

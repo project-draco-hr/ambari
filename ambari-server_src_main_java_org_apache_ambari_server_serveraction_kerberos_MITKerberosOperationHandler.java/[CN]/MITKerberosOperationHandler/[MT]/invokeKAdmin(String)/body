@@ -1,0 +1,49 @@
+{
+  ShellCommandUtil.Result result=null;
+  if ((query != null) && !query.isEmpty()) {
+    KerberosCredential administratorCredentials=getAdministratorCredentials();
+    String defaultRealm=getDefaultRealm();
+    List<String> command=new ArrayList<String>();
+    File tempKeytabFile=null;
+    try {
+      String adminPrincipal=(administratorCredentials == null) ? null : administratorCredentials.getPrincipal();
+      if ((adminPrincipal == null) || adminPrincipal.isEmpty()) {
+        command.add("kadmin.local");
+      }
+ else {
+        String adminPassword=administratorCredentials.getPassword();
+        String adminKeyTab=administratorCredentials.getKeytab();
+        command.add("kadmin");
+        command.add("-p");
+        command.add(adminPrincipal);
+        if ((adminKeyTab != null) && !adminKeyTab.isEmpty()) {
+          tempKeytabFile=createKeytabFile(adminKeyTab);
+          if (tempKeytabFile != null) {
+            command.add("-k");
+            command.add("-t");
+            command.add(tempKeytabFile.getAbsolutePath());
+          }
+        }
+ else         if (adminPassword != null) {
+          command.add("-w");
+          command.add(adminPassword);
+        }
+      }
+      if ((defaultRealm != null) && !defaultRealm.isEmpty()) {
+        command.add("-r");
+        command.add(defaultRealm);
+      }
+      command.add("-q");
+      command.add(query.replace("\"","\\\""));
+      result=executeCommand(command.toArray(new String[command.size()]));
+    }
+  finally {
+      if (tempKeytabFile != null) {
+        if (!tempKeytabFile.delete()) {
+          tempKeytabFile.deleteOnExit();
+        }
+      }
+    }
+  }
+  return result;
+}
