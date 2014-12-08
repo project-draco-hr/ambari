@@ -1,0 +1,45 @@
+def register(self, dict, componentsMapped=True, commandsInProgress=True):
+    ' Return various details about the host\n    componentsMapped: indicates if any components are mapped to this host\n    commandsInProgress: indicates if any commands are in progress\n    '
+    dict['hostHealth'] = {}
+    java = []
+    self.javaProcs(java)
+    dict['hostHealth']['activeJavaProcs'] = java
+    liveSvcs = []
+    self.checkLiveServices(self.DEFAULT_LIVE_SERVICES, liveSvcs)
+    dict['hostHealth']['liveServices'] = liveSvcs
+    dict['umask'] = str(self.getUMask())
+    dict['transparentHugePage'] = self.getTransparentHugePage()
+    dict['iptablesIsRunning'] = self.checkIptables()
+    dict['reverseLookup'] = self.checkReverseLookup()
+    if (componentsMapped or commandsInProgress):
+        dict['existingRepos'] = [self.RESULT_UNAVAILABLE]
+        dict['installedPackages'] = []
+        dict['alternatives'] = []
+        dict['stackFoldersAndFiles'] = []
+        dict['existingUsers'] = []
+    else:
+        etcs = []
+        self.etcAlternativesConf(self.DEFAULT_PROJECT_NAMES, etcs)
+        dict['alternatives'] = etcs
+        existingUsers = []
+        self.checkUsers(self.DEFAULT_USERS, existingUsers)
+        dict['existingUsers'] = existingUsers
+        dirs = []
+        self.checkFolders(self.DEFAULT_DIRS, self.DEFAULT_PROJECT_NAMES, existingUsers, dirs)
+        dict['stackFoldersAndFiles'] = dirs
+        installedPackages = []
+        availablePackages = []
+        self.packages.allInstalledPackages(installedPackages)
+        self.packages.allAvailablePackages(availablePackages)
+        repos = []
+        self.packages.getInstalledRepos(self.PACKAGES, (installedPackages + availablePackages), self.IGNORE_PACKAGES_FROM_REPOS, repos)
+        packagesInstalled = self.packages.getInstalledPkgsByRepo(repos, self.IGNORE_PACKAGES, installedPackages)
+        additionalPkgsInstalled = self.packages.getInstalledPkgsByNames(self.ADDITIONAL_PACKAGES, installedPackages)
+        allPackages = list(set((packagesInstalled + additionalPkgsInstalled)))
+        dict['installedPackages'] = self.packages.getPackageDetails(installedPackages, allPackages)
+        repos = self.getReposToRemove(repos, self.IGNORE_REPOS)
+        dict['existingRepos'] = repos
+        self.reportFileHandler.writeHostCheckFile(dict)
+        pass
+    dict['hostHealth']['agentTimeStampAtReporting'] = int((time.time() * 1000))
+    pass
