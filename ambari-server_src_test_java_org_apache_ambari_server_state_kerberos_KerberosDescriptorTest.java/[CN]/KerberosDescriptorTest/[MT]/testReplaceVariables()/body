@@ -1,0 +1,41 @@
+{
+  Map<String,Map<String,String>> configurations=new HashMap<String,Map<String,String>>(){
+{
+      put("",new HashMap<String,String>(){
+{
+          put("global_variable","Hello World");
+        }
+      }
+);
+      put("config-type",new HashMap<String,String>(){
+{
+          put("variable.name","Replacement1");
+          put("variable.name1","${config-type2/variable.name}");
+          put("variable.name2","");
+        }
+      }
+);
+      put("config-type2",new HashMap<String,String>(){
+{
+          put("variable.name","Replacement2");
+          put("self_reference","${config-type2/self_reference}");
+        }
+      }
+);
+    }
+  }
+;
+  Assert.assertEquals("concrete",KerberosDescriptor.replaceVariables("concrete",configurations));
+  Assert.assertEquals("Hello World",KerberosDescriptor.replaceVariables("${global_variable}",configurations));
+  Assert.assertEquals("Replacement1",KerberosDescriptor.replaceVariables("${config-type/variable.name}",configurations));
+  Assert.assertEquals("Replacement1|Replacement2",KerberosDescriptor.replaceVariables("${config-type/variable.name}|${config-type2/variable.name}",configurations));
+  Assert.assertEquals("Replacement1|Replacement2|${config-type3/variable.name}",KerberosDescriptor.replaceVariables("${config-type/variable.name}|${config-type2/variable.name}|${config-type3/variable.name}",configurations));
+  Assert.assertEquals("Replacement2|Replacement2",KerberosDescriptor.replaceVariables("${config-type/variable.name1}|${config-type2/variable.name}",configurations));
+  Assert.assertEquals("",KerberosDescriptor.replaceVariables("${config-type/variable.name2}",configurations));
+  try {
+    Assert.assertEquals("${config-type2/self_reference}",KerberosDescriptor.replaceVariables("${config-type2/self_reference}",configurations));
+    Assert.fail(String.format("%s expected to be thrown",AmbariException.class.getName()));
+  }
+ catch (  AmbariException e) {
+  }
+}
