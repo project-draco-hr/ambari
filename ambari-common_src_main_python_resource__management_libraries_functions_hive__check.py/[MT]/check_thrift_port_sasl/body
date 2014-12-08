@@ -1,47 +1,21 @@
-def check_thrift_port_sasl(address, port, timeout=5, security_enabled=False):
+def check_thrift_port_sasl(address, port, hive_auth='NOSASL', key=None, kinitcmd=None, smokeuser='ambari-qa'):
     '\n  Hive thrift SASL port check\n  '
-    mechanism = 'PLAIN'
-    usr = 'ANONYMOUS'
-    start_byte = 1
-    ok_byte = 2
-    bad_byte = 3
-    error_byte = 4
-    complete_byte = 5
-    msg = bytearray()
-    msg.append(start_byte)
-    msg.append(0)
-    msg.append(0)
-    msg.append(0)
-    msg.append(len(mechanism))
-    for elem in mechanism:
-        msg.append(ord(elem))
-    msg.append(ok_byte)
-    msg.append(0)
-    msg.append(0)
-    msg.append(0)
-    msg.append(((len(usr) * 2) + 2))
-    msg.append(0)
-    for elem in usr:
-        msg.append(ord(elem))
-    msg.append(0)
-    for elem in usr:
-        msg.append(ord(elem))
-    msg.append(complete_byte)
-    msg.append(0)
-    msg.append(0)
-    msg.append(0)
-    msg.append(0)
-    is_service_socket_valid = False
-    s = socket.socket()
-    s.settimeout(timeout)
-    try:
+    BEELINE_CHECK_TIMEOUT = 30
+    if kinitcmd:
+        url = format('jdbc:hive2://{address}:{port}/;principal={key}')
+        Execute(kinitcmd, user=smokeuser)
+    else:
+        url = format('jdbc:hive2://{address}:{port}')
+    if (hive_auth != 'NOSASL'):
+        cmd = (format("! beeline -u '{url}' -e '' ") + "2>&1| awk '{print}'|grep -i -e 'Connection refused' -e 'Invalid URL'")
+        Execute(cmd, user=smokeuser, path=['/bin/', '/usr/bin/', '/usr/lib/hive/bin/', '/usr/sbin/'], timeout=BEELINE_CHECK_TIMEOUT)
+    else:
+        s = socket.socket()
+        s.settimeout(1)
         try:
-            s.connect((address, port))
-            is_service_socket_valid = True
-            if (not security_enabled):
-                s.send(msg)
-        except socket.error as e:
-            pass
-    finally:
-        s.close()
-        return is_service_socket_valid
+            try:
+                s.connect((address, port))
+            except socket.error as e:
+                raise
+        finally:
+            s.close()
