@@ -1,0 +1,18 @@
+def validateAmsHbaseEnvConfigurations(self, properties, recommendedDefaults, configurations, services, hosts):
+    regionServerItem = self.validatorLessThenDefaultValue(properties, recommendedDefaults, 'hbase_regionserver_heapsize')
+    masterItem = self.validatorLessThenDefaultValue(properties, recommendedDefaults, 'hbase_master_heapsize')
+    if ((regionServerItem is None) and (masterItem is None)):
+        hbase_regionserver_heapsize = formatXmxSizeToBytes(properties['hbase_regionserver_heapsize'])
+        hbase_master_heapsize = formatXmxSizeToBytes(properties['hbase_master_heapsize'])
+        requiredMemory = ((1073741824 + hbase_regionserver_heapsize) + hbase_master_heapsize)
+        amsCollectorHosts = self.getComponentHostNames(services, 'AMS', 'METRIC_COLLECTOR')
+        for collectorHostName in amsCollectorHosts:
+            for host in hosts['items']:
+                if (host['Hosts']['host_name'] == collectorHostName):
+                    if ((host['Hosts']['total_mem'] * 1024) < requiredMemory):
+                        message = 'Not enough total RAM on the host {0}, at least {1} MB required'.format(collectorHostName, (requiredMemory / 1048576))
+                        regionServerItem = self.getWarnItem(message)
+                        masterItem = self.getWarnItem(message)
+                        break
+    validationItems = [{'config-name': 'hbase_regionserver_heapsize', 'item': regionServerItem, }, {'config-name': 'hbase_master_heapsize', 'item': masterItem, }]
+    return self.toConfigurationValidationProblems(validationItems, 'ams-hbase-env')
