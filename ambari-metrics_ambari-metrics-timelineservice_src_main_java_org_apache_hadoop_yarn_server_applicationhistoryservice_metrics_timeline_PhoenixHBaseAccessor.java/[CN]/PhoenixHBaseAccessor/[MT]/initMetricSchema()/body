@@ -17,14 +17,24 @@
     stmt.executeUpdate(String.format(CREATE_METRICS_AGGREGATE_MINUTE_TABLE_SQL,encoding,hostMinTtl,compression));
     stmt.executeUpdate(String.format(CREATE_METRICS_CLUSTER_AGGREGATE_TABLE_SQL,encoding,clusterMinTtl,compression));
     stmt.executeUpdate(String.format(CREATE_METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_SQL,encoding,clusterHourTtl,compression));
+    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_RECORD_TABLE_NAME,precisionTtl));
+    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_AGGREGATE_MINUTE_TABLE_NAME,hostMinTtl));
+    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_AGGREGATE_HOURLY_TABLE_NAME,hostHourTtl));
+    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_CLUSTER_AGGREGATE_TABLE_NAME,clusterMinTtl));
+    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME,clusterHourTtl));
     conn.commit();
   }
  catch (  SQLException sql) {
-    LOG.warn("Error creating Metrics Schema in HBase using Phoenix.",sql);
-    throw new MetricsInitializationException("Error creating Metrics Schema in HBase using Phoenix.",sql);
+    if (sql.getErrorCode() == SQLExceptionCode.SET_UNSUPPORTED_PROP_ON_ALTER_TABLE.getErrorCode()) {
+      LOG.warn("Cannot update TTL on tables. " + sql.getMessage());
+    }
+ else {
+      LOG.error("Error creating Metrics Schema in HBase using Phoenix.",sql);
+      throw new MetricsInitializationException("Error creating Metrics Schema in HBase using Phoenix.",sql);
+    }
   }
 catch (  InterruptedException e) {
-    LOG.warn("Error creating Metrics Schema in HBase using Phoenix.",e);
+    LOG.error("Error creating Metrics Schema in HBase using Phoenix.",e);
     throw new MetricsInitializationException("Error creating Metrics Schema in HBase using Phoenix.",e);
   }
  finally {
