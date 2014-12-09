@@ -1,5 +1,7 @@
-def service(action=None, name=None, user=None, create_pid_dir=False, create_log_dir=False):
+def service(action=None, name=None, user=None, options='', create_pid_dir=False, create_log_dir=False):
+    '\n  :param action: Either "start" or "stop"\n  :param name: Component name, e.g., "namenode", "datanode", "secondarynamenode", "zkfc"\n  :param user: User to run the command as\n  :param options: Additional options to pass to command as a string\n  :param create_pid_dir: Create PID directory\n  :param create_log_dir: Crate log file directory\n  '
     import params
+    options = (options if options else '')
     pid_dir = format('{hadoop_pid_dir_prefix}/{user}')
     pid_file = format('{pid_dir}/hadoop-{user}-{name}.pid')
     log_dir = format('{hdfs_log_dir_prefix}/{user}')
@@ -25,11 +27,15 @@ def service(action=None, name=None, user=None, create_pid_dir=False, create_log_
                 pass
     hadoop_daemon = format('{hadoop_bin}/hadoop-daemon.sh')
     if (user == 'root'):
-        cmd = [hadoop_daemon, '--config', params.hadoop_conf_dir]
-        daemon_cmd = as_sudo((cmd + [action, name]))
+        cmd = [hadoop_daemon, '--config', params.hadoop_conf_dir, action, name]
+        if options:
+            cmd += [options]
+        daemon_cmd = as_sudo(cmd)
     else:
-        cmd = format('{hadoop_daemon} --config {hadoop_conf_dir}')
-        daemon_cmd = as_user(format('{ulimit_cmd} {cmd} {action} {name}'), user)
+        cmd = format('{ulimit_cmd} {hadoop_daemon} --config {hadoop_conf_dir} {action} {name}')
+        if options:
+            cmd += (' ' + options)
+        daemon_cmd = as_user(cmd, user)
     service_is_up = (check_process if (action == 'start') else None)
     File(pid_file, action='delete', not_if=check_process)
     Execute(daemon_cmd, not_if=service_is_up, environment=hadoop_env_exports)

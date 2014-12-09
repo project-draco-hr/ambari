@@ -1,0 +1,16 @@
+def failover_namenode():
+    '\n  Failover the primary namenode by killing zkfc if it exists on this host (assuming this host is the primary).\n  '
+    import params
+    check_service_cmd = format('hdfs haadmin -getServiceState {namenode_id}')
+    (code, out) = call(check_service_cmd, verbose=True, logoutput=True, user=params.hdfs_user)
+    state = 'unknown'
+    if ((code == 0) and out):
+        state = ('active' if ('active' in out) else ('standby' if ('standby' in out) else state))
+        Logger.info(('Namenode service state: %s' % state))
+    if (state == 'active'):
+        Logger.info('Rolling Upgrade - Initiating namenode failover by killing zkfc on active namenode')
+        kill_zkfc(params.hdfs_user)
+        check_standby_cmd = format('hdfs haadmin -getServiceState {namenode_id} | grep standby')
+        Execute(check_standby_cmd, user=params.hdfs_user, tries=30, try_sleep=6)
+    else:
+        Logger.info(('Rolling Upgrade - Host %s is the standby namenode.' % str(params.hostname)))

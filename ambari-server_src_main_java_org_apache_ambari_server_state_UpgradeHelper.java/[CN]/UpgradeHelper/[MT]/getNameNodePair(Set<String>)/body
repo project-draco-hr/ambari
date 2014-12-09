@@ -1,0 +1,34 @@
+{
+  if (hosts != null && hosts.size() == 2) {
+    Iterator iter=hosts.iterator();
+    HashMap<String,String> stateToHost=new HashMap<String,String>();
+    Pattern pattern=Pattern.compile("^.*org\\.apache\\.hadoop\\.hdfs\\.server\\.namenode\\.NameNode\".*?\"State\"\\s*:\\s*\"(.+?)\".*$");
+    while (iter.hasNext()) {
+      String hostname=(String)iter.next();
+      try {
+        String endpoint="http://" + hostname + ":50070/jmx";
+        String response=HTTPUtils.requestURL(endpoint);
+        if (response != null && !response.isEmpty()) {
+          Matcher matcher=pattern.matcher(response);
+          if (matcher.matches()) {
+            String state=matcher.group(1);
+            stateToHost.put(state.toLowerCase(),hostname);
+          }
+        }
+ else {
+          throw new Exception("Response from endpoint " + endpoint + " was empty.");
+        }
+      }
+ catch (      Exception e) {
+        LOG.warn("Failed to parse namenode jmx endpoint to get state for host " + hostname + ". Error: "+ e.getMessage());
+      }
+    }
+    if (stateToHost.containsKey("active") && stateToHost.containsKey("standby") && !stateToHost.get("active").equalsIgnoreCase(stateToHost.get("standby"))) {
+      NameNodePair pair=new NameNodePair();
+      pair.activeHostName=stateToHost.get("active");
+      pair.standbyHostName=stateToHost.get("standby");
+      return pair;
+    }
+  }
+  return null;
+}
