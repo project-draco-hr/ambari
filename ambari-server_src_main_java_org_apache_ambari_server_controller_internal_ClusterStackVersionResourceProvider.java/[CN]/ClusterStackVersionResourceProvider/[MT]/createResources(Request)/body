@@ -8,8 +8,19 @@
     throw new UnsupportedOperationException("Multiple requests cannot be executed at the same time.");
   }
   Map<String,Object> propertyMap=iterator.next();
-  if (!propertyMap.containsKey(CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID) || !propertyMap.containsKey(CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID)) {
-    throw new IllegalArgumentException(String.format("%s or %s not defined",CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID,CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID));
+  Set<String> requiredProperties=new HashSet<String>(){
+{
+      add(CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID);
+      add(CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID);
+      add(CLUSTER_STACK_VERSION_STACK_PROPERTY_ID);
+      add(CLUSTER_STACK_VERSION_VERSION_PROPERTY_ID);
+    }
+  }
+;
+  for (  String requiredProperty : requiredProperties) {
+    if (!propertyMap.containsKey(requiredProperty)) {
+      throw new IllegalArgumentException(String.format("The required property %s is not defined",requiredProperty));
+    }
   }
   clName=(String)propertyMap.get(CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID);
   desiredRepoVersion=(String)propertyMap.get(CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID);
@@ -105,14 +116,17 @@
     ClusterVersionEntity existingCSVer=clusterVersionDAO.findByClusterAndStackAndVersion(clName,stackId,desiredRepoVersion);
     if (existingCSVer == null) {
       try {
-        cluster.createClusterVersion(stackId,desiredRepoVersion,managementController.getAuthName(),RepositoryVersionState.INSTALLED);
-        ClusterVersionEntity newCSVer=clusterVersionDAO.findByClusterAndStackAndVersion(clName,stackId,desiredRepoVersion);
-        cluster.initHostVersions(newCSVer);
+        cluster.createClusterVersion(stackId,desiredRepoVersion,managementController.getAuthName(),RepositoryVersionState.INSTALLING);
+        existingCSVer=clusterVersionDAO.findByClusterAndStackAndVersion(clName,stackId,desiredRepoVersion);
       }
  catch (      AmbariException e) {
         throw new SystemException(String.format("Can not create cluster stack version %s for cluster %s",desiredRepoVersion,clName),e);
       }
     }
+ else {
+      cluster.transitionClusterVersion(stackId,desiredRepoVersion,RepositoryVersionState.INSTALLING);
+    }
+    cluster.inferHostVersions(existingCSVer);
     req.persist();
   }
  catch (  AmbariException e) {
