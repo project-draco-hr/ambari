@@ -1,0 +1,64 @@
+{
+  if (!event.getRole().equals(INSTALL_PACKAGES)) {
+    return;
+  }
+  if (LOG.isDebugEnabled()) {
+    LOG.debug(event.toString());
+  }
+  RepositoryVersionState newHostState;
+  String repositoryVersion=null;
+  Long clusterId=event.getClusterId();
+  if (event.getCommandReport() == null) {
+    LOG.warn("Command report is null, marking action as INSTALL_FAILED");
+    newHostState=RepositoryVersionState.INSTALL_FAILED;
+  }
+ else {
+    try {
+      DistributeRepositoriesStructuredOutput structuredOutput=StageUtils.getGson().fromJson(event.getCommandReport().getStructuredOut(),DistributeRepositoriesStructuredOutput.class);
+      if (event.getCommandReport().getStatus().equals(HostRoleStatus.COMPLETED.toString())) {
+        newHostState=RepositoryVersionState.INSTALLED;
+      }
+ else {
+        newHostState=RepositoryVersionState.INSTALL_FAILED;
+      }
+      repositoryVersion=structuredOutput.getInstalledRepositoryVersion();
+    }
+ catch (    JsonSyntaxException e) {
+      LOG.error("Can not parse structured output %s",e);
+      newHostState=RepositoryVersionState.INSTALL_FAILED;
+    }
+  }
+  List<HostVersionEntity> hostVersions=hostVersionDAO.get().findByHost(event.getHostname());
+  for (  HostVersionEntity hostVersion : hostVersions) {
+    if (repositoryVersion != null && !hostVersion.getVersion().equals(repositoryVersion)) {
+      continue;
+    }
+    if (hostVersion.getState() == RepositoryVersionState.INSTALLING) {
+      hostVersion.setState(newHostState);
+      if (clusterId != null) {
+        try {
+          Cluster cluster=clusters.get().getClusterById(clusterId);
+          cluster.recalculateClusterVersionState(hostVersion.getVersion());
+        }
+ catch (        AmbariException e) {
+          LOG.error("Can not get cluster with Id " + clusterId,e);
+        }
+      }
+ else {
+        LOG.warn("Can not determine cluster for stack version state update");
+        try {
+          Set<Cluster> clustersForHost=clusters.get().getClustersForHost(event.getHostname());
+          for (          Cluster cluster : clustersForHost) {
+            cluster.recalculateClusterVersionState(hostVersion.getVersion());
+          }
+        }
+ catch (        AmbariException e) {
+          LOG.error("Can not update state of clusters",e);
+        }
+      }
+    }
+ else {
+      LOG.error(String.format("Can not transition host stack version state from %s to %s for" + "host %s",hostVersion.getState(),newHostState,event.getHostname()));
+    }
+  }
+}

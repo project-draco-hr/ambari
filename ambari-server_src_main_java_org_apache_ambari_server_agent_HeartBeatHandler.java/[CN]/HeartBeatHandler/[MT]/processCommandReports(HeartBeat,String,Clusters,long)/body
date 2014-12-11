@@ -7,8 +7,21 @@
   Collection<HostRoleCommand> commands=actionManager.getTasks(taskIds);
   Iterator<HostRoleCommand> hostRoleCommandIterator=commands.iterator();
   for (  CommandReport report : reports) {
+    Long clusterId=null;
+    if (report.getClusterName() != null) {
+      try {
+        Cluster cluster=clusterFsm.getCluster(report.getClusterName());
+        clusterId=Long.valueOf(cluster.getClusterId());
+      }
+ catch (      AmbariException e) {
+      }
+    }
     LOG.debug("Received command report: " + report);
     HostRoleCommand hostRoleCommand=hostRoleCommandIterator.next();
+    if (RoleCommand.valueOf(report.getRoleCommand()) == RoleCommand.ACTIONEXECUTE && HostRoleStatus.valueOf(report.getStatus()).isCompletedState()) {
+      ActionFinalReportReceivedEvent event=new ActionFinalReportReceivedEvent(clusterId,hostname,report,report.getRole());
+      ambariEventPublisher.publish(event);
+    }
     if (hostRoleCommand.getStatus() == HostRoleStatus.ABORTED) {
       continue;
     }
@@ -32,7 +45,7 @@
         ServiceComponent svcComp=svc.getServiceComponent(report.getRole());
         ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
         String schName=scHost.getServiceComponentName();
-        if (report.getStatus().equals("COMPLETED")) {
+        if (report.getStatus().equals(HostRoleStatus.COMPLETED.toString())) {
           if (scHost.getState().equals(State.UPGRADING)) {
             scHost.setStackVersion(scHost.getDesiredStackVersion());
           }
