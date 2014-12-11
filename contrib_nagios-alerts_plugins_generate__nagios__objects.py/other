@@ -1,0 +1,76 @@
+'\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
+import urllib2
+import json
+import sys
+import base64
+import traceback
+SERVICE_DEFINITION = '\ndefine service {\n        use                             generic-service\n        host_name                       %s\n        normal_check_interval           1\n        servicegroups                   AMBARI,%s\n        service_description             %s - %s\n        check_command                   check_ambari_alert!%s!%s!%s!%s!%s!%s!%s\n}\n\n'
+HOST_DEFINITION = '\ndefine host{\n        use                     linux-server\n        hostgroups              ambari-hosts\n        host_name               %s\n        alias                   %s\n        address                 %s\n        }\n'
+HOST_GROUP_DEFINITION = '\ndefine hostgroup{\n        hostgroup_name\t%s\n        alias\t        %s\n        }\n'
+ALERT_CHECK_COMMAND = '\ndefine command {\n        command_name    check_ambari_alert\n        command_line    %s $ARG1$ $ARG2$ $ARG3$ $ARG4$ $ARG5$ $ARG6$ $ARG7$\n}\n'
+SERVICE_GROUP_DEFINITION = '\ndefine servicegroup {\n    servicegroup_name               %s\n    alias                           %s\n}\n'
+try:
+    host = raw_input('Enter ambari host: ')
+    port = raw_input('Enter ambari port: ')
+    cluster = raw_input('Enter ambari cluster: ')
+    ssl = raw_input('Use SSL [true/false]: ')
+    login = raw_input('Enter ambari login: ')
+    password = raw_input('Enter ambari password: ')
+    alerts_url = 'api/v1/clusters/{0}/alerts?fields=Alert/label,Alert/service_name,Alert/name,Alert/text,Alert/state'
+    if (ssl.lower() == 'true'):
+        protocol = 'https'
+    else:
+        protocol = 'http'
+    url = '{0}://{1}:{2}/{3}'.format(protocol, host, port, alerts_url.format(cluster))
+    admin_auth = base64.encodestring(('%s:%s' % (login, password))).replace('\n', '')
+    request = urllib2.Request(url)
+    request.add_header('Authorization', ('Basic %s' % admin_auth))
+    request.add_header('X-Requested-By', 'ambari')
+    response = urllib2.urlopen(request)
+    response_body = response.read()
+except Exception as ex:
+    print ('Error during Ambari Alerts data fetch: %s' % ex)
+    sys.exit(1)
+try:
+    alerts = json.loads(response_body)['items']
+    services = []
+    service_groups = {'AMBARI': (SERVICE_GROUP_DEFINITION % ('AMBARI', 'Ambari services group')), }
+    hosts = {host: (HOST_DEFINITION % (host, 'Ambari server', host)), }
+    host_groups = [(HOST_GROUP_DEFINITION % ('ambari-hosts', 'Ambari hosts'))]
+    for alert in alerts:
+        service_name = alert['Alert']['service_name']
+        label = alert['Alert']['label']
+        name = alert['Alert']['name']
+        alert_host = alert['Alert']['host_name']
+        if (alert_host is None):
+            alert_host = host
+        if (alert_host not in hosts):
+            hosts[alert_host] = (HOST_DEFINITION % (alert_host, ('Ambari host - ' + alert_host), alert_host))
+        if (service_name not in service_groups):
+            service_groups[service_name] = (SERVICE_GROUP_DEFINITION % (service_name, (service_name + ' services group')))
+        services.append((SERVICE_DEFINITION % (alert_host, service_name, service_name, label, host, port, cluster, protocol, login, base64.b64encode(password), name)))
+except Exception as ex:
+    print ('Error during processing Ambari Alerts data: %s' % ex)
+    sys.exit(1)
+try:
+    script_path = raw_input("Enter path to Ambari Alerts Plugin 'ambari_alerts.py': ")
+    localhost_cfg = raw_input("Enter path to Nagios configuration file 'localhost.cfg' : ")
+    commands_cfg = raw_input("Enter path to Nagios configuration file 'commands.cfg': ")
+    with open(localhost_cfg, 'a') as localhost_file:
+        localhost_file.write('# Ambari Alerts HostGroups')
+        for host_group in host_groups:
+            localhost_file.write(host_group)
+        localhost_file.write('# Ambari Alerts Hosts')
+        for host_def in hosts.values():
+            localhost_file.write(host_def)
+        localhost_file.write('# Ambari Alerts ServiceGroups')
+        for service_group in service_groups.values():
+            localhost_file.write(service_group)
+        localhost_file.write('# Ambari Alerts Services')
+        for service in services:
+            localhost_file.write(service)
+    with open(commands_cfg, 'a') as commands_file:
+        commands_file.write((ALERT_CHECK_COMMAND % script_path))
+except Exception as ex:
+    print ('Error during creating Nagios objects for Ambari Alerts: %s' % ex)
+    sys.exit(1)
