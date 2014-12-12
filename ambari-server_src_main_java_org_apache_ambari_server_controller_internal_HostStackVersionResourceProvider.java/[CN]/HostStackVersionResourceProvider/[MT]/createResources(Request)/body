@@ -76,6 +76,13 @@
   if (repoVersionEnt == null) {
     throw new IllegalArgumentException(String.format("Repo version %s is not available for stack %s",desiredRepoVersion,stackId));
   }
+  HostVersionEntity hostVersEntity=hostVersionDAO.findByClusterStackVersionAndHost(clName,stackId,desiredRepoVersion,hostName);
+  if (hostVersEntity == null) {
+    throw new IllegalArgumentException(String.format("Repo version %s for stack %s is not available for host %s",desiredRepoVersion,stackId,hostName));
+  }
+  if (hostVersEntity.getState() != RepositoryVersionState.INSTALLED && hostVersEntity.getState() != RepositoryVersionState.INSTALL_FAILED) {
+    throw new UnsupportedOperationException(String.format("Repo version %s for stack %s " + "for host %s is in %s state. Can not transition to INSTALLING state",desiredRepoVersion,stackId,hostName,hostVersEntity.getState().toString()));
+  }
   List<OperatingSystemEntity> operatingSystems=repoVersionEnt.getOperatingSystems();
   Map<String,List<RepositoryEntity>> perOsRepos=new HashMap<String,List<RepositoryEntity>>();
   for (  OperatingSystemEntity operatingSystem : operatingSystems) {
@@ -114,7 +121,7 @@
 ;
   RequestResourceFilter filter=new RequestResourceFilter(null,null,Collections.singletonList(hostName));
   ActionExecutionContext actionContext=new ActionExecutionContext(cluster.getClusterName(),INSTALL_PACKAGES_ACTION,Collections.singletonList(filter),params);
-  actionContext.setTimeout((short)600);
+  actionContext.setTimeout(Short.valueOf(configuration.getDefaultAgentTaskTimeout()));
   String caption=String.format(INSTALL_PACKAGES_FULL_NAME + " on host %s",hostName);
   RequestStageContainer req=createRequest(caption);
   Map<String,String> hostLevelParams=new HashMap<String,String>();
@@ -133,6 +140,8 @@
     throw new SystemException("Can not modify stage",e);
   }
   try {
+    hostVersEntity.setState(RepositoryVersionState.INSTALLING);
+    hostVersionDAO.merge(hostVersEntity);
     req.persist();
   }
  catch (  AmbariException e) {
