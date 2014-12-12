@@ -1,0 +1,67 @@
+{
+  Map<String,Map<String,ProcessingComponent>> allTasks=upgradePack.getTasks();
+  List<UpgradeGroupHolder> groups=new ArrayList<UpgradeGroupHolder>();
+  for (  Grouping group : upgradePack.getGroups()) {
+    if (ClusterGrouping.class.isInstance(group)) {
+      UpgradeGroupHolder groupHolder=getClusterGroupHolder(cluster,(ClusterGrouping)group);
+      if (null != groupHolder) {
+        groups.add(groupHolder);
+        continue;
+      }
+    }
+    UpgradeGroupHolder groupHolder=new UpgradeGroupHolder();
+    groupHolder.name=group.name;
+    groupHolder.title=group.title;
+    groups.add(groupHolder);
+    StageWrapperBuilder builder=group.getBuilder();
+    for (    UpgradePack.OrderService service : group.services) {
+      if (!allTasks.containsKey(service.serviceName)) {
+        continue;
+      }
+      for (      String component : service.components) {
+        if (!allTasks.get(service.serviceName).containsKey(component)) {
+          continue;
+        }
+        Set<String> componentHosts=cluster.getHosts(service.serviceName,component);
+        if (0 == componentHosts.size()) {
+          continue;
+        }
+        HostsType hostsType=new HostsType();
+        hostsType.hosts=componentHosts;
+        ProcessingComponent pc=allTasks.get(service.serviceName).get(component);
+        if (service.serviceName.equalsIgnoreCase("HDFS") && component.equalsIgnoreCase("NAMENODE")) {
+          hostsType=mhr.getMasterAndHosts(service.serviceName,component);
+          if (hostsType != null && hostsType.master != null && componentHosts.contains(hostsType.master) && hostsType.secondary != null && componentHosts.contains(hostsType.secondary)) {
+            Set<String> order=new LinkedHashSet<String>();
+            order.add(hostsType.master);
+            order.add(hostsType.secondary);
+            hostsType.hosts=order;
+            builder.add(hostsType,service.serviceName,pc);
+          }
+ else {
+            throw new AmbariException(MessageFormat.format("Could not find active and standby namenodes using hosts: {0}",StringUtils.join(componentHosts,", ").toString()));
+          }
+        }
+ else {
+          builder.add(hostsType,service.serviceName,pc);
+        }
+      }
+    }
+    List<StageWrapper> proxies=builder.build();
+    groupHolder.items=proxies;
+  }
+  if (LOG.isDebugEnabled()) {
+    for (    UpgradeGroupHolder group : groups) {
+      LOG.debug(group.name);
+      int i=0;
+      for (      StageWrapper proxy : group.items) {
+        LOG.debug("  Stage {}",Integer.valueOf(i++));
+        int j=0;
+        for (        TaskWrapper task : proxy.getTasks()) {
+          LOG.debug("    Task {} {}",Integer.valueOf(j++),task);
+        }
+      }
+    }
+  }
+  return groups;
+}
