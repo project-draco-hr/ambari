@@ -1,0 +1,37 @@
+{
+  installHdfsService();
+  int definitionCount=definitionDao.findAll().size();
+  AlertDefinitionEntity definition=ormHelper.createAlertDefinition(1L);
+  Assert.assertEquals(definitionCount + 1,definitionDao.findAll().size());
+  AggregateSource source=new AggregateSource();
+  Reporting reporting=new Reporting();
+  ReportTemplate okTemplate=new ReportTemplate();
+  okTemplate.setValue(50.0d);
+  okTemplate.setText("foo");
+  reporting.setOk(okTemplate);
+  source.setReporting(reporting);
+  source.setAlertName(definition.getDefinitionName());
+  source.setType(SourceType.AGGREGATE);
+  AlertDefinitionEntity aggregateEntity=new AlertDefinitionEntity();
+  aggregateEntity.setClusterId(1L);
+  aggregateEntity.setComponentName("DATANODE");
+  aggregateEntity.setEnabled(true);
+  aggregateEntity.setDefinitionName("datanode_aggregate");
+  aggregateEntity.setScope(Scope.ANY);
+  aggregateEntity.setServiceName("HDFS");
+  aggregateEntity.setSource(new Gson().toJson(source));
+  aggregateEntity.setHash(UUID.randomUUID().toString());
+  aggregateEntity.setScheduleInterval(1);
+  aggregateEntity.setSourceType(SourceType.AGGREGATE);
+  definitionDao.create(aggregateEntity);
+  AlertDefinition aggregate=aggregateMapping.getAggregateDefinition(1L,source.getAlertName());
+  Assert.assertNotNull(aggregate);
+  Assert.assertEquals("foo",aggregate.getSource().getReporting().getOk().getText());
+  String sourceText=aggregateEntity.getSource();
+  sourceText=sourceText.replace("foo","bar");
+  aggregateEntity.setSource(sourceText);
+  definitionDao.merge(aggregateEntity);
+  aggregate=aggregateMapping.getAggregateDefinition(1L,source.getAlertName());
+  Assert.assertNotNull(aggregate);
+  Assert.assertEquals("bar",aggregate.getSource().getReporting().getOk().getText());
+}
