@@ -1,0 +1,58 @@
+{
+  UPGRADE_CHECK_REGISTRY.add(new UpgradeCheckDescriptor(){
+    @Override public UpgradeCheck perform(    String clusterName){
+      final UpgradeCheck upgradeCheck=new UpgradeCheck("SERVICES_MAINTENANCE_MODE","All services must not be in Maintenance Mode",UpgradeCheckType.SERVICE,clusterName);
+      try {
+        final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+        for (        Map.Entry<String,Service> serviceEntry : cluster.getServices().entrySet()) {
+          final Service service=serviceEntry.getValue();
+          if (service.getMaintenanceState() == MaintenanceState.ON) {
+            upgradeCheck.getFailedOn().add(service.getName());
+          }
+        }
+        if (upgradeCheck.getFailedOn().isEmpty()) {
+          upgradeCheck.setStatus(UpgradeCheckStatus.PASS);
+        }
+ else {
+          upgradeCheck.setStatus(UpgradeCheckStatus.FAIL);
+          upgradeCheck.setFailReason("Some services are in Maintenance Mode");
+        }
+      }
+ catch (      AmbariException ex) {
+        LOG.error("Pre-upgrade check " + upgradeCheck.getId() + " failed",ex);
+        upgradeCheck.setStatus(UpgradeCheckStatus.FAIL);
+        upgradeCheck.setFailReason("Unexpected server error happened");
+      }
+      return upgradeCheck;
+    }
+  }
+);
+  UPGRADE_CHECK_REGISTRY.add(new UpgradeCheckDescriptor(){
+    @Override public UpgradeCheck perform(    String clusterName){
+      final UpgradeCheck upgradeCheck=new UpgradeCheck("HOST_HEARTBEAT","All hosts must be heartbeating with the server unless they are in Maintenance Mode",UpgradeCheckType.HOST,clusterName);
+      try {
+        final Map<String,Host> clusterHosts=clustersProvider.get().getHostsForCluster(clusterName);
+        for (        Map.Entry<String,Host> hostEntry : clusterHosts.entrySet()) {
+          final Host host=hostEntry.getValue();
+          if (host.getHealthStatus().getHealthStatus() == HealthStatus.UNKNOWN) {
+            upgradeCheck.getFailedOn().add(host.getHostName());
+          }
+        }
+        if (upgradeCheck.getFailedOn().isEmpty()) {
+          upgradeCheck.setStatus(UpgradeCheckStatus.PASS);
+        }
+ else {
+          upgradeCheck.setStatus(UpgradeCheckStatus.FAIL);
+          upgradeCheck.setFailReason("Some hosts are not heartbeating with the server");
+        }
+      }
+ catch (      AmbariException ex) {
+        LOG.error("Pre-upgrade check " + upgradeCheck.getId() + " failed",ex);
+        upgradeCheck.setStatus(UpgradeCheckStatus.FAIL);
+        upgradeCheck.setFailReason("Unexpected server error happened");
+      }
+      return upgradeCheck;
+    }
+  }
+);
+}
