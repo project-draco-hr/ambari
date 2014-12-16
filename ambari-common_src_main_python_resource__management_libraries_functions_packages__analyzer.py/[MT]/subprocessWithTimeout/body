@@ -1,0 +1,22 @@
+def subprocessWithTimeout(command):
+    event = threading.Event()
+
+    def watchdog_func(command):
+        event.wait(TIMEOUT_SECONDS)
+        if (command.returncode is None):
+            logger.error('Task timed out and will be killed')
+            shell.kill_process_with_children(command.pid)
+        pass
+    osStat = _launch_subprocess(command)
+    logger.debug('Launching watchdog thread')
+    event.clear()
+    thread = Thread(target=watchdog_func, args=(osStat,))
+    thread.start()
+    (out, err) = osStat.communicate()
+    result = {}
+    result['out'] = out
+    result['err'] = err
+    result['retCode'] = osStat.returncode
+    event.set()
+    thread.join()
+    return result
