@@ -3,12 +3,18 @@
   if (serviceName == null || componentName == null) {
     return null;
   }
-  Service s=Service.valueOf(serviceName.toUpperCase());
   Set<String> componentHosts=cluster.getHosts(serviceName,componentName);
   if (0 == componentHosts.size()) {
     return null;
   }
   hostsType.hosts=componentHosts;
+  Service s=null;
+  try {
+    s=Service.valueOf(serviceName.toUpperCase());
+  }
+ catch (  Exception e) {
+    return hostsType;
+  }
 switch (s) {
 case HDFS:
     if (componentName.equalsIgnoreCase("NAMENODE")) {
@@ -17,11 +23,19 @@ case HDFS:
         hostsType.master=pair.containsKey(Status.ACTIVE) ? pair.get(Status.ACTIVE) : null;
         hostsType.secondary=pair.containsKey(Status.STANDBY) ? pair.get(Status.STANDBY) : null;
       }
+ else {
+        hostsType.master=componentHosts.iterator().next();
+      }
     }
   break;
+case YARN:
+if (componentName.equalsIgnoreCase("RESOURCEMANAGER")) {
+  resolveResourceManagers(hostsType);
+}
+break;
 case HBASE:
-if (componentName.equalsIgnoreCase("HBASE_REGIONSERVER")) {
-  ;
+if (componentName.equalsIgnoreCase("HBASE_MASTER")) {
+resolveHBaseMasters(hostsType);
 }
 break;
 }

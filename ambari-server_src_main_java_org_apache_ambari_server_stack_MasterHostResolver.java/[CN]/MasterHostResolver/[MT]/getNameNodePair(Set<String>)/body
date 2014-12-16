@@ -1,35 +1,11 @@
 {
   Map<Status,String> stateToHost=new HashMap<Status,String>();
   if (hosts != null && hosts.size() == 2) {
-    Iterator iter=hosts.iterator();
-    while (iter.hasNext()) {
-      String hostname=(String)iter.next();
-      try {
-        String endpoint="http://" + hostname + ":50070/jmx?qry=Hadoop:service=NameNode,name=NameNodeStatus";
-        String response=HTTPUtils.requestURL(endpoint);
-        if (response != null && !response.isEmpty()) {
-          Map<String,ArrayList<HashMap<String,String>>> nameNodeInfo=new HashMap<String,ArrayList<HashMap<String,String>>>();
-          Type type=new TypeToken<Map<String,ArrayList<HashMap<String,String>>>>(){
-          }
-.getType();
-          nameNodeInfo=StageUtils.getGson().fromJson(response,type);
-          try {
-            String state=nameNodeInfo.get("beans").get(0).get("State");
-            if (state.equalsIgnoreCase(Status.ACTIVE.toString()) || state.equalsIgnoreCase(Status.STANDBY.toString())) {
-              Status status=Status.valueOf(state.toUpperCase());
-              stateToHost.put(status,hostname);
-            }
-          }
- catch (          Exception e) {
-            throw new Exception("Response from endpoint " + endpoint + " was not formatted correctly. Value: "+ response);
-          }
-        }
- else {
-          throw new Exception("Response from endpoint " + endpoint + " was empty.");
-        }
-      }
- catch (      Exception e) {
-        LOG.warn("Failed to parse namenode jmx endpoint to get state for host " + hostname + ". Error: "+ e.getMessage());
+    for (    String hostname : hosts) {
+      String state=queryJmxBeanValue(hostname,50070,"Hadoop:service=NameNode,name=NameNodeStatus","State",true);
+      if (null != state && (state.equalsIgnoreCase(Status.ACTIVE.toString()) || state.equalsIgnoreCase(Status.STANDBY.toString()))) {
+        Status status=Status.valueOf(state.toUpperCase());
+        stateToHost.put(status,hostname);
       }
     }
     if (stateToHost.containsKey(Status.ACTIVE) && stateToHost.containsKey(Status.STANDBY) && !stateToHost.get(Status.ACTIVE).equalsIgnoreCase(stateToHost.get(Status.STANDBY))) {
