@@ -1,0 +1,120 @@
+{
+  Map<String,Service> services=cluster.getServices();
+  if ((services != null) && !services.isEmpty()) {
+    SecurityState desiredSecurityState=handler.getNewServiceSecurityState();
+    String clusterName=cluster.getClusterName();
+    Map<String,Host> hosts=clusters.getHostsForCluster(clusterName);
+    if ((hosts != null) && !hosts.isEmpty()) {
+      List<ServiceComponentHost> serviceComponentHostsToProcess=new ArrayList<ServiceComponentHost>();
+      File indexFile;
+      kerberosDescriptor=buildKerberosDescriptor(cluster.getCurrentStackVersion(),kerberosDescriptor);
+      KerberosActionDataFileBuilder kerberosActionDataFileBuilder=null;
+      Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
+      Map<String,Map<String,String>> kerberosConfigurations=new HashMap<String,Map<String,String>>();
+      File dataDirectory;
+      try {
+        dataDirectory=createTemporaryDirectory();
+      }
+ catch (      IOException e) {
+        String message="Failed to create the temporary data directory.";
+        LOG.error(message,e);
+        throw new AmbariException(message,e);
+      }
+      indexFile=new File(dataDirectory,KerberosActionDataFile.DATA_FILE_NAME);
+      try {
+        for (        Host host : hosts.values()) {
+          if (host.getState() == HostState.HEALTHY) {
+            String hostname=host.getHostName();
+            List<ServiceComponentHost> serviceComponentHosts=cluster.getServiceComponentHosts(hostname);
+            if ((serviceComponentHosts != null) && !serviceComponentHosts.isEmpty()) {
+              Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,hostname);
+              if (kerberosDescriptorProperties != null) {
+                if (configurations == null) {
+                  configurations=new HashMap<String,Map<String,String>>();
+                }
+                if (configurations.get("") == null) {
+                  configurations.put("",kerberosDescriptorProperties);
+                }
+ else {
+                  configurations.get("").putAll(kerberosDescriptorProperties);
+                }
+              }
+              for (              ServiceComponentHost sch : serviceComponentHosts) {
+                String serviceName=sch.getServiceName();
+                KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
+                if (serviceDescriptor != null) {
+                  KerberosComponentDescriptor componentDescriptor=serviceDescriptor.getComponent(sch.getServiceComponentName());
+                  if (componentDescriptor != null) {
+                    int identitiesAdded=0;
+                    if (handler.shouldProcess(desiredSecurityState,sch)) {
+                      mergeConfigurations(kerberosConfigurations,componentDescriptor.getConfigurations(true),configurations);
+                      if (kerberosActionDataFileBuilder == null) {
+                        kerberosActionDataFileBuilder=new KerberosActionDataFileBuilder(indexFile);
+                      }
+                      identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,serviceDescriptor.getIdentities(true),sch,configurations);
+                      identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,componentDescriptor.getIdentities(true),sch,configurations);
+                      if (identitiesAdded > 0) {
+                        serviceComponentHostsToProcess.add(sch);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+ catch (      IOException e) {
+        String message=String.format("Failed to write index file - %s",indexFile.getAbsolutePath());
+        LOG.error(message);
+        throw new AmbariException(message,e);
+      }
+ finally {
+        if (kerberosActionDataFileBuilder != null) {
+          try {
+            kerberosActionDataFileBuilder.close();
+          }
+ catch (          IOException e) {
+            LOG.warn("Failed to close the index file writer",e);
+          }
+        }
+      }
+      if (!serviceComponentHostsToProcess.isEmpty()) {
+        if (getEncryptedAdministratorCredentials(cluster) == null) {
+          try {
+            FileUtils.deleteDirectory(dataDirectory);
+          }
+ catch (          IOException e) {
+            LOG.warn(String.format("The data directory (%s) was not deleted due to an error condition - {%s}",dataDirectory.getAbsolutePath(),e.getMessage()),e);
+          }
+          throw new AmbariException("Missing KDC administrator credentials");
+        }
+      }
+      Map<String,Set<String>> clusterHostInfo=StageUtils.getClusterHostInfo(hosts,cluster);
+      String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
+      Map<String,String> hostParams=customCommandExecutionHelper.createDefaultHostParams(cluster);
+      String hostParamsJson=StageUtils.getGson().toJson(hostParams);
+      String ambariServerHostname=StageUtils.getHostName();
+      ServiceComponentHostServerActionEvent event=new ServiceComponentHostServerActionEvent("AMBARI_SERVER",ambariServerHostname,System.currentTimeMillis());
+      RoleCommandOrder roleCommandOrder=ambariManagementController.getRoleCommandOrder(cluster);
+      if (requestStageContainer == null) {
+        requestStageContainer=new RequestStageContainer(actionManager.getNextRequestId(),null,requestFactory,actionManager);
+      }
+      int lastStageId=handler.createStages(cluster,hosts,kerberosConfigurations,clusterHostInfoJson,hostParamsJson,event,roleCommandOrder,realm,kdcType.toString(),dataDirectory,requestStageContainer);
+      Map<String,String> commandParameters=new HashMap<String,String>();
+      commandParameters.put(KerberosServerAction.DATA_DIRECTORY,dataDirectory.getAbsolutePath());
+      Stage stage=createServerActionStage(++lastStageId,cluster,requestStageContainer.getId(),"Finalize Operations",clusterHostInfoJson,"{}",hostParamsJson,FinalizeKerberosServerAction.class,event,commandParameters,300);
+      RoleGraph roleGraph=new RoleGraph(roleCommandOrder);
+      roleGraph.build(stage);
+      requestStageContainer.addStages(roleGraph.getStages());
+      for (      ServiceComponentHost sch : serviceComponentHostsToProcess) {
+        sch.setDesiredSecurityState(handler.getNewDesiredSCHSecurityState());
+        sch.setSecurityState(handler.getNewSCHSecurityState());
+      }
+    }
+    for (    Service service : services.values()) {
+      service.setSecurityState(desiredSecurityState);
+    }
+  }
+  return requestStageContainer;
+}

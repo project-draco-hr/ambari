@@ -8,54 +8,58 @@
     String dataDirectoryPath=getDataDirectoryPath(commandParameters);
     if (dataDirectoryPath != null) {
       File dataDirectory=new File(dataDirectoryPath);
-      if (!dataDirectory.exists() || !dataDirectory.isDirectory()) {
-        String message=String.format("Failed to process the identities, the data directory does not exist: %s",dataDirectory.getAbsolutePath());
-        LOG.error(message);
-        throw new AmbariException(message);
-      }
-      File indexFile=new File(dataDirectory,DATA_FILE_NAME);
-      if (!indexFile.canRead()) {
-        String message=String.format("Failed to process the identities, cannot read the index file: %s",indexFile.getAbsolutePath());
-        LOG.error(message);
-        throw new AmbariException(message);
-      }
-      KerberosActionDataFileReader reader=null;
-      KerberosOperationHandler handler=KerberosOperationHandlerFactory.getKerberosOperationHandler(kdcType);
-      if (handler == null) {
-        String message=String.format("Failed to process the identities, cannot read the index file: %s",indexFile.getAbsolutePath());
-        LOG.error(message);
-        throw new AmbariException(message);
-      }
-      handler.open(administratorCredential,defaultRealm);
-      try {
-        reader=new KerberosActionDataFileReader(indexFile);
-        for (        Map<String,String> record : reader) {
-          commandReport=processRecord(record,defaultRealm,handler,requestSharedDataContext);
-          if (commandReport != null) {
-            break;
-          }
+      if (dataDirectory.exists()) {
+        if (!dataDirectory.isDirectory() || !dataDirectory.canRead()) {
+          String message=String.format("Failed to process the identities, the data directory is not accessible: %s",dataDirectory.getAbsolutePath());
+          LOG.error(message);
+          throw new AmbariException(message);
         }
-      }
- catch (      AmbariException e) {
-        throw new AmbariException(e.getMessage(),e);
-      }
-catch (      IOException e) {
-        String message=String.format("Failed to process the identities, cannot read the index file: %s",indexFile.getAbsolutePath());
-        LOG.error(message,e);
-        throw new AmbariException(message,e);
-      }
- finally {
-        if (reader != null) {
+        File indexFile=new File(dataDirectory,DATA_FILE_NAME);
+        if (indexFile.exists()) {
+          if (!indexFile.canRead()) {
+            String message=String.format("Failed to process the identities, cannot read the index file: %s",indexFile.getAbsolutePath());
+            LOG.error(message);
+            throw new AmbariException(message);
+          }
+          KerberosOperationHandler handler=KerberosOperationHandlerFactory.getKerberosOperationHandler(kdcType);
+          if (handler == null) {
+            String message=String.format("Failed to process the identities, a KDC operation handler was not found for the KDC type of : %s",kdcType.toString());
+            LOG.error(message);
+            throw new AmbariException(message);
+          }
+          KerberosActionDataFileReader reader=null;
           try {
-            reader.close();
+            handler.open(administratorCredential,defaultRealm);
+            reader=new KerberosActionDataFileReader(indexFile);
+            for (            Map<String,String> record : reader) {
+              commandReport=processRecord(record,defaultRealm,handler,requestSharedDataContext);
+              if (commandReport != null) {
+                break;
+              }
+            }
           }
- catch (          IOException e) {
+ catch (          AmbariException e) {
+            throw new AmbariException(e.getMessage(),e);
           }
-        }
-        try {
-          handler.close();
-        }
- catch (        AmbariException e) {
+catch (          IOException e) {
+            String message=String.format("Failed to process the identities, cannot read the index file: %s",indexFile.getAbsolutePath());
+            LOG.error(message,e);
+            throw new AmbariException(message,e);
+          }
+ finally {
+            if (reader != null) {
+              try {
+                reader.close();
+              }
+ catch (              IOException e) {
+              }
+            }
+            try {
+              handler.close();
+            }
+ catch (            AmbariException e) {
+            }
+          }
         }
       }
     }
