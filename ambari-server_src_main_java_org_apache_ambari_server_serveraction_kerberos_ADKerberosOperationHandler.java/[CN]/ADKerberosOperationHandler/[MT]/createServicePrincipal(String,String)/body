@@ -1,0 +1,44 @@
+{
+  if (principal == null) {
+    throw new AmbariException("principal is null");
+  }
+  if (password == null) {
+    throw new AmbariException("principal password is null");
+  }
+  Attributes attributes=new BasicAttributes();
+  Attribute objectClass=new BasicAttribute("objectClass");
+  objectClass.add("user");
+  attributes.put(objectClass);
+  Attribute cn=new BasicAttribute("cn");
+  cn.add(principal);
+  attributes.put(cn);
+  Attribute upn=new BasicAttribute("userPrincipalName");
+  upn.add(principal + "@" + realm.toLowerCase());
+  attributes.put(upn);
+  Attribute spn=new BasicAttribute("servicePrincipalName");
+  spn.add(principal + "@" + realm.toUpperCase());
+  attributes.put(spn);
+  Attribute obcat=new BasicAttribute("objectCategory");
+  obcat.add("CN=Person,CN=Schema,CN=Configuration," + realmToDcs(realm));
+  attributes.put(obcat);
+  Attribute uac=new BasicAttribute("userAccountControl");
+  uac.add("512");
+  attributes.put(uac);
+  Attribute passwordAttr=new BasicAttribute("unicodePwd");
+  String quotedPasswordVal="\"" + password + "\"";
+  try {
+    passwordAttr.add(quotedPasswordVal.getBytes("UTF-16LE"));
+  }
+ catch (  UnsupportedEncodingException ue) {
+    throw new AmbariException("Can not encode password with UTF-16LE",ue);
+  }
+  attributes.put(passwordAttr);
+  try {
+    Name name=new CompositeName().add("cn=" + principal + ","+ principalContainerDn);
+    ldapContext.createSubcontext(name,attributes);
+  }
+ catch (  NamingException ne) {
+    throw new AmbariException("Can not created principal : " + principal,ne);
+  }
+  return true;
+}
