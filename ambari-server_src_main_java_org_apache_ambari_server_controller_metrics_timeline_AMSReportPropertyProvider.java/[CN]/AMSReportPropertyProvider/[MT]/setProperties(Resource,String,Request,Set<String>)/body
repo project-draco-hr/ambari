@@ -1,0 +1,53 @@
+{
+  Map<String,MetricReportRequest> reportRequestMap=getPropertyIdMaps(request,ids);
+  String host=hostProvider.getCollectorHostName(clusterName,TIMELINE_METRICS);
+  String port=hostProvider.getCollectorPortName(clusterName,TIMELINE_METRICS);
+  URIBuilder uriBuilder=AMSPropertyProvider.getAMSUriBuilder(host,port != null ? Integer.parseInt(port) : 8188);
+  for (  Map.Entry<String,MetricReportRequest> entry : reportRequestMap.entrySet()) {
+    MetricReportRequest reportRequest=entry.getValue();
+    TemporalInfo temporalInfo=reportRequest.getTemporalInfo();
+    Map<String,String> propertyIdMap=reportRequest.getPropertyIdMap();
+    uriBuilder.removeQuery();
+    uriBuilder.addParameter("metricNames",MetricsPropertyProvider.getSetString(propertyIdMap.keySet(),-1));
+    uriBuilder.setParameter("appId","HOST");
+    long startTime=temporalInfo.getStartTime();
+    if (startTime != -1) {
+      uriBuilder.setParameter("startTime",String.valueOf(startTime));
+    }
+    long endTime=temporalInfo.getEndTime();
+    if (endTime != -1) {
+      uriBuilder.setParameter("endTime",String.valueOf(endTime));
+    }
+    BufferedReader reader=null;
+    String spec=uriBuilder.toString();
+    try {
+      LOG.debug("Metrics request url =" + spec);
+      reader=new BufferedReader(new InputStreamReader(streamProvider.readFrom(spec)));
+      TimelineMetrics timelineMetrics=timelineObjectReader.readValue(reader);
+      LOG.debug("Timeline metrics response => " + timelineMetrics);
+      for (      TimelineMetric metric : timelineMetrics.getMetrics()) {
+        if (metric.getMetricName() != null && metric.getMetricValues() != null) {
+          String propertyId=propertyIdMap.get(metric.getMetricName());
+          if (propertyId != null) {
+            resource.setProperty(propertyId,getValue(metric,true));
+          }
+        }
+      }
+    }
+ catch (    IOException io) {
+      LOG.warn("Error getting timeline metrics.",io);
+    }
+ finally {
+      if (reader != null) {
+        try {
+          reader.close();
+        }
+ catch (        IOException e) {
+          if (LOG.isWarnEnabled()) {
+            LOG.warn("Unable to close http input steam : spec=" + spec,e);
+          }
+        }
+      }
+    }
+  }
+}
