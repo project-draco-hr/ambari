@@ -1,0 +1,52 @@
+{
+  Map<String,String> hlp=ec.getHostLevelParams();
+  if ((hlp == null) || !"SET_KEYTAB".equals(hlp.get("custom_command"))) {
+    return;
+  }
+  List<Map<String,String>> kcp=ec.getKerberosCommandParams();
+  String dataDir=ec.getCommandParams().get(KerberosServerAction.DATA_DIRECTORY);
+  File file=new File(dataDir + File.separator + "index.dat");
+  CSVParser csvParser=null;
+  try {
+    KerberosActionDataFileReader reader=new KerberosActionDataFileReader(file);
+    Iterator<Map<String,String>> iterator=reader.iterator();
+    while (iterator.hasNext()) {
+      Map<String,String> record=iterator.next();
+      String hostName=record.get(KerberosActionDataFile.HOSTNAME);
+      if (!targetHost.equalsIgnoreCase(hostName)) {
+        continue;
+      }
+      Map<String,String> keytabMap=new HashMap<String,String>();
+      keytabMap.put(KerberosActionDataFile.HOSTNAME,hostName);
+      keytabMap.put(KerberosActionDataFile.SERVICE,record.get(KerberosActionDataFile.SERVICE));
+      keytabMap.put(KerberosActionDataFile.COMPONENT,record.get(KerberosActionDataFile.COMPONENT));
+      keytabMap.put(KerberosActionDataFile.PRINCIPAL,record.get(KerberosActionDataFile.PRINCIPAL));
+      keytabMap.put(KerberosActionDataFile.PRINCIPAL_CONFIGURATION,record.get(KerberosActionDataFile.PRINCIPAL_CONFIGURATION));
+      keytabMap.put(KerberosActionDataFile.KEYTAB_FILE_PATH,record.get(KerberosActionDataFile.KEYTAB_FILE_PATH));
+      keytabMap.put(KerberosActionDataFile.KEYTAB_FILE_OWNER_NAME,record.get(KerberosActionDataFile.KEYTAB_FILE_OWNER_NAME));
+      keytabMap.put(KerberosActionDataFile.KEYTAB_FILE_OWNER_ACCESS,record.get(KerberosActionDataFile.KEYTAB_FILE_OWNER_ACCESS));
+      keytabMap.put(KerberosActionDataFile.KEYTAB_FILE_GROUP_NAME,record.get(KerberosActionDataFile.KEYTAB_FILE_GROUP_NAME));
+      keytabMap.put(KerberosActionDataFile.KEYTAB_FILE_GROUP_ACCESS,record.get(KerberosActionDataFile.KEYTAB_FILE_GROUP_ACCESS));
+      keytabMap.put(KerberosActionDataFile.KEYTAB_FILE_CONFIGURATION,record.get(KerberosActionDataFile.KEYTAB_FILE_CONFIGURATION));
+      String sha1Keytab=DigestUtils.sha1Hex(record.get(KerberosActionDataFile.KEYTAB_FILE_PATH));
+      BufferedInputStream bufferedIn=new BufferedInputStream(new FileInputStream(dataDir + File.separator + hostName+ File.separator+ sha1Keytab));
+      byte[] keytabContent=IOUtils.toByteArray(bufferedIn);
+      String keytabContentBase64=Base64.encodeBase64String(keytabContent);
+      keytabMap.put(KerberosServerAction.KEYTAB_CONTENT_BASE64,keytabContentBase64);
+      kcp.add(keytabMap);
+    }
+  }
+ catch (  IOException e) {
+    throw new AmbariException("Could not inject keytabs to enable kerberos");
+  }
+ finally {
+    if (csvParser != null && !csvParser.isClosed()) {
+      try {
+        csvParser.close();
+      }
+ catch (      Throwable t) {
+      }
+    }
+  }
+  ec.setKerberosCommandParams(kcp);
+}
