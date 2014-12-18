@@ -1,0 +1,57 @@
+def modify_configs(options, config_type):
+    properties_to_move = ['dfs.namenode.checkpoint.edits.dir', 'dfs.namenode.checkpoint.dir', 'dfs.namenode.checkpoint.period']
+    hostmapping = read_mapping()
+    if ((config_type is None) or (config_type == CAPACITY_SCHEDULER_TAG)):
+        update_config(options, CAPACITY_SCHEDULER, CAPACITY_SCHEDULER_TAG)
+        pass
+    jt_host = hostmapping['JOBTRACKER'][0]
+    if ((config_type is None) or (config_type == YARN_SITE_TAG)):
+        for key in YARN_SITE.keys():
+            if (REPLACE_JH_HOST_NAME_TAG in YARN_SITE[key]):
+                YARN_SITE[key] = YARN_SITE[key].replace(REPLACE_JH_HOST_NAME_TAG, jt_host, 1)
+            if (REPLACE_RM_HOST_NAME_TAG in YARN_SITE[key]):
+                YARN_SITE[key] = YARN_SITE[key].replace(REPLACE_RM_HOST_NAME_TAG, jt_host, 1)
+                pass
+            pass
+        pass
+        update_config(options, YARN_SITE, YARN_SITE_TAG)
+        pass
+    if ((config_type is None) or (config_type == GLOBAL_TAG)):
+        update_config_using_existing(options, GLOBAL_TAG, GLOBAL.copy())
+        pass
+    core_site_latest = rename_all_properties(get_config(options, CORE_SITE_TAG), PROPERTY_MAPPING)
+    hdfs_site_latest = rename_all_properties(get_config(options, HDFS_SITE_TAG), PROPERTY_MAPPING)
+    mapred_site_latest = rename_all_properties(get_config(options, MAPRED_SITE_TAG), PROPERTY_MAPPING)
+    for property in properties_to_move:
+        if (property in core_site_latest.keys()):
+            hdfs_site_latest[property] = core_site_latest[property]
+            del core_site_latest[property]
+        pass
+    mapred_updated = MAPRED_SITE.copy()
+    if ((config_type is None) or (config_type == MAPRED_SITE_TAG)):
+        for key in mapred_updated.keys():
+            if (REPLACE_JH_HOST_NAME_TAG in mapred_updated[key]):
+                mapred_updated[key] = mapred_updated[key].replace(REPLACE_JH_HOST_NAME_TAG, jt_host, 1)
+                pass
+            pass
+        pass
+        update_config_using_existing_properties(options, MAPRED_SITE_TAG, mapred_updated, mapred_site_latest)
+        pass
+    if ((config_type is None) or (config_type == HDFS_SITE_TAG)):
+        update_config_using_existing_properties(options, HDFS_SITE_TAG, HDFS_SITE.copy(), hdfs_site_latest)
+        pass
+    if ((config_type is None) or (config_type == CORE_SITE_TAG)):
+        update_config_using_existing_properties(options, CORE_SITE_TAG, CORE_SITE.copy(), core_site_latest)
+        pass
+    if ((config_type is None) or (config_type == HBASE_SITE_TAG)):
+        (tag, structured_resp) = get_config_resp(options, HBASE_SITE_TAG, False)
+        if (structured_resp is not None):
+            update_config_using_existing(options, HBASE_SITE_TAG, HBASE_SITE.copy())
+            pass
+        pass
+    if ((config_type is None) or (config_type == HIVE_SITE_TAG)):
+        (tag, structured_resp) = get_config_resp(options, HIVE_SITE_TAG, False)
+        if (structured_resp is not None):
+            update_config_using_existing(options, HIVE_SITE_TAG, HIVE_SITE.copy())
+            pass
+    pass
