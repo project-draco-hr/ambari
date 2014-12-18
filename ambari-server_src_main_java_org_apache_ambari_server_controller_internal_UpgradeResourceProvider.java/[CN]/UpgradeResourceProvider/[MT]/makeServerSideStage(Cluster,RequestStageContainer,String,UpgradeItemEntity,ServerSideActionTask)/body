@@ -1,0 +1,39 @@
+{
+  Map<String,String> commandParams=new HashMap<String,String>();
+  commandParams.put("clusterName",cluster.getClusterName());
+  String itemText=entity.getText();
+switch (task.getType()) {
+case MANUAL:
+{
+      itemText=((ManualTask)task).message;
+      break;
+    }
+case CONFIGURE:
+{
+    ConfigureTask ct=(ConfigureTask)task;
+    commandParams.put("type",ct.configType);
+    commandParams.put("key",ct.key);
+    commandParams.put("value",ct.value);
+    itemText=String.format("Updating config %s/%s to %s",ct.configType,ct.key,ct.value);
+    break;
+  }
+default :
+break;
+}
+entity.setText(itemText);
+Map<String,String> restartCommandParams=new HashMap<String,String>();
+restartCommandParams.put("version",version);
+ActionExecutionContext actionContext=new ActionExecutionContext(cluster.getClusterName(),Role.AMBARI_SERVER_ACTION.toString(),Collections.<RequestResourceFilter>emptyList(),restartCommandParams);
+actionContext.setTimeout(Short.valueOf((short)-1));
+ExecuteCommandJson jsons=commandExecutionHelper.get().getCommandJson(actionContext,cluster);
+Stage stage=stageFactory.get().createNew(request.getId().longValue(),"/tmp/ambari",cluster.getClusterName(),cluster.getClusterId(),entity.getText(),jsons.getClusterHostInfo(),jsons.getCommandParamsForStage(),jsons.getHostParamsForStage());
+long stageId=request.getLastStageId() + 1;
+if (0L == stageId) {
+stageId=1L;
+}
+stage.setStageId(stageId);
+entity.setStageId(Long.valueOf(stageId));
+String host=cluster.getAllHostsDesiredConfigs().keySet().iterator().next();
+stage.addServerActionCommand(task.getImplementationClass(),Role.AMBARI_SERVER_ACTION,RoleCommand.EXECUTE,cluster.getClusterName(),host,new ServiceComponentHostServerActionEvent(StageUtils.getHostName(),System.currentTimeMillis()),commandParams,1200);
+request.addStages(Collections.singletonList(stage));
+}
