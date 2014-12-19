@@ -5,7 +5,7 @@ def setup(options):
     if (not is_root()):
         err = MESSAGE_ERROR_NOT_ROOT
         raise FatalException(4, err)
-    if os_check_jdbc_options(options):
+    if _check_jdbc_options(options):
         proceedJDBCProperties(options)
         return
     (retcode, err) = disable_security_enhancements()
@@ -15,15 +15,14 @@ def setup(options):
     if (not (retcode == 0)):
         err = 'Failed to create user. Exiting.'
         raise FatalException(retcode, err)
-    print MESSAGE_CHECK_FIREWALL
-    os_check_firewall()
-    if os_check_jdbc_options(options):
+    check_firewall()
+    if _check_jdbc_options(options):
         proceedJDBCProperties(options)
     print 'Checking JDK...'
     try:
         download_and_install_jdk(options)
     except FatalException as e:
-        err = 'Downloading or installing JDK failed: {0}. Exiting.'.format(e)
+        err = 'Downloading or installing JDK failed: {0}. Exiting.'.format(str(e))
         raise FatalException(e.code, err)
     print 'Completing setup...'
     retcode = configure_os_settings()
@@ -31,6 +30,11 @@ def setup(options):
         err = 'Configure of OS settings in ambari.properties failed. Exiting.'
         raise FatalException(retcode, err)
     if prompt_db_properties(options):
-        os_setup_database(options)
+        _setup_database(options)
     check_jdbc_drivers(options)
-    pass
+    print 'Extracting system views...'
+    retcode = extract_views()
+    if (not (retcode == 0)):
+        err = 'Error while extracting system views. Exiting'
+        raise FatalException(retcode, err)
+    adjust_directory_permissions(read_ambari_user())

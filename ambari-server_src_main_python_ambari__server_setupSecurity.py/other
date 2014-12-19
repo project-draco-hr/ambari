@@ -1,33 +1,35 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
 import datetime
 import fileinput
+import os
 import random
+import re
+import shutil
 import socket
 import stat
+import string
 import sys
+import tempfile
+import time
 import urllib2
-from ambari_commons.exceptions import *
-from serverConfiguration import *
-from setupActions import *
-from userInput import *
+from ambari_commons.exceptions import FatalException, NonFatalException
+from ambari_commons.logging_utils import print_error_msg, print_info_msg, print_warning_msg, SILENT
+from ambari_commons.os_utils import copy_file, remove_file, search_file, set_file_permissions, is_valid_filepath, is_root, run_os_command
+from ambari_server.serverConfiguration import find_properties_file, get_ambari_properties, get_value_from_properties, get_conf_dir, get_full_ambari_classpath, read_ambari_user, find_jdk, get_prompt_default, update_properties_2, configDefaults, BOOTSTRAP_DIR_PROPERTY, GET_FQDN_SERVICE_URL, JDBC_USE_INTEGRATED_AUTH_PROPERTY, JDBC_PASSWORD_PROPERTY, JDBC_PASSWORD_FILENAME, JDBC_RCA_PASSWORD_ALIAS, JDBC_RCA_PASSWORD_FILE_PROPERTY, JDBC_METRICS_USE_INTEGRATED_AUTH_PROPERTY, JDBC_METRICS_PASSWORD_PROPERTY, JDBC_METRICS_PASSWORD_ALIAS, JDBC_METRICS_PASSWORD_FILENAME, BLIND_PASSWORD
+from ambari_server.setupActions import SETUP_ACTION, LDAP_SETUP_ACTION
+from ambari_server.userInput import get_validated_filepath_input, get_validated_string_input, get_YN_input
 SSL_PASSWORD_FILE = 'pass.txt'
 SSL_PASSIN_FILE = 'passin.txt'
 VALIDATE_KEYSTORE_CMD = "openssl pkcs12 -info -in '{0}' -password file:'{1}' -passout file:'{2}'"
 EXPRT_KSTR_CMD = "openssl pkcs12 -export -in '{0}' -inkey '{1}' -certfile '{0}' -out '{4}' -password file:'{2}' -passin file:'{3}'"
 CHANGE_KEY_PWD_CND = 'openssl rsa -in {0} -des3 -out {0}.secured -passout pass:{1}'
 GET_CRT_INFO_CMD = 'openssl x509 -dates -subject -in {0}'
-keytool_bin = 'keytool'
-if OSCheck.is_windows_family():
-    keytool_bin = 'keytool.exe'
-KEYTOOL_IMPORT_CERT_CMD = ((((('{0}' + os.sep) + 'bin') + os.sep) + keytool_bin) + " -import -alias '{1}' -storetype '{2}' -file '{3}' -storepass '{4}' -noprompt")
-KEYTOOL_DELETE_CERT_CMD = ((((('{0}' + os.sep) + 'bin') + os.sep) + keytool_bin) + " -delete -alias '{1}' -storepass '{2}' -noprompt")
+KEYTOOL_IMPORT_CERT_CMD = ((((('{0}' + os.sep) + 'bin') + os.sep) + configDefaults.keytool_bin) + " -import -alias '{1}' -storetype '{2}' -file '{3}' -storepass '{4}' -noprompt")
+KEYTOOL_DELETE_CERT_CMD = ((((('{0}' + os.sep) + 'bin') + os.sep) + configDefaults.keytool_bin) + " -delete -alias '{1}' -storepass '{2}' -noprompt")
 KEYTOOL_KEYSTORE = " -keystore '{0}'"
-java_bin = 'java'
-if OSCheck.is_windows_family():
-    java_bin = 'java.exe'
-SECURITY_PROVIDER_GET_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider GET {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
-SECURITY_PROVIDER_PUT_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider PUT {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
-SECURITY_PROVIDER_KEY_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.MasterKeyServiceImpl {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_GET_CMD = (((((((('{0}' + os.sep) + configDefaults.JAVA_EXE_SUBPATH) + ' -cp {1} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider GET {2} {3} {4} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_PUT_CMD = (((((((('{0}' + os.sep) + configDefaults.JAVA_EXE_SUBPATH) + ' -cp {1} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider PUT {2} {3} {4} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_KEY_CMD = (((((((('{0}' + os.sep) + configDefaults.JAVA_EXE_SUBPATH) + ' -cp {1}') + 'org.apache.ambari.server.security.encryption') + '.MasterKeyServiceImpl {2} {3} {4} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
 SSL_KEY_DIR = 'security.server.keys_dir'
 SSL_API_PORT = 'client.api.ssl.port'
 SSL_API = 'api.ssl'

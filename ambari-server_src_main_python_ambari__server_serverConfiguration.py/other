@@ -1,14 +1,20 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
 import datetime
 import glob
+import os
 import re
-from ambari_commons.os_utils import *
+import shutil
+import string
+import tempfile
+from ambari_commons import OSCheck, OSConst
+from ambari_commons.exceptions import FatalException
+from ambari_commons.os_family_impl import OsFamilyImpl
+from ambari_commons.os_utils import search_file, run_os_command
 from ambari_commons.logging_utils import print_warning_msg, print_info_msg, print_error_msg
-from properties import Properties
-if OSCheck.is_windows_family():
-    from serverConfiguration_windows import *
-else:
-    from serverConfiguration_linux import *
+from ambari_server.properties import Properties
+OS_VERSION = OSCheck().get_os_major_version()
+OS_TYPE = OSCheck.get_os_type()
+OS_FAMILY = OSCheck.get_os_family()
 NR_USER_PROPERTY = 'ambari-server.user'
 STACK_NAME_VER_SEP = '-'
 BLIND_PASSWORD = '*****'
@@ -29,19 +35,23 @@ AMBARI_VERSION_VAR = 'AMBARI_VERSION_VAR'
 JAVA_HOME_PROPERTY = 'java.home'
 JDK_NAME_PROPERTY = 'jdk.name'
 JCE_NAME_PROPERTY = 'jce.name'
+DEFAULT_JDK16_LOCATION = '/usr/jdk64/jdk1.6.0_31'
+JDK_NAMES = ['jdk-7u67-linux-x64.tar.gz', 'jdk-6u31-linux-x64.bin']
 JCE_POLICY_FILENAMES = ['UnlimitedJCEPolicyJDK7.zip', 'jce_policy-6.zip']
 JCE_DOWNLOAD_CMD = 'curl -o {0} {1}'
 JCE_MIN_FILESIZE = 5000
 JDBC_DATABASE_PROPERTY = 'server.jdbc.database'
+JDBC_DATABASE_NAME_PROPERTY = 'server.jdbc.database_name'
 JDBC_HOSTNAME_PROPERTY = 'server.jdbc.hostname'
 JDBC_PORT_PROPERTY = 'server.jdbc.port'
-JDBC_SCHEMA_PROPERTY = 'server.jdbc.schema'
+JDBC_POSTGRES_SCHEMA_PROPERTY = 'server.jdbc.postgres.schema'
 JDBC_USER_NAME_PROPERTY = 'server.jdbc.user.name'
 JDBC_PASSWORD_PROPERTY = 'server.jdbc.user.passwd'
 JDBC_PASSWORD_FILENAME = 'password.dat'
 JDBC_RCA_PASSWORD_FILENAME = 'rca_password.dat'
 CLIENT_API_PORT_PROPERTY = 'client.api.port'
 CLIENT_API_PORT = '8080'
+SERVER_VERSION_FILE_PATH = 'server.version.file'
 PERSISTENCE_TYPE_PROPERTY = 'server.persistence.type'
 JDBC_DRIVER_PROPERTY = 'server.jdbc.driver'
 JDBC_DRIVER_PATH_PROPERTY = 'server.jdbc.driver.path'
@@ -55,9 +65,28 @@ JDBC_RCA_URL_PROPERTY = 'server.jdbc.rca.url'
 JDBC_RCA_USER_NAME_PROPERTY = 'server.jdbc.rca.user.name'
 JDBC_RCA_PASSWORD_FILE_PROPERTY = 'server.jdbc.rca.user.passwd'
 JDBC_RCA_PASSWORD_ALIAS = 'ambari.db.password'
+JDBC_USE_INTEGRATED_AUTH_PROPERTY = 'server.jdbc.use.integrated.auth'
+JDBC_RCA_USE_INTEGRATED_AUTH_PROPERTY = 'server.jdbc.rca.use.integrated.auth'
+JDBC_METRICS_USE_INTEGRATED_AUTH_PROPERTY = 'scom.sink.db.use.integrated.auth'
+METRICS_PERSISTENCE_TYPE_PROPERTY = 'metrics.persistence.type'
+JDBC_METRICS_DATABASE_PROPERTY = 'scom.sink.db.database'
+JDBC_METRICS_HOSTNAME_PROPERTY = 'scom.sink.db.hostname'
+JDBC_METRICS_PORT_PROPERTY = 'scom.sink.db.port'
+JDBC_METRICS_SCHEMA_PROPERTY = 'scom.sink.db.schema'
+JDBC_METRICS_DRIVER_PROPERTY = 'scom.sink.db.driver'
+JDBC_METRICS_URL_PROPERTY = 'scom.sink.db.url'
+JDBC_METRICS_USER_NAME_PROPERTY = 'scom.sink.db.username'
+JDBC_METRICS_PASSWORD_PROPERTY = 'scom.sink.db.password'
+JDBC_METRICS_PASSWORD_FILENAME = 'scom_password.dat'
+JDBC_METRICS_PASSWORD_ALIAS = 'scom.db.password'
 RESOURCES_DIR_PROPERTY = 'resources.dir'
 RESOURCES_DIR_DEFAULT = 'resources'
 STACK_LOCATION_KEY = 'metadata.path'
 STACK_LOCATION_DEFAULT = (('resources' + os.sep) + 'stacks')
 JDK_RELEASES = 'java.releases'
+VIEWS_DIR_PROPERTY = 'views.dir'
 back_up_file_path = None
+configDefaults = ServerConfigDefaults()
+SCHEMA_UPGRADE_HELPER_CMD = (((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1} ') + 'org.apache.ambari.server.upgrade.SchemaUpgradeHelper') + ' > ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
+VIEW_EXTRACT_CMD = (((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1} ') + 'org.apache.ambari.server.view.ViewRegistry extract {2} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
+SETUP_OR_UPGRADE_MSG = '- If this is a new setup, then run the "ambari-server setup" command to create the user\n- If this is an upgrade of an existing setup, run the "ambari-server upgrade" command.\nRefer to the Ambari documentation for more information on setup and upgrade.'

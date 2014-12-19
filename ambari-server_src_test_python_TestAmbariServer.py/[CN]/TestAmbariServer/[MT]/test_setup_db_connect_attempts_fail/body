@@ -1,9 +1,25 @@
-@patch.object(ambari_server, 'configure_database_username_password')
+@patch.object(OSCheck, 'get_os_family')
+@patch.object(OSCheck, 'get_os_type')
+@patch.object(OSCheck, 'get_os_major_version')
 @patch('time.sleep')
-@patch.object(ambari_server, 'run_os_command')
-def test_setup_db_connect_attempts_fail(self, run_os_command_mock, sleep_mock, config_db_mock):
+@patch('ambari_server.dbConfiguration_linux.run_os_command')
+def test_setup_db_connect_attempts_fail(self, run_os_command_mock, sleep_mock, get_os_major_version_mock, get_os_type_mock, get_os_family_mock):
+    args = MagicMock()
+    properties = Properties()
+    args.dbms_index = 0
+    del args.dbms
+    del args.database_host
+    del args.database_port
+    del args.database_name
+    del args.database_username
+    del args.database_password
+    del args.silent
     run_os_command_mock.side_effect = [(1, 'error', 'error'), (1, 'error', 'error'), (1, 'error', 'error')]
-    result = ambari_server.setup_db(MagicMock())
+    factory = DBMSConfigFactory()
+    dbConfig = factory.create(args, properties)
+    self.assertTrue(dbConfig.dbms, 'postgres')
+    self.assertTrue(dbConfig.persistence_type, 'local')
+    result = dbConfig._setup_db()
     self.assertTrue(run_os_command_mock.called)
     self.assertEqual((1, 'error', 'error'), result)
     self.assertEqual(2, sleep_mock.call_count)

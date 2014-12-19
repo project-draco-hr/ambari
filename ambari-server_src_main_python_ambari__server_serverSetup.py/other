@@ -1,18 +1,29 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
-import socket
+import optparse
+import os
+import platform
+import re
+import shutil
 import sys
-import urllib2
+from ambari_commons import OSCheck, OSConst, Firewall
+from ambari_commons.exceptions import FatalException
 from ambari_commons.inet_utils import force_download_file
-from ambari_commons.logging_utils import print_warning_msg, print_error_msg
-from serverConfiguration import *
-from setupSecurity import adjust_directory_permissions, get_is_secure, store_password_file, encrypt_password, get_is_persisted
-from userInput import *
-from utils import *
-if OSCheck.is_windows_family():
-    from serverSetup_windows import *
-else:
-    from serverSetup_linux import *
-OS_VERSION = OSCheck().get_os_major_version()
-OS_TYPE = OSCheck.get_os_type()
-OS_FAMILY = OSCheck.get_os_family()
-JDK_INDEX = 0
+from ambari_commons.logging_utils import print_error_msg, print_info_msg, print_warning_msg, SILENT
+from ambari_commons.os_family_impl import OsFamilyImpl, OsFamilyFuncImpl
+from ambari_commons.os_utils import is_root, run_os_command
+from ambari_commons.str_utils import compress_backslashes
+from ambari_server.dbConfiguration import DBMSConfigFactory
+from ambari_server.serverConfiguration import get_ambari_properties, read_ambari_user, update_database_name_property, parse_properties_file, run_schema_upgrade, update_ambari_properties, update_properties, write_property, get_full_ambari_classpath, get_JAVA_HOME, find_jdk, configDefaults, JDKRelease, OS_VERSION, OS_TYPE, OS_FAMILY, NR_USER_PROPERTY, OS_TYPE_PROPERTY, AMBARI_PROPERTIES_FILE, JAVA_HOME, JAVA_HOME_PROPERTY, JDK_NAME_PROPERTY, JCE_NAME_PROPERTY, JDBC_URL_PROPERTY, JDBC_RCA_URL_PROPERTY, JDBC_METRICS_URL_PROPERTY, RESOURCES_DIR_PROPERTY, JDK_RELEASES, VIEWS_DIR_PROPERTY, VIEW_EXTRACT_CMD, SETUP_OR_UPGRADE_MSG
+from ambari_server.setupSecurity import get_is_secure, get_is_persisted, adjust_directory_permissions
+from ambari_server.userInput import get_YN_input, get_validated_string_input
+from ambari_server.utils import locate_file
+GET_SE_LINUX_ST_CMD = locate_file('sestatus', '/usr/sbin')
+SE_SETENFORCE_CMD = 'setenforce 0'
+SE_STATUS_DISABLED = 'disabled'
+SE_STATUS_ENABLED = 'enabled'
+SE_MODE_ENFORCING = 'enforcing'
+SE_MODE_PERMISSIVE = 'permissive'
+SERVICE_USERNAME_KEY = 'TMP_AMBARI_USERNAME'
+SERVICE_PASSWORD_KEY = 'TMP_AMBARI_PASSWORD'
+MESSAGE_ERROR_NOT_ROOT = get_message_error_not_root()
+JDBC_DB_OPTION_VALUES = get_supported_dbms()

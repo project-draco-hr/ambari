@@ -1,21 +1,23 @@
 @patch('os.path.exists')
-@patch.object(ambari_server, 'set_file_permissions')
-@patch.object(ambari_server, 'run_os_command')
-@patch.object(ambari_server, 'get_ambari_properties')
-@patch.object(ambari_server, 'get_value_from_properties')
-@patch('os.mkdir')
-def test_adjust_directory_permissions(self, mkdir_mock, get_value_from_properties_mock, get_ambari_properties_mock, run_os_command_mock, set_file_permissions_mock, exists_mock):
+@patch('ambari_server.setupSecurity.set_file_permissions')
+@patch('ambari_server.setupSecurity.run_os_command')
+@patch('ambari_server.setupSecurity.get_ambari_properties')
+@patch('ambari_server.setupSecurity.get_value_from_properties')
+@patch('shutil.rmtree')
+@patch('os.makedirs')
+def test_adjust_directory_permissions(self, mkdir_mock, rmtree_mock, get_value_from_properties_mock, get_ambari_properties_mock, run_os_command_mock, set_file_permissions_mock, exists_mock):
     properties_mock = MagicMock()
     get_value_from_properties_mock.return_value = 'dummy_bootstrap_dir'
-    ambari_server.adjust_directory_permissions('user')
+    adjust_directory_permissions('user')
     exists_mock.return_value = False
-    self.assertEquals(run_os_command_mock.call_args_list[0][0][0], 'rm -rf dummy_bootstrap_dir')
+    self.assertTrue(set_file_permissions_mock.called)
+    self.assertTrue(rmtree_mock.called)
     self.assertTrue(mkdir_mock.called)
     set_file_permissions_mock.reset_mock()
-    old_list = ambari_server.NR_ADJUST_OWNERSHIP_LIST
-    ambari_server.NR_ADJUST_OWNERSHIP_LIST = [('/etc/ambari-server/conf', '755', '{0}', True), ('/etc/ambari-server/conf/ambari.properties', '644', '{0}', False)]
-    ambari_server.adjust_directory_permissions('user')
-    self.assertTrue((len(set_file_permissions_mock.call_args_list) == len(ambari_server.NR_ADJUST_OWNERSHIP_LIST)))
+    old_list = configDefaults.NR_ADJUST_OWNERSHIP_LIST
+    configDefaults.NR_ADJUST_OWNERSHIP_LIST = [('/etc/ambari-server/conf', '755', '{0}', True), ('/etc/ambari-server/conf/ambari.properties', '644', '{0}', False)]
+    adjust_directory_permissions('user')
+    self.assertTrue((len(set_file_permissions_mock.call_args_list) == len(configDefaults.NR_ADJUST_OWNERSHIP_LIST)))
     self.assertEquals(set_file_permissions_mock.call_args_list[0][0][3], True)
     self.assertEquals(set_file_permissions_mock.call_args_list[1][0][3], False)
-    ambari_server.NR_ADJUST_OWNERSHIP_LIST = old_list
+    configDefaults.NR_ADJUST_OWNERSHIP_LIST = old_list

@@ -1,13 +1,15 @@
-@patch.object(ambari_server, 'setup_master_key')
-@patch.object(ambari_server, 'read_password')
-@patch.object(ambari_server, 'get_validated_string_input')
-@patch.object(ambari_server, 'get_YN_input')
-def test_prompt_db_properties_for_each_database_type(self, gyni_mock, gvsi_mock, rp_mock, smk_mock):
+@patch.object(OSCheck, 'get_os_family')
+@patch.object(OSCheck, 'get_os_type')
+@patch.object(OSCheck, 'get_os_major_version')
+@patch('ambari_server.dbConfiguration_linux.store_password_file')
+@patch('ambari_server.dbConfiguration_linux.read_password')
+@patch('ambari_server.dbConfiguration_linux.get_validated_string_input')
+@patch('ambari_server.dbConfiguration_linux.get_YN_input')
+def test_prompt_db_properties_for_each_database_type(self, gyni_mock, gvsi_mock, rp_mock, spf_mock, get_os_major_version_mock, get_os_type_mock, get_os_family_mock):
     '\n    :return: Validates that installation for each database type correctly stores the database type, database name,\n    and optionally the postgres schema name.\n    '
-    ambari_server.PROMPT_DATABASE_OPTIONS = True
     gyni_mock.return_value = True
     rp_mock.return_value = 'password'
-    smk_mock.return_value = (None, False, True)
+    spf_mock.return_value = 'encrypted password'
     hostname = 'localhost'
     db_name = 'db_ambari'
     postgres_schema = 'sc_ambari'
@@ -15,47 +17,60 @@ def test_prompt_db_properties_for_each_database_type(self, gyni_mock, gvsi_mock,
     oracle_service = '1'
     oracle_service_name = 'ambari'
     user_name = 'ambari'
-    postgres_embedded_values = ['1', db_name, postgres_schema, hostname]
-    oracle_values = ['2', hostname, port, oracle_service, oracle_service_name, user_name]
-    mysql_values = ['3', hostname, port, db_name, user_name]
-    postgres_external_values = ['4', hostname, port, db_name, postgres_schema, user_name]
+    postgres_embedded_values = [db_name, postgres_schema, hostname]
+    oracle_values = [hostname, port, oracle_service, oracle_service_name, user_name]
+    mysql_values = [hostname, port, db_name, user_name]
+    postgres_external_values = [hostname, port, db_name, postgres_schema, user_name]
     list_of_return_values = (((postgres_embedded_values + oracle_values) + mysql_values) + postgres_external_values)
     list_of_return_values = list_of_return_values[::(-1)]
 
     def side_effect(*args, **kwargs):
         return list_of_return_values.pop()
     gvsi_mock.side_effect = side_effect
-    if (ambari_server.AMBARI_CONF_VAR in os.environ):
-        del os.environ[ambari_server.AMBARI_CONF_VAR]
+    if (AMBARI_CONF_VAR in os.environ):
+        del os.environ[AMBARI_CONF_VAR]
     tempdir = tempfile.gettempdir()
-    os.environ[ambari_server.AMBARI_CONF_VAR] = tempdir
-    for i in range(1, 5):
+    os.environ[AMBARI_CONF_VAR] = tempdir
+    for i in range(0, 4):
         prop_file = os.path.join(tempdir, 'ambari.properties')
         if os.path.exists(prop_file):
             os.remove(prop_file)
         with open(prop_file, 'w') as f:
             f.write('server.jdbc.database_name=oldDBName')
         f.close()
-        ambari_server.AMBARI_PROPERTIES_FILE = prop_file
+        ambari__server.AMBARI_PROPERTIES_FILE = prop_file
         args = MagicMock()
-        ambari_server.load_default_db_properties(args)
-        ambari_server.prompt_db_properties(args)
-        if (i == 1):
-            ambari_server.store_local_properties(args)
+        properties = Properties()
+        args.dbms_index = i
+        args.silent = False
+        del args.dbms
+        del args.database_host
+        del args.database_port
+        del args.database_name
+        del args.database_username
+        del args.database_password
+        factory = DBMSConfigFactory()
+        dbConfig = factory.create(args, properties)
+        dbConfig._prompt_db_properties()
+        if dbConfig._is_local_database():
+            dbConfig._setup_local_server(properties)
         else:
-            ambari_server.store_remote_properties(args)
-        properties = ambari_server.get_ambari_properties()
-        if (i == 1):
-            self.assertEqual(properties[ambari_server.JDBC_DATABASE_PROPERTY], 'postgres')
-            self.assertEqual(properties[ambari_server.JDBC_DATABASE_NAME_PROPERTY], db_name)
-            self.assertEqual(properties[ambari_server.JDBC_POSTGRES_SCHEMA_PROPERTY], postgres_schema)
+            dbConfig._setup_remote_server(properties)
+        if (i == 0):
+            self.assertEqual(properties[JDBC_DATABASE_PROPERTY], 'postgres')
+            self.assertEqual(properties[JDBC_DATABASE_NAME_PROPERTY], db_name)
+            self.assertEqual(properties[JDBC_POSTGRES_SCHEMA_PROPERTY], postgres_schema)
+            self.assertEqual(properties[PERSISTENCE_TYPE_PROPERTY], 'local')
+        elif (i == 1):
+            self.assertEqual(properties[JDBC_DATABASE_PROPERTY], 'oracle')
+            self.assertFalse((JDBC_POSTGRES_SCHEMA_PROPERTY in properties.propertyNames()))
+            self.assertEqual(properties[PERSISTENCE_TYPE_PROPERTY], 'remote')
         elif (i == 2):
-            self.assertEqual(properties[ambari_server.JDBC_DATABASE_PROPERTY], 'oracle')
-            self.assertFalse((ambari_server.JDBC_POSTGRES_SCHEMA_PROPERTY in properties.propertyNames()))
+            self.assertEqual(properties[JDBC_DATABASE_PROPERTY], 'mysql')
+            self.assertFalse((JDBC_POSTGRES_SCHEMA_PROPERTY in properties.propertyNames()))
+            self.assertEqual(properties[PERSISTENCE_TYPE_PROPERTY], 'remote')
         elif (i == 3):
-            self.assertEqual(properties[ambari_server.JDBC_DATABASE_PROPERTY], 'mysql')
-            self.assertFalse((ambari_server.JDBC_POSTGRES_SCHEMA_PROPERTY in properties.propertyNames()))
-        elif (i == 4):
-            self.assertEqual(properties[ambari_server.JDBC_DATABASE_PROPERTY], 'postgres')
-            self.assertEqual(properties[ambari_server.JDBC_DATABASE_NAME_PROPERTY], db_name)
-            self.assertEqual(properties[ambari_server.JDBC_POSTGRES_SCHEMA_PROPERTY], postgres_schema)
+            self.assertEqual(properties[JDBC_DATABASE_PROPERTY], 'postgres')
+            self.assertEqual(properties[JDBC_DATABASE_NAME_PROPERTY], db_name)
+            self.assertEqual(properties[JDBC_POSTGRES_SCHEMA_PROPERTY], postgres_schema)
+            self.assertEqual(properties[PERSISTENCE_TYPE_PROPERTY], 'remote')

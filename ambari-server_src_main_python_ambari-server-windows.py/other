@@ -1,22 +1,25 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
 import optparse
-from ambari_commons.ambari_service import AmbariService, ENV_PYTHON_PATH
-from ambari_commons.logging_utils import *
-from ambari_commons.os_utils import remove_file
+import os
+import subprocess
+import sys
+from ambari_commons.ambari_service import AmbariService
+from ambari_commons.exceptions import NonFatalException, FatalException
+from ambari_commons.logging_utils import print_error_msg, print_info_msg, print_warning_msg
+from ambari_commons.os_utils import remove_file, set_open_files_limit
 from ambari_commons.os_windows import SvcStatusCallback
-from ambari_server import utils
-from ambari_server.dbConfiguration import DBMSConfig
+from ambari_server.dbConfiguration import DBMSConfigFactory
 from ambari_server.resourceFilesKeeper import ResourceFilesKeeper, KeeperException
-from ambari_server.serverConfiguration import *
-from ambari_server.serverSetup import setup, reset, is_server_running, upgrade
-from ambari_server.setupActions import *
-from ambari_server.setupSecurity import *
-from ambari_server.serverSetup_windows import SERVICE_PASSWORD_KEY, SERVICE_USERNAME_KEY
+from ambari_server.serverConfiguration import find_jdk, get_ambari_properties, get_value_from_properties, get_full_ambari_classpath, configDefaults, VERBOSE_OUTPUT_KEY, DEBUG_MODE_KEY, SUSPEND_START_MODE_KEY, SERVER_OUT_FILE_KEY, RESOURCES_DIR_PROPERTY, RESOURCES_DIR_DEFAULT, STACK_LOCATION_KEY, STACK_LOCATION_DEFAULT
+from ambari_server.serverSetup import setup, reset, is_server_running, upgrade, SERVICE_PASSWORD_KEY, SERVICE_USERNAME_KEY
+from ambari_server.setupActions import SETUP_ACTION, START_ACTION, PSTART_ACTION, STOP_ACTION, RESET_ACTION, STATUS_ACTION, UPGRADE_ACTION, UPGRADE_STACK_ACTION, LDAP_SETUP_ACTION, SETUP_SECURITY_ACTION, ACTION_REQUIRE_RESTART
+from ambari_server.setupSecurity import setup_ambari_krb5_jaas, setup_https, setup_ldap, setup_master_key
+from ambari_server.userInput import get_validated_string_input
+from ambari_server.utils import check_reverse_lookup, save_pid
 SERVER_START_DEBUG = False
 SUSPEND_START_MODE = False
 ambari_provider_module_option = ''
 ambari_provider_module = os.environ.get('AMBARI_PROVIDER_MODULE')
-SETUP_OR_UPGRADE_MSG = '- If this is a new setup, then run the "ambari-server setup" command to create the user\n- If this is an upgrade of an existing setup, run the "ambari-server upgrade" command.\nRefer to the Ambari documentation for more information on setup and upgrade.'
 AMBARI_SERVER_DIE_MSG = 'Ambari Server java process died with exitcode {0}. Check {1} for more information.'
 if (ambari_provider_module is not None):
     ambari_provider_module_option = (('-Dprovider.module.class=' + ambari_provider_module) + ' ')
