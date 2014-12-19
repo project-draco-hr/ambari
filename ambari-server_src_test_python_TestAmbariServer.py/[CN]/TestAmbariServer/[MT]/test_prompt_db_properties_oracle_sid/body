@@ -1,33 +1,23 @@
-@patch.object(OSCheck, 'get_os_family')
-@patch.object(OSCheck, 'get_os_type')
-@patch.object(OSCheck, 'get_os_major_version')
-@patch('ambari_server.dbConfiguration_linux.read_password')
-@patch('ambari_server.dbConfiguration_linux.get_validated_string_input')
-@patch('ambari_server.dbConfiguration_linux.get_YN_input')
-def test_prompt_db_properties_oracle_sid(self, gyni_mock, gvsi_mock, rp_mock, get_os_major_version_mock, get_os_type_mock, get_os_family_mock):
+@patch.object(ambari_server, 'setup_master_key')
+@patch.object(ambari_server, 'read_password')
+@patch.object(ambari_server, 'get_validated_string_input')
+@patch.object(ambari_server, 'get_YN_input')
+def test_prompt_db_properties_oracle_sid(self, gyni_mock, gvsi_mock, rp_mock, smk_mock):
+    ambari_server.PROMPT_DATABASE_OPTIONS = True
     gyni_mock.return_value = True
-    list_of_return_values = ['ambari-server', 'ambari', '2', '1521', 'localhost']
+    list_of_return_values = ['ambari-server', 'ambari', '2', '1521', 'localhost', '2']
 
     def side_effect(*args, **kwargs):
         return list_of_return_values.pop()
     gvsi_mock.side_effect = side_effect
     rp_mock.return_value = 'password'
+    smk_mock.return_value = (None, False, True)
     args = MagicMock()
-    properties = Properties()
-    args.dbms_index = 1
-    args.silent = False
-    del args.dbms
-    del args.database_host
-    del args.database_port
-    del args.database_name
-    del args.database_username
-    del args.database_password
-    factory = DBMSConfigFactory()
-    dbConfig = factory.create(args, properties)
-    dbConfig._prompt_db_properties()
-    self.assertEqual(dbConfig.dbms, 'oracle')
-    self.assertEqual(dbConfig.database_port, '1521')
-    self.assertEqual(dbConfig.database_host, 'localhost')
-    self.assertEqual(dbConfig.database_name, 'ambari')
-    self.assertEqual(dbConfig.database_username, 'ambari-server')
-    self.assertEqual(dbConfig.sid_or_sname, 'sid')
+    ambari_server.load_default_db_properties(args)
+    ambari_server.prompt_db_properties(args)
+    self.assertEqual(args.dbms, 'oracle')
+    self.assertEqual(args.database_port, '1521')
+    self.assertEqual(args.database_host, 'localhost')
+    self.assertEqual(args.database_name, 'ambari')
+    self.assertEqual(args.database_username, 'ambari-server')
+    self.assertEqual(args.sid_or_sname, 'sid')

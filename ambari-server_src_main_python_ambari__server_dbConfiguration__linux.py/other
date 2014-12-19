@@ -1,22 +1,32 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
-import fileinput
-import glob
-import os
-import re
 import shutil
-import socket
-import subprocess
-import sys
-import time
-from ambari_commons import OSCheck, OSConst
-from ambari_commons.logging_utils import print_error_msg, print_info_msg, print_warning_msg, VERBOSE
-from ambari_commons.exceptions import NonFatalException, FatalException
-from ambari_commons.os_utils import copy_files, remove_file, run_os_command
-from ambari_server.dbConfiguration import DBMSConfig, USERNAME_PATTERN, SETUP_DB_CONNECT_ATTEMPTS, SETUP_DB_CONNECT_TIMEOUT
-from ambari_server.serverConfiguration import get_ambari_properties, get_value_from_properties, configDefaults, OS_TYPE, AMBARI_PROPERTIES_FILE, BLIND_PASSWORD, RESOURCES_DIR_PROPERTY, JDBC_DATABASE_PROPERTY, JDBC_DATABASE_NAME_PROPERTY, JDBC_POSTGRES_SCHEMA_PROPERTY, JDBC_HOSTNAME_PROPERTY, JDBC_PORT_PROPERTY, JDBC_USER_NAME_PROPERTY, JDBC_PASSWORD_PROPERTY, JDBC_PASSWORD_FILENAME, JDBC_DRIVER_PROPERTY, JDBC_URL_PROPERTY, JDBC_RCA_USER_NAME_PROPERTY, JDBC_RCA_PASSWORD_ALIAS, JDBC_RCA_PASSWORD_FILE_PROPERTY, JDBC_RCA_DRIVER_PROPERTY, JDBC_RCA_URL_PROPERTY, PERSISTENCE_TYPE_PROPERTY
-from ambari_server.setupSecurity import read_password, store_password_file, encrypt_password
-from ambari_server.userInput import get_YN_input, get_validated_string_input
-from ambari_server.utils import get_postgre_hba_dir, get_postgre_running_status
-_DEFAULT_PASSWORD = 'bigdata'
-ORACLE_DB_ID_TYPES = ['Service Name', 'SID']
-JDBC_PROPERTIES_PREFIX = 'server.jdbc.properties.'
+from ambari_commons import OSConst
+from ambari_commons.logging_utils import *
+from exceptions import *
+from dbConfiguration import *
+from utils import *
+import utils
+PG_JDBC_CONNECTION_STRING = 'jdbc:postgresql://{0}:{1}/{2}'
+PG_JDBC_CONNECTION_STRING_ALT = 'jdbc:postgresql://{0}:{1}/{2}'
+UBUNTU_PG_HBA_ROOT = '/etc/postgresql'
+PG_HBA_ROOT_DEFAULT = '/var/lib/pgsql/data'
+SETUP_DB_CMD = ['su', '-', 'postgres', '--command=psql -f {0} -v username=\'"{1}"\' -v password="\'{2}\'" -v dbname="{3}"']
+UPGRADE_STACK_CMD = ['su', 'postgres', '--command=psql -f {0} -v stack_name="\'{1}\'"  -v stack_version="\'{2}\'" -v dbname="{3}"']
+CHANGE_OWNER_COMMAND = ['su', '-', 'postgres', '--command=/var/lib/ambari-server/resources/scripts/change_owner.sh -d {0} -s {1} -o {2}']
+PG_ERROR_BLOCKED = 'is being accessed by other users'
+PG_STATUS_RUNNING = get_running_status()
+PG_DEFAULT_PASSWORD = 'bigdata'
+SERVICE_CMD = '/usr/bin/env service'
+PG_SERVICE_NAME = 'postgresql'
+PG_HBA_DIR = utils.get_postgre_hba_dir()
+PG_ST_CMD = ('%s %s status' % (SERVICE_CMD, PG_SERVICE_NAME))
+if os.path.isfile('/usr/bin/postgresql-setup'):
+    PG_INITDB_CMD = '/usr/bin/postgresql-setup initdb'
+else:
+    PG_INITDB_CMD = ('%s %s initdb' % (SERVICE_CMD, PG_SERVICE_NAME))
+PG_START_CMD = ('%s %s start' % (SERVICE_CMD, PG_SERVICE_NAME))
+PG_RESTART_CMD = ('%s %s restart' % (SERVICE_CMD, PG_SERVICE_NAME))
+PG_HBA_RELOAD_CMD = ('%s %s reload' % (SERVICE_CMD, PG_SERVICE_NAME))
+PG_HBA_CONF_FILE = os.path.join(PG_HBA_DIR, 'pg_hba.conf')
+PG_HBA_CONF_FILE_BACKUP = os.path.join(PG_HBA_DIR, 'pg_hba_bak.conf.old')
+POSTGRESQL_CONF_FILE = os.path.join(PG_HBA_DIR, 'postgresql.conf')

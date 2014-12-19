@@ -1,50 +1,35 @@
-@patch.object(OSCheck, 'get_os_family')
-@patch.object(OSCheck, 'get_os_type')
-@patch.object(OSCheck, 'get_os_major_version')
-@patch('ambari_server.dbConfiguration_linux.PGConfig._restart_postgres')
-@patch('ambari_server.dbConfiguration_linux.PGConfig._get_postgre_status')
-@patch('ambari_server.dbConfiguration_linux.PGConfig._configure_postgresql_conf')
-@patch('ambari_server.dbConfiguration_linux.run_os_command')
-def test_configure_postgres(self, run_os_command_mock, configure_postgresql_conf_mock, get_postgre_status_mock, restart_postgres_mock, get_os_major_version_mock, get_os_type_mock, get_os_family_mock):
-    args = MagicMock()
-    properties = Properties()
-    args.dbms_index = 0
-    del args.dbms
-    del args.database_host
-    del args.database_port
-    del args.database_name
-    del args.database_username
-    del args.database_password
-    del args.silent
-    factory = DBMSConfigFactory()
-    dbConfig = factory.create(args, properties)
-    self.assertTrue(dbConfig.dbms, 'postgres')
-    self.assertTrue(dbConfig.persistence_type, 'local')
+@patch.object(ambari_server, 'restart_postgres')
+@patch.object(ambari_server, 'get_postgre_status')
+@patch.object(ambari_server, 'configure_postgresql_conf')
+@patch.object(ambari_server, 'configure_pg_hba_ambaridb_users')
+@patch.object(ambari_server, 'configure_pg_hba_postgres_user')
+def test_configure_postgres(self, configure_pg_hba_postgres_user_mock, configure_pg_hba_ambaridb_users_mock, configure_postgresql_conf_mock, get_postgre_status_mock, restart_postgres_mock):
     tf1 = tempfile.NamedTemporaryFile()
     tf2 = tempfile.NamedTemporaryFile()
-    PGConfig.PG_HBA_CONF_FILE = tf1.name
-    PGConfig.PG_HBA_CONF_FILE_BACKUP = tf2.name
+    ambari_server.PG_HBA_CONF_FILE = tf1.name
+    ambari_server.PG_HBA_CONF_FILE_BACKUP = tf2.name
+    args = MagicMock()
     out = StringIO.StringIO()
     sys.stdout = out
-    (retcode, out1, err) = dbConfig._configure_postgres()
+    (retcode, out1, err) = ambari_server.configure_postgres()
     sys.stdout = sys.__stdout__
     self.assertEqual(0, retcode)
     self.assertEqual('Backup for pg_hba found, reconfiguration not required\n', out.getvalue())
-    tf2.close()
-    get_postgre_status_mock.return_value = (PGConfig.PG_STATUS_RUNNING, 0, '', '')
-    run_os_command_mock.return_value = (0, '', '')
+    ambari_server.PG_HBA_CONF_FILE_BACKUP = tempfile.mktemp()
+    get_postgre_status_mock.return_value = (ambari_server.PG_STATUS_RUNNING, 0, '', '')
     restart_postgres_mock.return_value = (0, '', '')
-    (rcode, out, err) = dbConfig._configure_postgres()
-    self.assertTrue(os.path.isfile(PGConfig.PG_HBA_CONF_FILE_BACKUP), 'postgresql.conf backup not created')
-    self.assertTrue(run_os_command_mock.called)
-    mode = oct(os.stat(PGConfig.PG_HBA_CONF_FILE)[stat.ST_MODE])
+    (rcode, out, err) = ambari_server.configure_postgres()
+    self.assertTrue(os.path.isfile(ambari_server.PG_HBA_CONF_FILE_BACKUP), 'postgresql.conf backup not created')
+    self.assertTrue(configure_pg_hba_postgres_user_mock.called)
+    self.assertTrue(configure_pg_hba_ambaridb_users_mock.called)
+    mode = oct(os.stat(ambari_server.PG_HBA_CONF_FILE)[stat.ST_MODE])
     str_mode = str(mode)[(-4):]
     self.assertEqual('0644', str_mode, 'Wrong file permissions')
     self.assertTrue(configure_postgresql_conf_mock.called)
     self.assertEqual(0, rcode)
-    os.unlink(PGConfig.PG_HBA_CONF_FILE_BACKUP)
+    os.unlink(ambari_server.PG_HBA_CONF_FILE_BACKUP)
     get_postgre_status_mock.return_value = ('stopped', 0, '', '')
-    (rcode, out, err) = dbConfig._configure_postgres()
+    (rcode, out, err) = ambari_server.configure_postgres()
     self.assertEqual(0, rcode)
-    os.unlink(PGConfig.PG_HBA_CONF_FILE_BACKUP)
+    os.unlink(ambari_server.PG_HBA_CONF_FILE_BACKUP)
     sys.stdout = sys.__stdout__

@@ -1,20 +1,9 @@
-@patch('os.makedirs')
-@patch('os.path.exists')
-@patch('os.rename')
-@patch('os.stat')
 @patch('urllib2.urlopen')
 @patch('__builtin__.open')
-@patch('ambari_commons.inet_utils.download_progress')
-@patch('ambari_commons.inet_utils.print_info_msg')
-def test_track_jdk(self, print_info_msg_mock, download_progress_mock, openMock, urlopenMock, os_stat_mock, os_rename_mock, os_path_exists_mock, os_makedirs_mock):
-    os_path_exists_mock.return_value = False
-    fsize = MagicMock()
-    fsize.st_size = 24576
-    os_stat_mock.return_value = fsize
-    inf = MagicMock()
-    inf.getheaders.return_value = ['bytes 0-24575/24576']
+@patch.object(ambari_server, 'dlprogress')
+def test_track_jdk(self, dlprogress_mock, openMock, urlopenMock):
     u = MagicMock()
-    u.info.return_value = inf
+    u.info.return_value = {'Content-Length': '24576', }
     chunks = [None, 'second', 'first']
 
     def side_effect(*args, **kwargs):
@@ -23,9 +12,9 @@ def test_track_jdk(self, print_info_msg_mock, download_progress_mock, openMock, 
     urlopenMock.return_value = u
     f = MagicMock()
     openMock.return_value = f
-    force_download_file('base', 'url', progress_func=download_progress_mock)
+    ambari_server.track_jdk('base', 'url', 'local')
     self.assertEqual(0, len(chunks))
     self.assertTrue(f.write.called)
+    self.assertTrue(f.flush.called)
     self.assertTrue(f.close.called)
-    self.assertEqual(2, len(download_progress_mock.call_args_list))
-    self.assertTrue(print_info_msg_mock.called)
+    self.assertEqual(2, len(dlprogress_mock.call_args_list))

@@ -1,0 +1,86 @@
+def setup(args):
+    retcode = verify_setup_allowed()
+    if (not (retcode == 0)):
+        raise FatalException(1, None)
+    if (not is_root()):
+        err = 'Ambari-server setup should be run with root-level privileges'
+        raise FatalException(4, err)
+    if ((args.jdbc_driver is not None) and (args.jdbc_db is not None)):
+        proceedJDBCProperties(args)
+        return
+    print 'Checking SELinux...'
+    retcode = check_selinux()
+    if (not (retcode == 0)):
+        err = 'Failed to disable SELinux. Exiting.'
+        raise FatalException(retcode, err)
+    retcode = check_ambari_user()
+    if (not (retcode == 0)):
+        err = 'Failed to create user. Exiting.'
+        raise FatalException(retcode, err)
+    print 'Checking firewall...'
+    firewall_obj = Firewall().getFirewallObject()
+    firewall_on = firewall_obj.check_iptables()
+    if (firewall_obj.stderrdata and (len(firewall_obj.stderrdata) > 0)):
+        print firewall_obj.stderrdata
+    if firewall_on:
+        print_warning_msg((('%s is running. Confirm the necessary Ambari ports are accessible. ' % firewall_obj.FIREWALL_SERVICE_NAME) + 'Refer to the Ambari documentation for more details on ports.'))
+        ok = get_YN_input('OK to continue [y/n] (y)? ', True)
+        if (not ok):
+            raise FatalException(1, None)
+    if ((args.jdbc_driver is not None) and (args.jdbc_db is not None)):
+        proceedJDBCProperties(args)
+    print 'Checking JDK...'
+    try:
+        download_jdk(args)
+    except FatalException as e:
+        err = 'Downloading or installing JDK failed: {0}. Exiting.'.format(e)
+        raise FatalException(e.code, err)
+    print 'Completing setup...'
+    retcode = configure_os_settings()
+    if (not (retcode == 0)):
+        err = 'Configure of OS settings in ambari.properties failed. Exiting.'
+        raise FatalException(retcode, err)
+    print 'Configuring database...'
+    prompt_db_properties(args)
+    if is_local_database(args):
+        is_user_changed = is_jdbc_user_changed(args)
+        print 'Default properties detected. Using built-in database.'
+        store_local_properties(args)
+        print 'Checking PostgreSQL...'
+        (pg_status, retcode, out, err) = check_postgre_up()
+        if (not (retcode == 0)):
+            err = 'Unable to start PostgreSQL server. Status {0}. {1}. Exiting'.format(pg_status, err)
+            raise FatalException(retcode, err)
+        print 'Configuring local database...'
+        (retcode, outdata, errdata) = setup_db(args)
+        if (not (retcode == 0)):
+            err = 'Running database init script was failed. {0}. Exiting.'.format(errdata)
+            raise FatalException(retcode, err)
+        if is_user_changed:
+            remove_file(PG_HBA_CONF_FILE_BACKUP)
+        print 'Configuring PostgreSQL...'
+        (retcode, out, err) = configure_postgres()
+        if (not (retcode == 0)):
+            err = 'Unable to configure PostgreSQL server. {0} Exiting'.format(err)
+            raise FatalException(retcode, err)
+    else:
+        retcode = store_remote_properties(args)
+        if (retcode != 0):
+            err = 'Unable to save config file'
+            raise FatalException(retcode, err)
+        check_jdbc_drivers(args)
+        print 'Configuring remote database connection properties...'
+        retcode = setup_remote_db(args)
+        if (retcode == (-1)):
+            err = 'Remote database setup aborted.'
+            raise NonFatalException(err)
+        if (not (retcode == 0)):
+            err = 'Error while configuring connection properties. Exiting'
+            raise FatalException(retcode, err)
+        check_jdbc_drivers(args)
+    print 'Extracting system views...'
+    retcode = extract_views()
+    if (not (retcode == 0)):
+        err = 'Error while extracting system views. Exiting'
+        raise FatalException(retcode, err)
+    adjust_directory_permissions(read_ambari_user())

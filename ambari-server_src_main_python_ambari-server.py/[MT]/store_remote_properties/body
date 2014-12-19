@@ -1,0 +1,47 @@
+def store_remote_properties(args):
+    properties = get_ambari_properties()
+    if (properties == (-1)):
+        print_error_msg('Error getting ambari properties')
+        return (-1)
+    isSecure = get_is_secure(properties)
+    properties.process_pair(PERSISTENCE_TYPE_PROPERTY, 'remote')
+    properties.process_pair(JDBC_DATABASE_PROPERTY, args.dbms)
+    properties.process_pair(JDBC_HOSTNAME_PROPERTY, args.database_host)
+    properties.process_pair(JDBC_PORT_PROPERTY, args.database_port)
+    properties.process_pair(JDBC_DATABASE_NAME_PROPERTY, args.database_name)
+    if (args.dbms == 'postgres'):
+        properties.process_pair(JDBC_POSTGRES_SCHEMA_PROPERTY, args.postgres_schema)
+    properties.process_pair(JDBC_DRIVER_PROPERTY, DATABASE_DRIVER_NAMES[DATABASE_INDEX])
+    jdbc_hostname = args.database_host
+    if (args.database_host == 'localhost'):
+        jdbc_hostname = socket.getfqdn().lower()
+    connectionStringFormat = DATABASE_CONNECTION_STRINGS
+    if (args.sid_or_sname == 'sid'):
+        connectionStringFormat = DATABASE_CONNECTION_STRINGS_ALT
+    properties.process_pair(JDBC_URL_PROPERTY, connectionStringFormat[DATABASE_INDEX].format(jdbc_hostname, args.database_port, args.database_name))
+    properties.process_pair(JDBC_USER_NAME_PROPERTY, args.database_username)
+    properties.process_pair(JDBC_PASSWORD_PROPERTY, store_password_file(args.database_password, JDBC_PASSWORD_FILENAME))
+    if (DATABASE_INDEX < len(DATABASE_JDBC_PROPERTIES)):
+        for pair in DATABASE_JDBC_PROPERTIES[DATABASE_INDEX]:
+            properties.process_pair((JDBC_PROPERTIES_PREFIX + pair[0]), pair[1])
+    if isSecure:
+        encrypted_password = encrypt_password(JDBC_RCA_PASSWORD_ALIAS, args.database_password)
+        if (encrypted_password != args.database_password):
+            properties.process_pair(JDBC_PASSWORD_PROPERTY, encrypted_password)
+    pass
+    properties.process_pair(JDBC_RCA_DRIVER_PROPERTY, DATABASE_DRIVER_NAMES[DATABASE_INDEX])
+    properties.process_pair(JDBC_RCA_URL_PROPERTY, connectionStringFormat[DATABASE_INDEX].format(jdbc_hostname, args.database_port, args.database_name))
+    properties.process_pair(JDBC_RCA_USER_NAME_PROPERTY, args.database_username)
+    properties.process_pair(JDBC_RCA_PASSWORD_FILE_PROPERTY, store_password_file(args.database_password, JDBC_PASSWORD_FILENAME))
+    if isSecure:
+        encrypted_password = encrypt_password(JDBC_RCA_PASSWORD_ALIAS, args.database_password)
+        if (encrypted_password != args.database_password):
+            properties.process_pair(JDBC_RCA_PASSWORD_FILE_PROPERTY, encrypted_password)
+    pass
+    conf_file = properties.fileName
+    try:
+        properties.store(open(conf_file, 'w'))
+    except Exception as e:
+        print ('Could not write ambari config file "%s": %s' % (conf_file, e))
+        return (-1)
+    return 0

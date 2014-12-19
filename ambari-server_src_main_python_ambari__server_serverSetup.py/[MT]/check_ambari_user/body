@@ -1,2 +1,27 @@
 def check_ambari_user():
-    return AmbariUserChecks().do_checks()
+    try:
+        user = read_ambari_user()
+        create_user = False
+        update_user_setting = False
+        if (user is not None):
+            create_user = get_YN_input(NR_USER_CHANGE_PROMPT.format(user), False)
+            update_user_setting = create_user
+        else:
+            update_user_setting = True
+            create_user = get_YN_input(NR_USER_CUSTOMIZE_PROMPT, False)
+            if (not create_user):
+                user = NR_DEFAULT_USER
+        if create_user:
+            (retcode, user) = create_custom_user()
+            if (retcode != 0):
+                return retcode
+        if update_user_setting:
+            write_property(NR_USER_PROPERTY, user)
+        adjust_directory_permissions(user)
+    except OSError as e:
+        print_error_msg(('Failed: %s' % e.strerror))
+        return 4
+    except Exception as e:
+        print_error_msg(('Unexpected error %s' % e))
+        return 1
+    return 0
