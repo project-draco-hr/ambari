@@ -1,5 +1,6 @@
 def _call(command, verbose=False, logoutput=False, throw_on_failure=True, cwd=None, env=None, preexec_fn=None, user=None, wait_for_finish=True, timeout=None, path=None, output_file=None, sudo=False):
     "\n  Execute shell command\n  \n  @param command: list/tuple of arguments (recommended as more safe - don't need to escape) \n  or string of the command to execute\n  @param logoutput: boolean, whether command output should be logged of not\n  @param throw_on_failure: if true, when return code is not zero exception is thrown\n  \n  @return: return_code, stdout\n  "
+    command_alias = (string_cmd_from_args_list(command) if isinstance(command, (list, tuple)) else command)
     env = add_current_path_to_env(env)
     if path:
         path = (os.pathsep.join(path) if isinstance(path, (list, tuple)) else path)
@@ -10,9 +11,11 @@ def _call(command, verbose=False, logoutput=False, throw_on_failure=True, cwd=No
         command = as_user(command, user, env=env)
     if isinstance(command, (list, tuple)):
         command = string_cmd_from_args_list(command)
-    command = command.replace(SUDO_ENVIRONMENT_PLACEHOLDER, get_environment_str(env), 1)
+    env_str = get_environment_str(env)
+    for (placeholder, replacement) in PLACEHOLDERS_TO_STR.iteritems():
+        command = command.replace(placeholder, replacement.format(env_str=env_str))
     if verbose:
-        Logger.info(('Call command: ' + Logger.get_protected_text(command)))
+        Logger.info(('Running: ' + command))
     subprocess_command = ['/bin/bash', '--login', '--noprofile', '-c', command]
     proc = subprocess.Popen(subprocess_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd, env=env, shell=False, preexec_fn=preexec_fn)
     if (not wait_for_finish):
@@ -31,6 +34,6 @@ def _call(command, verbose=False, logoutput=False, throw_on_failure=True, cwd=No
     if (logoutput and out):
         Logger.info(out)
     if (throw_on_failure and code):
-        err_msg = Logger.get_protected_text(("Execution of '%s' returned %d. %s" % (command, code, out)))
+        err_msg = Logger.filter_text(("Execution of '%s' returned %d. %s" % (command_alias, code, out)))
         raise Fail(err_msg)
     return (code, out)
