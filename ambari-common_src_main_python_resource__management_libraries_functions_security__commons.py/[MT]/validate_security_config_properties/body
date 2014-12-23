@@ -1,0 +1,27 @@
+def validate_security_config_properties(params, configuration_rules):
+    '\n  Generic security configuration validation based on a set of rules and operations\n  :param params: The structure where the config parameters are held\n  :param configuration_rules: A structure containing rules and expectations,\n  Three types of checks are currently supported by this method:\n  1. value_checks - checks that a certain value must be set\n  2. empty_checks - checks that the property values must not be empty\n  3. read_checks - checks that the value represented by the property describes a readable file on the filesystem\n  :return: Issues found - should be empty if all is good\n  '
+    issues = {}
+    for (config_file, rule_sets) in configuration_rules.iteritems():
+        try:
+            actual_values = (params[config_file] if (config_file in params) else {})
+            rules = (rule_sets['value_checks'] if ('value_checks' in rule_sets) else None)
+            if rules:
+                for (property_name, expected_value) in rules.iteritems():
+                    actual_value = (actual_values[property_name] if (property_name in actual_values) else '')
+                    if (actual_value != expected_value):
+                        issues[config_file] = ((((('Property ' + property_name) + '. Expected/Actual: ') + expected_value) + '/') + actual_value)
+            rules = (rule_sets['empty_checks'] if ('empty_checks' in rule_sets) else None)
+            if rules:
+                for property_name in rules:
+                    actual_value = (actual_values[property_name] if (property_name in actual_values) else '')
+                    if (not actual_value):
+                        issues[config_file] = (('Property ' + property_name) + ' must exist and must not be empty!')
+            rules = (rule_sets['read_checks'] if ('read_checks' in rule_sets) else None)
+            if rules:
+                for property_name in rules:
+                    actual_value = (actual_values[property_name] if (property_name in actual_values) else None)
+                    if ((not actual_value) or (not os.path.isfile(actual_value))):
+                        issues[config_file] = (('Property ' + property_name) + ' points to an inaccessible file or parameter does not exist!')
+        except Exception as e:
+            issues[config_file] = ('Exception occurred while validating the config file\nCauses: ' + str(e))
+    return issues

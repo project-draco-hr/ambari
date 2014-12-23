@@ -1,0 +1,44 @@
+@patch('xml.etree.ElementTree.parse')
+def test_get_params_from_filesystem(self, et_parser_mock):
+    conf_dir = gettempdir()
+    config_file = []
+    config_file.append('config.xml')
+    prop1_name_mock = MagicMock()
+    prop1_name_mock.text.return_value = 'property1'
+    prop1_value_mock = MagicMock()
+    prop1_value_mock.text.return_value = 'true'
+    prop2_name_mock = MagicMock()
+    prop2_name_mock.text.return_value = 'property2'
+    prop2_value_mock = MagicMock()
+    prop2_value_mock.text.return_value = 'false'
+    prop3_name_mock = MagicMock()
+    prop3_name_mock.text.return_value = 'property3'
+    prop3_value_mock = MagicMock()
+    prop3_value_mock.text.return_value = 'true'
+    props = []
+    props.append([prop1_name_mock, prop1_value_mock])
+    props.append([prop2_name_mock, prop2_value_mock])
+    props.append([prop3_name_mock, prop3_value_mock])
+    element_tree_mock = MagicMock()
+    et_parser_mock.return_value = element_tree_mock
+    get_root_mock = MagicMock()
+    element_tree_mock.getroot.return_value = get_root_mock
+    get_root_mock.getchildren.return_value = props
+    result = get_params_from_filesystem(conf_dir, config_file)
+    et_parser_mock.assert_called_with(((conf_dir + os.sep) + 'config.xml'))
+    self.assertEquals((not result), False)
+    self.assertEquals((not result[result.keys()[0]]), False)
+    empty_props = []
+    get_root_mock.getchildren.return_value = empty_props
+    result = get_params_from_filesystem(conf_dir, config_file)
+    self.assertEquals((not result), False)
+    self.assertEquals((not result['config'].items()), True)
+    empty_config_file = []
+    result = get_params_from_filesystem(conf_dir, empty_config_file)
+    self.assertEquals((not result), True)
+    et_parser_mock.reset_mock()
+    et_parser_mock.side_effect = Exception('Invalid path')
+    try:
+        get_params_from_filesystem(conf_dir, config_file)
+    except:
+        self.assertTrue(True)
