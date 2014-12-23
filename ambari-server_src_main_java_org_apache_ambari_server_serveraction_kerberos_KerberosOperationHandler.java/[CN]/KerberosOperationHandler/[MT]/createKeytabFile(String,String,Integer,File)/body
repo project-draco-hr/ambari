@@ -1,0 +1,64 @@
+{
+  boolean success=false;
+  if ((principal == null) || principal.isEmpty()) {
+    throw new AmbariException("Failed to create keytab file, missing principal");
+  }
+ else   if (password == null) {
+    throw new AmbariException(String.format("Failed to create keytab file for %s, missing password",principal));
+  }
+ else   if (keytabFile == null) {
+    throw new AmbariException(String.format("Failed to create keytab file for %s, missing file path",principal));
+  }
+ else {
+    Keytab keytab;
+    Set<EncryptionType> ciphers=new HashSet<EncryptionType>(DEFAULT_CIPHERS);
+    List<KeytabEntry> keytabEntries=new ArrayList<KeytabEntry>();
+    if (keytabFile.exists() && keytabFile.canRead() && (keytabFile.length() > 0)) {
+      try {
+        keytab=Keytab.read(keytabFile);
+      }
+ catch (      IOException e) {
+        keytab=new Keytab();
+      }
+      List<KeytabEntry> existingEntries=keytab.getEntries();
+      if ((existingEntries != null) && !existingEntries.isEmpty()) {
+        for (        KeytabEntry entry : existingEntries) {
+          if (principal.equals(entry.getPrincipalName())) {
+            ciphers.remove(entry.getKey().getKeyType());
+          }
+          keytabEntries.add(entry);
+        }
+      }
+    }
+ else {
+      keytab=new Keytab();
+    }
+    if (ciphers.isEmpty()) {
+      success=true;
+    }
+ else {
+      Map<EncryptionType,EncryptionKey> keys=KerberosKeyFactory.getKerberosKeys(principal,password,ciphers);
+      if (keys != null) {
+        byte keyVersion=(keyNumber == null) ? 0 : keyNumber.byteValue();
+        KerberosTime timestamp=new KerberosTime();
+        for (        EncryptionKey encryptionKey : keys.values()) {
+          keytabEntries.add(new KeytabEntry(principal,1,timestamp,keyVersion,encryptionKey));
+        }
+        keytab.setEntries(keytabEntries);
+        try {
+          keytab.write(keytabFile);
+          success=true;
+        }
+ catch (        IOException e) {
+          String message=String.format("Failed to export keytab file for %s",principal);
+          LOG.error(message,e);
+          if (!keytabFile.delete()) {
+            keytabFile.deleteOnExit();
+          }
+          throw new AmbariException(message,e);
+        }
+      }
+    }
+  }
+  return success;
+}
