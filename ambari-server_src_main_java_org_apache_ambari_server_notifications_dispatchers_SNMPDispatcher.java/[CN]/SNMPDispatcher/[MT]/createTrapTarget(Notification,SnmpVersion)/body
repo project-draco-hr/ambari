@@ -1,0 +1,28 @@
+{
+  if (snmpVersion.isCommunityTargetRequired()) {
+    OctetString community=new OctetString(getDispatchProperty(notification,COMMUNITY_PROPERTY));
+    CommunityTarget communityTarget=new CommunityTarget();
+    communityTarget.setCommunity(community);
+    communityTarget.setVersion(snmpVersion.getTargetVersion());
+    return communityTarget;
+  }
+ else {
+    OctetString userName=new OctetString(getDispatchProperty(notification,SECURITY_USERNAME_PROPERTY));
+    if (snmp.getUSM() == null) {
+      USM usm=new USM(SecurityProtocols.getInstance(),new OctetString(MPv3.createLocalEngineID()),0);
+      String authPassphraseProperty=notification.DispatchProperties.get(SECURITY_AUTH_PASSPHRASE_PROPERTY);
+      String privPassphraseProperty=notification.DispatchProperties.get(SECURITY_PRIV_PASSPHRASE_PROPERTY);
+      OctetString authPassphrase=authPassphraseProperty != null ? new OctetString(authPassphraseProperty) : null;
+      OctetString privPassphrase=privPassphraseProperty != null ? new OctetString(privPassphraseProperty) : null;
+      UsmUser usmUser=new UsmUser(userName,AuthMD5.ID,authPassphrase,PrivDES.ID,privPassphrase);
+      usm.addUser(userName,usmUser);
+      SecurityModels.getInstance().addSecurityModel(usm);
+    }
+    UserTarget userTarget=new UserTarget();
+    userTarget.setSecurityName(userName);
+    userTarget.setSecurityLevel(getSecurityLevel(notification).getSecurityLevel());
+    userTarget.setSecurityModel(SecurityModel.SECURITY_MODEL_USM);
+    userTarget.setVersion(snmpVersion.getTargetVersion());
+    return userTarget;
+  }
+}
