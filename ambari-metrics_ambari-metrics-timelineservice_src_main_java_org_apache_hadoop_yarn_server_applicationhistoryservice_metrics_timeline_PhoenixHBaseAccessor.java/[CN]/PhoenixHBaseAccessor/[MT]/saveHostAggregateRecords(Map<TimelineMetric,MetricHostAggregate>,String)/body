@@ -1,60 +1,58 @@
 {
-  if (hostAggregateMap == null || hostAggregateMap.isEmpty()) {
-    LOG.debug("Empty aggregate records.");
-    return;
-  }
-  Connection conn=getConnection();
-  PreparedStatement stmt=null;
-  long start=System.currentTimeMillis();
-  int rowCount=0;
-  try {
-    stmt=conn.prepareStatement(String.format(UPSERT_AGGREGATE_RECORD_SQL,phoenixTableName));
-    for (    Map.Entry<TimelineMetric,MetricHostAggregate> metricAggregate : hostAggregateMap.entrySet()) {
-      TimelineMetric metric=metricAggregate.getKey();
-      MetricHostAggregate hostAggregate=metricAggregate.getValue();
-      rowCount++;
-      stmt.clearParameters();
-      stmt.setString(1,metric.getMetricName());
-      stmt.setString(2,metric.getHostName());
-      stmt.setString(3,metric.getAppId());
-      stmt.setString(4,metric.getInstanceId());
-      stmt.setLong(5,metric.getTimestamp());
-      stmt.setString(6,metric.getType());
-      stmt.setDouble(7,hostAggregate.getSum());
-      stmt.setDouble(8,hostAggregate.getMax());
-      stmt.setDouble(9,hostAggregate.getMin());
-      stmt.setDouble(10,hostAggregate.getNumberOfSamples());
-      try {
-        stmt.executeUpdate();
+  if (hostAggregateMap != null && !hostAggregateMap.isEmpty()) {
+    Connection conn=getConnection();
+    PreparedStatement stmt=null;
+    long start=System.currentTimeMillis();
+    int rowCount=0;
+    try {
+      stmt=conn.prepareStatement(String.format(UPSERT_AGGREGATE_RECORD_SQL,phoenixTableName));
+      for (      Map.Entry<TimelineMetric,MetricHostAggregate> metricAggregate : hostAggregateMap.entrySet()) {
+        TimelineMetric metric=metricAggregate.getKey();
+        MetricHostAggregate hostAggregate=metricAggregate.getValue();
+        rowCount++;
+        stmt.clearParameters();
+        stmt.setString(1,metric.getMetricName());
+        stmt.setString(2,metric.getHostName());
+        stmt.setString(3,metric.getAppId());
+        stmt.setString(4,metric.getInstanceId());
+        stmt.setLong(5,metric.getTimestamp());
+        stmt.setString(6,metric.getType());
+        stmt.setDouble(7,hostAggregate.getSum());
+        stmt.setDouble(8,hostAggregate.getMax());
+        stmt.setDouble(9,hostAggregate.getMin());
+        stmt.setDouble(10,hostAggregate.getNumberOfSamples());
+        try {
+          stmt.executeUpdate();
+        }
+ catch (        SQLException sql) {
+          LOG.error(sql);
+        }
+        if (rowCount >= PHOENIX_MAX_MUTATION_STATE_SIZE - 1) {
+          conn.commit();
+          rowCount=0;
+        }
       }
- catch (      SQLException sql) {
-        LOG.error(sql);
-      }
-      if (rowCount >= PHOENIX_MAX_MUTATION_STATE_SIZE - 1) {
-        conn.commit();
-        rowCount=0;
-      }
+      conn.commit();
     }
-    conn.commit();
-  }
   finally {
-    if (stmt != null) {
-      try {
-        stmt.close();
+      if (stmt != null) {
+        try {
+          stmt.close();
+        }
+ catch (        SQLException e) {
+        }
       }
- catch (      SQLException e) {
+      if (conn != null) {
+        try {
+          conn.close();
+        }
+ catch (        SQLException sql) {
+        }
       }
     }
-    if (conn != null) {
-      try {
-        conn.close();
-      }
- catch (      SQLException sql) {
-      }
+    long end=System.currentTimeMillis();
+    if ((end - start) > 60000l) {
+      LOG.info("Time to save map: " + (end - start) + ", "+ "thread = "+ Thread.currentThread().getClass());
     }
-  }
-  long end=System.currentTimeMillis();
-  if ((end - start) > 60000l) {
-    LOG.info("Time to save map: " + (end - start) + ", "+ "thread = "+ Thread.currentThread().getClass());
   }
 }

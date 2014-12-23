@@ -1,23 +1,20 @@
 {
-  verifyCondition(condition);
+  if (condition.isEmpty()) {
+    throw new SQLException("No filter criteria specified.");
+  }
   Connection conn=getConnection();
   PreparedStatement stmt=null;
   TimelineMetrics metrics=new TimelineMetrics();
   try {
-    if (condition.isPointInTime()) {
-      stmt=getLatestMetricRecords(condition,conn,metrics);
-    }
+    stmt=PhoenixTransactSQL.prepareGetMetricsSqlStmt(conn,condition);
+    ResultSet rs=stmt.executeQuery();
+    while (rs.next()) {
+      TimelineMetric metric=getTimelineMetricFromResultSet(rs);
+      if (condition.isGrouped()) {
+        metrics.addOrMergeTimelineMetric(metric);
+      }
  else {
-      stmt=PhoenixTransactSQL.prepareGetMetricsSqlStmt(conn,condition);
-      ResultSet rs=stmt.executeQuery();
-      while (rs.next()) {
-        TimelineMetric metric=getTimelineMetricFromResultSet(rs);
-        if (condition.isGrouped()) {
-          metrics.addOrMergeTimelineMetric(metric);
-        }
- else {
-          metrics.getMetrics().add(metric);
-        }
+        metrics.getMetrics().add(metric);
       }
     }
   }
@@ -37,6 +34,5 @@
       }
     }
   }
-  LOG.info("Metrics records size: " + metrics.getMetrics().size());
   return metrics;
 }
