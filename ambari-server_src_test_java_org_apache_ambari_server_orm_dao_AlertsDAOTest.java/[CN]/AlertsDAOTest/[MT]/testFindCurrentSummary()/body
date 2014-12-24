@@ -14,8 +14,14 @@
   int warn=0;
   int crit=0;
   int unk=0;
-  for (  AlertCurrentEntity h : m_dao.findCurrentByCluster(m_cluster.getClusterId())) {
-switch (h.getAlertHistory().getAlertState()) {
+  int maintenance=0;
+  List<AlertCurrentEntity> currents=m_dao.findCurrentByCluster(m_cluster.getClusterId());
+  for (  AlertCurrentEntity current : currents) {
+    if (current.getMaintenanceState() != MaintenanceState.OFF) {
+      maintenance++;
+      continue;
+    }
+switch (current.getAlertHistory().getAlertState()) {
 case CRITICAL:
       crit++;
     break;
@@ -34,24 +40,40 @@ summary=m_dao.findCurrentCounts(m_cluster.getClusterId(),null,null);
 assertEquals(ok,summary.getOkCount());
 assertEquals(warn,summary.getWarningCount());
 assertEquals(crit,summary.getCriticalCount());
-assertEquals(unk,summary.getCriticalCount());
+assertEquals(unk,summary.getUnknownCount());
+assertEquals(maintenance,summary.getMaintenanceCount());
 assertEquals(2,summary.getOkCount());
 assertEquals(1,summary.getWarningCount());
 assertEquals(1,summary.getCriticalCount());
-assertEquals(1,summary.getCriticalCount());
+assertEquals(1,summary.getUnknownCount());
+assertEquals(0,summary.getMaintenanceCount());
 summary=m_dao.findCurrentCounts(m_cluster.getClusterId(),"YARN",null);
 assertEquals(2,summary.getOkCount());
 assertEquals(1,summary.getWarningCount());
 assertEquals(1,summary.getCriticalCount());
-assertEquals(1,summary.getCriticalCount());
+assertEquals(1,summary.getUnknownCount());
 summary=m_dao.findCurrentCounts(m_cluster.getClusterId(),null,"h1");
 assertEquals(2,summary.getOkCount());
 assertEquals(1,summary.getWarningCount());
 assertEquals(1,summary.getCriticalCount());
-assertEquals(1,summary.getCriticalCount());
+assertEquals(1,summary.getUnknownCount());
+assertEquals(0,summary.getMaintenanceCount());
 summary=m_dao.findCurrentCounts(m_cluster.getClusterId(),"foo",null);
 assertEquals(0,summary.getOkCount());
 assertEquals(0,summary.getWarningCount());
 assertEquals(0,summary.getCriticalCount());
-assertEquals(0,summary.getCriticalCount());
+assertEquals(0,summary.getUnknownCount());
+assertEquals(0,summary.getMaintenanceCount());
+for (AlertCurrentEntity current : currents) {
+if (current.getAlertHistory().getAlertState() == AlertState.WARNING) {
+current.setMaintenanceState(MaintenanceState.ON);
+m_dao.merge(current);
+}
+}
+summary=m_dao.findCurrentCounts(m_cluster.getClusterId(),null,null);
+assertEquals(2,summary.getOkCount());
+assertEquals(0,summary.getWarningCount());
+assertEquals(1,summary.getCriticalCount());
+assertEquals(1,summary.getUnknownCount());
+assertEquals(1,summary.getMaintenanceCount());
 }
