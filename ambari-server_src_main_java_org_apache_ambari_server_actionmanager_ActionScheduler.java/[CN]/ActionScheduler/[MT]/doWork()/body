@@ -17,10 +17,10 @@
     int i_stage=0;
     stages=filterParallelPerHostStages(stages);
     boolean exclusiveRequestIsGoing=false;
-    for (    Stage stage : stages) {
+    for (    Stage s : stages) {
       i_stage++;
-      long requestId=stage.getRequestId();
-      LOG.debug("==> STAGE_i = " + i_stage + "(requestId="+ requestId+ ",StageId="+ stage.getStageId()+ ")");
+      long requestId=s.getRequestId();
+      LOG.debug("==> STAGE_i = " + i_stage + "(requestId="+ requestId+ ",StageId="+ s.getStageId()+ ")");
       Request request=db.getRequest(requestId);
       if (request.isExclusive()) {
         if (runningRequestIds.size() > 0) {
@@ -41,7 +41,7 @@
         }
       }
       List<ExecutionCommand> commandsToSchedule=new ArrayList<ExecutionCommand>();
-      Map<String,RoleStats> roleStats=processInProgressStage(stage,commandsToSchedule);
+      Map<String,RoleStats> roleStats=processInProgressStage(s,commandsToSchedule);
       boolean failed=false;
       for (      Map.Entry<String,RoleStats> entry : roleStats.entrySet()) {
         String role=entry.getKey();
@@ -55,26 +55,26 @@
         }
       }
       if (!failed) {
-        failed=hasPreviousStageFailed(stage);
+        failed=hasPreviousStageFailed(s);
       }
       if (failed) {
-        LOG.warn("Operation completely failed, aborting request id:" + stage.getRequestId());
-        cancelHostRoleCommands(stage.getOrderedHostRoleCommands(),FAILED_TASK_ABORT_REASONING);
-        abortOperationsForStage(stage);
+        LOG.warn("Operation completely failed, aborting request id:" + s.getRequestId());
+        cancelHostRoleCommands(s.getOrderedHostRoleCommands(),FAILED_TASK_ABORT_REASONING);
+        abortOperationsForStage(s);
         return;
       }
       List<ExecutionCommand> commandsToStart=new ArrayList<ExecutionCommand>();
       List<ExecutionCommand> commandsToUpdate=new ArrayList<ExecutionCommand>();
       for (      ExecutionCommand cmd : commandsToSchedule) {
-        processHostRole(stage,cmd,commandsToStart,commandsToUpdate);
+        processHostRole(s,cmd,commandsToStart,commandsToUpdate);
       }
       LOG.debug("==> Commands to start: {}",commandsToStart.size());
       LOG.debug("==> Commands to update: {}",commandsToUpdate.size());
-      ListMultimap<String,ServiceComponentHostEvent> eventMap=formEventMap(stage,commandsToStart);
+      ListMultimap<String,ServiceComponentHostEvent> eventMap=formEventMap(s,commandsToStart);
       List<ExecutionCommand> commandsToAbort=new ArrayList<ExecutionCommand>();
       if (!eventMap.isEmpty()) {
         LOG.debug("==> processing {} serviceComponentHostEvents...",eventMap.size());
-        Cluster cluster=fsmObject.getCluster(stage.getClusterName());
+        Cluster cluster=fsmObject.getCluster(s.getClusterName());
         if (cluster != null) {
           List<ServiceComponentHostEvent> failedEvents=cluster.processServiceComponentHostEvents(eventMap);
           LOG.debug("==> {} events failed.",failedEvents.size());
@@ -90,11 +90,11 @@
           }
         }
  else {
-          LOG.warn("There was events to process but cluster {} not found",stage.getClusterName());
+          LOG.warn("There was events to process but cluster {} not found",s.getClusterName());
         }
       }
       LOG.debug("==> Scheduling {} tasks...",commandsToUpdate.size());
-      db.bulkHostRoleScheduled(stage,commandsToUpdate);
+      db.bulkHostRoleScheduled(s,commandsToUpdate);
       if (commandsToAbort.size() > 0) {
         LOG.debug("==> Aborting {} tasks...",commandsToAbort.size());
         List<Long> taskIds=new ArrayList<Long>();
@@ -103,7 +103,7 @@
         }
         Collection<HostRoleCommand> hostRoleCommands=db.getTasks(taskIds);
         cancelHostRoleCommands(hostRoleCommands,FAILED_TASK_ABORT_REASONING);
-        db.bulkAbortHostRole(stage,commandsToAbort);
+        db.bulkAbortHostRole(s,commandsToAbort);
       }
       LOG.debug("==> Adding {} tasks to queue...",commandsToUpdate.size());
       for (      ExecutionCommand cmd : commandsToUpdate) {
