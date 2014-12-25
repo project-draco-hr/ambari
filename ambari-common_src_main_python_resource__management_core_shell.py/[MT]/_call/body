@@ -1,7 +1,7 @@
-def _call(command, verbose=False, logoutput=False, throw_on_failure=True, cwd=None, env=None, preexec_fn=None, user=None, wait_for_finish=True, timeout=None, path=None, output_file=None, sudo=False):
-    "\n  Execute shell command\n  \n  @param command: list/tuple of arguments (recommended as more safe - don't need to escape) \n  or string of the command to execute\n  @param logoutput: boolean, whether command output should be logged of not\n  @param throw_on_failure: if true, when return code is not zero exception is thrown\n  \n  @return: return_code, stdout\n  "
+def _call(command, verbose=False, logoutput=False, throw_on_failure=True, cwd=None, env=None, preexec_fn=None, user=None, wait_for_finish=True, timeout=None, path=None, sudo=False, on_new_line=None):
+    "\n  Execute shell command\n  \n  @param command: list/tuple of arguments (recommended as more safe - don't need to escape) \n  or string of the command to execute\n  @param logoutput: boolean, whether command output should be logged of not\n  @param throw_on_failure: if true, when return code is not zero exception is thrown\n  "
     command_alias = (string_cmd_from_args_list(command) if isinstance(command, (list, tuple)) else command)
-    env = add_current_path_to_env(env)
+    env = _add_current_path_to_env(env)
     if path:
         path = (os.pathsep.join(path) if isinstance(path, (list, tuple)) else path)
         env['PATH'] = os.pathsep.join([env['PATH'], path])
@@ -11,28 +11,42 @@ def _call(command, verbose=False, logoutput=False, throw_on_failure=True, cwd=No
         command = as_user(command, user, env=env)
     if isinstance(command, (list, tuple)):
         command = string_cmd_from_args_list(command)
-    env_str = get_environment_str(env)
+    env_str = _get_environment_str(env)
     for (placeholder, replacement) in PLACEHOLDERS_TO_STR.iteritems():
         command = command.replace(placeholder, replacement.format(env_str=env_str))
     if verbose:
         Logger.info(('Running: ' + command))
     subprocess_command = ['/bin/bash', '--login', '--noprofile', '-c', command]
     proc = subprocess.Popen(subprocess_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=cwd, env=env, shell=False, preexec_fn=preexec_fn)
-    if (not wait_for_finish):
-        return (None, None)
     if timeout:
         q = Queue()
-        t = threading.Timer(timeout, on_timeout, [proc, q])
+        t = threading.Timer(timeout, _on_timeout, [proc, q])
         t.start()
-    out = proc.communicate()[0].strip('\n')
+    if (not wait_for_finish):
+        return proc
+    logoutput = (((logoutput == True) and Logger.logger.isEnabledFor(logging.INFO)) or ((logoutput == None) and Logger.logger.isEnabledFor(logging.DEBUG)))
+    out = ''
+    try:
+        for line in iter(proc.stdout.readline, ''):
+            out += line
+            try:
+                if on_new_line:
+                    on_new_line(line)
+            except Exception as err:
+                err_msg = "Caused by on_new_line function failed with exception for input argument '{0}':\n{1}".format(line, traceback.format_exc())
+                raise Fail(err_msg)
+            if logoutput:
+                _print(line)
+    finally:
+        proc.stdout.close()
+    proc.wait()
+    out = out.strip('\n')
     if timeout:
         if q.empty():
             t.cancel()
         else:
             raise ExecuteTimeoutException()
     code = proc.returncode
-    if (logoutput and out):
-        Logger.info(out)
     if (throw_on_failure and code):
         err_msg = Logger.filter_text(("Execution of '%s' returned %d. %s" % (command_alias, code, out)))
         raise Fail(err_msg)
