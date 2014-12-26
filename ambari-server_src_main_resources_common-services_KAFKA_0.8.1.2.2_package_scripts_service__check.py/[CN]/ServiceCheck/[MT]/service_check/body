@@ -2,15 +2,9 @@ def service_check(self, env):
     import params
     env.set_params(params)
     kafka_config = self.read_kafka_config()
-    environment = self.get_env()
     create_topic_cmd_created_output = 'Created topic "ambari_kafka_service_check".'
     create_topic_cmd_exists_output = 'Topic "ambari_kafka_service_check" already exists.'
+    source_cmd = format('source {conf_dir}/kafka-env.sh')
+    create_topic_cmd = format('{kafka_home}/bin/kafka-topics.sh --zookeeper {kafka_config[zookeeper.connect]} --create --topic ambari_kafka_service_check --partitions 1 --replication-factor 1')
     print 'Running kafka create topic command'
-    create_topic_cmd = ((params.kafka_home + '/bin/kafka-topics.sh'), ('--zookeeper ' + kafka_config['zookeeper.connect']), '--create --topic ambari_kafka_service_check', '--partitions 1 --replication-factor 1')
-    (code, out) = shell.checked_call(create_topic_cmd, verbose=True, env=environment)
-    if (out.find(create_topic_cmd_created_output) != (-1)):
-        print out
-    elif (out.find(create_topic_cmd_exists_output) != (-1)):
-        print 'Topic ambari_kafka_service_check exists'
-    else:
-        raise Fail(out)
+    Execute(format("{source_cmd} ; {create_topic_cmd} | grep '{create_topic_cmd_created_output}\\|{create_topic_cmd_exists_output}'"), logoutput=True)
