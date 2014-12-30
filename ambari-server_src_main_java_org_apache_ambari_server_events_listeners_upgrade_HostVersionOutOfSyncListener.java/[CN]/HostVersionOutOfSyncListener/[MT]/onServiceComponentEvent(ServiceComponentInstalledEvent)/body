@@ -1,0 +1,20 @@
+{
+  if (LOG.isDebugEnabled()) {
+    LOG.debug(event.toString());
+  }
+  try {
+    Cluster cluster=clusters.get().getClusterById(event.getClusterId());
+    List<HostVersionEntity> hostVersionEntities=hostVersionDAO.get().findByClusterAndHost(cluster.getClusterName(),event.getHostName());
+    StackId currentStackId=cluster.getCurrentStackVersion();
+    for (    HostVersionEntity hostVersionEntity : hostVersionEntities) {
+      if (hostVersionEntity.getRepositoryVersion().getStack().equals(currentStackId.getStackId()) && hostVersionEntity.getState().equals(RepositoryVersionState.INSTALLED)) {
+        hostVersionEntity.setState(RepositoryVersionState.OUT_OF_SYNC);
+        hostVersionDAO.get().merge(hostVersionEntity);
+        cluster.recalculateClusterVersionState(hostVersionEntity.getRepositoryVersion().getVersion());
+      }
+    }
+  }
+ catch (  AmbariException e) {
+    LOG.error("Can not update hosts about out of sync",e);
+  }
+}

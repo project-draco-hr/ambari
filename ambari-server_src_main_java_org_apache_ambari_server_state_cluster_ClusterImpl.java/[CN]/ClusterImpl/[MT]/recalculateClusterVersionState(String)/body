@@ -10,27 +10,23 @@
         throw new AmbariException(String.format("Repository version %s not found for cluster %s",repositoryVersion,getClusterName()));
       }
       RepositoryVersionState worstState;
-      if (clusterVersion.getState() != RepositoryVersionState.INSTALL_FAILED && clusterVersion.getState() != RepositoryVersionState.INSTALLING && clusterVersion.getState() != RepositoryVersionState.INSTALLED) {
+      if (clusterVersion.getState() != RepositoryVersionState.INSTALL_FAILED && clusterVersion.getState() != RepositoryVersionState.OUT_OF_SYNC && clusterVersion.getState() != RepositoryVersionState.INSTALLING && clusterVersion.getState() != RepositoryVersionState.INSTALLED) {
         return;
       }
       worstState=RepositoryVersionState.INSTALLED;
       for (      Host host : hosts.values()) {
         String hostName=host.getHostName();
         if (host.getState() != HostState.HEALTHY) {
-          worstState=RepositoryVersionState.INSTALL_FAILED;
+          worstState=getWorstState(worstState,RepositoryVersionState.OUT_OF_SYNC);
           LOG.warn(String.format("Host %s is in unhealthy state, treating as %s",hostName,worstState));
-          continue;
         }
         HostVersionEntity hostVersion=hostVersionDAO.findByClusterStackVersionAndHost(this.getClusterName(),stackId,repositoryVersion,hostName);
         if (hostVersion == null) {
-          throw new AmbariException(String.format("Repo version %s is not installed on host %s",repositoryVersion,hostName));
+          LOG.warn(String.format("Repo version %s is not installed on host %s",repositoryVersion,hostName));
+          worstState=getWorstState(worstState,RepositoryVersionState.OUT_OF_SYNC);
         }
-        if (hostVersion.getState() == RepositoryVersionState.INSTALL_FAILED) {
-          worstState=hostVersion.getState();
-          break;
-        }
- else         if (hostVersion.getState() == RepositoryVersionState.INSTALLING) {
-          worstState=RepositoryVersionState.INSTALLING;
+ else {
+          worstState=getWorstState(worstState,hostVersion.getState());
         }
       }
       if (worstState != clusterVersion.getState()) {
