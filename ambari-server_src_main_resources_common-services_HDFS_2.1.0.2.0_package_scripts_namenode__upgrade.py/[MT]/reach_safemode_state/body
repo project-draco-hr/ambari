@@ -1,0 +1,17 @@
+def reach_safemode_state(secure_user, safemode_state, in_ha):
+    '\n  Enter or leave safemode for the Namenode.\n  @param secure_user: user to perform action as\n  @param safemode_state: ON or OFF\n  @param in_ha: bool indicating if Namenode High Availability is enabled\n  @:return True if successful, false otherwise.\n  '
+    Logger.info('Prepare to leave safemode')
+    import params
+    hostname = params.hostname
+    grep = (format('Safe mode is {safemode_state} in {hostname}') if in_ha else format('Safe mode is {safemode_state}'))
+    safemode_check = format('su - {secure_user} -c \'hdfs dfsadmin -safemode get | grep "{grep}"\'')
+    (code, out) = call(safemode_check)
+    Logger.info(('Command: %s\nCode: %d.' % (safemode_check, code)))
+    if (code != 0):
+        command = ('hdfs dfsadmin -safemode %s' % safemode_to_instruction[safemode_state])
+        Execute(command, user=secure_user, logoutput=True)
+        (code, out) = call(safemode_check)
+        Logger.info(('Command: %s\nCode: %d. Out: %s' % (safemode_check, code, out)))
+        if (code != 0):
+            return False
+    return True

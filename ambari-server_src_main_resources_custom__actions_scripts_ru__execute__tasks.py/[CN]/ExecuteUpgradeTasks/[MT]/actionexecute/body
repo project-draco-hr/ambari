@@ -1,61 +1,29 @@
 def actionexecute(self, env):
+    resolve_ambari_config()
     config = Script.get_config()
     host_name = socket.gethostname()
-    version = '2.2.0.0'
-    (code, out) = checked_call('hdp-select')
-    if ((code == 0) and out):
-        p = re.compile('(2\\.2\\.0\\.0\\-\\d{4})')
-        m = p.search(out)
-        if (m and (len(m.groups()) == 1)):
-            version = m.group(1)
+    version = default('/roleParams/version', None)
+    service_package_folder = default('/roleParams/service_package_folder', None)
+    hooks_folder = default('/roleParams/hooks_folder', None)
     tasks = json.loads(config['roleParams']['tasks'])
     if tasks:
         for t in tasks:
-            Logger.info(('Task: %s' % str(t)))
-            command = (t['command'] if ('command' in t) else None)
-            first = (t['first'] if ('first' in t) else None)
-            unless = (t['unless'] if ('unless' in t) else None)
-            on_failure = (t['onfailure'] if ('onfailure' in t) else None)
-            upto = None
-            try:
-                upto = (int(t['upto']) if ('upto' in t) else None)
-            except ValueError as e:
-                Logger.warning("Could not retrieve 'upto' value from task.")
-            every = (int(t['every']) if (('every' in t) and upto) else 0)
-            if (every < 0):
-                every = 0
-            effective_times = (upto if upto else 1)
-            ignore_return_codes = (t['ignore'] if ('ignore' in t) else set())
-            if ignore_return_codes:
-                ignore_return_codes = set([int(e) for e in ignore_return_codes.split(',')])
-            if command:
-                command = replace_variables(command, host_name, version)
-                first = replace_variables(first, host_name, version)
-                unless = replace_variables(unless, host_name, version)
-                if first:
-                    (code, out) = call(first)
-                    Logger.info(('Pre-condition command. Code: %s, Out: %s' % (str(code), str(out))))
-                    if (code != 0):
-                        break
-                if unless:
-                    (code, out) = call(unless)
-                    Logger.info(('Unless command. Code: %s, Out: %s' % (str(code), str(out))))
-                    if (code == 0):
-                        break
-                for i in range(1, (effective_times + 1)):
-                    (code, out) = call(command)
-                    Logger.info(('Command. Code: %s, Out: %s' % (str(code), str(out))))
-                    if ((code == 0) or (code in ignore_return_codes)):
-                        break
-                    if (i == effective_times):
-                        err_msg = Logger.filter_text(("Execution of '%s' returned %d. %s" % (command, code, out)))
-                        try:
-                            if on_failure:
-                                on_failure = replace_variables(on_failure, host_name, version)
-                                (code_failure_handler, out_failure_handler) = call(on_failure)
-                                Logger.error(('Failure Handler. Code: %s, Out: %s' % (str(code_failure_handler), str(out_failure_handler))))
-                        except:
-                            pass
-                        raise Fail(err_msg)
-                    if upto:
-                        time.sleep(every)
+            task = ExecuteTask(t)
+            Logger.info(str(task))
+            if (task.script and task.function and service_package_folder and hooks_folder):
+                file_cache = FileCache(agent_config)
+                command_paths = {'commandParams': {'service_package_folder': service_package_folder, 'hooks_folder': hooks_folder, }, }
+                server_url_prefix = default('/hostLevelParams/jdk_location', '')
+                base_dir = file_cache.get_service_base_dir(command_paths, server_url_prefix)
+                script_path = os.path.join(base_dir, task.script)
+                if (not os.path.exists(script_path)):
+                    message = ('Script %s does not exist' % str(script_path))
+                    raise Fail(message)
+                command_params = ['python', script_path, task.function, self.command_data_file, self.basedir, self.stroutfile, self.logging_level, Script.get_tmp_dir()]
+                task.command = ' '.join(command_params)
+            if task.command:
+                task.command = replace_variables(task.command, host_name, version)
+                (code, out) = call(task.command)
+                Logger.info(('Command: %s\nCode: %s, Out: %s' % (task.command, str(code), str(out))))
+                if (code != 0):
+                    raise Fail(out)

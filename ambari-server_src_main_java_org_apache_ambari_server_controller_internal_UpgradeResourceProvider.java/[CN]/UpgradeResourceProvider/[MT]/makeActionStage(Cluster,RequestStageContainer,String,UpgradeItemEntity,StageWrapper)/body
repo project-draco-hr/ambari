@@ -5,11 +5,22 @@
   RequestResourceFilter filter=new RequestResourceFilter("","",new ArrayList<String>(wrapper.getHosts()));
   Map<String,String> params=new HashMap<String,String>();
   params.put("tasks",entity.getTasks());
+  params.put("version",version);
+  AmbariMetaInfo ambariMetaInfo=m_metaProvider.get();
+  StackId stackId=cluster.getDesiredStackVersion();
+  StackInfo stackInfo=ambariMetaInfo.getStack(stackId.getStackName(),stackId.getStackVersion());
+  if (wrapper.getTasks() != null && wrapper.getTasks().size() > 0) {
+    String serviceName=wrapper.getTasks().get(0).getService();
+    ServiceInfo serviceInfo=ambariMetaInfo.getService(stackId.getStackName(),stackId.getStackVersion(),serviceName);
+    params.put(SERVICE_PACKAGE_FOLDER,serviceInfo.getServicePackageFolder());
+    params.put(HOOKS_FOLDER,stackInfo.getStackHooksFolder());
+  }
   ActionExecutionContext actionContext=new ActionExecutionContext(cluster.getClusterName(),"ru_execute_tasks",Collections.singletonList(filter),params);
   actionContext.setTimeout(Short.valueOf((short)60));
   Map<String,String> hostLevelParams=new HashMap<String,String>();
   hostLevelParams.put(JDK_LOCATION,getManagementController().getJdkResourceUrl());
-  Stage stage=stageFactory.get().createNew(request.getId().longValue(),"/tmp/ambari",cluster.getClusterName(),cluster.getClusterId(),entity.getText(),"{}","{}",StageUtils.getGson().toJson(hostLevelParams));
+  ExecuteCommandJson jsons=commandExecutionHelper.get().getCommandJson(actionContext,cluster);
+  Stage stage=stageFactory.get().createNew(request.getId().longValue(),"/tmp/ambari",cluster.getClusterName(),cluster.getClusterId(),entity.getText(),jsons.getClusterHostInfo(),jsons.getCommandParamsForStage(),jsons.getHostParamsForStage());
   stage.setSkippable(UPGRADE_DEFAULT_SKIPPABLE);
   long stageId=request.getLastStageId() + 1;
   if (0L == stageId) {
