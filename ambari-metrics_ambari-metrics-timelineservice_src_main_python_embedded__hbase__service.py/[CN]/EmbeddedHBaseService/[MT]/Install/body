@@ -1,0 +1,40 @@
+@classmethod
+def Install(cls, startupMode='auto', username=None, password=None):
+    print ('Installing service %s' % cls._svc_name_)
+    java_path = get_java_exe_path()
+    java_args = _build_master_java_args(username)
+    config_file_path = _get_config_file_path()
+    xmlFileContents = _MasterXml()
+    xmlFileContents.service.id = EMBEDDED_HBASE_MASTER_SERVICE
+    xmlFileContents.service.name = EMBEDDED_HBASE_MASTER_SERVICE
+    xmlFileContents.service.description = ('This service runs ' + EMBEDDED_HBASE_MASTER_SERVICE)
+    xmlFileContents.service.executable = java_path
+    xmlFileContents.service.arguments = java_args
+    xmlFile = open(config_file_path, 'w')
+    xmlFile.write(str(xmlFileContents))
+    xmlFile.close()
+    startType = cls._get_start_type(startupMode)
+    serviceType = win32service.SERVICE_WIN32_OWN_PROCESS
+    errorControl = win32service.SERVICE_ERROR_NORMAL
+    commandLine = os.path.abspath(cls._exe_name_)
+    hscm = win32service.OpenSCManager(None, None, win32service.SC_MANAGER_ALL_ACCESS)
+    try:
+        try:
+            hs = win32service.CreateService(hscm, cls._svc_name_, cls._svc_display_name_, win32service.SERVICE_ALL_ACCESS, serviceType, startType, errorControl, commandLine, None, 0, None, username, password)
+            print 'Service installed'
+            win32service.CloseServiceHandle(hs)
+        finally:
+            win32service.CloseServiceHandle(hscm)
+    except win32service.error as exc:
+        if (exc.winerror == winerror.ERROR_SERVICE_EXISTS):
+            cls.Update(username, password)
+        else:
+            print ('Error installing service: %s (%d)' % (exc.strerror, exc.winerror))
+            err = exc.winerror
+    except ValueError as msg:
+        print ('Error installing service: %s' % str(msg))
+        err = (-1)
+        try:
+            RemoveService(cls._svc_name_)
+        except win32api.error:
+            print 'Warning - could not remove the partially installed service.'
