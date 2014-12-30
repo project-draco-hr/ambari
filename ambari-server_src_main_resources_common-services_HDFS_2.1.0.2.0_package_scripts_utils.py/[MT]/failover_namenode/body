@@ -11,6 +11,11 @@ def failover_namenode():
         Logger.info('Rolling Upgrade - Initiating namenode failover by killing zkfc on active namenode')
         kill_zkfc(params.hdfs_user)
         check_standby_cmd = format('hdfs haadmin -getServiceState {namenode_id} | grep standby')
-        Execute(check_standby_cmd, user=params.hdfs_user, tries=30, try_sleep=6, logoutput=True)
+        (code, out) = call(check_standby_cmd, user=params.hdfs_user, logoutput=True)
+        Logger.info(format('Rolling Upgrade - check for standby returned {code}'))
+        if ((code == 255) and out):
+            Logger.info('Rolling Upgrade - namenode is already down')
+        else:
+            Execute(check_standby_cmd, user=params.hdfs_user, tries=30, try_sleep=6, logoutput=True)
     else:
         Logger.info(('Rolling Upgrade - Host %s is the standby namenode.' % str(params.hostname)))
