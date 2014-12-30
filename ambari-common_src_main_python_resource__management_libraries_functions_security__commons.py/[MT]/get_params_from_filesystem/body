@@ -1,12 +1,25 @@
 def get_params_from_filesystem(conf_dir, config_files):
-    '\n  Used to retrieve properties from xml config files and build a dict\n  :param conf_dir:  directory where the configuration files sit\n  :param config_files: list of configuration file names\n  :return:\n  '
+    '\n  Used to retrieve properties from xml config files and build a dict\n\n  The dictionary of configuration files to file types should contain one of the following values"\n    \'XML\'\n    \'PROPERTIES\'\n\n  :param conf_dir:  directory where the configuration files sit\n  :param config_files: dictionary of configuration file names to (supported) file types\n  :return: a dictionary of config-type to a dictionary of key/value pairs for\n  '
     result = {}
     from xml.etree import ElementTree as ET
-    for config_file in config_files:
-        configuration = ET.parse(((conf_dir + os.sep) + config_file))
-        props = configuration.getroot().getchildren()
-        config_file_id = (config_file[:(-4)] if (len(config_file) > 4) else config_file)
-        result[config_file_id] = {}
-        for prop in props:
-            result[config_file_id].update({prop[0].text: prop[1].text, })
+    import ConfigParser, StringIO
+    for (config_file, file_type) in config_files.iteritems():
+        (file_name, file_ext) = os.path.splitext(config_file)
+        if (file_type == FILE_TYPE_XML):
+            configuration = ET.parse(((conf_dir + os.sep) + config_file))
+            props = configuration.getroot().getchildren()
+            config_file_id = (file_name if file_name else config_file)
+            result[config_file_id] = {}
+            for prop in props:
+                result[config_file_id].update({prop[0].text: prop[1].text, })
+        elif (file_type == FILE_TYPE_PROPERTIES):
+            with open(((conf_dir + os.sep) + config_file), 'r') as f:
+                config_string = ('[root]\n' + f.read())
+            ini_fp = StringIO.StringIO(config_string)
+            config = ConfigParser.RawConfigParser()
+            config.readfp(ini_fp)
+            props = config.items('root')
+            result[file_name] = {}
+            for (key, value) in props:
+                result[file_name].update({key: value, })
     return result
