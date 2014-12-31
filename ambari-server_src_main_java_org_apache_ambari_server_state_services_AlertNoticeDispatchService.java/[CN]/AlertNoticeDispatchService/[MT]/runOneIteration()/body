@@ -3,7 +3,7 @@
   if (pending.size() == 0) {
     return;
   }
-  LOG.info("There are {} pending alert notices about to be dispatched..." + pending.size());
+  LOG.info("There are {} pending alert notices about to be dispatched...",pending.size());
   Map<AlertTargetEntity,List<AlertNoticeEntity>> aggregateMap=new HashMap<AlertTargetEntity,List<AlertNoticeEntity>>(pending.size());
   for (  AlertNoticeEntity notice : pending) {
     AlertTargetEntity target=notice.getAlertTarget();
@@ -21,48 +21,41 @@
       continue;
     }
     String targetType=target.getNotificationType();
-    String propertiesJson=target.getProperties();
-    AlertTargetProperties targetProperties=m_gson.fromJson(propertiesJson,AlertTargetProperties.class);
-    Map<String,String> properties=targetProperties.Properties;
-    Notification notification=new Notification();
-    notification.Callback=new AlertNoticeDispatchCallback();
-    notification.CallbackIds=new ArrayList<String>(notices.size());
-    List<AlertHistoryEntity> histories=new ArrayList<AlertHistoryEntity>(notices.size());
-    for (    AlertNoticeEntity notice : notices) {
-      AlertHistoryEntity history=notice.getAlertHistory();
-      histories.add(history);
-      notification.CallbackIds.add(notice.getUuid());
-    }
-    try {
-      renderNotificationContent(notification,histories,target);
-    }
- catch (    Exception exception) {
-      LOG.error("Unable to create notification for alerts",exception);
-      List<String> failedNoticeIds=new ArrayList<String>(notices.size());
-      for (      AlertNoticeEntity notice : notices) {
-        failedNoticeIds.add(notice.getUuid());
-      }
-      notification.Callback.onFailure(failedNoticeIds);
-      continue;
-    }
-    if (properties.containsKey(AMBARI_DISPATCH_CREDENTIAL_USERNAME) && properties.containsKey(AMBARI_DISPATCH_CREDENTIAL_PASSWORD)) {
-      DispatchCredentials credentials=new DispatchCredentials();
-      credentials.UserName=properties.get(AMBARI_DISPATCH_CREDENTIAL_USERNAME);
-      credentials.Password=properties.get(AMBARI_DISPATCH_CREDENTIAL_PASSWORD);
-      notification.Credentials=credentials;
-    }
-    if (null != targetProperties.Recipients) {
-      List<Recipient> recipients=new ArrayList<Recipient>(targetProperties.Recipients.size());
-      for (      String stringRecipient : targetProperties.Recipients) {
-        Recipient recipient=new Recipient();
-        recipient.Identifier=stringRecipient;
-        recipients.add(recipient);
-      }
-      notification.Recipients=recipients;
-    }
-    notification.DispatchProperties=properties;
     NotificationDispatcher dispatcher=m_dispatchFactory.getDispatcher(targetType);
-    DispatchRunnable runnable=new DispatchRunnable(dispatcher,notification);
-    m_executor.execute(runnable);
+    if (dispatcher.isDigestSupported()) {
+      Notification notification=buildNotificationFromTarget(target);
+      notification.CallbackIds=new ArrayList<String>(notices.size());
+      List<AlertHistoryEntity> histories=new ArrayList<AlertHistoryEntity>(notices.size());
+      for (      AlertNoticeEntity notice : notices) {
+        AlertHistoryEntity history=notice.getAlertHistory();
+        histories.add(history);
+        notification.CallbackIds.add(notice.getUuid());
+      }
+      try {
+        renderDigestNotificationContent(notification,histories,target);
+        DispatchRunnable runnable=new DispatchRunnable(dispatcher,notification);
+        m_executor.execute(runnable);
+      }
+ catch (      Exception exception) {
+        LOG.error("Unable to create notification for alerts",exception);
+        notification.Callback.onFailure(notification.CallbackIds);
+      }
+    }
+ else {
+      for (      AlertNoticeEntity notice : notices) {
+        Notification notification=buildNotificationFromTarget(target);
+        AlertHistoryEntity history=notice.getAlertHistory();
+        notification.CallbackIds=Collections.singletonList(notice.getUuid());
+        try {
+          renderNotificationContent(notification,history,target);
+          DispatchRunnable runnable=new DispatchRunnable(dispatcher,notification);
+          m_executor.execute(runnable);
+        }
+ catch (        Exception exception) {
+          LOG.error("Unable to create notification for alert",exception);
+          notification.Callback.onFailure(notification.CallbackIds);
+        }
+      }
+    }
   }
 }
