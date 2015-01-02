@@ -1,0 +1,19 @@
+{
+  final String clusterName=request.getClusterName();
+  final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+  final Map<String,Host> clusterHosts=clustersProvider.get().getHostsForCluster(clusterName);
+  for (  Map.Entry<String,Host> hostEntry : clusterHosts.entrySet()) {
+    final Host host=hostEntry.getValue();
+    if (host.getMaintenanceState(cluster.getClusterId()) == MaintenanceState.OFF) {
+      final RepositoryVersionEntity repositoryVersion=repositoryVersionDaoProvider.get().findByDisplayName(request.getRepositoryVersionName());
+      final HostVersionEntity hostVersion=hostVersionDaoProvider.get().findByClusterStackVersionAndHost(clusterName,repositoryVersion.getStack(),repositoryVersion.getVersion(),host.getHostName());
+      if (hostVersion == null || hostVersion.getState() != RepositoryVersionState.INSTALLED) {
+        upgradeCheck.getFailedOn().add(host.getHostName());
+      }
+    }
+  }
+  if (!upgradeCheck.getFailedOn().isEmpty()) {
+    upgradeCheck.setStatus(UpgradeCheckStatus.FAIL);
+    upgradeCheck.setFailReason("Some hosts do not have repository version " + request.getRepositoryVersionName() + " installed");
+  }
+}
