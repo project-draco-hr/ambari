@@ -1,18 +1,11 @@
 {
   TreeNode<Resource> resultTree=queryResult.getResultTree();
-  Result summary=new ResultImpl(true);
-  int ok=0;
-  int warning=0;
-  int critical=0;
-  int unknown=0;
-  long mostRecentOK=0;
-  long mostRecentWarning=0;
-  long mostRecentCritical=0;
-  long mostRecentUnknown=0;
+  AlertStateSummary alertSummary=new AlertStateSummary();
   for (  TreeNode<Resource> node : resultTree.getChildren()) {
     Resource resource=node.getObject();
     AlertState state=(AlertState)resource.getPropertyValue(AlertResourceProvider.ALERT_STATE);
     Long originalTimestampObject=(Long)resource.getPropertyValue(AlertResourceProvider.ALERT_ORIGINAL_TIMESTAMP);
+    MaintenanceState maintenanceState=(MaintenanceState)resource.getPropertyValue(AlertResourceProvider.ALERT_MAINTENANCE_STATE);
     if (null == state) {
       state=AlertState.UNKNOWN;
     }
@@ -20,52 +13,48 @@
     if (null != originalTimestampObject) {
       originalTimestamp=originalTimestampObject.longValue();
     }
+    boolean isMaintenanceModeEnabled=false;
+    if (null != maintenanceState && maintenanceState != MaintenanceState.OFF) {
+      isMaintenanceModeEnabled=true;
+    }
+    final AlertStateValues alertStateValues;
 switch (state) {
 case CRITICAL:
 {
-        critical++;
-        if (originalTimestamp > mostRecentCritical) {
-          mostRecentCritical=originalTimestamp;
-        }
+        alertStateValues=alertSummary.Critical;
         break;
       }
 case OK:
 {
-      ok++;
-      if (originalTimestamp > mostRecentOK) {
-        mostRecentOK=originalTimestamp;
-      }
+      alertStateValues=alertSummary.Ok;
       break;
     }
 case WARNING:
 {
-    warning++;
-    if (originalTimestamp > mostRecentWarning) {
-      mostRecentWarning=originalTimestamp;
-    }
+    alertStateValues=alertSummary.Warning;
     break;
   }
 default :
 case UNKNOWN:
 {
-  unknown++;
-  if (originalTimestamp > mostRecentUnknown) {
-    mostRecentUnknown=originalTimestamp;
-  }
+  alertStateValues=alertSummary.Unknown;
   break;
 }
 }
+if (isMaintenanceModeEnabled) {
+alertStateValues.MaintenanceCount++;
 }
+ else {
+alertStateValues.Count++;
+}
+if (originalTimestamp > alertStateValues.Timestamp) {
+alertStateValues.Timestamp=originalTimestamp;
+}
+}
+Result summary=new ResultImpl(true);
 Resource resource=new ResourceImpl(Resource.Type.Alert);
-resource.setProperty(OK_COUNT_PROPERTY,ok);
-resource.setProperty(WARN_COUNT_PROPERTY,warning);
-resource.setProperty(CRITICAL_COUNT_PROPERTY,critical);
-resource.setProperty(UNKNOWN_COUNT_PROPERTY,unknown);
-resource.setProperty(OK_TIMESTAMP_PROPERTY,mostRecentOK);
-resource.setProperty(WARN_TIMESTAMP_PROPERTY,mostRecentWarning);
-resource.setProperty(CRITICAL_TIMESTAMP_PROPERTY,mostRecentCritical);
-resource.setProperty(UNKNOWN_TIMESTAMP_PROPERTY,mostRecentUnknown);
 TreeNode<Resource> summaryTree=summary.getResultTree();
 summaryTree.addChild(resource,"alerts_summary");
+resource.setProperty("alerts_summary",alertSummary);
 return summary;
 }
