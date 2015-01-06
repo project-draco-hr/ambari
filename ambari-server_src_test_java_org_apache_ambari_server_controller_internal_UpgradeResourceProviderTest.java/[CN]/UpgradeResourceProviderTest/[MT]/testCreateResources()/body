@@ -12,8 +12,9 @@
   assertEquals(1,upgrades.size());
   UpgradeEntity entity=upgrades.get(0);
   assertEquals(cluster.getClusterId(),entity.getClusterId().longValue());
-  assertEquals(4,entity.getUpgradeGroups().size());
-  UpgradeGroupEntity group=entity.getUpgradeGroups().get(1);
+  List<UpgradeGroupEntity> upgradeGroups=entity.getUpgradeGroups();
+  assertEquals(4,upgradeGroups.size());
+  UpgradeGroupEntity group=upgradeGroups.get(1);
   assertEquals(4,group.getItems().size());
   assertTrue(group.getItems().get(0).getText().contains("Preparing"));
   assertTrue(group.getItems().get(1).getText().contains("Restarting"));
@@ -27,5 +28,18 @@
   assertEquals(9,stages.size());
   List<HostRoleCommand> tasks=am.getRequestTasks(requests.get(0).longValue());
   assertEquals(9,tasks.size());
+  Set<Long> slaveStageIds=new HashSet<Long>();
+  UpgradeGroupEntity coreSlavesGroup=upgradeGroups.get(2);
+  for (  UpgradeItemEntity itemEntity : coreSlavesGroup.getItems()) {
+    slaveStageIds.add(itemEntity.getStageId());
+  }
+  for (  Stage stage : stages) {
+    assertEquals(slaveStageIds.contains(stage.getStageId()),stage.isSkippable());
+    for (    Map<String,HostRoleCommand> taskMap : stage.getHostRoleCommands().values()) {
+      for (      HostRoleCommand task : taskMap.values()) {
+        assertEquals(!slaveStageIds.contains(stage.getStageId()),task.isRetryAllowed());
+      }
+    }
+  }
   return status;
 }
