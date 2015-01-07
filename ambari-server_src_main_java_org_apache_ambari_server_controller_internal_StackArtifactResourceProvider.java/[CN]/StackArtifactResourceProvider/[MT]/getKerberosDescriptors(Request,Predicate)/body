@@ -1,0 +1,32 @@
+{
+  Set<Resource> resources=new HashSet<Resource>();
+  for (  Map<String,Object> properties : getPropertyMaps(predicate)) {
+    String artifactName=(String)properties.get(ARTIFACT_NAME_PROPERTY_ID);
+    if (artifactName == null || artifactName.equals(KERBEROS_DESCRIPTOR_NAME)) {
+      String stackName=(String)properties.get(STACK_NAME_PROPERTY_ID);
+      String stackVersion=(String)properties.get(STACK_VERSION_PROPERTY_ID);
+      String stackService=(String)properties.get(STACK_SERVICE_NAME_PROPERTY_ID);
+      Map<String,Object> descriptor;
+      try {
+        descriptor=getKerberosDescriptor(stackName,stackVersion,stackService);
+      }
+ catch (      IOException e) {
+        LOG.error("Unable to process Kerberos Descriptor. Properties: " + properties,e);
+        throw new SystemException("An internal exception occurred while attempting to build a Kerberos Descriptor " + "artifact. See ambari server logs for more information",e);
+      }
+      if (descriptor != null) {
+        Resource resource=new ResourceImpl(Resource.Type.StackArtifact);
+        Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+        setResourceProperty(resource,ARTIFACT_NAME_PROPERTY_ID,KERBEROS_DESCRIPTOR_NAME,requestedIds);
+        setResourceProperty(resource,ARTIFACT_DATA_PROPERTY_ID,descriptor,requestedIds);
+        setResourceProperty(resource,STACK_NAME_PROPERTY_ID,stackName,requestedIds);
+        setResourceProperty(resource,STACK_VERSION_PROPERTY_ID,stackVersion,requestedIds);
+        if (stackService != null) {
+          setResourceProperty(resource,STACK_SERVICE_NAME_PROPERTY_ID,stackService,requestedIds);
+        }
+        resources.add(resource);
+      }
+    }
+  }
+  return resources;
+}
