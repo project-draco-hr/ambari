@@ -1,2 +1,49 @@
 {
+  Map<String,UpgradePack> upgrades=ambariMetaInfo.getUpgradePacks("HDP","2.1.1");
+  assertTrue(upgrades.size() > 0);
+  assertTrue(upgrades.containsKey("upgrade_test"));
+  UpgradePack up=upgrades.get("upgrade_test");
+  assertEquals("2.2.*",up.getTarget());
+  Map<String,List<String>> expectedStages=new LinkedHashMap<String,List<String>>(){
+{
+      put("ZOOKEEPER",Arrays.asList("ZOOKEEPER_SERVER"));
+      put("HDFS",Arrays.asList("NAMENODE","DATANODE"));
+    }
+  }
+;
+  int i=0;
+  for (  Entry<String,List<String>> entry : expectedStages.entrySet()) {
+    assertTrue(up.getTasks().containsKey(entry.getKey()));
+    assertEquals(i++,indexOf(up.getTasks(),entry.getKey()));
+    assertEquals(entry.getValue().size(),up.getTasks().get(entry.getKey()).size());
+    int j=0;
+    for (    String comp : entry.getValue()) {
+      assertEquals(j++,indexOf(up.getTasks().get(entry.getKey()),comp));
+    }
+  }
+  assertTrue(up.getTasks().containsKey("HDFS"));
+  assertTrue(up.getTasks().get("HDFS").containsKey("NAMENODE"));
+  ProcessingComponent pc=up.getTasks().get("HDFS").get("NAMENODE");
+  assertNotNull(pc.preTasks);
+  assertNotNull(pc.postTasks);
+  assertNotNull(pc.tasks);
+  assertNull(pc.preDowngradeTasks);
+  assertNull(pc.postDowngradeTasks);
+  assertEquals(1,pc.tasks.size());
+  assertEquals(Task.Type.RESTART,pc.tasks.get(0).getType());
+  assertEquals(RestartTask.class,pc.tasks.get(0).getClass());
+  assertTrue(up.getTasks().containsKey("ZOOKEEPER"));
+  assertTrue(up.getTasks().get("ZOOKEEPER").containsKey("ZOOKEEPER_SERVER"));
+  pc=up.getTasks().get("HDFS").get("DATANODE");
+  assertNotNull(pc.preDowngradeTasks);
+  assertEquals(0,pc.preDowngradeTasks.size());
+  assertNotNull(pc.postDowngradeTasks);
+  assertEquals(1,pc.postDowngradeTasks.size());
+  pc=up.getTasks().get("ZOOKEEPER").get("ZOOKEEPER_SERVER");
+  assertNotNull(pc.preTasks);
+  assertEquals(1,pc.preTasks.size());
+  assertNotNull(pc.postTasks);
+  assertEquals(1,pc.postTasks.size());
+  assertNotNull(pc.tasks);
+  assertEquals(1,pc.tasks.size());
 }
