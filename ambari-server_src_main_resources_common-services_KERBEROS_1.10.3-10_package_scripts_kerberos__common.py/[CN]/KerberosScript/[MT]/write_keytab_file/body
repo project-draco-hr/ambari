@@ -1,6 +1,7 @@
 @staticmethod
 def write_keytab_file():
     import params
+    import stat
     if (params.kerberos_command_params is not None):
         for item in params.kerberos_command_params:
             keytab_content_base64 = get_property_value(item, 'keytab_content_base64')
@@ -8,12 +9,19 @@ def write_keytab_file():
                 keytab_file_path = get_property_value(item, 'keytab_file_path')
                 if ((keytab_file_path is not None) and (len(keytab_file_path) > 0)):
                     (head, tail) = os.path.split(keytab_file_path)
-                    if (head and (not os.path.isdir(head))):
-                        os.makedirs(head)
-                    with open(keytab_file_path, 'w') as f:
-                        f.write(base64.b64decode(keytab_content_base64))
-                    owner = get_property_value(item, 'keytab_file_owner')
+                    if head:
+                        Directory(head, recursive=True, mode=493, owner='root', group='root')
+                    owner = get_property_value(item, 'keytab_file_owner_name')
                     owner_access = get_property_value(item, 'keytab_file_owner_access')
-                    group = get_property_value(item, 'keytab_file_group')
+                    group = get_property_value(item, 'keytab_file_group_name')
                     group_access = get_property_value(item, 'keytab_file_group_access')
-                    KerberosScript._set_file_access(keytab_file_path, owner, owner_access, group, group_access)
+                    mode = 0
+                    if (owner_access == 'rw'):
+                        mode |= (stat.S_IREAD | stat.S_IWRITE)
+                    else:
+                        mode |= stat.S_IREAD
+                    if (group_access == 'rw'):
+                        mode |= (stat.S_IRGRP | stat.S_IWGRP)
+                    elif (group_access == 'r'):
+                        mode |= stat.S_IRGRP
+                    File(keytab_file_path, content=base64.b64decode(keytab_content_base64), mode=mode, owner=owner, group=group)
