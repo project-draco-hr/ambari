@@ -24,7 +24,7 @@ def flume(action=None):
     elif (action == 'start'):
         if (len(params.flume_command_targets) == 0):
             _set_desired_state('STARTED')
-        flume_base = (as_user(format('{flume_bin} agent --name {{0}} --conf {{1}} --conf-file {{2}} {{3}}'), params.flume_user, env={'JAVA_HOME': params.java_home, }) + ' &')
+        flume_base = (as_user(format('{flume_bin} agent --name {{0}} --conf {{1}} --conf-file {{2}} {{3}} > {flume_log_dir}/{{4}}.out 2>&1'), params.flume_user, env={'JAVA_HOME': params.java_home, }) + ' &')
         for agent in cmd_target_names():
             flume_agent_conf_dir = ((params.flume_conf_dir + os.sep) + agent)
             flume_agent_conf_file = ((flume_agent_conf_dir + os.sep) + 'flume.conf')
@@ -38,10 +38,10 @@ def flume(action=None):
                     extra_args = extra_args.format(params.ganglia_server_host, '8655')
                 if params.has_metric_collector:
                     extra_args = '-Dflume.monitoring.type=org.apache.hadoop.metrics2.sink.flume.FlumeTimelineMetricsSink'
-                flume_cmd = flume_base.format(agent, flume_agent_conf_dir, flume_agent_conf_file, extra_args)
+                flume_cmd = flume_base.format(agent, flume_agent_conf_dir, flume_agent_conf_file, extra_args, agent)
                 Execute(flume_cmd, wait_for_finish=False, environment={'JAVA_HOME': params.java_home, })
                 pid_cmd = format('pgrep -o -u {flume_user} -f ^{java_home}.*{agent}.* > {flume_agent_pid_file}')
-                Execute(pid_cmd, logoutput=True, tries=20, try_sleep=6)
+                Execute(pid_cmd, logoutput=True, tries=20, try_sleep=10)
         pass
     elif (action == 'stop'):
         if (len(params.flume_command_targets) == 0):
