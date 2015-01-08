@@ -1,0 +1,24 @@
+{
+  final String expectedHostName="c6401.apache.ambari.org";
+  final String expectedHostGroupName="host_group_1";
+  EasyMockSupport mockSupport=new EasyMockSupport();
+  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
+  Stack mockStack=mockSupport.createMock(Stack.class);
+  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName,"serverTwo")).atLeastOnce();
+  expect(mockHostGroupOne.getComponents()).andReturn(Collections.singleton("GANGLIA_SERVER")).atLeastOnce();
+  mockSupport.replayAll();
+  Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
+  Map<String,String> stormSiteProperties=new HashMap<String,String>();
+  configProperties.put("storm-site",stormSiteProperties);
+  stormSiteProperties.put("worker.childopts","localhost");
+  stormSiteProperties.put("supervisor.childopts","localhost");
+  stormSiteProperties.put("nimbus.childopts","localhost");
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
+  Map<String,HostGroup> mapOfHostGroups=new HashMap<String,HostGroup>();
+  mapOfHostGroups.put(expectedHostGroupName,mockHostGroupOne);
+  configProcessor.doUpdateForClusterCreate(mapOfHostGroups,mockStack);
+  assertEquals("worker startup settings not properly handled by cluster create",expectedHostName,stormSiteProperties.get("worker.childopts"));
+  assertEquals("supervisor startup settings not properly handled by cluster create",expectedHostName,stormSiteProperties.get("supervisor.childopts"));
+  assertEquals("nimbus startup settings not properly handled by cluster create",expectedHostName,stormSiteProperties.get("nimbus.childopts"));
+  mockSupport.verifyAll();
+}
