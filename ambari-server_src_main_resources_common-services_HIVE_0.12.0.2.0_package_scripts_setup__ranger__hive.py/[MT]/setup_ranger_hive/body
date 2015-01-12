@@ -1,0 +1,41 @@
+def setup_ranger_hive(env):
+    import params
+    env.set_params(params)
+    if params.has_ranger_admin:
+        try:
+            command = 'hdp-select status hive-server2'
+            (return_code, hdp_output) = shell.call(command, timeout=20)
+        except Exception as e:
+            Logger.error(str(e))
+            raise Fail('Unable to execute hdp-select command to retrieve the version.')
+        if (return_code != 0):
+            raise Fail('Unable to determine the current version because of a non-zero return code of {0}'.format(str(return_code)))
+        hdp_version = re.sub('hive-server2 - ', '', hdp_output)
+        match = re.match('[0-9]+.[0-9]+.[0-9]+.[0-9]+-[0-9]+', hdp_version)
+        if (match is None):
+            raise Fail('Failed to get extracted version')
+        file_path = (('/usr/hdp/' + hdp_version) + '/ranger-hive-plugin/install.properties')
+        ranger_hive_dict = ranger_hive_properties(params)
+        hive_repo_data = hive_repo_properties(params)
+        write_properties_to_file(file_path, ranger_hive_dict)
+        if params.enable_ranger_hive:
+            cmd = format('cd /usr/hdp/{hdp_version}/ranger-hive-plugin/ && sh enable-hive-plugin.sh')
+            ranger_adm_obj = Rangeradmin(url=ranger_hive_dict['POLICY_MGR_URL'])
+            (response_code, response_recieved) = ranger_adm_obj.call_pycurl_request((ranger_hive_dict['POLICY_MGR_URL'] + '/login.jsp'), '', 'get', 'test:test')
+            if ((response_code is not None) and (response_code == 200)):
+                repo = ranger_adm_obj.get_repository_by_name_pycurl(ranger_hive_dict['REPOSITORY_NAME'], 'hive', 'true', 'admin:admin')
+                if (repo and (repo['name'] == ranger_hive_dict['REPOSITORY_NAME'])):
+                    Logger.info('Hive Repository exist')
+                else:
+                    response = ranger_adm_obj.create_repository_pycurl(hive_repo_data, 'admin:admin')
+                    if (response is not None):
+                        Logger.info('Hive Repository created')
+                    else:
+                        Logger.info('Hive Repository creation failed')
+            else:
+                Logger.info('Ranger service is not started on given host')
+        else:
+            cmd = format('cd /usr/hdp/{hdp_version}/ranger-hive-plugin/ && sh disable-hive-plugin.sh')
+        Execute(cmd, environment={'JAVA_HOME': params.java64_home, }, logoutput=True)
+    else:
+        Logger.info('Ranger admin not installed')
