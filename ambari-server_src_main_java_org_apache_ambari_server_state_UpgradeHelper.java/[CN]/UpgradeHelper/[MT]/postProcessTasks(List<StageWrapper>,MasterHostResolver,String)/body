@@ -1,0 +1,46 @@
+{
+  Cluster cluster=mhr.getCluster();
+  for (  StageWrapper stageWrapper : stageWrappers) {
+    List<TaskWrapper> taskWrappers=stageWrapper.getTasks();
+    for (    TaskWrapper taskWrapper : taskWrappers) {
+      List<Task> tasks=taskWrapper.getTasks();
+      for (      Task task : tasks) {
+        if (task.getType() == Type.MANUAL) {
+          List<String> tokens=new ArrayList<String>(5);
+          ManualTask manualTask=(ManualTask)task;
+          if (null == manualTask.message) {
+            continue;
+          }
+          Matcher matcher=PLACEHOLDER_REGEX.matcher(manualTask.message);
+          while (matcher.find()) {
+            tokens.add(matcher.group(1));
+          }
+          for (          String token : tokens) {
+            String value=token;
+            if (token.equals(PLACEHOLDER_HOST_ALL)) {
+              HostsType hostsType=mhr.getMasterAndHosts(taskWrapper.getService(),taskWrapper.getComponent());
+              if (null != hostsType) {
+                value=StringUtils.join(hostsType.hosts,", ");
+              }
+            }
+ else             if (token.equals(PLACEHOLDER_HOST_MASTER)) {
+              HostsType hostsType=mhr.getMasterAndHosts(taskWrapper.getService(),taskWrapper.getComponent());
+              if (null != hostsType) {
+                value=hostsType.master;
+              }
+            }
+ else             if (token.equals(PLACEHOLDER_VERSION)) {
+              value=version;
+            }
+ else {
+              value=m_configHelper.get().getPlaceholderValueFromDesiredConfigurations(cluster,token);
+            }
+            if (null != value) {
+              manualTask.message=manualTask.message.replace(token,value);
+            }
+          }
+        }
+      }
+    }
+  }
+}
