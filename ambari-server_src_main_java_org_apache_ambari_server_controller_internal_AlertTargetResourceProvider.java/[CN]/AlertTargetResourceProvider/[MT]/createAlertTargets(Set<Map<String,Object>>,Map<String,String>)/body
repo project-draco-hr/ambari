@@ -1,0 +1,57 @@
+{
+  List<AlertTargetEntity> entities=new ArrayList<AlertTargetEntity>();
+  for (  Map<String,Object> requestMap : requestMaps) {
+    AlertTargetEntity entity=new AlertTargetEntity();
+    String name=(String)requestMap.get(ALERT_TARGET_NAME);
+    String description=(String)requestMap.get(ALERT_TARGET_DESCRIPTION);
+    String notificationType=(String)requestMap.get(ALERT_TARGET_NOTIFICATION_TYPE);
+    Collection<String> alertStates=(Collection<String>)requestMap.get(ALERT_TARGET_STATES);
+    String globalProperty=(String)requestMap.get(ALERT_TARGET_GLOBAL);
+    if (StringUtils.isEmpty(name)) {
+      throw new IllegalArgumentException("The name of the alert target is required.");
+    }
+    if (StringUtils.isEmpty(notificationType)) {
+      throw new IllegalArgumentException("The type of the alert target is required.");
+    }
+    Map<String,String> properties=extractProperties(requestMap);
+    String propertiesJson=s_gson.toJson(properties);
+    if (StringUtils.isEmpty(propertiesJson)) {
+      throw new IllegalArgumentException("Alert targets must be created with their connection properties");
+    }
+    String validationProperty=requestInfoProps.get(AlertTargetResourceDefinition.VALIDATE_CONFIG_DIRECTIVE);
+    if (validationProperty != null && validationProperty.equalsIgnoreCase("true")) {
+      validateTargetConfig(notificationType,properties);
+    }
+    boolean isGlobal=false;
+    if (null != globalProperty) {
+      isGlobal=Boolean.parseBoolean(globalProperty);
+    }
+    final Set<AlertState> alertStateSet;
+    if (null != alertStates) {
+      alertStateSet=new HashSet<AlertState>(alertStates.size());
+      for (      String state : alertStates) {
+        alertStateSet.add(AlertState.valueOf(state));
+      }
+    }
+ else {
+      alertStateSet=EnumSet.allOf(AlertState.class);
+    }
+    if (requestMap.containsKey(ALERT_TARGET_GROUPS)) {
+      Collection<Long> groupIds=(Collection<Long>)requestMap.get(ALERT_TARGET_GROUPS);
+      if (!groupIds.isEmpty()) {
+        Set<AlertGroupEntity> groups=new HashSet<AlertGroupEntity>();
+        List<Long> ids=new ArrayList<Long>(groupIds);
+        groups.addAll(s_dao.findGroupsById(ids));
+        entity.setAlertGroups(groups);
+      }
+    }
+    entity.setDescription(description);
+    entity.setNotificationType(notificationType);
+    entity.setProperties(propertiesJson);
+    entity.setTargetName(name);
+    entity.setAlertStates(alertStateSet);
+    entity.setGlobal(isGlobal);
+    entities.add(entity);
+  }
+  s_dao.createTargets(entities);
+}
