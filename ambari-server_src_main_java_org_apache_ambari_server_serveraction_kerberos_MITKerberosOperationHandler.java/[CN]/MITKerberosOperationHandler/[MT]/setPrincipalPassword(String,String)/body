@@ -1,39 +1,21 @@
 {
+  if (!isOpen()) {
+    throw new KerberosOperationException("This operation handler has not be opened");
+  }
   if ((principal == null) || principal.isEmpty()) {
-    throw new AmbariException("Failed to set password - no principal specified");
+    throw new KerberosOperationException("Failed to set password - no principal specified");
+  }
+ else   if ((password == null) || password.isEmpty()) {
+    throw new KerberosOperationException("Failed to set password - no password specified");
   }
  else {
-    StringBuilder queryBuilder=new StringBuilder();
-    queryBuilder.append("change_password");
-    if ((password == null) || password.isEmpty()) {
-      queryBuilder.append(" -randkey");
-    }
- else {
-      queryBuilder.append(" -pw ");
-      queryBuilder.append(password);
-    }
-    queryBuilder.append(" ");
-    queryBuilder.append(principal);
     try {
-      ShellCommandUtil.Result result=invokeKAdmin(queryBuilder.toString());
-      if (result != null) {
-        if (result.isSuccessful()) {
-          return getKeyNumber(principal);
-        }
- else {
-          LOG.warn("Failed to set password for {}:\n\tExitCode: {}\n\tSTDOUT: {}\n\tSTDERR: {}",principal,result.getExitCode(),result.getStdout(),result.getStderr());
-          throw new AmbariException(String.format("Failed to update password for %s",principal));
-        }
-      }
- else {
-        String message=String.format("Failed to set password for %s - Unknown reason",principal);
-        LOG.warn(message);
-        throw new AmbariException(message);
-      }
+      invokeKAdmin(String.format("change_password -pw %s %s",password,principal));
     }
- catch (    AmbariException e) {
+ catch (    KerberosOperationException e) {
       LOG.error(String.format("Failed to set password for %s",principal),e);
       throw e;
     }
+    return getKeyNumber(principal);
   }
 }

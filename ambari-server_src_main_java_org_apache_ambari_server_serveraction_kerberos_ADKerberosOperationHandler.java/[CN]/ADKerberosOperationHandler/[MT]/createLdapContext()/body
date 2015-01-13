@@ -1,22 +1,40 @@
 {
-  LOG.info("Creating ldap context");
-  Properties env=new Properties();
-  env.put(Context.INITIAL_CONTEXT_FACTORY,LDAP_CONTEXT_FACTORY_CLASS);
-  env.put(Context.PROVIDER_URL,ldapUrl);
-  env.put(Context.SECURITY_PRINCIPAL,adminPrincipal);
-  env.put(Context.SECURITY_CREDENTIALS,adminPassword);
-  env.put(Context.SECURITY_AUTHENTICATION,LDAP_ATUH_MECH_SIMPLE);
-  env.put(Context.REFERRAL,"follow");
+  KerberosCredential administratorCredentials=getAdministratorCredentials();
+  Properties properties=new Properties();
+  properties.put(Context.INITIAL_CONTEXT_FACTORY,LDAP_CONTEXT_FACTORY_CLASS);
+  properties.put(Context.PROVIDER_URL,ldapUrl);
+  properties.put(Context.SECURITY_PRINCIPAL,administratorCredentials.getPrincipal());
+  properties.put(Context.SECURITY_CREDENTIALS,administratorCredentials.getPassword());
+  properties.put(Context.SECURITY_AUTHENTICATION,LDAP_ATUH_MECH_SIMPLE);
+  properties.put(Context.REFERRAL,"follow");
+  properties.put("java.naming.ldap.factory.socket",TrustingSSLSocketFactory.class.getName());
   try {
-    ldapContext=new InitialLdapContext(env,null);
+    return createInitialLdapContext(properties,null);
   }
- catch (  NamingException ne) {
-    LOG.error("Can not created ldapContext",ne);
-    throw new AmbariException("Can not created ldapContext",ne);
+ catch (  CommunicationException e) {
+    String message=String.format("Failed to communicate with the Active Directory at %s: %s",ldapUrl,e.getMessage());
+    LOG.warn(message,e);
+    throw new KerberosKDCConnectionException(message,e);
   }
-  searchControls=new SearchControls();
-  searchControls.setSearchScope(ONELEVEL_SCOPE);
-  Set<String> userSearchAttributes=new HashSet<String>();
-  userSearchAttributes.add("cn");
-  searchControls.setReturningAttributes(userSearchAttributes.toArray(new String[userSearchAttributes.size()]));
+catch (  AuthenticationException e) {
+    String message=String.format("Failed to authenticate with the Active Directory at %s: %s",ldapUrl,e.getMessage());
+    LOG.warn(message,e);
+    throw new KerberosAdminAuthenticationException(message,e);
+  }
+catch (  NamingException e) {
+    String error=e.getMessage();
+    if ((error != null) && !error.isEmpty()) {
+      String message=String.format("Failed to communicate with the Active Directory at %s: %s",ldapUrl,e.getMessage());
+      LOG.warn(message,e);
+      if (error.startsWith("Cannot parse url:")) {
+        throw new KerberosKDCConnectionException(message,e);
+      }
+ else {
+        throw new KerberosOperationException(message,e);
+      }
+    }
+ else {
+      throw new KerberosOperationException("Unexpected error condition",e);
+    }
+  }
 }

@@ -1,51 +1,45 @@
 {
+  if (!isOpen()) {
+    throw new KerberosOperationException("This operation handler has not be opened");
+  }
   if ((principal == null) || principal.isEmpty()) {
-    throw new AmbariException("Failed to get key number for principal  - no principal specified");
+    throw new KerberosOperationException("Failed to get key number for principal  - no principal specified");
   }
  else {
     String query=String.format("get_principal %s",principal);
+    ShellCommandUtil.Result result;
     try {
-      ShellCommandUtil.Result result=invokeKAdmin(query);
-      if (result != null) {
-        if (result.isSuccessful()) {
-          String stdOut=result.getStdout();
-          if (stdOut == null) {
-            LOG.warn("Failed to get key number for {}:\n\tExitCode: {}\n\tSTDOUT: NULL\n\tSTDERR: {}",principal,result.getExitCode(),result.getStderr());
-            throw new AmbariException(String.format("Failed to get key number for %s",principal));
-          }
-          Matcher matcher=PATTERN_GET_KEY_NUMBER.matcher(stdOut);
-          if (matcher.matches()) {
-            NumberFormat numberFormat=NumberFormat.getIntegerInstance();
-            String keyNumber=matcher.group(1);
-            numberFormat.setGroupingUsed(false);
-            try {
-              Number number=numberFormat.parse(keyNumber);
-              return (number == null) ? 0 : number.intValue();
-            }
- catch (            ParseException e) {
-              LOG.warn("Failed to get key number for {} - invalid key number value ({}):\n\tExitCode: {}\n\tSTDOUT: NULL\n\tSTDERR: {}",principal,keyNumber,result.getExitCode(),result.getStderr());
-              throw new AmbariException(String.format("Failed to get key number for %s",principal));
-            }
-          }
- else {
-            LOG.warn("Failed to get key number for {} - unexpected STDOUT data:\n\tExitCode: {}\n\tSTDOUT: NULL\n\tSTDERR: {}",principal,result.getExitCode(),result.getStderr());
-            throw new AmbariException(String.format("Failed to get key number for %s",principal));
-          }
-        }
- else {
-          LOG.warn("Failed to get key number for {}:\n\tExitCode: {}\n\tSTDOUT: {}\n\tSTDERR: {}",principal,result.getExitCode(),result.getStdout(),result.getStderr());
-          throw new AmbariException(String.format("Failed to get key number for %s",principal));
-        }
-      }
- else {
-        String message=String.format("Failed to get key number for %s - Unknown reason",principal);
-        LOG.warn(message);
-        throw new AmbariException(message);
-      }
+      result=invokeKAdmin(query);
     }
- catch (    AmbariException e) {
+ catch (    KerberosOperationException e) {
       LOG.error(String.format("Failed to get key number for %s",principal),e);
       throw e;
+    }
+    String stdOut=result.getStdout();
+    if (stdOut == null) {
+      String message=String.format("Failed to get key number for %s:\n\tExitCode: %s\n\tSTDOUT: NULL\n\tSTDERR: %s",principal,result.getExitCode(),result.getStderr());
+      LOG.warn(message);
+      throw new KerberosOperationException(message);
+    }
+    Matcher matcher=PATTERN_GET_KEY_NUMBER.matcher(stdOut);
+    if (matcher.matches()) {
+      NumberFormat numberFormat=NumberFormat.getIntegerInstance();
+      String keyNumber=matcher.group(1);
+      numberFormat.setGroupingUsed(false);
+      try {
+        Number number=numberFormat.parse(keyNumber);
+        return (number == null) ? 0 : number.intValue();
+      }
+ catch (      ParseException e) {
+        String message=String.format("Failed to get key number for %s - invalid key number value (%s):\n\tExitCode: %s\n\tSTDOUT: NULL\n\tSTDERR: %s",principal,keyNumber,result.getExitCode(),result.getStderr());
+        LOG.warn(message);
+        throw new KerberosOperationException(message);
+      }
+    }
+ else {
+      String message=String.format("Failed to get key number for %s - unexpected STDOUT data:\n\tExitCode: %s\n\tSTDOUT: NULL\n\tSTDERR: %s",principal,result.getExitCode(),result.getStderr());
+      LOG.warn(message);
+      throw new KerberosOperationException(message);
     }
   }
 }

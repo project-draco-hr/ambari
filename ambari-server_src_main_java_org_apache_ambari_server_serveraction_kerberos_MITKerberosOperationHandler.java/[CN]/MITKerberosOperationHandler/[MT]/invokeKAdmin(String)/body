@@ -1,47 +1,68 @@
 {
   ShellCommandUtil.Result result=null;
-  if ((query != null) && !query.isEmpty()) {
-    KerberosCredential administratorCredentials=getAdministratorCredentials();
-    String defaultRealm=getDefaultRealm();
-    List<String> command=new ArrayList<String>();
-    File tempKeytabFile=null;
-    try {
-      String adminPrincipal=(administratorCredentials == null) ? null : administratorCredentials.getPrincipal();
-      if ((adminPrincipal == null) || adminPrincipal.isEmpty()) {
-        command.add("kadmin.local");
+  if ((query == null) || query.isEmpty()) {
+    throw new KerberosOperationException("Missing kadmin query");
+  }
+  KerberosCredential administratorCredentials=getAdministratorCredentials();
+  String defaultRealm=getDefaultRealm();
+  List<String> command=new ArrayList<String>();
+  File tempKeytabFile=null;
+  try {
+    String adminPrincipal=(administratorCredentials == null) ? null : administratorCredentials.getPrincipal();
+    if ((adminPrincipal == null) || adminPrincipal.isEmpty()) {
+      command.add("kadmin.local");
+    }
+ else {
+      String adminPassword=administratorCredentials.getPassword();
+      String adminKeyTab=administratorCredentials.getKeytab();
+      command.add("kadmin");
+      command.add("-p");
+      command.add(adminPrincipal);
+      if ((adminKeyTab != null) && !adminKeyTab.isEmpty()) {
+        tempKeytabFile=createKeytabFile(adminKeyTab);
+        if (tempKeytabFile != null) {
+          command.add("-k");
+          command.add("-t");
+          command.add(tempKeytabFile.getAbsolutePath());
+        }
+      }
+ else       if (adminPassword != null) {
+        command.add("-w");
+        command.add(adminPassword);
+      }
+    }
+    if ((defaultRealm != null) && !defaultRealm.isEmpty()) {
+      command.add("-r");
+      command.add(defaultRealm);
+    }
+    command.add("-q");
+    command.add(query.replace("\"","\\\""));
+    result=executeCommand(command.toArray(new String[command.size()]));
+    if (!result.isSuccessful()) {
+      String message=String.format("Failed to execute kadmin:\n\tExitCode: %s\n\tSTDOUT: %s\n\tSTDERR: %s",result.getExitCode(),result.getStdout(),result.getStderr());
+      LOG.warn(message);
+      String stdErr=result.getStderr();
+      if (stdErr.contains("Client not found in Kerberos database")) {
+        throw new KerberosAdminAuthenticationException(stdErr);
+      }
+ else       if (stdErr.contains("Incorrect password while initializing")) {
+        throw new KerberosAdminAuthenticationException(stdErr);
+      }
+ else       if (stdErr.contains("Cannot contact any KDC")) {
+        throw new KerberosKDCConnectionException(stdErr);
+      }
+ else       if (stdErr.contains("Missing parameters in krb5.conf required for kadmin client")) {
+        throw new KerberosRealmException(stdErr);
       }
  else {
-        String adminPassword=administratorCredentials.getPassword();
-        String adminKeyTab=administratorCredentials.getKeytab();
-        command.add("kadmin");
-        command.add("-p");
-        command.add(adminPrincipal);
-        if ((adminKeyTab != null) && !adminKeyTab.isEmpty()) {
-          tempKeytabFile=createKeytabFile(adminKeyTab);
-          if (tempKeytabFile != null) {
-            command.add("-k");
-            command.add("-t");
-            command.add(tempKeytabFile.getAbsolutePath());
-          }
-        }
- else         if (adminPassword != null) {
-          command.add("-w");
-          command.add(adminPassword);
-        }
+        throw new KerberosOperationException("Unexpected error condition executing the kadmin command");
       }
-      if ((defaultRealm != null) && !defaultRealm.isEmpty()) {
-        command.add("-r");
-        command.add(defaultRealm);
-      }
-      command.add("-q");
-      command.add(query.replace("\"","\\\""));
-      result=executeCommand(command.toArray(new String[command.size()]));
     }
+  }
   finally {
-      if (tempKeytabFile != null) {
-        if (!tempKeytabFile.delete()) {
-          tempKeytabFile.deleteOnExit();
-        }
+    if (tempKeytabFile != null) {
+      if (!tempKeytabFile.delete()) {
+        tempKeytabFile.deleteOnExit();
       }
     }
   }
