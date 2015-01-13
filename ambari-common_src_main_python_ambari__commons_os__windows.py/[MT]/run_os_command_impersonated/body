@@ -1,7 +1,7 @@
 def run_os_command_impersonated(cmd, user, password, domain='.'):
-    si = STARTUPINFO()
+    si = win32process.STARTUPINFO()
     (out_handle, err_handle, out_file, err_file) = _create_tmp_files()
-    (ok, si.hStdInput) = _safe_duplicate_handle(GetStdHandle(STD_INPUT_HANDLE))
+    (ok, si.hStdInput) = _safe_duplicate_handle(win32api.GetStdHandle(win32api.STD_INPUT_HANDLE))
     if (not ok):
         raise Exception('Unable to create StdInput for child process')
     (ok, si.hStdOutput) = _safe_duplicate_handle(out_handle)
@@ -10,17 +10,17 @@ def run_os_command_impersonated(cmd, user, password, domain='.'):
     (ok, si.hStdError) = _safe_duplicate_handle(err_handle)
     if (not ok):
         raise Exception('Unable to create StdErr for child process')
-    si.dwFlags = STARTF_USESTDHANDLES
+    si.dwFlags = win32process.STARTF_USESTDHANDLES
     si.lpDesktop = ''
-    user_token = LogonUser(user, domain, password, win32con.LOGON32_LOGON_SERVICE, win32con.LOGON32_PROVIDER_DEFAULT)
-    primary_token = DuplicateTokenEx(user_token, SecurityImpersonation, 0, TokenPrimary)
-    info = CreateProcessAsUser(primary_token, None, cmd, None, None, 1, 0, None, None, si)
+    user_token = win32security.LogonUser(user, domain, password, win32con.LOGON32_LOGON_SERVICE, win32con.LOGON32_PROVIDER_DEFAULT)
+    primary_token = win32security.DuplicateTokenEx(user_token, win32security.SecurityImpersonation, 0, win32security.TokenPrimary)
+    info = win32process.CreateProcessAsUser(primary_token, None, cmd, None, None, 1, 0, None, None, si)
     (hProcess, hThread, dwProcessId, dwThreadId) = info
     hThread.Close()
     try:
-        WaitForSingleObject(hProcess, INFINITE)
+        win32event.WaitForSingleObject(hProcess, win32event.INFINITE)
     except KeyboardInterrupt:
         pass
     (out, err) = _get_files_output(out_file, err_file)
-    exitcode = GetExitCodeProcess(hProcess)
+    exitcode = win32process.GetExitCodeProcess(hProcess)
     return (exitcode, out, err)
