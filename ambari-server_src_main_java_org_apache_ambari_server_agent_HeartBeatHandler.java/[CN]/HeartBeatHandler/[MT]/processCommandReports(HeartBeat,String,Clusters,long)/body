@@ -5,6 +5,7 @@
     taskIds.add(report.getTaskId());
   }
   Collection<HostRoleCommand> commands=actionManager.getTasks(taskIds);
+  Set<ServiceComponentHost> scHostsRequireRecalculation=new HashSet<ServiceComponentHost>();
   Iterator<HostRoleCommand> hostRoleCommandIterator=commands.iterator();
   for (  CommandReport report : reports) {
     Long clusterId=null;
@@ -46,6 +47,21 @@
         ServiceComponentHost scHost=svcComp.getServiceComponentHost(hostname);
         String schName=scHost.getServiceComponentName();
         if (report.getStatus().equals(HostRoleStatus.COMPLETED.toString())) {
+          if (StringUtils.isNotBlank(report.getStructuredOut())) {
+            try {
+              final ComponentVersionStructuredOut structuredOutput=gson.fromJson(report.getStructuredOut(),ComponentVersionStructuredOut.class);
+              final String previousVersion=scHost.getVersion();
+              if (StringUtils.isNotBlank(structuredOutput.getVersion()) && !previousVersion.equals(structuredOutput.getVersion())) {
+                scHost.setVersion(structuredOutput.getVersion());
+                if (!previousVersion.equals("UNKNOWN")) {
+                  scHost.setUpgradeState(UpgradeState.COMPLETE);
+                }
+                scHostsRequireRecalculation.add(scHost);
+              }
+            }
+ catch (            JsonSyntaxException ex) {
+            }
+          }
           if (scHost.getState().equals(State.UPGRADING)) {
             scHost.setStackVersion(scHost.getDesiredStackVersion());
           }
@@ -97,6 +113,9 @@ catch (      InvalidStateTransitionException ex) {
         }
       }
     }
+  }
+  for (  ServiceComponentHost serviceComponentHost : scHostsRequireRecalculation) {
+    serviceComponentHost.recalculateHostVersionState();
   }
   actionManager.processTaskResponse(hostname,reports,commands);
 }
