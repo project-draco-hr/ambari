@@ -1,0 +1,33 @@
+{
+  clusters.addHost("h2");
+  Host host=clusters.getHost("h2");
+  Map<String,String> hostAttributes=new HashMap<String,String>();
+  hostAttributes.put("os_family","redhat");
+  hostAttributes.put("os_release_version","6.3");
+  host.setHostAttributes(hostAttributes);
+  host.persist();
+  clusters.mapHostToCluster("h2","c1");
+  Cluster cluster=clusters.getCluster("c1");
+  Service service=cluster.getService("ZOOKEEPER");
+  ServiceComponent component=service.getServiceComponent("ZOOKEEPER_SERVER");
+  ServiceComponentHost sch=component.addServiceComponentHost("h2");
+  sch.setVersion("2.2.2.2");
+  List<UpgradeEntity> upgrades=upgradeDao.findUpgrades(cluster.getClusterId());
+  assertEquals(0,upgrades.size());
+  Map<String,Object> requestProps=new HashMap<String,Object>();
+  requestProps.put(UpgradeResourceProvider.UPGRADE_CLUSTER_NAME,"c1");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_VERSION,"2.2.2.1");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_FORCE_DOWNGRADE,"true");
+  ResourceProvider upgradeResourceProvider=createProvider(amc);
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  upgradeResourceProvider.createResources(request);
+  upgrades=upgradeDao.findUpgrades(cluster.getClusterId());
+  assertEquals(1,upgrades.size());
+  UpgradeEntity entity=upgrades.get(0);
+  assertEquals(cluster.getClusterId(),entity.getClusterId().longValue());
+  List<UpgradeGroupEntity> upgradeGroups=entity.getUpgradeGroups();
+  assertEquals(4,upgradeGroups.size());
+  UpgradeGroupEntity group=upgradeGroups.get(2);
+  assertEquals("ZOOKEEPER",group.getName());
+  assertEquals(4,group.getItems().size());
+}
