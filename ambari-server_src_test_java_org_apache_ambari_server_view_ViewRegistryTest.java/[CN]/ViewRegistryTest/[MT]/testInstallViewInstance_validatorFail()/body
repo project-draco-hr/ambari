@@ -1,0 +1,25 @@
+{
+  ViewRegistry registry=ViewRegistry.getInstance();
+  Properties properties=new Properties();
+  properties.put("p1","v1");
+  Configuration ambariConfig=new Configuration(properties);
+  Validator validator=createNiceMock(Validator.class);
+  ValidationResult result=createNiceMock(ValidationResult.class);
+  ViewConfig config=ViewConfigTest.getConfig(xml_valid_instance);
+  ViewEntity viewEntity=getViewEntity(config,ambariConfig,getClass().getClassLoader(),"");
+  viewEntity.setValidator(validator);
+  ViewInstanceEntity viewInstanceEntity=getViewInstanceEntity(viewEntity,config.getInstances().get(0));
+  expect(validator.validateInstance(viewInstanceEntity,Validator.ValidationContext.PRE_CREATE)).andReturn(result).anyTimes();
+  expect(result.isValid()).andReturn(false).anyTimes();
+  replay(viewDAO,viewInstanceDAO,securityHelper,handlerList,validator,result);
+  registry.addDefinition(viewEntity);
+  try {
+    registry.installViewInstance(viewInstanceEntity);
+    Assert.fail("expected a ValidationException");
+  }
+ catch (  ValidationException e) {
+  }
+  Collection<ViewInstanceEntity> viewInstanceDefinitions=registry.getInstanceDefinitions(viewEntity);
+  Assert.assertTrue(viewInstanceDefinitions.isEmpty());
+  verify(viewDAO,viewInstanceDAO,securityHelper,handlerList,validator,result);
+}

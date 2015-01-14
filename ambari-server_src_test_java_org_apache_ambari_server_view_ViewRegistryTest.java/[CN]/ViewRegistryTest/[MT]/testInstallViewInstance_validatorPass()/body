@@ -9,24 +9,18 @@
   ViewEntity viewEntity=getViewEntity(config,ambariConfig,getClass().getClassLoader(),"");
   viewEntity.setValidator(validator);
   ViewInstanceEntity viewInstanceEntity=getViewInstanceEntity(viewEntity,config.getInstances().get(0));
-  ViewInstanceEntity updateInstance=getViewInstanceEntity(viewEntity,config.getInstances().get(0));
-  expect(viewInstanceDAO.merge(viewInstanceEntity)).andReturn(viewInstanceEntity);
-  expect(viewInstanceDAO.findByName("MY_VIEW{1.0.0}",viewInstanceEntity.getInstanceName())).andReturn(viewInstanceEntity).anyTimes();
-  expect(validator.validateInstance(viewInstanceEntity,Validator.ValidationContext.PRE_UPDATE)).andReturn(result).anyTimes();
-  expect(result.isValid()).andReturn(false).anyTimes();
-  replay(viewDAO,viewInstanceDAO,securityHelper,validator,result);
+  expect(viewInstanceDAO.merge(viewInstanceEntity)).andReturn(null);
+  expect(viewInstanceDAO.findByName("MY_VIEW{1.0.0}",viewInstanceEntity.getInstanceName())).andReturn(viewInstanceEntity);
+  handlerList.addViewInstance(viewInstanceEntity);
+  expect(validator.validateInstance(viewInstanceEntity,Validator.ValidationContext.PRE_CREATE)).andReturn(result).anyTimes();
+  expect(result.isValid()).andReturn(true).anyTimes();
+  replay(viewDAO,viewInstanceDAO,securityHelper,handlerList,validator,result);
   registry.addDefinition(viewEntity);
   registry.installViewInstance(viewInstanceEntity);
-  try {
-    registry.updateViewInstance(updateInstance);
-    Assert.fail("expected a ValidationException");
-  }
- catch (  ValidationException e) {
-  }
   Collection<ViewInstanceEntity> viewInstanceDefinitions=registry.getInstanceDefinitions(viewEntity);
   Assert.assertEquals(1,viewInstanceDefinitions.size());
   ViewInstanceEntity instanceEntity=viewInstanceDefinitions.iterator().next();
   Assert.assertEquals("v2-1",instanceEntity.getProperty("p2").getValue());
   Assert.assertEquals(viewInstanceEntity,viewInstanceDefinitions.iterator().next());
-  verify(viewDAO,viewInstanceDAO,securityHelper,validator,result);
+  verify(viewDAO,viewInstanceDAO,securityHelper,handlerList,validator,result);
 }
