@@ -1,5 +1,19 @@
 def execute(self):
-    '\n    Executes method relevant to command type\n    '
+    '\n    Sets up logging;\n    Parses command parameters and executes method relevant to command type\n    '
+    (logger, chout, cherr) = Logger.initialize_logger()
+    if (len(sys.argv) < 7):
+        logger.error('Script expects at least 6 arguments')
+        print USAGE.format(os.path.basename(sys.argv[0]))
+        sys.exit(1)
+    command_name = str.lower(sys.argv[1])
+    self.command_data_file = sys.argv[2]
+    self.basedir = sys.argv[3]
+    self.stroutfile = sys.argv[4]
+    self.logging_level = sys.argv[5]
+    Script.tmp_dir = sys.argv[6]
+    logging_level_str = logging._levelNames[self.logging_level]
+    chout.setLevel(logging_level_str)
+    logger.setLevel(logging_level_str)
     if (platform.system() == 'Windows'):
         reload_windows_env()
     try:
@@ -11,21 +25,14 @@ def execute(self):
                 if (get_path_form_configuration(k, Script.config) and get_path_form_configuration(v, Script.config)):
                     Script.passwords[get_path_form_configuration(k, Script.config)] = get_path_form_configuration(v, Script.config)
     except IOError:
-        self.logger.exception('Can not read json file with command parameters: ')
+        logger.exception('Can not read json file with command parameters: ')
         sys.exit(1)
     try:
-        method = self.choose_method_to_execute(self.command_name)
+        method = self.choose_method_to_execute(command_name)
         with Environment(self.basedir) as env:
             method(env)
-            if ((self.command_name == 'start') or (self.command_name == 'install')):
-                try:
-                    import params
-                    if hasattr(params, 'stack_name'):
-                        self.save_component_version_to_structured_out(params.stack_name)
-                except ImportError:
-                    self.logger.error(('Executing command %s could not import params' % str(self.command_name)))
     except (ClientComponentHasNoStatus or ComponentIsNotRunning):
         sys.exit(1)
     except Fail:
-        self.logger.exception("Error while executing command '{0}':".format(self.command_name))
+        logger.exception("Error while executing command '{0}':".format(command_name))
         sys.exit(1)
