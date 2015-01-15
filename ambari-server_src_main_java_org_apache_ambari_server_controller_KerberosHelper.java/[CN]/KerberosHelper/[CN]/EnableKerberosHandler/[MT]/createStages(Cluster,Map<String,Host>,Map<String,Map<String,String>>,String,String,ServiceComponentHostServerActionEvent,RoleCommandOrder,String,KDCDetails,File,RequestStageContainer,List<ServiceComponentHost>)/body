@@ -1,0 +1,72 @@
+{
+  RoleGraph roleGraph;
+  Stage stage;
+  int stageId=-1;
+  if (requestStageContainer == null) {
+    requestStageContainer=new RequestStageContainer(actionManager.getNextRequestId(),null,requestFactory,actionManager);
+  }
+  if (!kerberosConfigurations.isEmpty()) {
+    File configFile=new File(dataDirectory,KerberosConfigDataFile.DATA_FILE_NAME);
+    KerberosConfigDataFileBuilder kerberosConfDataFileBuilder=null;
+    try {
+      kerberosConfDataFileBuilder=new KerberosConfigDataFileBuilder(configFile);
+      for (      Map.Entry<String,Map<String,String>> entry : kerberosConfigurations.entrySet()) {
+        String type=entry.getKey();
+        Map<String,String> properties=entry.getValue();
+        if (properties != null) {
+          for (          Map.Entry<String,String> configTypeEntry : properties.entrySet()) {
+            kerberosConfDataFileBuilder.addRecord(type,configTypeEntry.getKey(),configTypeEntry.getValue());
+          }
+        }
+      }
+    }
+ catch (    IOException e) {
+      String message=String.format("Failed to write kerberos configurations file - %s",configFile.getAbsolutePath());
+      LOG.error(message);
+      throw new AmbariException(message,e);
+    }
+ finally {
+      if (kerberosConfDataFileBuilder != null) {
+        try {
+          kerberosConfDataFileBuilder.close();
+        }
+ catch (        IOException e) {
+          LOG.warn("Failed to close the kerberos configurations file writer",e);
+        }
+      }
+    }
+  }
+  Map<String,String> commandParameters=new HashMap<String,String>();
+  commandParameters.put(KerberosServerAction.DATA_DIRECTORY,dataDirectory.getAbsolutePath());
+  commandParameters.put(KerberosServerAction.DEFAULT_REALM,realm);
+  commandParameters.put(KerberosServerAction.KDC_TYPE,kdcDetails.getKdcType().name());
+  commandParameters.put(KerberosServerAction.KDC_LDAP_URL,kdcDetails.getLdapUrl());
+  commandParameters.put(KerberosServerAction.KDC_PRINCIPAL_CONTAINER_DN,kdcDetails.getPrincipalContainerDn());
+  commandParameters.put(KerberosServerAction.ADMINISTRATOR_CREDENTIAL,getEncryptedAdministratorCredentials(cluster));
+  stage=createServerActionStage(++stageId,cluster,requestStageContainer.getId(),"Create Principals",clusterHostInfoJson,"{}",hostParamsJson,CreatePrincipalsServerAction.class,event,commandParameters,"Create Principals",1200);
+  roleGraph=new RoleGraph(roleCommandOrder);
+  roleGraph.build(stage);
+  requestStageContainer.addStages(roleGraph.getStages());
+  stage=createServerActionStage(++stageId,cluster,requestStageContainer.getId(),"Create Keytabs",clusterHostInfoJson,"{}",hostParamsJson,CreateKeytabFilesServerAction.class,event,commandParameters,"Create Keytabs",1200);
+  roleGraph=new RoleGraph(roleCommandOrder);
+  roleGraph.build(stage);
+  requestStageContainer.addStages(roleGraph.getStages());
+  stage=createNewStage(++stageId,cluster,requestStageContainer.getId(),"Distribute Keytabs",clusterHostInfoJson,StageUtils.getGson().toJson(commandParameters),hostParamsJson);
+  if (!serviceComponentHosts.isEmpty()) {
+    List<String> hostsToUpdate=createUniqueHostList(serviceComponentHosts);
+    Map<String,String> requestParams=new HashMap<String,String>();
+    List<RequestResourceFilter> requestResourceFilters=new ArrayList<RequestResourceFilter>();
+    RequestResourceFilter reqResFilter=new RequestResourceFilter("KERBEROS","KERBEROS_CLIENT",hostsToUpdate);
+    requestResourceFilters.add(reqResFilter);
+    ActionExecutionContext actionExecContext=new ActionExecutionContext(cluster.getClusterName(),"SET_KEYTAB",requestResourceFilters,requestParams);
+    customCommandExecutionHelper.addExecutionCommandsToStage(actionExecContext,stage,requestParams,false);
+  }
+  roleGraph=new RoleGraph(roleCommandOrder);
+  roleGraph.build(stage);
+  requestStageContainer.addStages(roleGraph.getStages());
+  stage=createServerActionStage(++stageId,cluster,requestStageContainer.getId(),"Update Service Configurations",clusterHostInfoJson,"{}",hostParamsJson,UpdateKerberosConfigsServerAction.class,event,commandParameters,"Update Service Configurations",1200);
+  roleGraph=new RoleGraph(roleCommandOrder);
+  roleGraph.build(stage);
+  requestStageContainer.addStages(roleGraph.getStages());
+  return stageId;
+}

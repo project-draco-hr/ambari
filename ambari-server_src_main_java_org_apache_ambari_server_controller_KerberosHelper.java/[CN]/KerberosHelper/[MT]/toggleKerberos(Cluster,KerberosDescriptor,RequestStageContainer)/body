@@ -34,8 +34,23 @@
       LOG.error(message);
       throw new AmbariException(message);
     }
+    Config configKerberosEnv=cluster.getDesiredConfigByType("kerberos-env");
+    if (configKerberosEnv == null) {
+      String message="The 'kerberos-env' configuration is not available";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
+    Map<String,String> kerberosEnvProperties=configKerberosEnv.getProperties();
+    if (kerberosEnvProperties == null) {
+      String message="The 'kerberos-env' configuration properties are not available";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
     KDCType kdcType=null;
-    String kdcTypeProperty=krb5ConfProperties.get("kdc_type");
+    String kdcTypeProperty=kerberosEnvProperties.get("kdc_type");
+    if (kdcTypeProperty == null) {
+      kdcTypeProperty=krb5ConfProperties.get("kdc_type");
+    }
     if (kdcTypeProperty != null) {
       try {
         kdcType=KDCType.translate(kdcTypeProperty);
@@ -49,13 +64,14 @@
     if (kdcType == null) {
       kdcType=KDCType.MIT_KDC;
     }
+    KDCDetails kdcDetails=new KDCDetails(kdcType,(kerberosEnvProperties == null) ? null : kerberosEnvProperties.get("ldap_url"),(kerberosEnvProperties == null) ? null : kerberosEnvProperties.get("container_dn"));
     if ("true".equalsIgnoreCase(securityEnabled)) {
       LOG.info("Configuring Kerberos for realm {} on cluster, {}",defaultRealm,cluster.getClusterName());
-      requestStageContainer=handle(cluster,kerberosDescriptor,defaultRealm,kdcType,requestStageContainer,enableKerberosHandler);
+      requestStageContainer=handle(cluster,kerberosDescriptor,defaultRealm,kdcDetails,requestStageContainer,enableKerberosHandler);
     }
  else     if ("false".equalsIgnoreCase(securityEnabled)) {
       LOG.info("Disabling Kerberos from cluster, {}",cluster.getClusterName());
-      requestStageContainer=handle(cluster,kerberosDescriptor,defaultRealm,kdcType,requestStageContainer,disableKerberosHandler);
+      requestStageContainer=handle(cluster,kerberosDescriptor,defaultRealm,kdcDetails,requestStageContainer,disableKerberosHandler);
     }
  else {
       String message=String.format("Invalid value for `security_enabled` property of cluster-env: %s",securityEnabled);

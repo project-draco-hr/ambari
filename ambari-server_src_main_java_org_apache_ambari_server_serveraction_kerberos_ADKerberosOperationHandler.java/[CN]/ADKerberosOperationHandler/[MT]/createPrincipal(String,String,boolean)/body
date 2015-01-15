@@ -1,0 +1,55 @@
+{
+  if (!isOpen()) {
+    throw new KerberosOperationException("This operation handler has not been opened");
+  }
+  if (principal == null) {
+    throw new KerberosOperationException("principal is null");
+  }
+  if (password == null) {
+    throw new KerberosOperationException("principal password is null");
+  }
+  String realm=getDefaultRealm();
+  int atIndex=principal.indexOf("@");
+  if (atIndex >= 0) {
+    realm=principal.substring(atIndex + 1);
+    principal=principal.substring(0,atIndex);
+  }
+  if (realm == null) {
+    realm="";
+  }
+  Attributes attributes=new BasicAttributes();
+  Attribute objectClass=new BasicAttribute("objectClass");
+  objectClass.add("user");
+  attributes.put(objectClass);
+  Attribute cn=new BasicAttribute("cn");
+  cn.add(principal);
+  attributes.put(cn);
+  Attribute upn=new BasicAttribute("userPrincipalName");
+  upn.add(String.format("%s@%s",principal,realm.toLowerCase()));
+  attributes.put(upn);
+  if (service) {
+    Attribute spn=new BasicAttribute("servicePrincipalName");
+    spn.add(principal);
+    attributes.put(spn);
+  }
+  Attribute uac=new BasicAttribute("userAccountControl");
+  uac.add("512");
+  attributes.put(uac);
+  Attribute passwordAttr=new BasicAttribute("unicodePwd");
+  String quotedPasswordVal="\"" + password + "\"";
+  try {
+    passwordAttr.add(quotedPasswordVal.getBytes("UTF-16LE"));
+  }
+ catch (  UnsupportedEncodingException ue) {
+    throw new KerberosOperationException("Can not encode password with UTF-16LE",ue);
+  }
+  attributes.put(passwordAttr);
+  try {
+    Name name=new CompositeName().add("cn=" + principal + ","+ principalContainerDn);
+    ldapContext.createSubcontext(name,attributes);
+  }
+ catch (  NamingException ne) {
+    throw new KerberosOperationException("Can not create principal : " + principal,ne);
+  }
+  return 0;
+}
