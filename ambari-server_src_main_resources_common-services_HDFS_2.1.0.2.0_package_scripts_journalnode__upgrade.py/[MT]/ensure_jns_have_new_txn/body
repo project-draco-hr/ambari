@@ -1,0 +1,41 @@
+def ensure_jns_have_new_txn(nodes, last_txn_id):
+    '\n  :param nodes: List of Journalnodes\n  :param last_txn_id: Integer of last transaction id\n  :return: Return true on success, false otherwise\n  '
+    import params
+    num_of_jns = len(nodes)
+    actual_txn_ids = {}
+    jns_updated = 0
+    protocol = 'http'
+    journal_node_address = default('/configurations/hdfs-site/dfs.journalnode.https-address', None)
+    if journal_node_address:
+        protocol = 'https'
+    else:
+        journal_node_address = default('/configurations/hdfs-site/dfs.journalnode.http-address', None)
+    if (not journal_node_address):
+        raise Fail('Could not retrieve Journal node address')
+    jn_port = get_port(journal_node_address)
+    if (not jn_port):
+        raise Fail('Could not retrieve Journalnode port')
+    time_out_secs = (3 * 60)
+    step_time_secs = 10
+    iterations = int((time_out_secs / step_time_secs))
+    Logger.info('Checking if all Journalnodes are updated.')
+    for i in range(iterations):
+        Logger.info(('Try %d out of %d' % ((i + 1), iterations)))
+        for node in nodes:
+            if (jns_updated == num_of_jns):
+                Logger.info('All journal nodes are updated')
+                return True
+            if ((node in actual_txn_ids) and actual_txn_ids[node] and (actual_txn_ids[node] >= last_txn_id)):
+                continue
+            url = ('%s://%s:%s' % (protocol, node, jn_port))
+            data = get_jmx_data(url, 'Journal-', 'LastWrittenTxId')
+            if data:
+                actual_txn_ids[node] = int(data)
+                if (actual_txn_ids[node] >= last_txn_id):
+                    Logger.info(('Journalnode %s has a higher transaction id: %s' + str(data)))
+                    jns_updated += 1
+                else:
+                    Logger.info(('Journalnode %s is still on transaction id: %s' + str(data)))
+        Logger.info(('Sleeping for %d secs' % step_time_secs))
+        time.sleep(step_time_secs)
+    return (jns_updated == num_of_jns)

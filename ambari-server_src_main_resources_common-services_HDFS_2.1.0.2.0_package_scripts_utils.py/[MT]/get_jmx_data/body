@@ -1,0 +1,23 @@
+def get_jmx_data(nn_address, modeler_type, metric, encrypted=False):
+    '\n  :param nn_address: Namenode Address, e.g., host:port, ** MAY ** be preceded with "http://" or "https://" already.\n  If not preceded, will use the encrypted param to determine.\n  :param modeler_type: Modeler type to query using startswith function\n  :param metric: Metric to return\n  :return: Return an object representation of the metric, or None if it does not exist\n  '
+    if ((not nn_address) or (not modeler_type) or (not metric)):
+        return None
+    nn_address = nn_address.strip()
+    if (not nn_address.startswith('http')):
+        nn_address = (('https://' if encrypted else 'http://') + nn_address)
+    if (not nn_address.endswith('/')):
+        nn_address = (nn_address + '/')
+    nn_address = (nn_address + 'jmx')
+    Logger.info(('Retrieve modeler: %s, metric: %s from JMX endpoint %s' % (modeler_type, metric, nn_address)))
+    data = urllib2.urlopen(nn_address).read()
+    data_dict = json.loads(data)
+    my_data = None
+    if data_dict:
+        for el in data_dict['beans']:
+            if ((el is not None) and (el['modelerType'] is not None) and el['modelerType'].startswith(modeler_type)):
+                if (metric in el):
+                    my_data = el[metric]
+                    if my_data:
+                        my_data = json.loads(str(my_data))
+                        break
+    return my_data

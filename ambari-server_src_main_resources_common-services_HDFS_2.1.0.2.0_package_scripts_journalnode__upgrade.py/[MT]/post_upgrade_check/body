@@ -1,0 +1,27 @@
+def post_upgrade_check():
+    '\n  Ensure all journal nodes are up and quorum is established\n  :return:\n  '
+    import params
+    Logger.info('Ensuring Journalnode quorum is established')
+    time.sleep(5)
+    hdfs_roll_edits()
+    time.sleep(5)
+    all_journal_node_hosts = default('/clusterHostInfo/journalnode_hosts', [])
+    if (len(all_journal_node_hosts) < 3):
+        raise Fail('Need at least 3 Journalnodes to maintain a quorum')
+    policy = default('/configurations/hdfs-site/dfs.http.policy', None)
+    if (not policy):
+        raise Fail('Could not retrieve dfs.http.policy')
+    encrypted = (policy.upper == 'HTTPS_ONLY')
+    nn_address = (default('/configurations/hdfs-site/dfs.namenode.https-address', None) if encrypted else default('/configurations/hdfs-site/dfs.namenode.http-address', None))
+    if (not nn_address):
+        raise Fail(('Could not retrieve dfs.namenode.http(s)-address for policy %s' % str(policy)))
+    nn_data = get_jmx_data(nn_address, 'org.apache.hadoop.hdfs.server.namenode.FSNamesystem', 'JournalTransactionInfo', encrypted)
+    if (not nn_data):
+        raise Fail('Could not retrieve JournalTransactionInfo from JMX')
+    try:
+        last_txn_id = int(nn_data['LastAppliedOrWrittenTxId'])
+        success = ensure_jns_have_new_txn(all_journal_node_hosts, last_txn_id)
+        if (not success):
+            raise Fail('Could not ensure that all Journal nodes have a new log transaction id')
+    except KeyError:
+        raise Fail('JournalTransactionInfo does not have key LastAppliedOrWrittenTxId from JMX info')
