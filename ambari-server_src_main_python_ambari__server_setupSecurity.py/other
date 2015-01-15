@@ -1,17 +1,23 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
 import datetime
 import fileinput
+import os
 import random
+import re
+import shutil
 import socket
 import stat
+import string
 import sys
 import tempfile
 import urllib2
-from ambari_commons.exceptions import *
-from ambari_commons.os_utils import run_os_command
-from serverConfiguration import *
-from setupActions import *
-from userInput import *
+from ambari_commons.exceptions import NonFatalException, FatalException
+from ambari_commons.logging_utils import get_silent, print_warning_msg, print_error_msg, print_info_msg
+from ambari_commons.os_check import OSCheck, OSConst
+from ambari_commons.os_utils import copy_file, is_root, is_valid_filepath, remove_file, set_file_permissions, run_os_command, search_file
+from ambari_server.serverConfiguration import configDefaults, get_ambari_properties, read_ambari_user, get_value_from_properties, find_jdk, get_ambari_classpath, get_conf_dir, is_alias_string, find_properties_file, update_properties_2, JDBC_USE_INTEGRATED_AUTH_PROPERTY, JDBC_PASSWORD_PROPERTY, JDBC_PASSWORD_FILENAME, JDBC_RCA_PASSWORD_FILE_PROPERTY, JDBC_RCA_PASSWORD_ALIAS, JDBC_METRICS_USE_INTEGRATED_AUTH_PROPERTY, JDBC_METRICS_PASSWORD_PROPERTY, JDBC_METRICS_PASSWORD_FILENAME, JDBC_METRICS_PASSWORD_ALIAS, BOOTSTRAP_DIR_PROPERTY, GET_FQDN_SERVICE_URL, BLIND_PASSWORD
+from setupActions import SETUP_ACTION, LDAP_SETUP_ACTION
+from ambari_server.userInput import get_YN_input, get_validated_string_input, get_validated_filepath_input, get_prompt_default
 SSL_PASSWORD_FILE = 'pass.txt'
 SSL_PASSIN_FILE = 'passin.txt'
 VALIDATE_KEYSTORE_CMD = "openssl pkcs12 -info -in '{0}' -password file:'{1}' -passout file:'{2}'"
@@ -27,9 +33,9 @@ KEYTOOL_KEYSTORE = " -keystore '{0}'"
 java_bin = 'java'
 if OSCheck.is_windows_family():
     java_bin = 'java.exe'
-SECURITY_PROVIDER_GET_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider GET {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
-SECURITY_PROVIDER_PUT_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider PUT {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
-SECURITY_PROVIDER_KEY_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.MasterKeyServiceImpl {3} {4} {5} ') + '> ') + SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_GET_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider GET {3} {4} {5} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_PUT_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider PUT {3} {4} {5} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_KEY_CMD = (((((((((((('{0}' + os.sep) + 'bin') + os.sep) + java_bin) + ' -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.MasterKeyServiceImpl {3} {4} {5} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
 SSL_KEY_DIR = 'security.server.keys_dir'
 SSL_API_PORT = 'client.api.ssl.port'
 SSL_API = 'api.ssl'
@@ -73,4 +79,3 @@ REGEX_HOSTNAME_PORT = '^(.*:[0-9]{1,5}$)'
 REGEX_TRUE_FALSE = '^(true|false)?$'
 REGEX_ANYTHING = '.*'
 CLIENT_SECURITY_KEY = 'client.security'
-NR_ADJUST_OWNERSHIP_LIST = [('/var/log/ambari-server', '644', '{0}', True), ('/var/log/ambari-server', '755', '{0}', False), ('/var/run/ambari-server', '644', '{0}', True), ('/var/run/ambari-server', '755', '{0}', False), ('/var/run/ambari-server/bootstrap', '755', '{0}', False), ('/var/lib/ambari-server/ambari-env.sh', '700', '{0}', False), ('/var/lib/ambari-server/keys', '600', '{0}', True), ('/var/lib/ambari-server/keys', '700', '{0}', False), ('/var/lib/ambari-server/keys/db', '700', '{0}', False), ('/var/lib/ambari-server/keys/db/newcerts', '700', '{0}', False), ('/var/lib/ambari-server/keys/.ssh', '700', '{0}', False), ('/var/lib/ambari-server/resources/stacks/', '755', '{0}', True), ('/var/lib/ambari-server/resources/custom_actions/', '755', '{0}', True), ('/etc/ambari-server/conf', '644', '{0}', True), ('/etc/ambari-server/conf', '755', '{0}', False), ('/etc/ambari-server/conf/password.dat', '640', '{0}', False)]

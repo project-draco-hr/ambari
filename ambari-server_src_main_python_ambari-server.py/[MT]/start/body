@@ -19,7 +19,7 @@ def start(args):
     conf_dir = get_conf_dir()
     jdk_path = find_jdk()
     if (jdk_path is None):
-        err = ('No JDK found, please run the "ambari-server setup" command to install a JDK automatically or install any JDK manually to ' + JDK_INSTALL_DIR)
+        err = ('No JDK found, please run the "ambari-server setup" command to install a JDK automatically or install any JDK manually to ' + configDefaults.JDK_INSTALL_DIR)
         raise FatalException(1, err)
     if (args.persistence_type == 'remote'):
         result = find_jdbc_driver(args)
@@ -61,6 +61,7 @@ def start(args):
             else:
                 prompt = True
         if prompt:
+            import pwd
             masterKey = get_original_master_key(properties)
             tempDir = tempfile.gettempdir()
             tempFilePath = ((tempDir + os.sep) + 'masterkey')
@@ -73,29 +74,29 @@ def start(args):
                 os.chmod(tempFilePath, (stat.S_IREAD | stat.S_IWRITE))
             if (tempFilePath is not None):
                 environ[SECURITY_MASTER_KEY_LOCATION] = tempFilePath
-    pidfile = ((PID_DIR + os.sep) + PID_NAME)
+    pidfile = os.path.join(configDefaults.PID_DIR, PID_NAME)
     command_base = (SERVER_START_CMD_DEBUG if (get_debug_mode() or SERVER_START_DEBUG) else SERVER_START_CMD)
-    command = ('%s %s; %s' % (ULIMIT_CMD, str(get_ulimit_open_files()), command_base.format(jdk_path, conf_dir, get_ambari_classpath(), os.path.join(PID_DIR, EXITCODE_NAME))))
-    if (not os.path.exists(PID_DIR)):
-        os.makedirs(PID_DIR, 493)
-    os.chdir(ROOT_FS_PATH)
+    command = ('%s %s; %s' % (ULIMIT_CMD, str(get_ulimit_open_files()), command_base.format(jdk_path, conf_dir, get_ambari_classpath(), os.path.join(configDefaults.PID_DIR, EXITCODE_NAME))))
+    if (not os.path.exists(configDefaults.PID_DIR)):
+        os.makedirs(configDefaults.PID_DIR, 493)
+    os.chdir(configDefaults.ROOT_FS_PATH)
     if (is_root() and (ambari_user != 'root')):
-        param_list = [utils.locate_file('su', '/bin'), ambari_user, '-s', utils.locate_file('sh', '/bin'), '-c', command]
+        param_list = [locate_file('su', '/bin'), ambari_user, '-s', locate_file('sh', '/bin'), '-c', command]
     else:
-        param_list = [utils.locate_file('sh', '/bin'), '-c', command]
+        param_list = [locate_file('sh', '/bin'), '-c', command]
     print_info_msg(('Running server: ' + str(param_list)))
     subprocess.Popen(param_list, env=environ)
     print ('Server PID at: ' + pidfile)
-    print ('Server out at: ' + SERVER_OUT_FILE)
-    print ('Server log at: ' + SERVER_LOG_FILE)
+    print ('Server out at: ' + configDefaults.SERVER_OUT_FILE)
+    print ('Server log at: ' + configDefaults.SERVER_LOG_FILE)
     sys.stdout.write('Waiting for server start...')
     sys.stdout.flush()
-    pids = utils.looking_for_pid(SERVER_SEARCH_PATTERN, SERVER_INIT_TIMEOUT)
-    found_pids = utils.wait_for_pid(pids, SERVER_START_TIMEOUT)
+    pids = looking_for_pid(SERVER_SEARCH_PATTERN, SERVER_INIT_TIMEOUT)
+    found_pids = wait_for_pid(pids, SERVER_START_TIMEOUT)
     sys.stdout.write('\n')
     sys.stdout.flush()
     if (found_pids <= 0):
-        exitcode = utils.check_exitcode(os.path.join(PID_DIR, EXITCODE_NAME))
-        raise FatalException((-1), AMBARI_SERVER_DIE_MSG.format(exitcode, SERVER_OUT_FILE))
+        exitcode = check_exitcode(os.path.join(configDefaults.PID_DIR, EXITCODE_NAME))
+        raise FatalException((-1), AMBARI_SERVER_DIE_MSG.format(exitcode, configDefaults.SERVER_OUT_FILE))
     else:
-        utils.save_main_pid_ex(pids, pidfile, [utils.locate_file('sh', '/bin'), utils.locate_file('bash', '/bin')], True)
+        save_main_pid_ex(pids, pidfile, [locate_file('sh', '/bin'), locate_file('bash', '/bin')], True)

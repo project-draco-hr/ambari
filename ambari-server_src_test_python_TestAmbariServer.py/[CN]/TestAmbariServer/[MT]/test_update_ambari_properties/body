@@ -1,5 +1,6 @@
-@patch.object(_ambari_server_, 'get_conf_dir')
+@patch('ambari_server.serverConfiguration.get_conf_dir')
 def test_update_ambari_properties(self, get_conf_dir_mock):
+    from ambari_server import serverConfiguration
     properties = ['server.jdbc.user.name=ambari-server\n', 'server.jdbc.user.passwd=/etc/ambari-server/conf/password.dat\n', 'java.home=/usr/jdk64/jdk1.6.0_31\n', 'server.jdbc.database_name=ambari\n', 'ambari-server.user=ambari\n', 'agent.fqdn.service.url=URL\n']
     NEW_PROPERTY = 'some_new_property=some_value\n'
     JDK_NAME_PROPERTY = 'jdk.name=jdk-6u31-linux-x64.bin\n'
@@ -8,19 +9,19 @@ def test_update_ambari_properties(self, get_conf_dir_mock):
     get_conf_dir_mock.return_value = '/etc/ambari-server/conf'
     (tf1, fn1) = tempfile.mkstemp()
     (tf2, fn2) = tempfile.mkstemp()
-    _ambari_server_.AMBARI_PROPERTIES_RPMSAVE_FILE = fn1
-    _ambari_server_.AMBARI_PROPERTIES_FILE = fn2
-    with open(_ambari_server_.AMBARI_PROPERTIES_FILE, 'w') as f:
+    serverConfiguration.AMBARI_PROPERTIES_BACKUP_FILE = fn1
+    serverConfiguration.AMBARI_PROPERTIES_FILE = fn2
+    with open(serverConfiguration.AMBARI_PROPERTIES_FILE, 'w') as f:
         f.write(NEW_PROPERTY)
         f.write(CHANGED_VALUE_PROPERTY)
-    with open(_ambari_server_.AMBARI_PROPERTIES_RPMSAVE_FILE, 'w') as f:
+    with open(serverConfiguration.AMBARI_PROPERTIES_BACKUP_FILE, 'w') as f:
         for line in properties:
             f.write(line)
-    _ambari_server_.update_ambari_properties()
+    update_ambari_properties()
     timestamp = datetime.datetime.now()
-    self.assertFalse(os.path.exists(_ambari_server_.AMBARI_PROPERTIES_RPMSAVE_FILE))
-    self.assertTrue(os.path.exists(((_ambari_server_.AMBARI_PROPERTIES_RPMSAVE_FILE + '.') + timestamp.strftime('%Y%m%d%H%M%S'))))
-    with open(_ambari_server_.AMBARI_PROPERTIES_FILE, 'r') as f:
+    self.assertFalse(os.path.exists(serverConfiguration.AMBARI_PROPERTIES_BACKUP_FILE))
+    self.assertTrue(os.path.exists(((serverConfiguration.AMBARI_PROPERTIES_BACKUP_FILE + '.') + timestamp.strftime('%Y%m%d%H%M%S'))))
+    with open(serverConfiguration.AMBARI_PROPERTIES_FILE, 'r') as f:
         ambari_properties_content = f.readlines()
     for line in properties:
         if (line == 'agent.fqdn.service.url=URL\n'):
@@ -36,10 +37,10 @@ def test_update_ambari_properties(self, get_conf_dir_mock):
         self.fail()
     if (CHANGED_VALUE_PROPERTY in ambari_properties_content):
         self.fail()
-    result = _ambari_server_.update_ambari_properties()
+    result = update_ambari_properties()
     self.assertEquals(result, 0)
     os.unlink(fn2)
     (tf, fn) = tempfile.mkstemp()
-    _ambari_server_.AMBARI_PROPERTIES_RPMSAVE_FILE = fn
-    result = _ambari_server_.update_ambari_properties()
+    serverConfiguration.AMBARI_PROPERTIES_BACKUP_FILE = fn
+    result = update_ambari_properties()
     self.assertNotEquals(result, 0)
