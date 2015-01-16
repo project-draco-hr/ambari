@@ -2,15 +2,28 @@
   Cluster cluster=mhr.getCluster();
   Map<String,Map<String,ProcessingComponent>> allTasks=upgradePack.getTasks();
   List<UpgradeGroupHolder> groups=new ArrayList<UpgradeGroupHolder>();
-  int idx=0;
-  for (  Grouping group : upgradePack.getGroups()) {
+  for (  Grouping group : upgradePack.getGroups(forUpgrade)) {
     if (ClusterGrouping.class.isInstance(group)) {
       UpgradeGroupHolder groupHolder=getClusterGroupHolder(cluster,(ClusterGrouping)group,forUpgrade ? null : version);
       if (null != groupHolder) {
         groups.add(groupHolder);
-        idx++;
-        continue;
       }
+      continue;
+    }
+ else     if (ServiceCheckGrouping.class.isInstance(group)) {
+      ServiceCheckGrouping scg=(ServiceCheckGrouping)group;
+      scg.getBuilder().setHelpers(cluster,m_ambariMetaInfo.get());
+      List<StageWrapper> wrappers=scg.getBuilder().build();
+      if (!wrappers.isEmpty()) {
+        UpgradeGroupHolder groupHolder=new UpgradeGroupHolder();
+        groupHolder.name=group.name;
+        groupHolder.title=group.title;
+        groupHolder.skippable=group.skippable;
+        groupHolder.allowRetry=group.allowRetry;
+        groupHolder.items=wrappers;
+        groups.add(groupHolder);
+      }
+      continue;
     }
     UpgradeGroupHolder groupHolder=new UpgradeGroupHolder();
     groupHolder.name=group.name;
@@ -59,12 +72,7 @@
     postProcessTasks(proxies,mhr,version);
     if (!proxies.isEmpty()) {
       groupHolder.items=proxies;
-      if (forUpgrade) {
-        groups.add(groupHolder);
-      }
- else {
-        groups.add(idx,groupHolder);
-      }
+      groups.add(groupHolder);
     }
   }
   if (LOG.isDebugEnabled()) {
