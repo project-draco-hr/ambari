@@ -1,28 +1,24 @@
 {
-  AmbariMetaInfo stackInfo=getController().getAmbariMetaInfo();
+  AmbariMetaInfo ambariMetaInfo=getController().getAmbariMetaInfo();
+  StackInfo stack;
+  try {
+    stack=ambariMetaInfo.getStack(stackName,stackVersion);
+  }
+ catch (  AmbariException e) {
+    throw new RuntimeException("Unexpected exception occurred while generating a blueprint. " + "The stack '" + stackName + ":"+ stackVersion+ "' does not exist");
+  }
+  Map<String,PropertyInfo> requiredStackProperties=stack.getRequiredProperties();
+  updatePropertiesToStrip(requiredStackProperties);
   for (  TreeNode<Resource> serviceNode : servicesNode.getChildren()) {
     String name=(String)serviceNode.getObject().getPropertyValue("ServiceInfo/service_name");
     ServiceInfo service;
     try {
-      service=stackInfo.getService(stackName,stackVersion,name);
+      service=ambariMetaInfo.getService(stackName,stackVersion,name);
     }
  catch (    AmbariException e) {
       throw new RuntimeException("Unexpected exception occurred while generating a blueprint.  The service '" + name + "' was not found in the stack: '"+ stackName+ ":"+ stackVersion);
     }
     Map<String,PropertyInfo> requiredProperties=service.getRequiredProperties();
-    for (    Map.Entry<String,PropertyInfo> entry : requiredProperties.entrySet()) {
-      String propertyName=entry.getKey();
-      PropertyInfo propertyInfo=entry.getValue();
-      String configCategory=propertyInfo.getFilename();
-      if (configCategory.endsWith(".xml")) {
-        configCategory=configCategory.substring(0,configCategory.indexOf(".xml"));
-      }
-      Collection<String> categoryProperties=propertiesToStrip.get(configCategory);
-      if (categoryProperties == null) {
-        categoryProperties=new ArrayList<String>();
-        propertiesToStrip.put(configCategory,categoryProperties);
-      }
-      categoryProperties.add(propertyName);
-    }
+    updatePropertiesToStrip(requiredProperties);
   }
 }
