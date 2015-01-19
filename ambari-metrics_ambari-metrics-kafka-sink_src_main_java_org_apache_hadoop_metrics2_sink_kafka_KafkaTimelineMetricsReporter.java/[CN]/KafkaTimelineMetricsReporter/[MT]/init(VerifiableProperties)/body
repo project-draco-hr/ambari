@@ -1,0 +1,35 @@
+{
+synchronized (lock) {
+    if (!initialized) {
+      LOG.info("Initializing Kafka Timeline Metrics Sink");
+      try {
+        hostname=InetAddress.getLocalHost().getHostName();
+      }
+ catch (      UnknownHostException e) {
+        LOG.error("Could not identify hostname.");
+        throw new RuntimeException("Could not identify hostname.",e);
+      }
+      KafkaMetricsConfig metricsConfig=new KafkaMetricsConfig(props);
+      int metricsSendInterval=Integer.parseInt(props.getString(TIMELINE_METRICS_SEND_INTERVAL_PROPERTY,String.valueOf(TimelineMetricsCache.MAX_EVICTION_TIME_MILLIS)));
+      int maxRowCacheSize=Integer.parseInt(props.getString(TIMELINE_METRICS_MAX_ROW_CACHE_SIZE_PROPERTY,String.valueOf(TimelineMetricsCache.MAX_RECS_PER_NAME_DEFAULT)));
+      String metricCollectorHost=props.getString(TIMELINE_HOST_PROPERTY,TIMELINE_DEFAULT_HOST);
+      String metricCollectorPort=props.getString(TIMELINE_PORT_PROPERTY,TIMELINE_DEFAULT_PORT);
+      setMetricsCache(new TimelineMetricsCache(maxRowCacheSize,metricsSendInterval));
+      collectorUri="http://" + metricCollectorHost + ":"+ metricCollectorPort+ "/ws/v1/timeline/metrics";
+      List<InetSocketAddress> socketAddresses=Servers.parse(metricCollectorHost,Integer.parseInt(metricCollectorPort));
+      if (socketAddresses != null && !socketAddresses.isEmpty()) {
+        socketAddress=socketAddresses.get(0);
+      }
+      initializeReporter();
+      if (props.getBoolean(TIMELINE_REPORTER_ENABLED_PROPERTY,false)) {
+        startReporter(metricsConfig.pollingIntervalSecs());
+      }
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("CollectorUri = " + collectorUri);
+        LOG.trace("SocketAddress = " + socketAddress);
+        LOG.trace("MetricsSendInterval = " + metricsSendInterval);
+        LOG.trace("MaxRowCacheSize = " + maxRowCacheSize);
+      }
+    }
+  }
+}
