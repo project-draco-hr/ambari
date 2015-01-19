@@ -7,66 +7,103 @@
     stmtStr=condition.getStatement();
   }
  else {
-    stmtStr=String.format(GET_METRIC_SQL,getNaiveTimeRangeHint(condition.getStartTime(),NATIVE_TIME_RANGE_DELTA),METRICS_RECORD_TABLE_NAME);
-  }
-  StringBuilder sb=new StringBuilder(stmtStr);
-  sb.append(" WHERE ");
-  sb.append(condition.getConditionClause());
-  String orderByClause=condition.getOrderByClause();
-  if (orderByClause != null) {
-    sb.append(orderByClause);
-  }
- else {
-    sb.append(" ORDER BY METRIC_NAME, SERVER_TIME ");
-  }
-  if (condition.getLimit() != null) {
-    sb.append(" LIMIT ").append(condition.getLimit());
-  }
-  if (LOG.isDebugEnabled()) {
-    LOG.debug("SQL: " + sb.toString() + ", condition: "+ condition);
-  }
-  PreparedStatement stmt=connection.prepareStatement(sb.toString());
-  int pos=1;
-  if (condition.getMetricNames() != null) {
-    for (; pos <= condition.getMetricNames().size(); pos++) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Setting pos: " + pos + ", value = "+ condition.getMetricNames().get(pos - 1));
+    String metricsTable;
+    String query;
+    if (condition.getPrecision() == null) {
+      long endTime=condition.getEndTime() == null ? System.currentTimeMillis() : condition.getEndTime();
+      long startTime=condition.getStartTime() == null ? 0 : condition.getStartTime();
+      Long timeRange=endTime - startTime;
+      if (timeRange > 5 * DAY) {
+        metricsTable=METRICS_AGGREGATE_HOURLY_TABLE_NAME;
+        query=GET_METRIC_AGGREGATE_ONLY_SQL;
+        condition.setPrecision(Precision.HOURS);
       }
-      stmt.setString(pos,condition.getMetricNames().get(pos - 1));
+ else       if (timeRange > 10 * HOUR) {
+        metricsTable=METRICS_AGGREGATE_MINUTE_TABLE_NAME;
+        query=GET_METRIC_AGGREGATE_ONLY_SQL;
+        condition.setPrecision(Precision.MINUTES);
+      }
+ else {
+        metricsTable=METRICS_RECORD_TABLE_NAME;
+        query=GET_METRIC_SQL;
+        condition.setPrecision(Precision.SECONDS);
+      }
     }
-  }
-  if (condition.getHostname() != null) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Setting pos: " + pos + ", value: "+ condition.getHostname());
-    }
-    stmt.setString(pos++,condition.getHostname());
-  }
-  if (condition.getAppId() != null) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Setting pos: " + pos + ", value: "+ condition.getAppId());
-    }
-    stmt.setString(pos++,condition.getAppId());
-  }
-  if (condition.getInstanceId() != null) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Setting pos: " + pos + ", value: "+ condition.getInstanceId());
-    }
-    stmt.setString(pos++,condition.getInstanceId());
-  }
-  if (condition.getStartTime() != null) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Setting pos: " + pos + ", value: "+ condition.getStartTime());
-    }
-    stmt.setLong(pos++,condition.getStartTime());
-  }
-  if (condition.getEndTime() != null) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Setting pos: " + pos + ", value: "+ condition.getEndTime());
-    }
-    stmt.setLong(pos,condition.getEndTime());
-  }
-  if (condition.getFetchSize() != null) {
-    stmt.setFetchSize(condition.getFetchSize());
-  }
-  return stmt;
+ else {
+switch (condition.getPrecision()) {
+case HOURS:
+        metricsTable=METRICS_AGGREGATE_HOURLY_TABLE_NAME;
+      query=GET_METRIC_AGGREGATE_ONLY_SQL;
+    break;
+case MINUTES:
+  metricsTable=METRICS_AGGREGATE_MINUTE_TABLE_NAME;
+query=GET_METRIC_AGGREGATE_ONLY_SQL;
+break;
+default :
+metricsTable=METRICS_RECORD_TABLE_NAME;
+query=GET_METRIC_SQL;
+}
+}
+stmtStr=String.format(query,getNaiveTimeRangeHint(condition.getStartTime(),NATIVE_TIME_RANGE_DELTA),metricsTable);
+}
+StringBuilder sb=new StringBuilder(stmtStr);
+sb.append(" WHERE ");
+sb.append(condition.getConditionClause());
+String orderByClause=condition.getOrderByClause();
+if (orderByClause != null) {
+sb.append(orderByClause);
+}
+ else {
+sb.append(" ORDER BY METRIC_NAME, SERVER_TIME ");
+}
+if (condition.getLimit() != null) {
+sb.append(" LIMIT ").append(condition.getLimit());
+}
+if (LOG.isDebugEnabled()) {
+LOG.debug("SQL: " + sb.toString() + ", condition: "+ condition);
+}
+PreparedStatement stmt=connection.prepareStatement(sb.toString());
+int pos=1;
+if (condition.getMetricNames() != null) {
+for (; pos <= condition.getMetricNames().size(); pos++) {
+if (LOG.isDebugEnabled()) {
+LOG.debug("Setting pos: " + pos + ", value = "+ condition.getMetricNames().get(pos - 1));
+}
+stmt.setString(pos,condition.getMetricNames().get(pos - 1));
+}
+}
+if (condition.getHostname() != null) {
+if (LOG.isDebugEnabled()) {
+LOG.debug("Setting pos: " + pos + ", value: "+ condition.getHostname());
+}
+stmt.setString(pos++,condition.getHostname());
+}
+if (condition.getAppId() != null) {
+if (LOG.isDebugEnabled()) {
+LOG.debug("Setting pos: " + pos + ", value: "+ condition.getAppId());
+}
+stmt.setString(pos++,condition.getAppId());
+}
+if (condition.getInstanceId() != null) {
+if (LOG.isDebugEnabled()) {
+LOG.debug("Setting pos: " + pos + ", value: "+ condition.getInstanceId());
+}
+stmt.setString(pos++,condition.getInstanceId());
+}
+if (condition.getStartTime() != null) {
+if (LOG.isDebugEnabled()) {
+LOG.debug("Setting pos: " + pos + ", value: "+ condition.getStartTime());
+}
+stmt.setLong(pos++,condition.getStartTime());
+}
+if (condition.getEndTime() != null) {
+if (LOG.isDebugEnabled()) {
+LOG.debug("Setting pos: " + pos + ", value: "+ condition.getEndTime());
+}
+stmt.setLong(pos,condition.getEndTime());
+}
+if (condition.getFetchSize() != null) {
+stmt.setFetchSize(condition.getFetchSize());
+}
+return stmt;
 }

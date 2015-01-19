@@ -1,0 +1,33 @@
+{
+  TimelineMetricAggregator aggregator=TimelineMetricAggregatorFactory.createTimelineMetricAggregatorHourly(hdb,new Configuration());
+  MetricHostAggregate expectedAggregate=createMetricHostAggregate(2.0,0.0,20,15.0);
+  Map<TimelineMetric,MetricHostAggregate> aggMap=new HashMap<TimelineMetric,MetricHostAggregate>();
+  long startTime=System.currentTimeMillis();
+  int min_5=5 * 60 * 1000;
+  long ctime=startTime - min_5;
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  aggMap.put(createEmptyTimelineMetric(ctime+=min_5),expectedAggregate);
+  hdb.saveHostAggregateRecords(aggMap,METRICS_AGGREGATE_MINUTE_TABLE_NAME);
+  long endTime=ctime + min_5;
+  boolean success=aggregator.doWork(startTime,endTime);
+  assertTrue(success);
+  PhoenixTransactSQL.Condition condition=new PhoenixTransactSQL.DefaultCondition(Collections.singletonList("disk_used"),"test_host","test_app",null,startTime,endTime,Precision.HOURS,null,true);
+  TimelineMetrics timelineMetrics=hdb.getMetricRecords(condition);
+  assertEquals(1,timelineMetrics.getMetrics().size());
+  TimelineMetric metric=timelineMetrics.getMetrics().get(0);
+  assertEquals("disk_used",metric.getMetricName());
+  assertEquals("test_host",metric.getHostName());
+  assertEquals(1,metric.getMetricValues().size());
+  Iterator<Map.Entry<Long,Double>> iterator=metric.getMetricValues().entrySet().iterator();
+  assertEquals(0.75,iterator.next().getValue(),0.00001);
+}

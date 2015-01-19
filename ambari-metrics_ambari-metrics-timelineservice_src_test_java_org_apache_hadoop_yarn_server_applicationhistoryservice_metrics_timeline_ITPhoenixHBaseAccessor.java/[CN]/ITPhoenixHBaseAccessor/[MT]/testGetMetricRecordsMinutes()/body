@@ -1,0 +1,21 @@
+{
+  TimelineMetricAggregator aggregatorMinute=TimelineMetricAggregatorFactory.createTimelineMetricAggregatorMinute(hdb,new Configuration());
+  long startTime=System.currentTimeMillis();
+  long ctime=startTime;
+  long minute=60 * 1000;
+  hdb.insertMetricRecords(prepareSingleTimelineMetric(ctime,"local1","disk_free",1));
+  hdb.insertMetricRecords(prepareSingleTimelineMetric(ctime + minute,"local1","disk_free",2));
+  hdb.insertMetricRecords(prepareSingleTimelineMetric(ctime,"local2","disk_free",2));
+  long endTime=ctime + minute;
+  boolean success=aggregatorMinute.doWork(startTime,endTime);
+  assertTrue(success);
+  PhoenixTransactSQL.Condition condition=new PhoenixTransactSQL.DefaultCondition(Collections.singletonList("disk_free"),"local1",null,null,startTime,endTime,Precision.MINUTES,null,false);
+  TimelineMetrics timelineMetrics=hdb.getMetricRecords(condition);
+  assertEquals(1,timelineMetrics.getMetrics().size());
+  TimelineMetric metric=timelineMetrics.getMetrics().get(0);
+  assertEquals("disk_free",metric.getMetricName());
+  assertEquals("local1",metric.getHostName());
+  assertEquals(1,metric.getMetricValues().size());
+  Iterator<Map.Entry<Long,Double>> iterator=metric.getMetricValues().entrySet().iterator();
+  assertEquals(1.5,iterator.next().getValue(),0.00001);
+}
