@@ -1,0 +1,25 @@
+{
+  setViewStatus(viewDefinition,ViewEntity.ViewStatus.DEPLOYING,"Deploying " + extractedArchiveDirFile + ".");
+  String extractedArchiveDirPath=extractedArchiveDirFile.getAbsolutePath();
+  try {
+    ClassLoader cl=extractor.extractViewArchive(viewDefinition,archiveFile,extractedArchiveDirFile);
+    ViewConfig viewConfig=archiveUtility.getViewConfigFromExtractedArchive(extractedArchiveDirPath,configuration.isViewValidationEnabled());
+    viewDefinition.setConfiguration(viewConfig);
+    if (checkViewVersions(viewDefinition,serverVersion)) {
+      setupViewDefinition(viewDefinition,cl);
+      Set<ViewInstanceEntity> instanceDefinitions=new HashSet<ViewInstanceEntity>();
+      for (      InstanceConfig instanceConfig : viewConfig.getInstances()) {
+        ViewInstanceEntity instanceEntity=createViewInstanceDefinition(viewConfig,viewDefinition,instanceConfig);
+        instanceEntity.setXmlDriven(true);
+        instanceDefinitions.add(instanceEntity);
+      }
+      persistView(viewDefinition,instanceDefinitions);
+      setViewStatus(viewDefinition,ViewEntity.ViewStatus.DEPLOYED,"Deployed " + extractedArchiveDirPath + ".");
+    }
+  }
+ catch (  Exception e) {
+    String msg="Caught exception loading view " + viewDefinition.getName();
+    setViewStatus(viewDefinition,ViewEntity.ViewStatus.ERROR,msg + " : " + e.getMessage());
+    LOG.error(msg,e);
+  }
+}
