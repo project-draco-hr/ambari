@@ -1,9 +1,11 @@
 {
+  if (repositoryVersion == null) {
+    return;
+  }
   clusterGlobalLock.readLock().lock();
   try {
     readWriteLock.writeLock().lock();
     try {
-      Map<String,Host> hosts=clusters.getHostsForCluster(this.getClusterName());
       StackId stackId=getCurrentStackVersion();
       ClusterVersionEntity clusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(this.getClusterName(),stackId.getStackId(),repositoryVersion);
       if (clusterVersion == null) {
@@ -15,32 +17,42 @@
           throw new AmbariException(String.format("Repository version %s not found for cluster %s",repositoryVersion,getClusterName()));
         }
       }
-      RepositoryVersionState worstState;
+      RepositoryVersionState lowestPriorityState;
       if (clusterVersion.getState() != RepositoryVersionState.INSTALL_FAILED && clusterVersion.getState() != RepositoryVersionState.OUT_OF_SYNC && clusterVersion.getState() != RepositoryVersionState.INSTALLING && clusterVersion.getState() != RepositoryVersionState.INSTALLED && clusterVersion.getState() != RepositoryVersionState.UPGRADING && clusterVersion.getState() != RepositoryVersionState.UPGRADED) {
         return;
       }
-      worstState=RepositoryVersionState.CURRENT;
+      Map<String,Host> hosts=clusters.getHostsForCluster(this.getClusterName());
+      Map<RepositoryVersionState,Set<String>> stateToHosts=new HashMap<RepositoryVersionState,Set<String>>();
       for (      Host host : hosts.values()) {
         String hostName=host.getHostName();
-        if (host.getState() != HostState.HEALTHY) {
-          worstState=getWorstState(worstState,RepositoryVersionState.OUT_OF_SYNC);
-          LOG.warn(String.format("Host %s is in unhealthy state, treating as %s",hostName,worstState));
-        }
         HostVersionEntity hostVersion=hostVersionDAO.findByClusterStackVersionAndHost(this.getClusterName(),stackId.getStackId(),repositoryVersion,hostName);
-        if (clusterVersionDAO.findByClusterAndStateCurrent(getClusterName()) != null) {
-          if (hostVersion == null) {
-            LOG.warn(String.format("Repo version %s is not installed on host %s",repositoryVersion,hostName));
-            worstState=getWorstState(worstState,RepositoryVersionState.OUT_OF_SYNC);
-          }
+        if (hostVersion == null) {
+          LOG.debug("Skipping transitioning the cluster version because host " + hostName + " does not have a version yet.");
+          return;
+        }
+        RepositoryVersionState hostState=hostVersion.getState();
+        if (host.getState() != HostState.HEALTHY) {
+          hostState=RepositoryVersionState.OUT_OF_SYNC;
+          LOG.warn(String.format("Host %s is in unhealthy state, treating as %s",hostName,hostState));
+        }
+        if (stateToHosts.containsKey(hostState)) {
+          stateToHosts.get(hostState).add(hostName);
+        }
  else {
-            worstState=getWorstState(worstState,hostVersion.getState());
-          }
+          Set<String> hostsInState=new HashSet<String>();
+          hostsInState.add(hostName);
+          stateToHosts.put(hostState,hostsInState);
         }
       }
-      if (worstState != clusterVersion.getState()) {
-        transitionClusterVersion(stackId.getStackId(),repositoryVersion,worstState);
+      RepositoryVersionState effectiveClusterVersionState=getEffectiveState(stateToHosts);
+      if (effectiveClusterVersionState != null && effectiveClusterVersionState != clusterVersion.getState()) {
+        try {
+          transitionClusterVersion(stackId.getStackId(),repositoryVersion,effectiveClusterVersionState);
+        }
+ catch (        AmbariException e) {
+          ;
+        }
       }
-      clusterVersionDAO.merge(clusterVersion);
     }
   finally {
       readWriteLock.writeLock().unlock();
