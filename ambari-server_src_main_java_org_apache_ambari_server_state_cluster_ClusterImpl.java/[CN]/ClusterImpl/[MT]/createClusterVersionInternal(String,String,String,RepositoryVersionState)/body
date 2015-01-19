@@ -1,0 +1,24 @@
+{
+  Set<RepositoryVersionState> allowedStates=new HashSet<RepositoryVersionState>();
+  Collection<ClusterVersionEntity> allClusterVersions=getAllClusterVersions();
+  if (allClusterVersions == null || allClusterVersions.isEmpty()) {
+    allowedStates.add(RepositoryVersionState.CURRENT);
+    allowedStates.add(RepositoryVersionState.UPGRADING);
+  }
+ else {
+    allowedStates.add(RepositoryVersionState.INSTALLING);
+  }
+  if (!allowedStates.contains(state)) {
+    throw new AmbariException("The allowed state for a new cluster version must be within " + allowedStates);
+  }
+  ClusterVersionEntity existing=clusterVersionDAO.findByClusterAndStackAndVersion(this.getClusterName(),stack,version);
+  if (existing != null) {
+    throw new DuplicateResourceException("Duplicate item, a cluster version with stack=" + stack + ", version="+ version+ " for cluster "+ this.getClusterName()+ " already exists");
+  }
+  RepositoryVersionEntity repositoryVersionEntity=repositoryVersionDAO.findByStackAndVersion(stack,version);
+  if (repositoryVersionEntity == null) {
+    throw new AmbariException("Could not find repository version for stack=" + stack + ", version="+ version);
+  }
+  ClusterVersionEntity clusterVersionEntity=new ClusterVersionEntity(this.clusterEntity,repositoryVersionEntity,state,System.currentTimeMillis(),System.currentTimeMillis(),userName);
+  clusterVersionDAO.create(clusterVersionEntity);
+}
