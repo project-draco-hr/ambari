@@ -1,0 +1,39 @@
+{
+  if (velocityEngine == null) {
+    throw new KerberosOperationException("The Velocity Engine must not be null");
+  }
+  if (gson == null) {
+    throw new KerberosOperationException("The JSON parser must not be null");
+  }
+  Map<String,Object> data=null;
+  String template;
+  StringWriter stringWriter=new StringWriter();
+  if ((createTemplate == null) || createTemplate.isEmpty()) {
+    template="{" + "\"objectClass\": [\"top\", \"person\", \"organizationalPerson\", \"user\"]," + "\"cn\": \"$principal\","+ "#if( $is_service )"+ "  \"servicePrincipalName\": \"$principal\","+ "#end"+ "\"userPrincipalName\": \"$principal@$realm.toLowerCase()\","+ "\"unicodePwd\": \"\\\"$password\\\"\","+ "\"accountExpires\": \"0\","+ "\"userAccountControl\": \"512\""+ "}";
+  }
+ else {
+    template=createTemplate;
+  }
+  try {
+    if (velocityEngine.evaluate(new VelocityContext(context),stringWriter,"Active Directory principal create template",template)) {
+      String json=stringWriter.toString();
+      Type type=new TypeToken<Map<String,Object>>(){
+      }
+.getType();
+      data=gson.fromJson(json,type);
+    }
+  }
+ catch (  ParseErrorException e) {
+    LOG.warn("Failed to parse Active Directory create principal template",e);
+    throw new KerberosOperationException("Failed to parse Active Directory create principal template",e);
+  }
+catch (  MethodInvocationException e) {
+    LOG.warn("Failed to process Active Directory create principal template",e);
+    throw new KerberosOperationException("Failed to process Active Directory create principal template",e);
+  }
+catch (  ResourceNotFoundException e) {
+    LOG.warn("Failed to process Active Directory create principal template",e);
+    throw new KerberosOperationException("Failed to process Active Directory create principal template",e);
+  }
+  return data;
+}

@@ -8,44 +8,69 @@
   if (password == null) {
     throw new KerberosOperationException("principal password is null");
   }
-  String realm=getDefaultRealm();
-  int atIndex=principal.indexOf("@");
-  if (atIndex >= 0) {
-    realm=principal.substring(atIndex + 1);
-    principal=principal.substring(0,atIndex);
+  String realm=null;
+  String principal_primary=null;
+  String principal_instance=null;
+  Matcher matcher=PATTERN_PRINCIPAL.matcher(principal);
+  if (matcher.matches()) {
+    principal=matcher.group(1);
+    principal_primary=matcher.group(2);
+    principal_instance=matcher.group(3);
+    realm=matcher.group(4);
   }
-  if (realm == null) {
-    realm="";
+  if ((realm == null) || realm.isEmpty()) {
+    realm=getDefaultRealm();
   }
+  Map<String,Object> context=new HashMap<String,Object>();
+  context.put("principal",principal);
+  context.put("principal_primary",principal_primary);
+  context.put("principal_instance",principal_instance);
+  context.put("realm",realm);
+  context.put("realm_lowercase",(realm == null) ? null : realm.toLowerCase());
+  context.put("password",password);
+  context.put("is_service",service);
+  context.put("container_dn",this.principalContainerDn);
+  Map<String,Object> data=processCreateTemplate(context);
   Attributes attributes=new BasicAttributes();
-  Attribute objectClass=new BasicAttribute("objectClass");
-  objectClass.add("user");
-  attributes.put(objectClass);
-  Attribute cn=new BasicAttribute("cn");
-  cn.add(principal);
-  attributes.put(cn);
-  Attribute upn=new BasicAttribute("userPrincipalName");
-  upn.add(String.format("%s@%s",principal,realm.toLowerCase()));
-  attributes.put(upn);
-  if (service) {
-    Attribute spn=new BasicAttribute("servicePrincipalName");
-    spn.add(principal);
-    attributes.put(spn);
+  String cn=null;
+  if (data != null) {
+    for (    Map.Entry<String,Object> entry : data.entrySet()) {
+      String key=entry.getKey();
+      Object value=entry.getValue();
+      if ("unicodePwd".equals(key)) {
+        if (value instanceof String) {
+          Attribute passwordAttr=new BasicAttribute("unicodePwd");
+          try {
+            passwordAttr.add(((String)value).getBytes("UTF-16LE"));
+          }
+ catch (          UnsupportedEncodingException ue) {
+            throw new KerberosOperationException("Can not encode password with UTF-16LE",ue);
+          }
+          attributes.put(passwordAttr);
+        }
+      }
+ else {
+        Attribute attribute=new BasicAttribute(key);
+        if (value instanceof Collection) {
+          for (          Object object : (Collection)value) {
+            attribute.add(object);
+          }
+        }
+ else {
+          attribute.add(value);
+          if ("cn".equals(key) && (value != null)) {
+            cn=value.toString();
+          }
+        }
+        attributes.put(attribute);
+      }
+    }
   }
-  Attribute uac=new BasicAttribute("userAccountControl");
-  uac.add("512");
-  attributes.put(uac);
-  Attribute passwordAttr=new BasicAttribute("unicodePwd");
-  String quotedPasswordVal="\"" + password + "\"";
+  if (cn == null) {
+    cn=String.format("%s@%s",principal,realm);
+  }
   try {
-    passwordAttr.add(quotedPasswordVal.getBytes("UTF-16LE"));
-  }
- catch (  UnsupportedEncodingException ue) {
-    throw new KerberosOperationException("Can not encode password with UTF-16LE",ue);
-  }
-  attributes.put(passwordAttr);
-  try {
-    Name name=new CompositeName().add("cn=" + principal + ","+ principalContainerDn);
+    Name name=new CompositeName().add(String.format("cn=%s,%s",cn,principalContainerDn));
     ldapContext.createSubcontext(name,attributes);
   }
  catch (  NamingException ne) {

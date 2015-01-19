@@ -21,11 +21,16 @@
     containerDN=DEFAULT_PRINCIPAL_CONTAINER_DN;
   }
   KerberosCredential credentials=new KerberosCredential(principal,password,null);
-  handler.open(credentials,realm,ldapUrl,containerDN);
+  Map<String,String> kerberosEnvMap=new HashMap<String,String>();
+  kerberosEnvMap.put(ADKerberosOperationHandler.KERBEROS_ENV_LDAP_URL,ldapUrl);
+  kerberosEnvMap.put(ADKerberosOperationHandler.KERBEROS_ENV_PRINCIPAL_CONTAINER_DN,containerDN);
+  handler.open(credentials,realm,kerberosEnvMap);
   System.out.println("Test Admin Credentials: " + handler.testAdministratorCredentials());
   System.out.println("Principal exists: " + handler.principalExists("nn/c1508.ambari.apache.org"));
-  handler.createPrincipal("nn/c1508.ambari.apache.org@" + DEFAULT_REALM.toLowerCase(),handler.createSecurePassword(),true);
-  handler.createPrincipal("nn/c1508.ambari.apache.org",handler.createSecurePassword(),true);
+  handler.close();
+  kerberosEnvMap.put(ADKerberosOperationHandler.KERBEROS_ENV_CREATE_ATTRIBUTES_TEMPLATE,"{" + "\"objectClass\": [\"top\", \"person\", \"organizationalPerson\", \"user\"]," + "\"distinguishedName\": \"CN=$principal@$realm,$container_dn\","+ "#if( $is_service )"+ "\"servicePrincipalName\": \"$principal\","+ "#end"+ "\"userPrincipalName\": \"$principal@$realm.toLowerCase()\","+ "\"unicodePwd\": \"\\\"$password\\\"\","+ "\"accountExpires\": \"0\","+ "\"userAccountControl\": \"66048\""+ "}");
+  handler.open(credentials,realm,kerberosEnvMap);
+  handler.createPrincipal("abcdefg/c1509.ambari.apache.org@" + DEFAULT_REALM,handler.createSecurePassword(),true);
   handler.setPrincipalPassword("nn/c1508.ambari.apache.org",handler.createSecurePassword());
   handler.close();
 }

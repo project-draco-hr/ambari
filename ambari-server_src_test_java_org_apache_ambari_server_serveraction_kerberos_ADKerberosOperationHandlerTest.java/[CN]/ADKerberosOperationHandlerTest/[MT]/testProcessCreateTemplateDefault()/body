@@ -1,0 +1,69 @@
+{
+  KerberosCredential kc=new KerberosCredential(DEFAULT_ADMIN_PRINCIPAL,DEFAULT_ADMIN_PASSWORD,null);
+  Map<String,String> kerberosEnvMap=new HashMap<String,String>(){
+{
+      put(ADKerberosOperationHandler.KERBEROS_ENV_LDAP_URL,DEFAULT_LDAP_URL);
+      put(ADKerberosOperationHandler.KERBEROS_ENV_PRINCIPAL_CONTAINER_DN,DEFAULT_PRINCIPAL_CONTAINER_DN);
+    }
+  }
+;
+  ADKerberosOperationHandler handler=createMockBuilder(ADKerberosOperationHandler.class).addMockedMethod(ADKerberosOperationHandler.class.getDeclaredMethod("createInitialLdapContext",Properties.class,Control[].class)).addMockedMethod(ADKerberosOperationHandler.class.getDeclaredMethod("createSearchControls")).createNiceMock();
+  expect(handler.createInitialLdapContext(anyObject(Properties.class),anyObject(Control[].class))).andAnswer(new IAnswer<LdapContext>(){
+    @Override public LdapContext answer() throws Throwable {
+      LdapContext ldapContext=createNiceMock(LdapContext.class);
+      expect(ldapContext.search(anyObject(String.class),anyObject(String.class),anyObject(SearchControls.class))).andAnswer(new IAnswer<NamingEnumeration<SearchResult>>(){
+        @Override public NamingEnumeration<SearchResult> answer() throws Throwable {
+          NamingEnumeration<SearchResult> result=createNiceMock(NamingEnumeration.class);
+          expect(result.hasMore()).andReturn(false).once();
+          replay(result);
+          return result;
+        }
+      }
+).once();
+      replay(ldapContext);
+      return ldapContext;
+    }
+  }
+).once();
+  expect(handler.createSearchControls()).andAnswer(new IAnswer<SearchControls>(){
+    @Override public SearchControls answer() throws Throwable {
+      SearchControls searchControls=createNiceMock(SearchControls.class);
+      replay(searchControls);
+      return searchControls;
+    }
+  }
+).once();
+  replayAll();
+  handler.open(kc,DEFAULT_REALM,kerberosEnvMap);
+  Map<String,Object> context=new HashMap<String,Object>();
+  context.put("principal","nn/c6501.ambari.apache.org");
+  context.put("principal_primary","nn");
+  context.put("principal_instance","c6501.ambari.apache.org");
+  context.put("realm","EXAMPLE.COM");
+  context.put("realm_lowercase","example.com");
+  context.put("password","secret");
+  context.put("is_service",true);
+  context.put("container_dn","ou=cluster,DC=EXAMPLE,DC=COM");
+  Map<String,Object> data;
+  data=handler.processCreateTemplate(context);
+  Assert.assertNotNull(data);
+  Assert.assertEquals(7,data.size());
+  Assert.assertEquals(new ArrayList<String>(Arrays.asList("top","person","organizationalPerson","user")),data.get("objectClass"));
+  Assert.assertEquals("nn/c6501.ambari.apache.org",data.get("cn"));
+  Assert.assertEquals("nn/c6501.ambari.apache.org",data.get("servicePrincipalName"));
+  Assert.assertEquals("nn/c6501.ambari.apache.org@example.com",data.get("userPrincipalName"));
+  Assert.assertEquals("\"secret\"",data.get("unicodePwd"));
+  Assert.assertEquals("0",data.get("accountExpires"));
+  Assert.assertEquals("512",data.get("userAccountControl"));
+  context.put("is_service",false);
+  data=handler.processCreateTemplate(context);
+  Assert.assertNotNull(data);
+  Assert.assertEquals(6,data.size());
+  Assert.assertEquals(new ArrayList<String>(Arrays.asList("top","person","organizationalPerson","user")),data.get("objectClass"));
+  Assert.assertEquals("nn/c6501.ambari.apache.org",data.get("cn"));
+  Assert.assertEquals("nn/c6501.ambari.apache.org@example.com",data.get("userPrincipalName"));
+  Assert.assertEquals("\"secret\"",data.get("unicodePwd"));
+  Assert.assertEquals("0",data.get("accountExpires"));
+  Assert.assertEquals("512",data.get("userAccountControl"));
+  handler.close();
+}
