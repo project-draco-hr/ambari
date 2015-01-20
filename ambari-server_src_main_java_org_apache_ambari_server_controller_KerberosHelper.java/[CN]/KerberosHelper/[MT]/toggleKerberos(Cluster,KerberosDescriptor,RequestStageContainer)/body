@@ -1,12 +1,82 @@
 {
-  KerberosDetails kerberosDetails=getKerberosDetails(cluster);
-  if (kerberosDetails.isSecurityEnabled()) {
-    LOG.info("Configuring Kerberos for realm {} on cluster, {}",kerberosDetails.getDefaultRealm(),cluster.getClusterName());
-    requestStageContainer=handle(cluster,kerberosDescriptor,kerberosDetails,null,null,requestStageContainer,enableKerberosHandler);
+  if (cluster == null) {
+    String message="The cluster object is not available";
+    LOG.error(message);
+    throw new AmbariException(message);
+  }
+  Config configClusterEnv=cluster.getDesiredConfigByType("cluster-env");
+  if (configClusterEnv == null) {
+    String message="The 'cluster-env' configuration is not available";
+    LOG.error(message);
+    throw new AmbariException(message);
+  }
+  Map<String,String> clusterEnvProperties=configClusterEnv.getProperties();
+  if (clusterEnvProperties == null) {
+    String message="The 'cluster-env' configuration properties are not available";
+    LOG.error(message);
+    throw new AmbariException(message);
+  }
+  String securityEnabled=clusterEnvProperties.get("security_enabled");
+  if ((securityEnabled == null) || securityEnabled.isEmpty()) {
+    LOG.warn("Missing 'securityEnabled' property of cluster-env, unable to determine the cluster's security state. This may be ok.");
   }
  else {
-    LOG.info("Disabling Kerberos from cluster, {}",cluster.getClusterName());
-    requestStageContainer=handle(cluster,kerberosDescriptor,kerberosDetails,null,null,requestStageContainer,disableKerberosHandler);
+    String defaultRealm=clusterEnvProperties.get("kerberos_domain");
+    Config configKrb5Conf=cluster.getDesiredConfigByType("krb5-conf");
+    if (configKrb5Conf == null) {
+      String message="The 'krb5-conf' configuration is not available";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
+    Map<String,String> krb5ConfProperties=configKrb5Conf.getProperties();
+    if (krb5ConfProperties == null) {
+      String message="The 'krb5-conf' configuration properties are not available";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
+    Config configKerberosEnv=cluster.getDesiredConfigByType("kerberos-env");
+    if (configKerberosEnv == null) {
+      String message="The 'kerberos-env' configuration is not available";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
+    Map<String,String> kerberosEnvProperties=configKerberosEnv.getProperties();
+    if (kerberosEnvProperties == null) {
+      String message="The 'kerberos-env' configuration properties are not available";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
+    KDCType kdcType=null;
+    String kdcTypeProperty=kerberosEnvProperties.get("kdc_type");
+    if (kdcTypeProperty == null) {
+      kdcTypeProperty=krb5ConfProperties.get("kdc_type");
+    }
+    if (kdcTypeProperty != null) {
+      try {
+        kdcType=KDCType.translate(kdcTypeProperty);
+      }
+ catch (      IllegalArgumentException e) {
+        String message=String.format("Invalid 'kdc_type' value: %s",kdcTypeProperty);
+        LOG.error(message);
+        throw new AmbariException(message);
+      }
+    }
+    if (kdcType == null) {
+      kdcType=KDCType.MIT_KDC;
+    }
+    if ("true".equalsIgnoreCase(securityEnabled)) {
+      LOG.info("Configuring Kerberos for realm {} on cluster, {}",defaultRealm,cluster.getClusterName());
+      requestStageContainer=handle(cluster,kerberosDescriptor,defaultRealm,kdcType,kerberosEnvProperties,requestStageContainer,enableKerberosHandler);
+    }
+ else     if ("false".equalsIgnoreCase(securityEnabled)) {
+      LOG.info("Disabling Kerberos from cluster, {}",cluster.getClusterName());
+      requestStageContainer=handle(cluster,kerberosDescriptor,defaultRealm,kdcType,kerberosEnvProperties,requestStageContainer,disableKerberosHandler);
+    }
+ else {
+      String message=String.format("Invalid value for `security_enabled` property of cluster-env: %s",securityEnabled);
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
   }
   return requestStageContainer;
 }
