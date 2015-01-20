@@ -1,0 +1,27 @@
+{
+  final String clusterName=request.getClusterName();
+  final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+  final MasterHostResolver masterHostResolver=new MasterHostResolver(cluster);
+  final Set<String> hostsWithMasterComponent=new HashSet<String>();
+  for (  Map.Entry<String,Service> serviceEntry : cluster.getServices().entrySet()) {
+    final Service service=serviceEntry.getValue();
+    for (    Map.Entry<String,ServiceComponent> serviceComponentEntry : service.getServiceComponents().entrySet()) {
+      final ServiceComponent serviceComponent=serviceComponentEntry.getValue();
+      final HostsType hostsType=masterHostResolver.getMasterAndHosts(service.getName(),serviceComponent.getName());
+      if (hostsType != null && hostsType.master != null) {
+        hostsWithMasterComponent.add(hostsType.master);
+      }
+    }
+  }
+  final Map<String,Host> clusterHosts=clustersProvider.get().getHostsForCluster(clusterName);
+  for (  Map.Entry<String,Host> hostEntry : clusterHosts.entrySet()) {
+    final Host host=hostEntry.getValue();
+    if (host.getMaintenanceState(cluster.getClusterId()) == MaintenanceState.ON && hostsWithMasterComponent.contains(host.getHostName())) {
+      prerequisiteCheck.getFailedOn().add(host.getHostName());
+    }
+  }
+  if (!prerequisiteCheck.getFailedOn().isEmpty()) {
+    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+    prerequisiteCheck.setFailReason("Some hosts with master components are in Maintenance Mode");
+  }
+}

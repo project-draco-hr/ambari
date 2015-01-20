@@ -1,0 +1,25 @@
+{
+  final String clusterName=request.getClusterName();
+  final List<PrerequisiteCheck> prerequisiteCheckResults=new ArrayList<PrerequisiteCheck>();
+  for (  AbstractCheckDescriptor checkDescriptor : checksRegistry) {
+    final PrerequisiteCheck prerequisiteCheck=new PrerequisiteCheck(checkDescriptor.id,checkDescriptor.description,checkDescriptor.type,clusterName);
+    try {
+      if (checkDescriptor.isApplicable(request)) {
+        checkDescriptor.perform(prerequisiteCheck,request);
+        prerequisiteCheckResults.add(prerequisiteCheck);
+      }
+    }
+ catch (    ClusterNotFoundException ex) {
+      prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+      prerequisiteCheck.setFailReason("Cluster with name " + clusterName + " doesn't exists");
+      prerequisiteCheckResults.add(prerequisiteCheck);
+    }
+catch (    Exception ex) {
+      LOG.error("Check " + checkDescriptor.id + " failed",ex);
+      prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+      prerequisiteCheck.setFailReason("Unexpected server error happened");
+      prerequisiteCheckResults.add(prerequisiteCheck);
+    }
+  }
+  return prerequisiteCheckResults;
+}
