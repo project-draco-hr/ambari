@@ -8,28 +8,22 @@
   if (password == null) {
     throw new KerberosOperationException("principal password is null");
   }
-  String realm=null;
-  String principal_primary=null;
-  String principal_instance=null;
-  Matcher matcher=PATTERN_PRINCIPAL.matcher(principal);
-  if (matcher.matches()) {
-    principal=matcher.group(1);
-    principal_primary=matcher.group(2);
-    principal_instance=matcher.group(3);
-    realm=matcher.group(4);
-  }
-  if ((realm == null) || realm.isEmpty()) {
-    realm=getDefaultRealm();
+  DeconstructedPrincipal deconstructedPrincipal=deconstructPrincipal(principal);
+  String realm=deconstructedPrincipal.getRealm();
+  if (realm == null) {
+    realm="";
   }
   Map<String,Object> context=new HashMap<String,Object>();
-  context.put("principal",principal);
-  context.put("principal_primary",principal_primary);
-  context.put("principal_instance",principal_instance);
+  context.put("normalized_principal",deconstructedPrincipal.getNormalizedPrincipal());
+  context.put("principal_name",deconstructedPrincipal.getPrincipalName());
+  context.put("principal_primary",deconstructedPrincipal.getPrimary());
+  context.put("principal_instance",deconstructedPrincipal.getInstance());
   context.put("realm",realm);
-  context.put("realm_lowercase",(realm == null) ? null : realm.toLowerCase());
+  context.put("realm_lowercase",realm.toLowerCase());
   context.put("password",password);
   context.put("is_service",service);
   context.put("container_dn",this.principalContainerDn);
+  context.put("principal_digest",DigestUtils.sha1Hex(deconstructedPrincipal.getNormalizedPrincipal()));
   Map<String,Object> data=processCreateTemplate(context);
   Attributes attributes=new BasicAttributes();
   String cn=null;
@@ -39,14 +33,12 @@
       Object value=entry.getValue();
       if ("unicodePwd".equals(key)) {
         if (value instanceof String) {
-          Attribute passwordAttr=new BasicAttribute("unicodePwd");
           try {
-            passwordAttr.add(((String)value).getBytes("UTF-16LE"));
+            attributes.put(new BasicAttribute("unicodePwd",String.format("\"%s\"",password).getBytes("UTF-16LE")));
           }
  catch (          UnsupportedEncodingException ue) {
             throw new KerberosOperationException("Can not encode password with UTF-16LE",ue);
           }
-          attributes.put(passwordAttr);
         }
       }
  else {
@@ -67,7 +59,7 @@
     }
   }
   if (cn == null) {
-    cn=String.format("%s@%s",principal,realm);
+    cn=deconstructedPrincipal.getNormalizedPrincipal();
   }
   try {
     Name name=new CompositeName().add(String.format("cn=%s,%s",cn,principalContainerDn));

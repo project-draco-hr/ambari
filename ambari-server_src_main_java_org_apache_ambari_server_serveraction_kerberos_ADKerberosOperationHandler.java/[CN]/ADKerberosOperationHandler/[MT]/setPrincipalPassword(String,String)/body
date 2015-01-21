@@ -8,25 +8,21 @@
   if (password == null) {
     throw new KerberosOperationException("principal password is null");
   }
+  DeconstructedPrincipal deconstructPrincipal=deconstructPrincipal(principal);
   try {
-    if (!principalExists(principal)) {
-      throw new KerberosOperationException("principal not found : " + principal);
+    String dn=findPrincipalDN(deconstructPrincipal.getNormalizedPrincipal());
+    if (dn != null) {
+      ldapContext.modifyAttributes(dn,new ModificationItem[]{new ModificationItem(DirContext.REPLACE_ATTRIBUTE,new BasicAttribute("unicodePwd",String.format("\"%s\"",password).getBytes("UTF-16LE")))});
+    }
+ else {
+      throw new KerberosOperationException(String.format("Can not set password for principal %s: Not Found",principal));
     }
   }
- catch (  KerberosOperationException e) {
-    e.printStackTrace();
+ catch (  NamingException e) {
+    throw new KerberosOperationException(String.format("Can not set password for principal %s: %s",principal,e.getMessage()),e);
   }
-  try {
-    ModificationItem[] mods=new ModificationItem[1];
-    String quotedPasswordVal="\"" + password + "\"";
-    mods[0]=new ModificationItem(DirContext.REPLACE_ATTRIBUTE,new BasicAttribute("UnicodePwd",quotedPasswordVal.getBytes("UTF-16LE")));
-    ldapContext.modifyAttributes(new CompositeName().add("cn=" + principal + ","+ principalContainerDn),mods);
-  }
- catch (  NamingException ne) {
-    throw new KerberosOperationException("Can not set password for principal : " + principal,ne);
-  }
-catch (  UnsupportedEncodingException ue) {
-    throw new KerberosOperationException("Unsupported encoding UTF-16LE",ue);
+catch (  UnsupportedEncodingException e) {
+    throw new KerberosOperationException("Unsupported encoding UTF-16LE",e);
   }
   return 0;
 }
