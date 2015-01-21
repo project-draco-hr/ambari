@@ -6,10 +6,19 @@ def service_check(self, env):
     current_time = time.time()
     metric_json = Template('smoketest_metrics.json.j2', hostname=params.hostname, random1=random_value1, current_time=current_time).get_content()
     Logger.info(('Generated metrics:\n%s' % metric_json))
-    Logger.info(('Connecting (POST) to %s:%s%s' % (params.ams_collector_host_single, params.metric_collector_port, self.AMS_METRICS_POST_URL)))
     headers = {'Content-type': 'application/json', }
-    conn = httplib.HTTPConnection(params.ams_collector_host_single, int(params.metric_collector_port))
-    conn.request('POST', self.AMS_METRICS_POST_URL, metric_json, headers)
+    for i in xrange(1, self.AMS_CONNECT_TRIES):
+        try:
+            Logger.info(('Connecting (POST) to %s:%s%s' % (params.ams_collector_host_single, params.metric_collector_port, self.AMS_METRICS_POST_URL)))
+            conn = httplib.HTTPConnection(params.ams_collector_host_single, int(params.metric_collector_port))
+            conn.request('POST', self.AMS_METRICS_POST_URL, metric_json, headers)
+            break
+        except (httplib.HTTPException, socket.error) as ex:
+            if (i < self.AMS_CONNECT_TRIES):
+                time.sleep(self.AMS_CONNECT_TIMEOUT)
+                Logger.info(('Connection failed. Next retry in %s seconds.' % self.AMS_CONNECT_TIMEOUT))
+            else:
+                Fail('AMS metrics were not saved. Service check has failed. \nConnection failed.')
     response = conn.getresponse()
     Logger.info(('Http response: %s %s' % (response.status, response.reason)))
     data = response.read()
