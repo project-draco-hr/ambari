@@ -1,0 +1,53 @@
+@patch('os.path.exists')
+@patch.object(_ambari_server_, 'run_os_command')
+@patch('os.path.split')
+@patch.object(_ambari_server_, 'unpack_jce_policy')
+@patch.object(_ambari_server_, 'get_ambari_properties')
+@patch.object(_ambari_server_, 'search_file')
+@patch('__builtin__.open')
+def test_setup_jce_policy(self, open_mock, search_file_mock, get_ambari_properties_mock, unpack_jce_policy_mock, split_mock, run_os_command_mock, exists_mock):
+    exists_mock.return_value = True
+    run_os_command_mock.return_value = (0, '', '')
+    properties = MagicMock()
+    unpack_jce_policy_mock.return_value = 0
+    get_ambari_properties_mock.return_value = properties
+    conf_file = 'etc/ambari-server/conf/ambari.properties'
+    search_file_mock.return_value = conf_file
+    split_mock.return_value = [_ambari_server_.configDefaults.SERVER_RESOURCES_DIR, 'UnlimitedJCEPolicyJDK7.zip']
+    path = '/path/to/JCEPolicy.zip'
+    copy_cmd = 'cp {0} {1}'.format(path, _ambari_server_.configDefaults.SERVER_RESOURCES_DIR)
+    _ambari_server_.setup_jce_policy(path)
+    run_os_command_mock.assert_called_with(copy_cmd)
+    self.assertTrue(unpack_jce_policy_mock.called)
+    self.assertTrue(get_ambari_properties_mock.called)
+    self.assertTrue(properties.store.called)
+    exists_mock.return_value = False
+    try:
+        _ambari_server_.setup_jce_policy(path)
+    except FatalException:
+        self.assertTrue(True)
+    exists_mock.return_value = True
+    run_os_command_mock.return_value = (2, '', 'Fail')
+    try:
+        _ambari_server_.setup_jce_policy(path)
+    except FatalException:
+        self.assertTrue(True)
+    run_os_command_mock.return_value = (0, '', '')
+    run_os_command_mock.reset_mock()
+    run_os_command_mock.side_effect = FatalException(1, 'The command fails.')
+    try:
+        _ambari_server_.setup_jce_policy(path)
+    except FatalException:
+        self.assertTrue(True)
+    run_os_command_mock.return_value = (0, '', '')
+    properties.store.side_effect = Exception('Invalid file.')
+    try:
+        _ambari_server_.setup_jce_policy(path)
+    except Exception:
+        self.assertTrue(True)
+    properties.reset_mock()
+    unpack_jce_policy_mock.side_effect = FatalException(1, 'Can not install JCE policy')
+    try:
+        _ambari_server_.setup_jce_policy(path)
+    except FatalException:
+        self.assertTrue(True)
