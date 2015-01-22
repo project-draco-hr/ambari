@@ -14,33 +14,37 @@
   }
  catch (  Exception e) {
   }
+  try {
 switch (s) {
 case HDFS:
-    if (componentName.equalsIgnoreCase("NAMENODE")) {
-      Map<Status,String> pair=getNameNodePair(componentHosts);
-      if (pair != null) {
-        hostsType.master=pair.containsKey(Status.ACTIVE) ? pair.get(Status.ACTIVE) : null;
-        hostsType.secondary=pair.containsKey(Status.STANDBY) ? pair.get(Status.STANDBY) : null;
+      if (componentName.equalsIgnoreCase("NAMENODE")) {
+        if (componentHosts.size() != 2) {
+          return hostsType;
+        }
+        Map<Status,String> pair=getNameNodePair();
+        if (pair != null) {
+          hostsType.master=pair.containsKey(Status.ACTIVE) ? pair.get(Status.ACTIVE) : null;
+          hostsType.secondary=pair.containsKey(Status.STANDBY) ? pair.get(Status.STANDBY) : null;
+        }
+ else {
+          hostsType.master=componentHosts.iterator().next();
+        }
       }
  else {
-        hostsType.master=componentHosts.iterator().next();
+        hostsType=filterSameVersion(hostsType,serviceName,componentName);
       }
-    }
- else {
-      hostsType=filterSameVersion(hostsType,serviceName,componentName);
-    }
-  break;
+    break;
 case YARN:
-if (componentName.equalsIgnoreCase("RESOURCEMANAGER")) {
-  resolveResourceManagers(hostsType);
-}
+  if (componentName.equalsIgnoreCase("RESOURCEMANAGER")) {
+    resolveResourceManagers(getCluster(),hostsType);
+  }
  else {
-  hostsType=filterSameVersion(hostsType,serviceName,componentName);
-}
+    hostsType=filterSameVersion(hostsType,serviceName,componentName);
+  }
 break;
 case HBASE:
 if (componentName.equalsIgnoreCase("HBASE_MASTER")) {
-resolveHBaseMasters(hostsType);
+resolveHBaseMasters(getCluster(),hostsType);
 }
  else {
 hostsType=filterSameVersion(hostsType,serviceName,componentName);
@@ -49,6 +53,10 @@ break;
 case OTHER:
 hostsType=filterSameVersion(hostsType,serviceName,componentName);
 break;
+}
+}
+ catch (Exception err) {
+LOG.error("Unable to get master and hosts for Component " + componentName + ". Error: "+ err.getMessage(),err);
 }
 return hostsType;
 }

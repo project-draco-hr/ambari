@@ -2,18 +2,21 @@ def post_upgrade_check():
     '\n  Ensure all journal nodes are up and quorum is established\n  :return:\n  '
     import params
     Logger.info('Ensuring Journalnode quorum is established')
+    if params.security_enabled:
+        Execute(params.jn_kinit_cmd, user=params.hdfs_user)
     time.sleep(5)
     hdfs_roll_edits()
     time.sleep(5)
     all_journal_node_hosts = default('/clusterHostInfo/journalnode_hosts', [])
     if (len(all_journal_node_hosts) < 3):
         raise Fail('Need at least 3 Journalnodes to maintain a quorum')
-    policy = default('/configurations/hdfs-site/dfs.http.policy', 'HTTP_ONLY')
-    encrypted = (policy.upper == 'HTTPS_ONLY')
-    nn_address = (default('/configurations/hdfs-site/dfs.namenode.https-address', None) if encrypted else default('/configurations/hdfs-site/dfs.namenode.http-address', None))
-    if (not nn_address):
-        raise Fail(('Could not retrieve dfs.namenode.http(s)-address for policy %s' % str(policy)))
-    nn_data = get_jmx_data(nn_address, 'org.apache.hadoop.hdfs.server.namenode.FSNamesystem', 'JournalTransactionInfo', encrypted)
+    try:
+        namenode_ha = NamenodeHAState()
+    except ValueError as err:
+        raise Fail(('Could not retrieve Namenode HA addresses. Error: ' + str(err)))
+    Logger.info(str(namenode_ha))
+    nn_address = namenode_ha.get_address(NAMENODE_STATE.ACTIVE)
+    nn_data = get_jmx_data(nn_address, 'org.apache.hadoop.hdfs.server.namenode.FSNamesystem', 'JournalTransactionInfo', namenode_ha.is_encrypted())
     if (not nn_data):
         raise Fail('Could not retrieve JournalTransactionInfo from JMX')
     try:

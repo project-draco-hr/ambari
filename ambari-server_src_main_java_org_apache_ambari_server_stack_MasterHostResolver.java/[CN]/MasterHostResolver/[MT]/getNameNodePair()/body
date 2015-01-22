@@ -1,0 +1,41 @@
+{
+  Map<Status,String> stateToHost=new HashMap<Status,String>();
+  Cluster cluster=getCluster();
+  String nameService=m_configHelper.getValueFromDesiredConfigurations(cluster,ConfigHelper.HDFS_SITE,"dfs.nameservices");
+  if (nameService == null || nameService.isEmpty()) {
+    return null;
+  }
+  String nnUniqueIDstring=m_configHelper.getValueFromDesiredConfigurations(cluster,ConfigHelper.HDFS_SITE,"dfs.ha.namenodes." + nameService);
+  if (nnUniqueIDstring == null || nnUniqueIDstring.isEmpty()) {
+    return null;
+  }
+  String[] nnUniqueIDs=nnUniqueIDstring.split(",");
+  if (nnUniqueIDs == null || nnUniqueIDs.length != 2) {
+    return null;
+  }
+  String policy=m_configHelper.getValueFromDesiredConfigurations(cluster,ConfigHelper.HDFS_SITE,"dfs.http.policy");
+  boolean encrypted=(policy != null && policy.equalsIgnoreCase(ConfigHelper.HTTPS_ONLY));
+  String namenodeFragment="dfs.namenode." + (encrypted ? "https-address" : "http-address") + ".{0}.{1}";
+  for (  String nnUniqueID : nnUniqueIDs) {
+    String key=MessageFormat.format(namenodeFragment,nameService,nnUniqueID);
+    String value=m_configHelper.getValueFromDesiredConfigurations(cluster,ConfigHelper.HDFS_SITE,key);
+    try {
+      HostAndPort hp=HTTPUtils.getHostAndPortFromProperty(value);
+      if (hp == null) {
+        throw new MalformedURLException("Could not parse host and port from " + value);
+      }
+      String state=queryJmxBeanValue(hp.host,hp.port,"Hadoop:service=NameNode,name=NameNodeStatus","State",true,encrypted);
+      if (null != state && (state.equalsIgnoreCase(Status.ACTIVE.toString()) || state.equalsIgnoreCase(Status.STANDBY.toString()))) {
+        Status status=Status.valueOf(state.toUpperCase());
+        stateToHost.put(status,hp.host);
+      }
+    }
+ catch (    MalformedURLException e) {
+      LOG.error(e.getMessage());
+    }
+  }
+  if (stateToHost.containsKey(Status.ACTIVE) && stateToHost.containsKey(Status.STANDBY) && !stateToHost.get(Status.ACTIVE).equalsIgnoreCase(stateToHost.get(Status.STANDBY))) {
+    return stateToHost;
+  }
+  return null;
+}
