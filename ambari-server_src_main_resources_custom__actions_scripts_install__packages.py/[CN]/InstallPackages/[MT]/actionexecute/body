@@ -6,13 +6,16 @@ def actionexecute(self, env):
         repository_version = config['roleParams']['repository_version']
         base_urls = json.loads(config['roleParams']['base_urls'])
         package_list = json.loads(config['roleParams']['package_list'])
+        stack_id = config['roleParams']['stack_id']
     except KeyError:
         repository_version = config['commandParams']['repository_version']
         base_urls = json.loads(config['commandParams']['base_urls'])
         package_list = json.loads(config['commandParams']['package_list'])
+        stack_id = config['commandParams']['stack_id']
     installed_repositories = []
     current_repositories = ['base']
     current_repo_files = set(['base'])
+    old_versions = self.hdp_versions()
     try:
         append_to_file = False
         for url_info in base_urls:
@@ -48,7 +51,12 @@ def actionexecute(self, env):
                 new_packages_installed = [package for package in packages_installed_after if (package not in packages_installed_before)]
                 for package in new_packages_installed:
                     Package(package, action='remove')
-    structured_output = {'ambari_repositories': installed_repositories, 'installed_repository_version': repository_version, 'package_installation_result': ('SUCCESS' if package_install_result else 'FAIL'), }
+    structured_output = {'ambari_repositories': installed_repositories, 'installed_repository_version': repository_version, 'stack_id': stack_id, 'package_installation_result': ('SUCCESS' if package_install_result else 'FAIL'), }
+    if package_install_result:
+        new_versions = self.hdp_versions()
+        deltas = (set(new_versions) - set(old_versions))
+        if (1 == len(deltas)):
+            structured_output['actual_version'] = next(iter(deltas))
     self.put_structured_out(structured_output)
     if delayed_fail:
         raise Fail('Failed to distribute repositories/install packages')

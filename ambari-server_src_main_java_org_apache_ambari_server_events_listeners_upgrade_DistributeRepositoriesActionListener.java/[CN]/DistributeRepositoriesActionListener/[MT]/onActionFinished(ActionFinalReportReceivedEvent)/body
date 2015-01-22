@@ -18,10 +18,26 @@
  else {
     try {
       DistributeRepositoriesStructuredOutput structuredOutput=StageUtils.getGson().fromJson(event.getCommandReport().getStructuredOut(),DistributeRepositoriesStructuredOutput.class);
+      repositoryVersion=structuredOutput.getInstalledRepositoryVersion();
       if (event.getCommandReport().getStatus().equals(HostRoleStatus.COMPLETED.toString())) {
         newHostState=RepositoryVersionState.INSTALLED;
+        if (null != structuredOutput.getActualVersion() && null != structuredOutput.getInstalledRepositoryVersion() && null != structuredOutput.getStackId() && !structuredOutput.getActualVersion().equals(structuredOutput.getInstalledRepositoryVersion())) {
+          RepositoryVersionEntity version=repoVersionDAO.findByStackAndVersion(structuredOutput.getStackId(),structuredOutput.getInstalledRepositoryVersion());
+          if (null != version) {
+            LOG.info("Repository version {} was found, but {} is the actual value",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion());
+            version.setVersion(structuredOutput.getActualVersion());
+            repoVersionDAO.merge(version);
+            repositoryVersion=structuredOutput.getActualVersion();
+          }
+ else {
+            version=repoVersionDAO.findByStackAndVersion(structuredOutput.getStackId(),structuredOutput.getActualVersion());
+            LOG.debug("Repository version {} was not found, check for {}.  Found={}",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion(),Boolean.valueOf(null != version));
+            if (null != version) {
+              repositoryVersion=structuredOutput.getActualVersion();
+            }
+          }
+        }
       }
-      repositoryVersion=structuredOutput.getInstalledRepositoryVersion();
     }
  catch (    JsonSyntaxException e) {
       LOG.error("Can not parse structured output %s",e);
