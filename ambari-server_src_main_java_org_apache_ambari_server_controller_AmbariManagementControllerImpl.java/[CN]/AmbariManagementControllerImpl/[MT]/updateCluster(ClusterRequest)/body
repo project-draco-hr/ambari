@@ -23,6 +23,38 @@
     }
     cluster.setClusterName(request.getClusterName());
   }
+  boolean toggleKerberos=false;
+  String desiredSecurityState=null;
+  List<ConfigurationRequest> desiredConfig=request.getDesiredConfig();
+  if (desiredConfig != null) {
+    for (    ConfigurationRequest configurationRequest : desiredConfig) {
+      if ("cluster-env".equals(configurationRequest.getType())) {
+        Map<String,String> properties=configurationRequest.getProperties();
+        if ((properties == null) || properties.isEmpty()) {
+          Config configClusterEnv=cluster.getConfig(configurationRequest.getType(),configurationRequest.getVersionTag());
+          if (configClusterEnv != null) {
+            properties=configClusterEnv.getProperties();
+          }
+        }
+        desiredSecurityState=(properties == null) ? null : properties.get("security_enabled");
+      }
+    }
+  }
+  if (desiredSecurityState != null) {
+    Config configClusterEnv=cluster.getDesiredConfigByType("cluster-env");
+    if (configClusterEnv == null) {
+      String message="The 'cluster-env' configuration is not available";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
+    Map<String,String> clusterEnvProperties=configClusterEnv.getProperties();
+    if (clusterEnvProperties == null) {
+      String message="The 'cluster-env' configuration properties are not available";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
+    toggleKerberos=!desiredSecurityState.equals(clusterEnvProperties.get("security_enabled"));
+  }
   if (null != request.getDesiredConfig()) {
     Set<Config> configs=new HashSet<Config>();
     String note=null;
@@ -94,9 +126,11 @@
     saveClusterUpdate(request,clusterResponse);
   }
   RequestStageContainer requestStageContainer=null;
-  Map<String,Service> services=cluster.getServices();
-  if ((services != null) && services.containsKey("KERBEROS")) {
-    requestStageContainer=kerberosHelper.toggleKerberos(cluster,request.getKerberosDescriptor(),null);
+  if (toggleKerberos) {
+    Map<String,Service> services=cluster.getServices();
+    if ((services != null) && services.containsKey("KERBEROS")) {
+      requestStageContainer=kerberosHelper.toggleKerberos(cluster,request.getKerberosDescriptor(),null);
+    }
   }
   if (requestStageContainer != null) {
     requestStageContainer.persist();
