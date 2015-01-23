@@ -1,0 +1,60 @@
+{
+  String clusterName=(String)requestMap.get(UPGRADE_CLUSTER_NAME);
+  if (null == clusterName) {
+    throw new AmbariException(String.format("%s is required",UPGRADE_CLUSTER_NAME));
+  }
+  Cluster cluster=getManagementController().getClusters().getCluster(clusterName);
+  ConfigHelper configHelper=getManagementController().getConfigHelper();
+  final String version=(String)requestMap.get(UPGRADE_VERSION);
+  UpgradeContext ctx=new UpgradeContext(direction == Direction.UPGRADE ? new MasterHostResolver(cluster) : new MasterHostResolver(cluster,version),version,direction);
+  List<UpgradeGroupHolder> groups=s_upgradeHelper.createSequence(pack,ctx);
+  if (groups.isEmpty()) {
+    throw new AmbariException("There are no upgrade groupings available");
+  }
+  List<UpgradeGroupEntity> groupEntities=new ArrayList<UpgradeGroupEntity>();
+  RequestStageContainer req=createRequest(version);
+  for (  UpgradeGroupHolder group : groups) {
+    UpgradeGroupEntity groupEntity=new UpgradeGroupEntity();
+    groupEntity.setName(group.name);
+    groupEntity.setTitle(group.title);
+    boolean skippable=group.skippable;
+    boolean allowRetry=group.allowRetry;
+    List<UpgradeItemEntity> itemEntities=new ArrayList<UpgradeItemEntity>();
+    for (    StageWrapper wrapper : group.items) {
+      if (wrapper.getType() == StageWrapper.Type.SERVER_SIDE_ACTION) {
+        for (        TaskWrapper taskWrapper : wrapper.getTasks()) {
+          for (          Task task : taskWrapper.getTasks()) {
+            UpgradeItemEntity itemEntity=new UpgradeItemEntity();
+            itemEntity.setText(wrapper.getText());
+            itemEntity.setTasks(wrapper.getTasksJson());
+            itemEntity.setHosts(wrapper.getHostsJson());
+            itemEntities.add(itemEntity);
+            injectVariables(configHelper,cluster,itemEntity);
+            makeServerSideStage(ctx,req,itemEntity,(ServerSideActionTask)task,skippable,allowRetry);
+          }
+        }
+      }
+ else {
+        UpgradeItemEntity itemEntity=new UpgradeItemEntity();
+        itemEntity.setText(wrapper.getText());
+        itemEntity.setTasks(wrapper.getTasksJson());
+        itemEntity.setHosts(wrapper.getHostsJson());
+        itemEntities.add(itemEntity);
+        injectVariables(configHelper,cluster,itemEntity);
+        createStage(ctx,req,itemEntity,wrapper,skippable,allowRetry);
+      }
+    }
+    groupEntity.setItems(itemEntities);
+    groupEntities.add(groupEntity);
+  }
+  UpgradeEntity entity=new UpgradeEntity();
+  entity.setFromVersion(cluster.getCurrentClusterVersion().getRepositoryVersion().getVersion());
+  entity.setToVersion(version);
+  entity.setUpgradeGroups(groupEntities);
+  entity.setClusterId(Long.valueOf(cluster.getClusterId()));
+  req.getRequestStatusResponse();
+  entity.setRequestId(req.getId());
+  req.persist();
+  m_upgradeDAO.create(entity);
+  return entity;
+}

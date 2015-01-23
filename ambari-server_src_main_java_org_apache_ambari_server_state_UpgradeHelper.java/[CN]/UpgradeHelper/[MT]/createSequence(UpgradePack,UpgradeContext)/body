@@ -1,0 +1,74 @@
+{
+  context.setAmbariMetaInfo(m_ambariMetaInfo.get());
+  Cluster cluster=context.getCluster();
+  boolean forUpgrade=context.getDirection() == Direction.UPGRADE;
+  MasterHostResolver mhr=context.getResolver();
+  String version=context.getVersion();
+  Map<String,Map<String,ProcessingComponent>> allTasks=upgradePack.getTasks();
+  List<UpgradeGroupHolder> groups=new ArrayList<UpgradeGroupHolder>();
+  for (  Grouping group : upgradePack.getGroups(forUpgrade)) {
+    UpgradeGroupHolder groupHolder=new UpgradeGroupHolder();
+    groupHolder.name=group.name;
+    groupHolder.title=group.title;
+    groupHolder.skippable=group.skippable;
+    groupHolder.allowRetry=group.allowRetry;
+    StageWrapperBuilder builder=group.getBuilder();
+    List<UpgradePack.OrderService> services=group.services;
+    if (context.getDirection() == Direction.DOWNGRADE && !services.isEmpty()) {
+      List<UpgradePack.OrderService> reverse=new ArrayList<UpgradePack.OrderService>(services);
+      Collections.reverse(reverse);
+      services=reverse;
+    }
+    for (    UpgradePack.OrderService service : services) {
+      if (!allTasks.containsKey(service.serviceName)) {
+        continue;
+      }
+      for (      String component : service.components) {
+        if (!allTasks.get(service.serviceName).containsKey(component)) {
+          continue;
+        }
+        HostsType hostsType=mhr.getMasterAndHosts(service.serviceName,component);
+        if (null == hostsType) {
+          continue;
+        }
+        Service svc=cluster.getService(service.serviceName);
+        ProcessingComponent pc=allTasks.get(service.serviceName).get(component);
+        if (service.serviceName.equalsIgnoreCase("HDFS") && component.equalsIgnoreCase("NAMENODE")) {
+          if (hostsType.master != null && hostsType.secondary != null) {
+            Set<String> order=new LinkedHashSet<String>();
+            order.add(hostsType.master);
+            order.add(hostsType.secondary);
+            hostsType.hosts=order;
+          }
+ else {
+            throw new AmbariException(MessageFormat.format("Could not find active and standby namenodes using hosts: {0}",StringUtils.join(hostsType.hosts,", ").toString()));
+          }
+          builder.add(hostsType,service.serviceName,forUpgrade,svc.isClientOnlyService(),pc);
+        }
+ else {
+          builder.add(hostsType,service.serviceName,forUpgrade,svc.isClientOnlyService(),pc);
+        }
+      }
+    }
+    List<StageWrapper> proxies=builder.build(context);
+    postProcessTasks(proxies,mhr,version);
+    if (!proxies.isEmpty()) {
+      groupHolder.items=proxies;
+      groups.add(groupHolder);
+    }
+  }
+  if (LOG.isDebugEnabled()) {
+    for (    UpgradeGroupHolder group : groups) {
+      LOG.debug(group.name);
+      int i=0;
+      for (      StageWrapper proxy : group.items) {
+        LOG.debug("  Stage {}",Integer.valueOf(i++));
+        int j=0;
+        for (        TaskWrapper task : proxy.getTasks()) {
+          LOG.debug("    Task {} {}",Integer.valueOf(j++),task);
+        }
+      }
+    }
+  }
+  return groups;
+}

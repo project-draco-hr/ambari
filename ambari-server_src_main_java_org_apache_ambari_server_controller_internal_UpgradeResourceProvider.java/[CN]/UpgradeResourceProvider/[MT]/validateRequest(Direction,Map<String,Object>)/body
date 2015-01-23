@@ -1,0 +1,27 @@
+{
+  String clusterName=(String)requestMap.get(UPGRADE_CLUSTER_NAME);
+  String version=(String)requestMap.get(UPGRADE_VERSION);
+  String versionForUpgradePack=(String)requestMap.get(UPGRADE_FROM_VERSION);
+  if (null == clusterName) {
+    throw new AmbariException(String.format("%s is required",UPGRADE_CLUSTER_NAME));
+  }
+  if (null == version) {
+    throw new AmbariException(String.format("%s is required",UPGRADE_VERSION));
+  }
+  Cluster cluster=getManagementController().getClusters().getCluster(clusterName);
+  StackId stack=cluster.getDesiredStackVersion();
+  String repoVersion=version;
+  if (direction == Direction.DOWNGRADE && null != versionForUpgradePack) {
+    repoVersion=versionForUpgradePack;
+  }
+  RepositoryVersionEntity versionEntity=m_repoVersionDAO.findByStackAndVersion(stack.getStackId(),repoVersion);
+  if (null == versionEntity) {
+    throw new AmbariException(String.format("Version %s for stack %s was not found",repoVersion,stack.getStackVersion()));
+  }
+  Map<String,UpgradePack> packs=m_metaProvider.get().getUpgradePacks(stack.getStackName(),stack.getStackVersion());
+  UpgradePack up=packs.get(versionEntity.getUpgradePackage());
+  if (null == up) {
+    throw new AmbariException(String.format("Unable to perform %s.  Could not locate upgrade pack %s for version %s",direction == Direction.DOWNGRADE ? "downgrade" : "upgrade",versionEntity.getUpgradePackage(),repoVersion));
+  }
+  return up;
+}
