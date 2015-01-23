@@ -1,0 +1,53 @@
+{
+  Map<String,Number[][]> retVal=new HashMap<String,Number[][]>();
+  if (appType == null || metricsHolder == null || metricsHolder.getTimelineMetrics() == null) {
+    logger.info("AppType must be provided and it must contain " + "timeline_metrics.json to extract jmx properties");
+    return retVal;
+  }
+  Map<String,Number[][]> receivedMetrics=null;
+  List<String> components=new ArrayList<String>();
+  for (  SliderAppTypeComponent appTypeComponent : appType.getTypeComponents()) {
+    components.add(appTypeComponent.getName());
+  }
+  Map<String,Map<String,Map<String,Metric>>> metrics=metricsHolder.getTimelineMetrics();
+  Map<String,Metric> relevantMetrics=getRelevantMetrics(metrics,components);
+  Set<String> metricsToRead=new HashSet<String>();
+  Map<String,String> reverseNameLookup=new HashMap<String,String>();
+  for (  String key : relevantMetrics.keySet()) {
+    if (metricsRequested.contains(key)) {
+      String metricName=relevantMetrics.get(key).getMetric();
+      metricsToRead.add(metricName);
+      reverseNameLookup.put(metricName,key);
+    }
+  }
+  if (metricsToRead.size() != 0) {
+    try {
+      String specWithParams=SliderAppMetricsHelper.getUrlWithParams(metricsUrl,metricsToRead,temporalInfo);
+      logger.info("Using spec: " + specWithParams);
+      if (specWithParams != null) {
+        String spec=null;
+        String params=null;
+        String[] tokens=specWithParams.split("\\?",2);
+        try {
+          spec=tokens[0];
+          params=tokens[1];
+        }
+ catch (        ArrayIndexOutOfBoundsException e) {
+          logger.info(e.toString());
+        }
+        receivedMetrics=SliderAppMetricsHelper.getMetrics(context,spec,params);
+      }
+    }
+ catch (    Exception e) {
+      logger.warn("Unable to retrieve metrics. " + e.getMessage());
+    }
+  }
+  if (receivedMetrics != null) {
+    for (    Map.Entry<String,Number[][]> metric : receivedMetrics.entrySet()) {
+      if (reverseNameLookup.containsKey(metric.getKey())) {
+        retVal.put(reverseNameLookup.get(metric.getKey()),metric.getValue());
+      }
+    }
+  }
+  return retVal;
+}

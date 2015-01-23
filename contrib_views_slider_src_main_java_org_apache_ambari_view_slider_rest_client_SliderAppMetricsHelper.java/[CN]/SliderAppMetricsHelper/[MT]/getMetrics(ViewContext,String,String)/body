@@ -1,0 +1,35 @@
+{
+  Map<String,Number[][]> receivedMetrics=new HashMap<String,Number[][]>();
+  Map<String,String> headers=new HashMap<String,String>();
+  BufferedReader reader=null;
+  try {
+    String fullUrl=spec + "?" + params;
+    logger.debug("Metrics request url = " + fullUrl);
+    reader=new BufferedReader(new InputStreamReader(context.getURLStreamProvider().readFrom(fullUrl,"GET",null,headers)));
+    TimelineMetrics timelineMetrics=timelineObjectReader.readValue(reader);
+    logger.debug("Timeline metrics response => " + timelineMetrics);
+    for (    TimelineMetric tlMetric : timelineMetrics.getMetrics()) {
+      if (tlMetric.getMetricName() != null && tlMetric.getMetricValues() != null) {
+        Map<Long,Double> tlMetricValues=tlMetric.getMetricValues();
+        Number[][] metricValues=transformMetricValues(tlMetricValues);
+        receivedMetrics.put(tlMetric.getMetricName(),metricValues);
+      }
+    }
+  }
+ catch (  IOException io) {
+    logger.warn("Error getting timeline metrics.",io);
+  }
+ finally {
+    if (reader != null) {
+      try {
+        reader.close();
+      }
+ catch (      IOException e) {
+        if (logger.isDebugEnabled()) {
+          logger.warn("Unable to close http input steam : spec=" + spec,e);
+        }
+      }
+    }
+  }
+  return receivedMetrics;
+}
