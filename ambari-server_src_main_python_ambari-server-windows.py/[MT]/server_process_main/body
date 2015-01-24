@@ -1,11 +1,6 @@
 def server_process_main(options, scmStatus=None):
     try:
-        set_debug_mode(options.debug)
-    except AttributeError:
-        pass
-    try:
-        global SUSPEND_START_MODE
-        SUSPEND_START_MODE = options.suspend_start
+        set_debug_mode_from_options(options)
     except AttributeError:
         pass
     if (not utils.check_reverse_lookup()):
@@ -32,10 +27,13 @@ def server_process_main(options, scmStatus=None):
     conf_dir = ((os.path.abspath(conf_dir) + os.pathsep) + get_ambari_classpath())
     if (conf_dir.find(' ') != (-1)):
         conf_dir = (('"' + conf_dir) + '"')
-    java_exe = ((jdk_path + os.sep) + configDefaults.JAVA_EXE_SUBPATH)
+    java_exe = get_java_exe_path()
     pidfile = os.path.join(configDefaults.PID_DIR, PID_NAME)
-    command_base = (SERVER_START_CMD_DEBUG if (get_debug_mode() or SERVER_START_DEBUG) else SERVER_START_CMD)
-    suspend_mode = ('y' if SUSPEND_START_MODE else 'n')
+    debug_mode = get_debug_mode()
+    debug_start = ((debug_mode & 1) or SERVER_START_DEBUG)
+    suspend_start = ((debug_mode & 2) or SUSPEND_START_MODE)
+    command_base = (SERVER_START_CMD_DEBUG if debug_start else SERVER_START_CMD)
+    suspend_mode = ('y' if suspend_start else 'n')
     command = command_base.format(conf_dir, suspend_mode)
     if (not os.path.exists(configDefaults.PID_DIR)):
         os.makedirs(configDefaults.PID_DIR, 493)

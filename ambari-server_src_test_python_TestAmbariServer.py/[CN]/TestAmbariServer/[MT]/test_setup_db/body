@@ -1,7 +1,22 @@
-@patch.object(_ambari_server_, 'configure_database_username_password')
-@patch.object(_ambari_server_, 'run_os_command')
-def test_setup_db(self, run_os_command_mock, configure_database_username_password_mock):
+@not_for_platform(PLATFORM_WINDOWS)
+@patch('ambari_server.dbConfiguration.decrypt_password_for_alias')
+@patch('ambari_server.dbConfiguration_linux.run_os_command')
+def test_setup_db(self, run_os_command_mock, decrypt_password_for_alias_mock):
+    args = MagicMock()
+    del args.database_index
+    del args.dbms
+    del args.database_host
+    del args.database_port
+    del args.database_name
+    del args.database_username
+    del args.database_password
+    properties = Properties()
+    properties.process_pair(JDBC_PASSWORD_PROPERTY, get_alias_string('mypwdalias'))
+    decrypt_password_for_alias_mock.return_value = 'password'
+    dbms = PGConfig(args, properties, 'local')
+    self.assertTrue(decrypt_password_for_alias_mock.called)
     run_os_command_mock.return_value = (0, None, None)
-    result = _ambari_server_.setup_db(MagicMock())
-    self.assertTrue(configure_database_username_password_mock.called)
+    result = dbms._setup_db()
+    self.assertTrue(run_os_command_mock.called)
     self.assertEqual((0, None, None), result)
+    pass

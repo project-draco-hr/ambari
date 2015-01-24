@@ -1,0 +1,32 @@
+def _reset_local_database(self):
+    if get_silent():
+        default = 'yes'
+    else:
+        default = 'no'
+    okToRun = get_YN_input('Confirm server reset [yes/no]({0})? '.format(default), get_silent())
+    if (not okToRun):
+        err = "Ambari Server 'reset' cancelled"
+        raise FatalException(1, err)
+    print 'Resetting the Server database...'
+    dbname = self.database_name
+    filename = self.drop_tables_script_file
+    username = self.database_username
+    password = self.database_password
+    command = PGConfig.SETUP_DB_CMD[:]
+    command[(-1)] = command[(-1)].format(filename, username, password, dbname)
+    (drop_retcode, drop_outdata, drop_errdata) = run_os_command(command)
+    if (not (drop_retcode == 0)):
+        raise FatalException(1, drop_errdata)
+    if (drop_errdata and (PGConfig.PG_ERROR_BLOCKED in drop_errdata)):
+        raise FatalException(1, 'Database is in use. Please, make sure all connections to the database are closed')
+    if (drop_errdata and get_verbose()):
+        print_warning_msg(drop_errdata)
+    print_info_msg('About to run database setup')
+    (retcode, outdata, errdata) = self._setup_db()
+    if (errdata and get_verbose()):
+        print_warning_msg(errdata)
+    if ((errdata and ('ERROR' in errdata.upper())) or (drop_errdata and ('ERROR' in drop_errdata.upper()))):
+        err = 'Non critical error in DDL'
+        if (not get_verbose()):
+            err += ', use --verbose for more information'
+        raise NonFatalException(err)

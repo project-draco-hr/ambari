@@ -1,21 +1,21 @@
 @patch('os.path.exists')
-@patch.object(_ambari_server_, 'set_file_permissions')
-@patch.object(_ambari_server_, 'run_os_command')
-@patch.object(_ambari_server_, 'get_ambari_properties')
-@patch.object(_ambari_server_, 'get_value_from_properties')
+@patch('ambari_server.setupSecurity.set_file_permissions')
+@patch('ambari_server.setupSecurity.get_ambari_properties')
+@patch('ambari_server.setupSecurity.get_value_from_properties')
 @patch('os.mkdir')
-def test_adjust_directory_permissions(self, mkdir_mock, get_value_from_properties_mock, get_ambari_properties_mock, run_os_command_mock, set_file_permissions_mock, exists_mock):
+@patch('shutil.rmtree')
+def test_adjust_directory_permissions(self, rmtree_mock, mkdir_mock, get_value_from_properties_mock, get_ambari_properties_mock, set_file_permissions_mock, exists_mock):
     properties_mock = MagicMock()
     get_value_from_properties_mock.return_value = 'dummy_bootstrap_dir'
-    _ambari_server_.adjust_directory_permissions('user')
     exists_mock.return_value = False
-    self.assertEquals(run_os_command_mock.call_args_list[0][0][0], 'rm -rf dummy_bootstrap_dir')
+    adjust_directory_permissions('user')
+    self.assertEquals(rmtree_mock.call_args_list[0][0][0], os.path.join(os.getcwd(), 'dummy_bootstrap_dir'))
     self.assertTrue(mkdir_mock.called)
     set_file_permissions_mock.reset_mock()
     old_list = configDefaults.NR_ADJUST_OWNERSHIP_LIST
     try:
         configDefaults.NR_ADJUST_OWNERSHIP_LIST = [('/etc/ambari-server/conf', '755', '{0}', True), ('/etc/ambari-server/conf/ambari.properties', '644', '{0}', False)]
-        _ambari_server_.adjust_directory_permissions('user')
+        adjust_directory_permissions('user')
         self.assertTrue((len(set_file_permissions_mock.call_args_list) == len(configDefaults.NR_ADJUST_OWNERSHIP_LIST)))
         self.assertEquals(set_file_permissions_mock.call_args_list[0][0][3], True)
         self.assertEquals(set_file_permissions_mock.call_args_list[1][0][3], False)

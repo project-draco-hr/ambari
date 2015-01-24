@@ -4,17 +4,22 @@ import glob
 import os
 import re
 import shutil
+import stat
 import string
+import sys
 import tempfile
 from ambari_commons.exceptions import FatalException
 from ambari_commons.os_check import OSCheck, OSConst
 from ambari_commons.os_family_impl import OsFamilyImpl
 from ambari_commons.os_utils import run_os_command, search_file
-from ambari_commons.logging_utils import print_warning_msg, print_info_msg, print_error_msg
-from properties import Properties
+from ambari_commons.logging_utils import get_debug_mode, print_info_msg, print_warning_msg, print_error_msg, set_debug_mode
+from ambari_server.properties import Properties
+from ambari_server.userInput import get_validated_string_input
+from ambari_server.utils import compare_versions, locate_file
 OS_VERSION = OSCheck().get_os_major_version()
 OS_TYPE = OSCheck.get_os_type()
 OS_FAMILY = OSCheck.get_os_family()
+PID_NAME = 'ambari-server.pid'
 NR_USER_PROPERTY = 'ambari-server.user'
 STACK_NAME_VER_SEP = '-'
 BLIND_PASSWORD = '*****'
@@ -24,10 +29,6 @@ OS_TYPE_PROPERTY = 'server.os_type'
 BOOTSTRAP_DIR_PROPERTY = 'bootstrap.dir'
 AMBARI_CONF_VAR = 'AMBARI_CONF_DIR'
 AMBARI_PROPERTIES_FILE = 'ambari.properties'
-if OSCheck.is_windows_family():
-    AMBARI_PROPERTIES_BACKUP_FILE = 'ambari.properties.backup'
-else:
-    AMBARI_PROPERTIES_BACKUP_FILE = 'ambari.properties.rpmsave'
 GET_FQDN_SERVICE_URL = 'server.fqdn.service.url'
 SERVER_OUT_FILE_KEY = 'ambari.output.file.path'
 VERBOSE_OUTPUT_KEY = 'ambari.output.verbose'
@@ -42,8 +43,7 @@ JCE_NAME_PROPERTY = 'jce.name'
 DEFAULT_JDK16_LOCATION = '/usr/jdk64/jdk1.6.0_31'
 JDK_NAMES = ['jdk-7u67-linux-x64.tar.gz', 'jdk-6u31-linux-x64.bin']
 JCE_POLICY_FILENAMES = ['UnlimitedJCEPolicyJDK7.zip', 'jce_policy-6.zip']
-JCE_DOWNLOAD_CMD = 'curl -o {0} {1}'
-JCE_MIN_FILESIZE = 5000
+JDBC_PATTERNS = {'oracle': '*ojdbc*.jar', 'mysql': '*mysql*.jar', }
 JDBC_DATABASE_PROPERTY = 'server.jdbc.database'
 JDBC_DATABASE_NAME_PROPERTY = 'server.jdbc.database_name'
 JDBC_HOSTNAME_PROPERTY = 'server.jdbc.hostname'
@@ -55,6 +55,7 @@ JDBC_PASSWORD_FILENAME = 'password.dat'
 JDBC_RCA_PASSWORD_FILENAME = 'rca_password.dat'
 CLIENT_API_PORT_PROPERTY = 'client.api.port'
 CLIENT_API_PORT = '8080'
+SERVER_VERSION_FILE_PATH = 'server.version.file'
 PERSISTENCE_TYPE_PROPERTY = 'server.persistence.type'
 JDBC_DRIVER_PROPERTY = 'server.jdbc.driver'
 JDBC_DRIVER_PATH_PROPERTY = 'server.jdbc.driver.path'
@@ -70,12 +71,33 @@ JDBC_RCA_PASSWORD_FILE_PROPERTY = 'server.jdbc.rca.user.passwd'
 JDBC_RCA_PASSWORD_ALIAS = 'ambari.db.password'
 JDBC_USE_INTEGRATED_AUTH_PROPERTY = 'server.jdbc.use.integrated.auth'
 JDBC_RCA_USE_INTEGRATED_AUTH_PROPERTY = 'server.jdbc.rca.use.integrated.auth'
+SERVICE_USERNAME_KEY = 'TMP_AMBARI_USERNAME'
+SERVICE_PASSWORD_KEY = 'TMP_AMBARI_PASSWORD'
 RESOURCES_DIR_PROPERTY = 'resources.dir'
 RESOURCES_DIR_DEFAULT = 'resources'
 STACK_LOCATION_KEY = 'metadata.path'
-STACK_LOCATION_DEFAULT = (('resources' + os.sep) + 'stacks')
+IS_LDAP_CONFIGURED = 'ambari.ldap.isConfigured'
+LDAP_MGR_PASSWORD_ALIAS = 'ambari.ldap.manager.password'
+LDAP_MGR_PASSWORD_PROPERTY = 'authentication.ldap.managerPassword'
+LDAP_MGR_PASSWORD_FILENAME = 'ldap-password.dat'
+LDAP_MGR_USERNAME_PROPERTY = 'authentication.ldap.managerDn'
+LDAP_PRIMARY_URL_PROPERTY = 'authentication.ldap.primaryUrl'
+SSL_TRUSTSTORE_PASSWORD_ALIAS = 'ambari.ssl.trustStore.password'
+SSL_TRUSTSTORE_PATH_PROPERTY = 'ssl.trustStore.path'
+SSL_TRUSTSTORE_PASSWORD_PROPERTY = 'ssl.trustStore.password'
+SSL_TRUSTSTORE_TYPE_PROPERTY = 'ssl.trustStore.type'
 JDK_RELEASES = 'java.releases'
+VIEWS_DIR_PROPERTY = 'views.dir'
 SETUP_OR_UPGRADE_MSG = '- If this is a new setup, then run the "ambari-server setup" command to create the user\n- If this is an upgrade of an existing setup, run the "ambari-server upgrade" command.\nRefer to the Ambari documentation for more information on setup and upgrade.'
 DEFAULT_DB_NAME = 'ambari'
 configDefaults = ServerConfigDefaults()
-SCHEMA_UPGRADE_HELPER_CMD = (((('{0} -cp {1} ' + 'org.apache.ambari.server.upgrade.SchemaUpgradeHelper') + ' > ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_KEYS_DIR = 'security.server.keys_dir'
+SECURITY_MASTER_KEY_LOCATION = 'security.master.key.location'
+SECURITY_KEY_IS_PERSISTED = 'security.master.key.ispersisted'
+SECURITY_KEY_ENV_VAR_NAME = 'AMBARI_SECURITY_MASTER_KEY'
+SECURITY_MASTER_KEY_FILENAME = 'master'
+SECURITY_IS_ENCRYPTION_ENABLED = 'security.passwords.encryption.enabled'
+SECURITY_KERBEROS_JASS_FILENAME = 'krb5JAASLogin.conf'
+SECURITY_PROVIDER_GET_CMD = ((((('{0} -cp {1}' + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider GET {2} {3} {4} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_PUT_CMD = ((((('{0} -cp {1}' + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider PUT {2} {3} {4} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
+SECURITY_PROVIDER_KEY_CMD = ((((('{0} -cp {1}' + 'org.apache.ambari.server.security.encryption') + '.MasterKeyServiceImpl {2} {3} {4} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')

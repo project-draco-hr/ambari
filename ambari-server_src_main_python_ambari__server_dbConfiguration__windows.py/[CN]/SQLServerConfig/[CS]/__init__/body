@@ -1,8 +1,9 @@
-def __init__(self, options, properties):
-    super(SQLServerConfig, self).__init__(options, properties)
+def __init__(self, options, properties, storage_type):
+    super(SQLServerConfig, self).__init__(options, properties, storage_type)
     '\n    #Just load the defaults. The derived classes will be able to modify them later\n    '
-    self.dbms = DATABASE_DBMS
-    self.driver_name = DATABASE_DRIVER_NAME
+    self.dbms = DATABASE_DBMS_SQLSERVER
+    self.driver_class_name = DATABASE_DRIVER_NAME_SQLSERVER
+    self.JDBC_DRIVER_INSTALL_MSG = 'Before starting Ambari Server, you must install the SQL Server JDBC driver.'
     self.database_host = (options.database_host if ((options.database_host is not None) and (options.database_host is not '')) else properties.get_property(self.dbPropKeys.server_key))
     try:
         if ((self.database_host is None) or (self.database_host is '')):
@@ -10,17 +11,17 @@ def __init__(self, options, properties):
         else:
             self.database_host = compress_backslashes(self.database_host)
     except:
-        self.database_host = 'localhost\\SQLEXPRESS'
+        self.database_host = DATABASE_SERVER_SQLSERVER_DEFAULT
         pass
-    self.database_port = (options.database_port if ((options.database_port is not None) and (options.database_port is not '')) else properties.get_property(self.dbPropKeys.port_key))
-    self.database_name = (options.database_name if ((options.database_name is not None) and (options.database_name is not '')) else properties.get_property(self.dbPropKeys.db_name_key))
-    self.use_windows_authentication = (options.database_windows_auth if (options.database_windows_auth is True) else properties.get_property(self.dbAuthKeys.integrated_auth_key))
-    self.database_username = (options.database_username if ((options.database_username is not None) and (options.database_username is not '')) else properties.get_property(self.dbAuthKeys.user_name_key))
+    self.database_port = DBMSConfig._init_member_with_prop_default(options, 'database_port', properties, self.dbPropKeys.port_key, '1433')
+    self.database_name = DBMSConfig._init_member_with_prop_default(options, 'database_name', properties, self.dbPropKeys.db_name_key, configDefaults.DEFAULT_DB_NAME)
+    self.use_windows_authentication = DBMSConfig._init_member_with_prop_default(options, 'database_windows_auth', properties, self.dbAuthKeys.integrated_auth_key, False)
+    self.database_username = DBMSConfig._init_member_with_prop_default(options, 'database_username', properties, self.dbAuthKeys.user_name_key, DEFAULT_USERNAME)
     self.database_password = (options.database_password if ((options.database_password is not None) and (options.database_password is not '')) else '')
-    self.password_file = properties[self.dbAuthKeys.password_key]
+    if (not self.database_password):
+        self.database_password = DBMSConfig._read_password_from_properties(properties)
     self.database_url = self._build_sql_server_connection_string()
     self.persistence_property = None
-    self.db_title = ''
     self.env_var_db_name = ''
     self.env_var_db_log_name = ''
     self.env_var_db_owner = ''

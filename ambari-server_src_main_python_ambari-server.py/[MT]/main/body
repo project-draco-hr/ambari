@@ -8,6 +8,7 @@ def main():
     parser.add_option('-v', '--verbose', action='store_true', dest='verbose', default=False, help='Print verbose status messages')
     parser.add_option('-s', '--silent', action='store_true', dest='silent', default=False, help='Silently accepts default prompt values')
     parser.add_option('-g', '--debug', action='store_true', dest='debug', default=False, help='Start ambari-server in debug mode')
+    parser.add_option('-y', '--suspend-start', action='store_true', dest='suspend_start', default=False, help='Freeze ambari-server Java process at startup in debug mode')
     parser.add_option('--all', action='store_true', default=False, help='LDAP sync all Ambari users and groups', dest='ldap_sync_all')
     parser.add_option('--existing', action='store_true', default=False, help='LDAP sync existing Ambari users and groups only', dest='ldap_sync_existing')
     parser.add_option('--users', default=None, help='Specifies the path to the LDAP sync users CSV file.', dest='ldap_sync_users')
@@ -25,7 +26,7 @@ def main():
     (options, args) = parser.parse_args()
     set_verbose(options.verbose)
     set_silent(options.silent)
-    set_debug_mode(options.debug)
+    set_debug_mode_from_options(options)
     global LDAP_SYNC_ALL
     LDAP_SYNC_ALL = options.ldap_sync_all
     global LDAP_SYNC_EXISTING
@@ -34,27 +35,25 @@ def main():
     LDAP_SYNC_USERS = options.ldap_sync_users
     global LDAP_SYNC_GROUPS
     LDAP_SYNC_GROUPS = options.ldap_sync_groups
-    global DATABASE_INDEX
-    global PROMPT_DATABASE_OPTIONS
     options.warnings = []
     if ((options.dbms is None) and (options.database_host is None) and (options.database_port is None) and (options.database_name is None) and (options.database_username is None) and (options.database_password is None)):
-        PROMPT_DATABASE_OPTIONS = True
+        options.must_set_database_options = True
     elif (not ((options.dbms is not None) and (options.database_host is not None) and (options.database_port is not None) and (options.database_name is not None) and (options.database_username is not None) and (options.database_password is not None))):
         parser.error('All database options should be set. Please see help for the options.')
+    else:
+        options.must_set_database_options = False
     if (options.dbms == 'embedded'):
         print (('WARNING: HostName for postgres server ' + options.database_host) + ' will be ignored: using localhost.')
         options.database_host = 'localhost'
         options.dbms = 'postgres'
         options.persistence_type = 'local'
         options.database_index = 0
-        DATABASE_INDEX = 0
         pass
-    elif ((options.dbms is not None) and (options.dbms not in DATABASE_TYPES)):
+    elif ((options.dbms is not None) and (options.dbms not in DATABASE_NAMES)):
         parser.print_help()
         parser.error(('Unsupported Database ' + options.dbms))
     elif (options.dbms is not None):
         options.dbms = options.dbms.lower()
-        DATABASE_INDEX = DATABASE_TYPES.index(options.dbms)
     if (options.database_port is not None):
         correct = False
         try:

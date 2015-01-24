@@ -1,13 +1,20 @@
-@patch.object(_ambari_server_, 'setup_db')
-@patch.object(_ambari_server_, 'print_info_msg')
-@patch.object(_ambari_server_, 'run_os_command')
-@patch.object(_ambari_server_, 'parse_properties_file')
-@patch.object(_ambari_server_, 'is_root')
-@patch.object(_ambari_server_, 'check_database_name_property')
-@patch.object(_ambari_server_, 'is_server_runing')
-def test_silent_reset(self, is_server_runing_mock, check_database_name_property_mock, is_root_mock, parse_properties_file_mock, run_os_command_mock, print_info_msg_mock, setup_db_mock):
+@patch.object(OSCheck, 'os_distribution', new=MagicMock(return_value=os_distro_value))
+@patch.object(PGConfig, '_setup_db')
+@patch('ambari_server.dbConfiguration_linux.print_info_msg')
+@patch('ambari_server.dbConfiguration_linux.run_os_command')
+@patch('ambari_server.serverSetup.is_root')
+@patch('ambari_server.serverSetup.is_server_runing')
+def test_silent_reset(self, is_server_runing_mock, is_root_mock, run_os_command_mock, print_info_msg_mock, setup_db_mock):
     is_root_mock.return_value = True
     args = MagicMock()
+    del args.dbms
+    del args.database_index
+    del args.database_host
+    del args.database_port
+    del args.database_name
+    del args.database_username
+    del args.database_password
+    del args.persistence_type
     set_silent(True)
     self.assertTrue(get_silent())
     setup_db_mock.return_value = (0, None, None)
@@ -17,8 +24,12 @@ def test_silent_reset(self, is_server_runing_mock, check_database_name_property_
     def signal_handler(signum, frame):
         self.fail('Timed out!')
     signal.signal(signal.SIGALRM, signal_handler)
-    signal.alarm(5)
-    rcode = _ambari_server_.reset(args)
-    signal.alarm(0)
-    self.assertEqual(None, rcode)
-    self.assertTrue(setup_db_mock.called)
+    try:
+        signal.alarm(5)
+        rcode = reset(args)
+        signal.alarm(0)
+        self.assertEqual(None, rcode)
+        self.assertTrue(setup_db_mock.called)
+    finally:
+        signal.signal(signal.SIGALRM, signal.SIG_IGN)
+    pass

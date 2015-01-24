@@ -1,0 +1,24 @@
+def _install_jdk(self, java_inst_file, jdk_cfg):
+    jdk_inst_dir = jdk_cfg.inst_dir
+    print 'Installing JDK to {0}'.format(jdk_inst_dir)
+    (retcode, out, err) = run_os_command(self.CREATE_JDK_DIR_CMD.format(jdk_inst_dir))
+    savedPath = os.getcwd()
+    os.chdir(jdk_inst_dir)
+    try:
+        if java_inst_file.endswith('.bin'):
+            (retcode, out, err) = run_os_command(self.MAKE_FILE_EXECUTABLE_CMD.format(java_inst_file))
+            (retcode, out, err) = run_os_command((java_inst_file + ' -noregister'))
+        elif java_inst_file.endswith('.gz'):
+            (retcode, out, err) = run_os_command(self.UNTAR_JDK_ARCHIVE.format(java_inst_file))
+        else:
+            err = 'JDK installation failed.Unknown file mask.'
+            raise FatalException(1, err)
+    finally:
+        os.chdir(savedPath)
+    if (retcode != 0):
+        err = ('Installation of JDK returned exit code %s' % retcode)
+        raise FatalException(retcode, err)
+    jdk_version = re.search(jdk_cfg.reg_exp, out).group(1)
+    java_home_dir = os.path.join(jdk_inst_dir, jdk_version)
+    print 'Successfully installed JDK to {0}'.format(jdk_inst_dir)
+    return (retcode, out, java_home_dir)

@@ -21,57 +21,31 @@ import tempfile
 import random
 import json
 import base64
-from ambari_commons import OSCheck, OSConst, Firewall
+from ambari_commons import OSCheck, OSConst
 from ambari_commons.exceptions import FatalException, NonFatalException
-from ambari_commons.logging_utils import get_verbose, set_verbose, get_silent, set_silent, get_debug_mode, set_debug_mode, print_info_msg, print_warning_msg, print_error_msg
-from ambari_commons.os_utils import is_root, run_in_shell, run_os_command, search_file
+from ambari_commons.logging_utils import get_verbose, set_verbose, get_silent, set_silent, get_debug_mode, set_debug_mode, print_info_msg, print_warning_msg, print_error_msg, set_debug_mode_from_options
+from ambari_commons.os_utils import is_root, run_os_command, search_file, copy_file, remove_file, set_file_permissions
 from ambari_server.BackupRestore import main as BackupRestore_main
+from ambari_server.dbConfiguration import DATABASE_NAMES, DATABASE_FULL_NAMES
 from ambari_server.properties import Properties
 from ambari_server.resourceFilesKeeper import ResourceFilesKeeper, KeeperException
-from ambari_server.serverConfiguration import AMBARI_PROPERTIES_FILE, configDefaults, backup_file_in_temp, find_properties_file, get_conf_dir, get_value_from_properties, is_alias_string, is_local_database, read_ambari_user, remove_property, update_ambari_properties, write_property, SCHEMA_UPGRADE_HELPER_CMD
+from ambari_server.serverConfiguration import AMBARI_PROPERTIES_FILE, configDefaults, backup_file_in_temp, check_database_name_property, find_jdbc_driver, find_jdk, find_properties_file, get_ambari_classpath, get_ambari_properties, get_conf_dir, get_full_ambari_classpath, get_value_from_properties, is_alias_string, parse_properties_file, read_ambari_user, BLIND_PASSWORD, SETUP_OR_UPGRADE_MSG, JDBC_RCA_PASSWORD_ALIAS, JDBC_PASSWORD_PROPERTY, JDBC_PASSWORD_FILENAME, JDBC_RCA_PASSWORD_FILE_PROPERTY, GET_FQDN_SERVICE_URL, get_stack_location, IS_LDAP_CONFIGURED, LDAP_PRIMARY_URL_PROPERTY, LDAP_MGR_PASSWORD_PROPERTY, LDAP_MGR_PASSWORD_ALIAS, LDAP_MGR_PASSWORD_FILENAME, LDAP_MGR_USERNAME_PROPERTY, PID_NAME, read_passwd_for_alias, get_credential_store_location, get_master_key_location, get_is_secure, get_is_persisted, get_original_master_key, SECURITY_PROVIDER_PUT_CMD, get_java_exe_path, SECURITY_PROVIDER_KEY_CMD, SECURITY_IS_ENCRYPTION_ENABLED, SECURITY_KERBEROS_JASS_FILENAME, SECURITY_KEY_ENV_VAR_NAME, SECURITY_MASTER_KEY_FILENAME, SECURITY_MASTER_KEY_LOCATION, SSL_TRUSTSTORE_PASSWORD_ALIAS, SSL_TRUSTSTORE_PASSWORD_PROPERTY, SSL_TRUSTSTORE_PATH_PROPERTY, SSL_TRUSTSTORE_TYPE_PROPERTY, update_debug_mode
+from ambari_server.serverSetup import reset, setup, is_server_runing
+from ambari_server.serverUpgrade import upgrade, upgrade_stack
+if (not OSCheck.is_windows_family()):
+    from ambari_server.dbConfiguration_linux import PGConfig
+from ambari_server.setupActions import SETUP_ACTION, START_ACTION, STOP_ACTION, RESET_ACTION, STATUS_ACTION, UPGRADE_ACTION, UPGRADE_STACK_ACTION, LDAP_SETUP_ACTION, LDAP_SYNC_ACTION, SETUP_SECURITY_ACTION, REFRESH_STACK_HASH_ACTION, BACKUP_ACTION, RESTORE_ACTION, ACTION_REQUIRE_RESTART
+from ambari_server.setupSecurity import adjust_directory_permissions, read_password, store_password_file, remove_password_file, encrypt_password, get_truststore_password
 from ambari_server.userInput import get_YN_input, get_validated_string_input, get_validated_filepath_input, get_prompt_default
-from ambari_server.utils import check_exitcode, get_postgre_hba_dir, get_postgre_running_status, locate_file, looking_for_pid, save_main_pid_ex, wait_for_pid
+from ambari_server.utils import check_exitcode, locate_file, looking_for_pid, save_main_pid_ex, wait_for_pid
 SERVER_START_DEBUG = False
+SUSPEND_START_MODE = False
 LDAP_SYNC_ALL = False
 LDAP_SYNC_EXISTING = False
 LDAP_SYNC_USERS = None
 LDAP_SYNC_GROUPS = None
-OS_VERSION = OSCheck().get_os_major_version()
-OS_TYPE = OSCheck.get_os_type()
-OS_FAMILY = OSCheck.get_os_family()
-SETUP_ACTION = 'setup'
-START_ACTION = 'start'
-STOP_ACTION = 'stop'
-RESET_ACTION = 'reset'
-UPGRADE_ACTION = 'upgrade'
-UPGRADE_STACK_ACTION = 'upgradestack'
-STATUS_ACTION = 'status'
-SETUP_HTTPS_ACTION = 'setup-https'
-LDAP_SETUP_ACTION = 'setup-ldap'
-LDAP_SYNC_ACTION = 'sync-ldap'
-SETUP_GANGLIA_HTTPS_ACTION = 'setup-ganglia-https'
-ENCRYPT_PASSWORDS_ACTION = 'encrypt-passwords'
-SETUP_SECURITY_ACTION = 'setup-security'
-REFRESH_STACK_HASH_ACTION = 'refresh-stack-hash'
-BACKUP_ACTION = 'backup'
-RESTORE_ACTION = 'restore'
-ACTION_REQUIRE_RESTART = [RESET_ACTION, UPGRADE_ACTION, UPGRADE_STACK_ACTION, SETUP_SECURITY_ACTION, LDAP_SETUP_ACTION]
-GET_SE_LINUX_ST_CMD = locate_file('sestatus', '/usr/sbin')
-SE_SETENFORCE_CMD = 'setenforce 0'
-SE_STATUS_DISABLED = 'disabled'
-SE_STATUS_ENABLED = 'enabled'
-SE_MODE_ENFORCING = 'enforcing'
-SE_MODE_PERMISSIVE = 'permissive'
 ambari_provider_module_option = ''
 ambari_provider_module = os.environ.get('AMBARI_PROVIDER_MODULE')
-NR_USER_PROPERTY = 'ambari-server.user'
-NR_USER_COMMENT = 'Ambari user'
-NR_GET_OWNER_CMD = 'stat -c "%U" {0}'
-NR_USERADD_CMD = ('useradd -M --comment "{1}" --shell %s -d /var/lib/ambari-server/keys/ {0}' % locate_file('nologin', '/sbin'))
-NR_SET_USER_COMMENT_CMD = 'usermod -c "{0}" {1}'
-NR_CHMOD_CMD = 'chmod {0} {1} {2}'
-NR_CHOWN_CMD = 'chown {0} {1} {2}'
-RECURSIVE_RM_CMD = 'rm -rf {0}'
 SSL_PASSWORD_FILE = 'pass.txt'
 SSL_PASSIN_FILE = 'passin.txt'
 VALIDATE_KEYSTORE_CMD = "openssl pkcs12 -info -in '{0}' -password file:'{1}' -passout file:'{2}'"
@@ -82,40 +56,22 @@ KEYTOOL_IMPORT_CERT_CMD = (((('{0}' + os.sep) + 'bin') + os.sep) + "keytool -imp
 KEYTOOL_DELETE_CERT_CMD = (((('{0}' + os.sep) + 'bin') + os.sep) + "keytool -delete -alias '{1}' -storepass '{2}' -noprompt")
 KEYTOOL_KEYSTORE = " -keystore '{0}'"
 STACK_NAME_VER_SEP = '-'
-JAVA_SHARE_PATH = '/usr/share/java'
-BLIND_PASSWORD = '*****'
 SERVER_API_HOST = '127.0.0.1'
 SERVER_API_PROTOCOL = 'http'
 SERVER_API_PORT = '8080'
 SERVER_API_LDAP_URL = '/api/v1/ldap_sync_events'
-BOLD_ON = '\x1b[1m'
-BOLD_OFF = '\x1b[0m'
-PRESS_ENTER_MSG = 'Press <enter> to continue.'
-SETUP_OR_UPGRADE_MSG = '- If this is a new setup, then run the "ambari-server setup" command to create the user\n- If this is an upgrade of an existing setup, run the "ambari-server upgrade" command.\nRefer to the Ambari documentation for more information on setup and upgrade.'
 AMBARI_SERVER_DIE_MSG = 'Ambari Server java process died with exitcode {0}. Check {1} for more information.'
 COMMON_NAME_ATTR = 'CN'
 NOT_BEFORE_ATTR = 'notBefore'
 NOT_AFTER_ATTR = 'notAfter'
 if (ambari_provider_module is not None):
     ambari_provider_module_option = (('-Dprovider.module.class=' + ambari_provider_module) + ' ')
-SERVER_START_CMD = ((((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -server -XX:NewRatio=3 -XX:+UseConcMarkSweepGC ') + '-XX:-UseGCOverheadLimit -XX:CMSInitiatingOccupancyFraction=60 ') + ambari_provider_module_option) + os.getenv('AMBARI_JVM_ARGS', '-Xms512m -Xmx2048m')) + ' -cp {1}') + os.pathsep) + '{2}') + ' org.apache.ambari.server.controller.AmbariServer >') + configDefaults.SERVER_OUT_FILE) + ' 2>&1 || echo $? > {3} &')
-SERVER_START_CMD_DEBUG = (((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -server -XX:NewRatio=2 -XX:+UseConcMarkSweepGC ') + ambari_provider_module_option) + os.getenv('AMBARI_JVM_ARGS', '-Xms512m -Xmx2048m')) + ' -Xdebug -Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=n -cp {1}') + os.pathsep) + '{2}') + ' org.apache.ambari.server.controller.AmbariServer')
+SERVER_START_CMD = ((((((((('{0} -server -XX:NewRatio=3 -XX:+UseConcMarkSweepGC ' + '-XX:-UseGCOverheadLimit -XX:CMSInitiatingOccupancyFraction=60 ') + ambari_provider_module_option) + os.getenv('AMBARI_JVM_ARGS', '-Xms512m -Xmx2048m')) + ' -cp {1}') + os.pathsep) + '{2}') + ' org.apache.ambari.server.controller.AmbariServer >') + configDefaults.SERVER_OUT_FILE) + ' 2>&1 || echo $? > {3} &')
+SERVER_START_CMD_DEBUG = (((((((('{0} -server -XX:NewRatio=2 -XX:+UseConcMarkSweepGC ' + ambari_provider_module_option) + os.getenv('AMBARI_JVM_ARGS', '-Xms512m -Xmx2048m')) + ' -Xdebug -Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend={4} -cp {1}') + os.pathsep) + '{2}') + ' org.apache.ambari.server.controller.AmbariServer>') + configDefaults.SERVER_OUT_FILE) + ' 2>&1 || echo $? > {3} &')
 SERVER_SEARCH_PATTERN = 'org.apache.ambari.server.controller.AmbariServer'
-SECURITY_PROVIDER_GET_CMD = ((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider GET {3} {4} {5} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
-SECURITY_PROVIDER_PUT_CMD = ((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.CredentialProvider PUT {3} {4} {5} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
-SECURITY_PROVIDER_KEY_CMD = ((((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.security.encryption') + '.MasterKeyServiceImpl {3} {4} {5} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
-STACK_UPGRADE_HELPER_CMD = (((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.upgrade.StackUpgradeHelper') + ' {3} {4} > ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
-VIEW_EXTRACT_CMD = (((((((((('{0}' + os.sep) + 'bin') + os.sep) + 'java -cp {1}') + os.pathsep) + '{2} ') + 'org.apache.ambari.server.view.ViewRegistry extract {3} ') + '> ') + configDefaults.SERVER_OUT_FILE) + ' 2>&1')
 ULIMIT_CMD = 'ulimit -n'
 SERVER_INIT_TIMEOUT = 5
 SERVER_START_TIMEOUT = 10
-SECURITY_KEYS_DIR = 'security.server.keys_dir'
-SECURITY_MASTER_KEY_LOCATION = 'security.master.key.location'
-SECURITY_KEY_IS_PERSISTED = 'security.master.key.ispersisted'
-SECURITY_KEY_ENV_VAR_NAME = 'AMBARI_SECURITY_MASTER_KEY'
-SECURITY_MASTER_KEY_FILENAME = 'master'
-SECURITY_IS_ENCRYPTION_ENABLED = 'security.passwords.encryption.enabled'
-SECURITY_KERBEROS_JASS_FILENAME = 'krb5JAASLogin.conf'
 SSL_KEY_DIR = 'security.server.keys_dir'
 SSL_API_PORT = 'client.api.ssl.port'
 SSL_API = 'api.ssl'
@@ -129,134 +85,17 @@ SSL_KEY_PASSWORD_LENGTH = 50
 DEFAULT_SSL_API_PORT = 8443
 SSL_DATE_FORMAT = '%b  %d %H:%M:%S %Y GMT'
 GANGLIA_HTTPS = 'ganglia.https'
-JDBC_RCA_PASSWORD_ALIAS = 'ambari.db.password'
 CLIENT_SECURITY_KEY = 'client.security'
-IS_LDAP_CONFIGURED = 'ambari.ldap.isConfigured'
-LDAP_MGR_PASSWORD_ALIAS = 'ambari.ldap.manager.password'
-LDAP_MGR_PASSWORD_PROPERTY = 'authentication.ldap.managerPassword'
-LDAP_MGR_PASSWORD_FILENAME = 'ldap-password.dat'
-LDAP_MGR_USERNAME_PROPERTY = 'authentication.ldap.managerDn'
-LDAP_PRIMARY_URL_PROPERTY = 'authentication.ldap.primaryUrl'
-SSL_TRUSTSTORE_PASSWORD_ALIAS = 'ambari.ssl.trustStore.password'
-SSL_TRUSTSTORE_PATH_PROPERTY = 'ssl.trustStore.path'
-SSL_TRUSTSTORE_PASSWORD_PROPERTY = 'ssl.trustStore.password'
-SSL_TRUSTSTORE_TYPE_PROPERTY = 'ssl.trustStore.type'
-AMBARI_CONF_VAR = 'AMBARI_CONF_DIR'
-AMBARI_SERVER_LIB = 'AMBARI_SERVER_LIB'
-JAVA_HOME = 'JAVA_HOME'
-BOOTSTRAP_DIR_PROPERTY = 'bootstrap.dir'
-PID_NAME = 'ambari-server.pid'
 EXITCODE_NAME = 'ambari-server.exitcode'
-RESOURCES_DIR_PROPERTY = 'resources.dir'
-SETUP_DB_CONNECT_TIMEOUT = 5
-SETUP_DB_CONNECT_ATTEMPTS = 3
-SETUP_DB_CMD = ['su', '-', 'postgres', '--command=psql -f {0} -v username=\'"{1}"\' -v password="\'{2}\'" -v dbname="{3}"']
-UPGRADE_STACK_CMD = ['su', 'postgres', '--command=psql -f {0} -v stack_name="\'{1}\'"  -v stack_version="\'{2}\'" -v dbname="{3}"']
-CHANGE_OWNER_COMMAND = ['su', '-', 'postgres', '--command=/var/lib/ambari-server/resources/scripts/change_owner.sh -d {0} -s {1} -o {2}']
-PG_ERROR_BLOCKED = 'is being accessed by other users'
-PG_STATUS_RUNNING = get_postgre_running_status(OS_TYPE)
-PG_DEFAULT_PASSWORD = 'bigdata'
-SERVICE_CMD = '/usr/bin/env service'
-PG_SERVICE_NAME = 'postgresql'
-PG_HBA_DIR = get_postgre_hba_dir(OS_FAMILY)
-PG_ST_CMD = ('%s %s status' % (SERVICE_CMD, PG_SERVICE_NAME))
-if os.path.isfile('/usr/bin/postgresql-setup'):
-    PG_INITDB_CMD = '/usr/bin/postgresql-setup initdb'
-else:
-    PG_INITDB_CMD = ('%s %s initdb' % (SERVICE_CMD, PG_SERVICE_NAME))
-PG_START_CMD = ('%s %s start' % (SERVICE_CMD, PG_SERVICE_NAME))
-PG_RESTART_CMD = ('%s %s restart' % (SERVICE_CMD, PG_SERVICE_NAME))
-PG_HBA_RELOAD_CMD = ('%s %s reload' % (SERVICE_CMD, PG_SERVICE_NAME))
-PG_HBA_CONF_FILE = os.path.join(PG_HBA_DIR, 'pg_hba.conf')
-PG_HBA_CONF_FILE_BACKUP = os.path.join(PG_HBA_DIR, 'pg_hba_bak.conf.old')
-POSTGRESQL_CONF_FILE = os.path.join(PG_HBA_DIR, 'postgresql.conf')
-SERVER_VERSION_FILE_PATH = 'server.version.file'
-JDBC_DATABASE_PROPERTY = 'server.jdbc.database'
-JDBC_DATABASE_NAME_PROPERTY = 'server.jdbc.database_name'
-JDBC_HOSTNAME_PROPERTY = 'server.jdbc.hostname'
-JDBC_PORT_PROPERTY = 'server.jdbc.port'
-JDBC_POSTGRES_SCHEMA_PROPERTY = 'server.jdbc.postgres.schema'
-VIEWS_DIR_PROPERTY = 'views.dir'
-DEFAULT_VIEWS_DIR = '/var/lib/ambari-server/resources/views'
-JDBC_USER_NAME_PROPERTY = 'server.jdbc.user.name'
-JDBC_PASSWORD_PROPERTY = 'server.jdbc.user.passwd'
-JDBC_PASSWORD_FILENAME = 'password.dat'
-JDBC_RCA_PASSWORD_FILENAME = 'rca_password.dat'
-CLIENT_API_PORT_PROPERTY = 'client.api.port'
-CLIENT_API_PORT = '8080'
 SRVR_TWO_WAY_SSL_PORT_PROPERTY = 'security.server.two_way_ssl.port'
 SRVR_TWO_WAY_SSL_PORT = '8441'
 SRVR_ONE_WAY_SSL_PORT_PROPERTY = 'security.server.one_way_ssl.port'
 SRVR_ONE_WAY_SSL_PORT = '8440'
-PERSISTENCE_TYPE_PROPERTY = 'server.persistence.type'
-JDBC_DRIVER_PROPERTY = 'server.jdbc.driver'
-JDBC_URL_PROPERTY = 'server.jdbc.url'
-JDBC_RCA_DRIVER_PROPERTY = 'server.jdbc.rca.driver'
-JDBC_RCA_URL_PROPERTY = 'server.jdbc.rca.url'
-JDBC_RCA_USER_NAME_PROPERTY = 'server.jdbc.rca.user.name'
-JDBC_RCA_PASSWORD_FILE_PROPERTY = 'server.jdbc.rca.user.passwd'
-CHECK_COMMAND_EXIST_CMD = 'type {0}'
-DATABASE_INDEX = 0
-PROMPT_DATABASE_OPTIONS = False
-USERNAME_PATTERN = '^[a-zA-Z_][a-zA-Z0-9_\\-]*$'
-PASSWORD_PATTERN = '^[a-zA-Z0-9_-]*$'
-DATABASE_TYPES = ['postgres', 'oracle', 'mysql']
-DATABASE_STORAGE_NAMES = ['Database', 'Service', 'Database']
-DATABASE_PORTS = ['5432', '1521', '3306']
-DATABASE_DRIVER_NAMES = ['org.postgresql.Driver', 'oracle.jdbc.driver.OracleDriver', 'com.mysql.jdbc.Driver']
-DATABASE_CONNECTION_STRINGS = ['jdbc:postgresql://{0}:{1}/{2}', 'jdbc:oracle:thin:@{0}:{1}/{2}', 'jdbc:mysql://{0}:{1}/{2}']
-DATABASE_CONNECTION_STRINGS_ALT = ['jdbc:postgresql://{0}:{1}/{2}', 'jdbc:oracle:thin:@{0}:{1}:{2}', 'jdbc:mysql://{0}:{1}/{2}']
-ORACLE_SID_PATTERN = 'jdbc:oracle:thin:@.+:.+/.+'
-ORACLE_SNAME_PATTERN = 'jdbc:oracle:thin:@.+:.+:.+'
-DATABASE_CLI_TOOLS = [['psql'], ['sqlplus', 'sqlplus64'], ['mysql']]
-DATABASE_CLI_TOOLS_DESC = ['psql', 'sqlplus', 'mysql']
-DATABASE_CLI_TOOLS_USAGE = ['su -postgres --command=psql -f {0} -v username=\'"{1}"\' -v password="\'{2}\'"', 'sqlplus {1}/{2} < {0} ', 'mysql --user={1} --password={2} {3}<{0}']
-MYSQL_INIT_SCRIPT = '/var/lib/ambari-server/resources/Ambari-DDL-MySQL-CREATE.sql'
-DATABASE_INIT_SCRIPTS = ['/var/lib/ambari-server/resources/Ambari-DDL-Postgres-CREATE.sql', '/var/lib/ambari-server/resources/Ambari-DDL-Oracle-CREATE.sql', MYSQL_INIT_SCRIPT]
-DATABASE_DROP_SCRIPTS = ['/var/lib/ambari-server/resources/Ambari-DDL-Postgres-DROP.sql', '/var/lib/ambari-server/resources/Ambari-DDL-Oracle-DROP.sql', '/var/lib/ambari-server/resources/Ambari-DDL-MySQL-DROP.sql']
-JDBC_PROPERTIES_PREFIX = 'server.jdbc.properties.'
-DATABASE_JDBC_PROPERTIES = [[], [['oracle.net.CONNECT_TIMEOUT', '2000'], ['oracle.net.READ_TIMEOUT', '2000'], ['oracle.jdbc.ReadTimeout', '8000']], []]
 REGEX_IP_ADDRESS = '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
 REGEX_HOSTNAME = '^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$'
 REGEX_HOSTNAME_PORT = '^(.*:[0-9]{1,5}$)'
 REGEX_TRUE_FALSE = '^(true|false)?$'
 REGEX_ANYTHING = '.*'
-POSTGRES_EXEC_ARGS = "-h {0} -p {1} -d {2} -U {3} -f {4} -v username='{3}'"
-ORACLE_EXEC_ARGS = "-S -L '{0}/{1}@(description=(address=(protocol=TCP)(host={2})(port={3}))(connect_data=({6}={4})))' @{5} {0}"
-MYSQL_EXEC_ARGS_WITH_USER_VARS = '--host={0} --port={1} --user={2} --password={3} {4} -e"set @schema=\'{4}\'; set @username=\'{2}\'; source {5};"'
-MYSQL_EXEC_ARGS_WO_USER_VARS = '--force --host={0} --port={1} --user={2} --password={3} --database={4} < {5} 2> /dev/null'
-MYSQL_UPGRADE_STACK_ARGS = '--host={0} --port={1} --user={2} --password={3} --database={4} -e"set @stackName=\'{6}\'; set @stackVersion=\'{7}\'; source {5};"'
-ORACLE_UPGRADE_STACK_ARGS = "-S -L '{0}/{1}@(description=(address=(protocol=TCP)(host={2})(port={3}))(connect_data=({6}={4})))' @{5} {7} {8}"
-JDBC_PATTERNS = {'oracle': '*ojdbc*.jar', 'mysql': '*mysql*.jar', }
-DATABASE_FULL_NAMES = {'oracle': 'Oracle', 'mysql': 'MySQL', 'postgres': 'PostgreSQL', }
-JDBC_DB_OPTION_VALUES = ['postgres', 'mysql', 'oracle', 'mssql']
-JDBC_DB_DEFAULT_DRIVER = {'postgresql': 'postgresql-jdbc.jar', 'mysql': 'mysql-connector-java.jar', 'oracle': 'ojdbc6.jar', }
-ORACLE_DB_ID_TYPES = ['Service Name', 'SID']
-JDK_NAMES = ['jdk-7u67-linux-x64.tar.gz', 'jdk-6u31-linux-x64.bin']
-JDK_URL_PROPERTIES = ['jdk1.7.url', 'jdk1.6.url']
-JCE_URL_PROPERTIES = ['jce_policy1.7.url', 'jce_policy1.6.url']
-DEFAULT_JDK16_LOCATION = '/usr/jdk64/jdk1.6.0_31'
-JDK_INDEX = 0
-JDK_VERSION_REs = ['(jdk.*)/jre', 'Creating (jdk.*)/jre']
-CUSTOM_JDK_NUMBER = '3'
-JDK_MIN_FILESIZE = 5000
-CREATE_JDK_DIR_CMD = ('/bin/mkdir -p ' + configDefaults.JDK_INSTALL_DIR)
-MAKE_FILE_EXECUTABLE_CMD = 'chmod a+x {0}'
-JAVA_HOME_PROPERTY = 'java.home'
-JDK_NAME_PROPERTY = 'jdk.name'
-JCE_NAME_PROPERTY = 'jce.name'
-OS_TYPE_PROPERTY = 'server.os_type'
-OS_FAMILY_PROPERTY = 'server.os_family'
-GET_FQDN_SERVICE_URL = 'server.fqdn.service.url'
-JDK_DOWNLOAD_CMD = 'curl --create-dirs -o {0} {1}'
-JDK_DOWNLOAD_SIZE_CMD = 'curl -I {0}'
-UNTAR_JDK_ARCHIVE = 'tar --no-same-owner -xvf {0}'
-JCE_POLICY_FILENAMES = ['UnlimitedJCEPolicyJDK7.zip', 'jce_policy-6.zip']
-JCE_DOWNLOAD_CMD = 'curl -o {0} {1}'
-JCE_MIN_FILESIZE = 5000
-DEFAULT_DB_NAME = 'ambari'
-STACK_LOCATION_KEY = 'metadata.path'
-STACK_LOCATION_DEFAULT = '/var/lib/ambari-server/resources/stacks'
 ULIMIT_OPEN_FILES_KEY = 'ulimit.open.files'
 ULIMIT_OPEN_FILES_DEFAULT = 10000
 ASF_LICENSE_HEADER = '\n# Copyright 2011 The Apache Software Foundation\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# "License"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an "AS IS" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n'

@@ -1,18 +1,32 @@
-@patch.object(_ambari_server_, 'decrypt_password_for_alias')
-@patch.object(_ambari_server_, 'is_alias_string')
-@patch.object(_ambari_server_, 'get_ambari_properties')
-def test_configure_database_username_password_masterkey_persisted(self, get_ambari_properties_method, is_alias_string_method, decrypt_password_for_alias_method):
+@not_for_platform(PLATFORM_WINDOWS)
+@patch('os.path.isabs')
+@patch('ambari_server.dbConfiguration.decrypt_password_for_alias')
+@patch('ambari_server.dbConfiguration_linux.get_ambari_properties')
+def test_configure_database_username_password_masterkey_persisted(self, get_ambari_properties_method, decrypt_password_for_alias_method, path_isabs_method):
     out = StringIO.StringIO()
     sys.stdout = out
-    configs = {_ambari_server_.JDBC_USER_NAME_PROPERTY: 'fakeuser', _ambari_server_.JDBC_PASSWORD_PROPERTY: '${alias=somealias}', _ambari_server_.JDBC_DATABASE_NAME_PROPERTY: 'fakedbname', _ambari_server_.SECURITY_KEY_IS_PERSISTED: 'True', }
-    get_ambari_properties_method.return_value = configs
-    is_alias_string_method.return_value = True
+    properties = Properties()
+    properties.process_pair(JDBC_USER_NAME_PROPERTY, 'fakeuser')
+    properties.process_pair(JDBC_PASSWORD_PROPERTY, '${alias=somealias}')
+    properties.process_pair(JDBC_DATABASE_NAME_PROPERTY, 'fakedbname')
+    properties.process_pair(SECURITY_KEY_IS_PERSISTED, 'True')
+    get_ambari_properties_method.return_value = properties
     decrypt_password_for_alias_method.return_value = 'falepasswd'
     args = MagicMock()
     args.master_key = None
-    _ambari_server_.configure_database_username_password(args)
+    del args.database_index
+    del args.dbms
+    del args.database_host
+    del args.database_port
+    del args.database_name
+    del args.database_username
+    del args.database_password
+    del args.sid_or_sname
+    del args.jdbc_url
+    dbms = OracleConfig(args, properties, 'local')
     self.assertTrue(decrypt_password_for_alias_method.called)
-    self.assertTrue(is_alias_string_method.called)
-    self.assertEquals('fakeuser', args.database_username)
-    self.assertEquals('falepasswd', args.database_password)
+    self.assertFalse(path_isabs_method.called)
+    self.assertEquals('fakeuser', dbms.database_username)
+    self.assertEquals('falepasswd', dbms.database_password)
     sys.stdout = sys.__stdout__
+    pass

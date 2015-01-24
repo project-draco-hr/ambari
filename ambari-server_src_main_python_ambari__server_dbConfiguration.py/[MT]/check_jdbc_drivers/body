@@ -1,0 +1,32 @@
+def check_jdbc_drivers(args):
+    properties = get_ambari_properties()
+    if (properties == (-1)):
+        err = 'Error getting ambari properties'
+        print_error_msg(err)
+        raise FatalException((-1), err)
+    conf_file = properties.fileName
+    try:
+        resources_dir = properties[RESOURCES_DIR_PROPERTY]
+    except KeyError as e:
+        err = ((('Property ' + str(e)) + ' is not defined at ') + conf_file)
+        raise FatalException(1, err)
+    try:
+        db_idx_orig = args.database_index
+    except AttributeError:
+        db_idx_orig = None
+    factory = DBMSConfigFactory()
+    db_idx = 1
+    try:
+        while (db_idx < len(factory.get_supported_dbms())):
+            args.database_index = db_idx
+            dbms = factory.create(args, properties)
+            if dbms.driver_symlink_name:
+                jdbc_file_path = os.path.join(resources_dir, dbms.driver_file_name)
+                if os.path.isfile(jdbc_file_path):
+                    jdbc_symlink = os.path.join(resources_dir, dbms.driver_symlink_name)
+                    if os.path.lexists(jdbc_symlink):
+                        os.remove(jdbc_symlink)
+                    os.symlink(jdbc_file_path, jdbc_symlink)
+            db_idx += 1
+    finally:
+        args.database_index = db_idx_orig
