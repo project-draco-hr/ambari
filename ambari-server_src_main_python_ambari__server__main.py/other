@@ -1,0 +1,38 @@
+'\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n'
+import getpass
+import os
+import stat
+import subprocess
+import tempfile
+import sys
+from ambari_commons.exceptions import FatalException
+from ambari_commons.logging_utils import get_debug_mode, get_verbose, print_warning_msg, print_info_msg, set_debug_mode_from_options
+from ambari_commons.os_check import OSConst
+from ambari_commons.os_family_impl import OsFamilyFuncImpl, OsFamilyImpl
+from ambari_commons.os_utils import is_root
+from ambari_server.dbConfiguration import ensure_dbms_is_running, ensure_jdbc_driver_is_installed
+from ambari_server.serverConfiguration import configDefaults, find_jdk, get_ambari_classpath, get_ambari_properties, get_conf_dir, get_is_persisted, get_is_secure, get_java_exe_path, get_original_master_key, read_ambari_user, PID_NAME, RESOURCES_DIR_DEFAULT, RESOURCES_DIR_PROPERTY, SECURITY_KEY_ENV_VAR_NAME, SECURITY_MASTER_KEY_LOCATION, SETUP_OR_UPGRADE_MSG, check_database_name_property, parse_properties_file
+from ambari_server.serverUtils import is_server_runing, refresh_stack_hash
+from ambari_server.setupHttps import get_fqdn
+from ambari_server.setupSecurity import save_master_key
+from ambari_server.utils import check_reverse_lookup, save_pid, locate_file, looking_for_pid, wait_for_pid, save_main_pid_ex, check_exitcode
+SERVER_START_DEBUG = False
+SUSPEND_START_MODE = False
+ambari_provider_module_option = ''
+ambari_provider_module = os.environ.get('AMBARI_PROVIDER_MODULE')
+if (ambari_provider_module is not None):
+    ambari_provider_module_option = (('-Dprovider.module.class=' + ambari_provider_module) + ' ')
+jvm_args = os.getenv('AMBARI_JVM_ARGS', '-Xms512m -Xmx2048m')
+SERVER_START_CMD = (('{0} -server -XX:NewRatio=3 -XX:+UseConcMarkSweepGC ' + '-XX:-UseGCOverheadLimit -XX:CMSInitiatingOccupancyFraction=60 ') + '{1} {2} -cp {3} org.apache.ambari.server.controller.AmbariServer > {4} 2>&1 || echo $? > {5} &')
+SERVER_START_CMD_DEBUG = (('{0} -server -XX:NewRatio=2 -XX:+UseConcMarkSweepGC ' + '{1} {2}  -Xdebug -Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend={6} -cp {3} ') + 'org.apache.ambari.server.controller.AmbariServer > {4} 2>&1 || echo $? > {5} &')
+SERVER_START_CMD_WINDOWS = ('{0} -server -XX:NewRatio=3 -XX:+UseConcMarkSweepGC ' + '-XX:-UseGCOverheadLimit -XX:CMSInitiatingOccupancyFraction=60 {1} {2} -cp {3} org.apache.ambari.server.controller.AmbariServer')
+SERVER_START_CMD_DEBUG_WINDOWS = '{0} -server -XX:NewRatio=2 -XX:+UseConcMarkSweepGC {1} {2} -Xdebug -Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend={4} -cp {3}org.apache.ambari.server.controller.AmbariServer'
+SERVER_INIT_TIMEOUT = 5
+SERVER_START_TIMEOUT = 10
+SERVER_PING_TIMEOUT_WINDOWS = 5
+SERVER_PING_ATTEMPTS_WINDOWS = 4
+SERVER_SEARCH_PATTERN = 'org.apache.ambari.server.controller.AmbariServer'
+EXITCODE_NAME = 'ambari-server.exitcode'
+AMBARI_SERVER_DIE_MSG = 'Ambari Server java process died with exitcode {0}. Check {1} for more information.'
+ULIMIT_OPEN_FILES_KEY = 'ulimit.open.files'
+ULIMIT_OPEN_FILES_DEFAULT = 10000

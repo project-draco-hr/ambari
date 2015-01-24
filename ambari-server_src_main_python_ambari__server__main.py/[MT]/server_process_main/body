@@ -1,0 +1,61 @@
+def server_process_main(options, scmStatus=None):
+    try:
+        set_debug_mode_from_options(options)
+    except AttributeError:
+        pass
+    if (not check_reverse_lookup()):
+        print_warning_msg('The hostname was not found in the reverse DNS lookup. This may result in incorrect behavior. Please check the DNS setup and fix the issue.')
+    check_database_name_property()
+    parse_properties_file(options)
+    ambari_user = read_ambari_user()
+    current_user = ensure_can_start_under_current_user(ambari_user)
+    print_info_msg('Ambari Server is not running...')
+    jdk_path = find_jdk()
+    if (jdk_path is None):
+        err = ('No JDK found, please run the "ambari-server setup" command to install a JDK automatically or install any JDK manually to ' + configDefaults.JDK_INSTALL_DIR)
+        raise FatalException(1, err)
+    properties = get_ambari_properties()
+    if is_root():
+        print configDefaults.MESSAGE_SERVER_RUNNING_AS_ROOT
+    ensure_jdbc_driver_is_installed(options, properties)
+    ensure_dbms_is_running(options, properties, scmStatus)
+    if (scmStatus is not None):
+        scmStatus.reportStartPending()
+    refresh_stack_hash(properties)
+    if (scmStatus is not None):
+        scmStatus.reportStartPending()
+    ensure_server_security_is_configured()
+    if (scmStatus is not None):
+        scmStatus.reportStartPending()
+    java_exe = get_java_exe_path()
+    class_path = get_conf_dir()
+    class_path = ((os.path.abspath(class_path) + os.pathsep) + get_ambari_classpath())
+    debug_mode = get_debug_mode()
+    debug_start = ((debug_mode & 1) or SERVER_START_DEBUG)
+    suspend_start = ((debug_mode & 2) or SUSPEND_START_MODE)
+    suspend_mode = ('y' if suspend_start else 'n')
+    param_list = generate_child_process_param_list(ambari_user, current_user, java_exe, class_path, debug_start, suspend_mode)
+    if (not os.path.exists(configDefaults.PID_DIR)):
+        os.makedirs(configDefaults.PID_DIR, 493)
+    environ = os.environ.copy()
+    print_info_msg(('Running server: ' + str(param_list)))
+    procJava = subprocess.Popen(param_list, env=environ)
+    pidJava = procJava.pid
+    if (pidJava <= 0):
+        procJava.terminate()
+        exitcode = procJava.returncode
+        exitfile = os.path.join(configDefaults.PID_DIR, EXITCODE_NAME)
+        save_pid(exitcode, exitfile)
+        if (scmStatus is not None):
+            scmStatus.reportStopPending()
+        raise FatalException((-1), AMBARI_SERVER_DIE_MSG.format(exitcode, configDefaults.SERVER_OUT_FILE))
+    else:
+        pidfile = os.path.join(configDefaults.PID_DIR, PID_NAME)
+        save_pid(pidJava, pidfile)
+        print ('Server PID at: ' + pidfile)
+        print ('Server out at: ' + configDefaults.SERVER_OUT_FILE)
+        print ('Server log at: ' + configDefaults.SERVER_LOG_FILE)
+        wait_for_server_start(pidfile, scmStatus)
+    if (scmStatus is not None):
+        scmStatus.reportStarted()
+    return procJava

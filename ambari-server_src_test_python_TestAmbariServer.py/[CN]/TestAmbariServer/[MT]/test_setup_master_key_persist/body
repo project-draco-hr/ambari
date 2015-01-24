@@ -1,20 +1,22 @@
-@patch.object(_ambari_server_, 'save_passwd_for_alias')
+@patch('ambari_server.setupSecurity.save_passwd_for_alias')
 @patch('os.path.exists')
-@patch.object(_ambari_server_, 'get_is_secure')
-@patch.object(_ambari_server_, 'get_is_persisted')
-@patch.object(_ambari_server_, 'read_master_key')
-@patch.object(_ambari_server_, 'read_ambari_user')
-@patch.object(_ambari_server_, 'get_master_key_location')
-@patch.object(_ambari_server_, 'update_properties')
-@patch.object(_ambari_server_, 'save_master_key')
-@patch.object(_ambari_server_, 'get_YN_input')
+@patch('ambari_server.setupSecurity.get_is_secure')
+@patch('ambari_server.setupSecurity.get_is_persisted')
+@patch('ambari_server.setupSecurity.read_master_key')
+@patch('ambari_server.setupSecurity.read_ambari_user')
+@patch('ambari_server.setupSecurity.get_master_key_location')
+@patch('ambari_server.setupSecurity.update_properties_2')
+@patch('ambari_server.setupSecurity.save_master_key')
+@patch('ambari_server.setupSecurity.get_YN_input')
 @patch('ambari_server.serverConfiguration.search_file')
-@patch.object(_ambari_server_, 'get_ambari_properties')
-@patch.object(_ambari_server_, 'is_root')
+@patch('ambari_server.setupSecurity.get_ambari_properties')
+@patch('ambari_server.setupSecurity.is_root')
 def test_setup_master_key_persist(self, is_root_method, get_ambari_properties_method, search_file_message, get_YN_input_method, save_master_key_method, update_properties_method, get_master_key_location_method, read_ambari_user_method, read_master_key_method, get_is_persisted_method, get_is_secure_method, exists_mock, save_passwd_for_alias_method):
     is_root_method.return_value = True
-    p = get_ambari_properties_method.return_value
-    p.get_property.side_effect = ['fakepasswd', None, None, None]
+    p = Properties()
+    FAKE_PWD_STRING = 'fakepasswd'
+    p.process_pair(JDBC_PASSWORD_PROPERTY, FAKE_PWD_STRING)
+    get_ambari_properties_method.return_value = p
     read_master_key_method.return_value = 'aaa'
     get_YN_input_method.side_effect = [True, False]
     read_ambari_user_method.return_value = None
@@ -22,13 +24,13 @@ def test_setup_master_key_persist(self, is_root_method, get_ambari_properties_me
     get_is_secure_method.return_value = False
     exists_mock.return_value = False
     save_passwd_for_alias_method.return_value = 0
-    _ambari_server_.setup_master_key()
+    setup_master_key()
     self.assertTrue(get_YN_input_method.called)
     self.assertTrue(read_master_key_method.called)
     self.assertTrue(read_ambari_user_method.called)
     self.assertTrue(update_properties_method.called)
     self.assertTrue(save_master_key_method.called)
-    result_expected = {JDBC_PASSWORD_PROPERTY: _ambari_server_.get_alias_string(JDBC_RCA_PASSWORD_ALIAS), _ambari_server_.SECURITY_IS_ENCRYPTION_ENABLED: 'true', }
+    result_expected = {JDBC_PASSWORD_PROPERTY: get_alias_string(JDBC_RCA_PASSWORD_ALIAS), SECURITY_IS_ENCRYPTION_ENABLED: 'true', }
     sorted_x = sorted(result_expected.iteritems(), key=operator.itemgetter(0))
     sorted_y = sorted(update_properties_method.call_args[0][1].iteritems(), key=operator.itemgetter(0))
     self.assertEquals(sorted_x, sorted_y)

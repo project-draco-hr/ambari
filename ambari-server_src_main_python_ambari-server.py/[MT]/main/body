@@ -1,147 +1,42 @@
 def main():
     parser = optparse.OptionParser(usage='usage: %prog [options] action [stack_id os]')
-    parser.add_option('-f', '--init-script-file', default='/var/lib/ambari-server/resources/Ambari-DDL-Postgres-EMBEDDED-CREATE.sql', help='File with setup script')
-    parser.add_option('-r', '--drop-script-file', default='/var/lib/ambari-server/resources/Ambari-DDL-Postgres-EMBEDDED-DROP.sql', help='File with drop script')
-    parser.add_option('-u', '--upgrade-script-file', default='/var/lib/ambari-server/resources/upgrade/ddl/Ambari-DDL-Postgres-UPGRADE-1.3.0.sql', help='File with upgrade script')
-    parser.add_option('-t', '--upgrade-stack-script-file', default='/var/lib/ambari-server/resources/upgrade/dml/Ambari-DML-Postgres-UPGRADE_STACK.sql', help='File with stack upgrade script')
-    parser.add_option('-j', '--java-home', default=None, help='Use specified java_home.  Must be valid on all hosts')
-    parser.add_option('-v', '--verbose', action='store_true', dest='verbose', default=False, help='Print verbose status messages')
-    parser.add_option('-s', '--silent', action='store_true', dest='silent', default=False, help='Silently accepts default prompt values')
-    parser.add_option('-g', '--debug', action='store_true', dest='debug', default=False, help='Start ambari-server in debug mode')
-    parser.add_option('-y', '--suspend-start', action='store_true', dest='suspend_start', default=False, help='Freeze ambari-server Java process at startup in debug mode')
-    parser.add_option('--all', action='store_true', default=False, help='LDAP sync all Ambari users and groups', dest='ldap_sync_all')
-    parser.add_option('--existing', action='store_true', default=False, help='LDAP sync existing Ambari users and groups only', dest='ldap_sync_existing')
-    parser.add_option('--users', default=None, help='Specifies the path to the LDAP sync users CSV file.', dest='ldap_sync_users')
-    parser.add_option('--groups', default=None, help='Specifies the path to the LDAP sync groups CSV file.', dest='ldap_sync_groups')
-    parser.add_option('--database', default=None, help='Database to use embedded|oracle|mysql|postgres', dest='dbms')
-    parser.add_option('--databasehost', default=None, help='Hostname of database server', dest='database_host')
-    parser.add_option('--databaseport', default=None, help='Database port', dest='database_port')
-    parser.add_option('--databasename', default=None, help='Database/Service name or ServiceID', dest='database_name')
-    parser.add_option('--postgresschema', default=None, help='Postgres database schema name', dest='postgres_schema')
-    parser.add_option('--databaseusername', default=None, help='Database user login', dest='database_username')
-    parser.add_option('--databasepassword', default=None, help='Database user password', dest='database_password')
-    parser.add_option('--sidorsname', default='sname', help='Oracle database identifier type, Service ID/Service Name sid|sname', dest='sid_or_sname')
-    parser.add_option('--jdbc-driver', default=None, help='Specifies the path to the JDBC driver JAR file for the database type specified with the --jdbc-db option. Used only with --jdbc-db option.', dest='jdbc_driver')
-    parser.add_option('--jdbc-db', default=None, help='Specifies the database type [postgres|mysql|oracle] for the JDBC driver specified with the --jdbc-driver option. Used only with --jdbc-driver option.', dest='jdbc_db')
+    init_parser_options(parser)
     (options, args) = parser.parse_args()
     set_verbose(options.verbose)
     set_silent(options.silent)
     set_debug_mode_from_options(options)
-    global LDAP_SYNC_ALL
-    LDAP_SYNC_ALL = options.ldap_sync_all
-    global LDAP_SYNC_EXISTING
-    LDAP_SYNC_EXISTING = options.ldap_sync_existing
-    global LDAP_SYNC_USERS
-    LDAP_SYNC_USERS = options.ldap_sync_users
-    global LDAP_SYNC_GROUPS
-    LDAP_SYNC_GROUPS = options.ldap_sync_groups
+    init_debug(options)
     options.warnings = []
-    if ((options.dbms is None) and (options.database_host is None) and (options.database_port is None) and (options.database_name is None) and (options.database_username is None) and (options.database_password is None)):
+    if are_cmd_line_db_args_blank(options):
         options.must_set_database_options = True
-    elif (not ((options.dbms is not None) and (options.database_host is not None) and (options.database_port is not None) and (options.database_name is not None) and (options.database_username is not None) and (options.database_password is not None))):
+    elif (not are_cmd_line_db_args_valid(options)):
         parser.error('All database options should be set. Please see help for the options.')
     else:
         options.must_set_database_options = False
-    if (options.dbms == 'embedded'):
-        print (('WARNING: HostName for postgres server ' + options.database_host) + ' will be ignored: using localhost.')
-        options.database_host = 'localhost'
-        options.dbms = 'postgres'
-        options.persistence_type = 'local'
-        options.database_index = 0
-        pass
-    elif ((options.dbms is not None) and (options.dbms not in DATABASE_NAMES)):
-        parser.print_help()
-        parser.error(('Unsupported Database ' + options.dbms))
-    elif (options.dbms is not None):
-        options.dbms = options.dbms.lower()
-    if (options.database_port is not None):
-        correct = False
-        try:
-            port = int(options.database_port)
-            if (65536 > port > 0):
-                correct = True
-        except ValueError:
-            pass
-        if (not correct):
-            parser.print_help()
-            parser.error(('Incorrect database port ' + options.database_port))
-    if ((options.jdbc_driver is None) and (options.jdbc_db is not None)):
-        parser.error('Option --jdbc-db is used only in pair with --jdbc-driver')
-    elif ((options.jdbc_driver is not None) and (options.jdbc_db is None)):
-        parser.error('Option --jdbc-driver is used only in pair with --jdbc-db')
-    if (options.sid_or_sname.lower() not in ['sid', 'sname']):
-        print "WARNING: Valid values for sid_or_sname are 'sid' or 'sname'. Use 'sid' if the db identifier type is Service ID. Use 'sname' if the db identifier type is Service Name"
-        parser.print_help()
-        exit((-1))
-    else:
-        options.sid_or_sname = options.sid_or_sname.lower()
+    fix_database_options(options, parser)
     if (len(args) == 0):
         print parser.print_help()
         parser.error('No action entered')
+    action_map = create_user_action_map(args, options)
     action = args[0]
-    if (action == UPGRADE_STACK_ACTION):
-        possible_args_numbers = [2, 4]
-    elif ((action == BACKUP_ACTION) or (action == RESTORE_ACTION)):
-        possible_args_numbers = [1, 2]
-    else:
-        possible_args_numbers = [1]
+    try:
+        action_obj = action_map[action]
+    except KeyError:
+        parser.error(('Invalid action: ' + action))
     matches = 0
-    for args_number_required in possible_args_numbers:
+    for args_number_required in action_obj.possible_args_numbers:
         matches += int((len(args) == args_number_required))
     if (matches == 0):
         print parser.print_help()
-        possible_args = ' or '.join((str(x) for x in possible_args_numbers))
+        possible_args = ' or '.join((str(x) for x in action_obj.possible_args_numbers))
         parser.error(((('Invalid number of arguments. Entered: ' + str(len(args))) + ', required: ') + possible_args))
     options.exit_message = ("Ambari Server '%s' completed successfully." % action)
-    need_restart = True
     try:
-        if (action == SETUP_ACTION):
-            setup(options)
-        elif (action == START_ACTION):
-            start(options)
-        elif (action == STOP_ACTION):
-            stop(options)
-        elif (action == RESET_ACTION):
-            reset(options)
-        elif (action == STATUS_ACTION):
-            status(options)
-        elif (action == UPGRADE_ACTION):
-            upgrade(options)
-        elif (action == UPGRADE_STACK_ACTION):
-            stack_id = args[1]
-            repo_url = None
-            repo_url_os = None
-            if (len(args) > 2):
-                repo_url = args[2]
-            if (len(args) > 3):
-                repo_url_os = args[3]
-            upgrade_stack(options, stack_id, repo_url, repo_url_os)
-        elif (action == LDAP_SETUP_ACTION):
-            setup_ldap()
-        elif (action == LDAP_SYNC_ACTION):
-            sync_ldap()
-        elif (action == SETUP_SECURITY_ACTION):
-            need_restart = setup_security(options)
-        elif (action == REFRESH_STACK_HASH_ACTION):
-            refresh_stack_hash()
-        elif (action == BACKUP_ACTION):
-            if (len(args) == 2):
-                path = args[1]
-            else:
-                path = None
-            backup(path)
-        elif (action == RESTORE_ACTION):
-            if (len(args) == 2):
-                path = args[1]
-            else:
-                path = None
-            restore(path)
-        else:
-            parser.error('Invalid action')
-        if ((action in ACTION_REQUIRE_RESTART) and need_restart):
+        action_obj.execute()
+        if action_obj.need_restart:
             (pstatus, pid) = is_server_runing()
             if pstatus:
-                print ('NOTE: Restart Ambari Server to apply changes' + ' ("ambari-server restart|stop|start")')
+                print ('NOTE: Restart Ambari Server to apply changes' + ' ("ambari-server restart|stop+start")')
         if options.warnings:
             for warning in options.warnings:
                 print_warning_msg(warning)
