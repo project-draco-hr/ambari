@@ -1,8 +1,9 @@
 {
+  RequestStageContainer requestStageContainer=null;
   if (request.getClusterId() == null && (request.getClusterName() == null || request.getClusterName().isEmpty())) {
     throw new IllegalArgumentException("Invalid arguments, cluster id or cluster name should not be null");
   }
-  LOG.info("Received a updateCluster request" + ", clusterId=" + request.getClusterId() + ", clusterName="+ request.getClusterName()+ ", request="+ request);
+  LOG.info("Received a updateCluster request" + ", clusterId=" + request.getClusterId() + ", clusterName="+ request.getClusterName()+ ", securityType="+ request.getSecurityType()+ ", request="+ request);
   final Cluster cluster;
   if (request.getClusterId() == null) {
     cluster=clusters.getCluster(request.getClusterName());
@@ -22,30 +23,6 @@
       LOG.debug("Received cluster name change request from " + cluster.getClusterName() + " to "+ request.getClusterName());
     }
     cluster.setClusterName(request.getClusterName());
-  }
-  boolean toggleKerberos=false;
-  String desiredSecurityState=null;
-  List<ConfigurationRequest> desiredConfig=request.getDesiredConfig();
-  if (desiredConfig != null) {
-    for (    ConfigurationRequest configurationRequest : desiredConfig) {
-      if ("cluster-env".equals(configurationRequest.getType())) {
-        Map<String,String> properties=configurationRequest.getProperties();
-        if ((properties == null) || properties.isEmpty()) {
-          Config configClusterEnv=cluster.getConfig(configurationRequest.getType(),configurationRequest.getVersionTag());
-          if (configClusterEnv != null) {
-            properties=configClusterEnv.getProperties();
-          }
-        }
-        desiredSecurityState=(properties == null) ? null : properties.get("security_enabled");
-      }
-    }
-  }
-  if (desiredSecurityState != null) {
-    Config configClusterEnv=cluster.getDesiredConfigByType("cluster-env");
-    Map<String,String> clusterEnvProperties=(configClusterEnv == null) ? null : configClusterEnv.getProperties();
-    if (clusterEnvProperties != null) {
-      toggleKerberos=!desiredSecurityState.equals(clusterEnvProperties.get("security_enabled"));
-    }
   }
   if (null != request.getDesiredConfig()) {
     Set<Config> configs=new HashSet<Config>();
@@ -111,18 +88,22 @@
     if (!configurationResponses.isEmpty()) {
       serviceConfigVersionResponse.setConfigurations(configurationResponses);
     }
-    ClusterResponse clusterResponse=new ClusterResponse(cluster.getClusterId(),cluster.getClusterName(),null,null,null,null,null);
+    ClusterResponse clusterResponse=new ClusterResponse(cluster.getClusterId(),cluster.getClusterName(),null,null,null,null,null,null);
     Map<String,Collection<ServiceConfigVersionResponse>> map=new HashMap<String,Collection<ServiceConfigVersionResponse>>();
     map.put(serviceConfigVersionResponse.getServiceName(),Collections.singletonList(serviceConfigVersionResponse));
     clusterResponse.setDesiredServiceConfigVersions(map);
     saveClusterUpdate(request,clusterResponse);
   }
-  RequestStageContainer requestStageContainer=null;
-  if (toggleKerberos) {
-    Map<String,Service> services=cluster.getServices();
-    if ((services != null) && services.containsKey("KERBEROS")) {
-      requestStageContainer=kerberosHelper.toggleKerberos(cluster,request.getKerberosDescriptor(),null);
+  SecurityType securityType=request.getSecurityType();
+  if ((securityType != null) && (cluster.getSecurityType() != securityType)) {
+    LOG.info("Received cluster security type change request from {} to {}",cluster.getSecurityType().name(),securityType.name());
+    if ((securityType == SecurityType.KERBEROS) || (securityType == SecurityType.NONE)) {
+      requestStageContainer=kerberosHelper.toggleKerberos(cluster,securityType,request.getKerberosDescriptor(),requestStageContainer);
     }
+ else {
+      throw new IllegalArgumentException(String.format("Unexpected security type encountered: %s",securityType.name()));
+    }
+    cluster.setSecurityType(securityType);
   }
   if (requestStageContainer != null) {
     requestStageContainer.persist();
