@@ -1,0 +1,50 @@
+{
+  HostVersionEntity hostVersionEntity=null;
+  List<HostVersionEntity> hostVersions=hostVersionDAO.findByHost(host.getHostName());
+  if (hostVersions == null || hostVersions.isEmpty()) {
+    hostVersionEntity=new HostVersionEntity(host.getHostName(),repositoryVersion,RepositoryVersionState.UPGRADING);
+    hostVersionEntity.setHostEntity(host);
+    hostVersionDAO.create(hostVersionEntity);
+  }
+ else {
+    hostVersionEntity=hostVersionDAO.findByClusterStackVersionAndHost(this.getClusterName(),repositoryVersion.getStack(),repositoryVersion.getVersion(),host.getHostName());
+    if (hostVersionEntity == null) {
+      throw new AmbariException("Host " + host.getHostName() + " is expected to have a Host Version for stack "+ repositoryVersion.getStackVersion());
+    }
+  }
+  final Collection<HostComponentStateEntity> allHostComponents=host.getHostComponentStateEntities();
+  final Collection<HostComponentStateEntity> versionedHostComponents=new HashSet<HostComponentStateEntity>();
+  final Collection<HostComponentStateEntity> noVersionNeededComponents=new HashSet<HostComponentStateEntity>();
+  for (  HostComponentStateEntity hostComponentStateEntity : allHostComponents) {
+    if (!hostComponentStateEntity.getVersion().equalsIgnoreCase(State.UNKNOWN.toString())) {
+      versionedHostComponents.add(hostComponentStateEntity);
+    }
+ else {
+      ComponentInfo compInfo=ambariMetaInfo.getComponent(stack.getStackName(),stack.getStackVersion(),hostComponentStateEntity.getServiceName(),hostComponentStateEntity.getComponentName());
+      if (!compInfo.isVersionAdvertised()) {
+        noVersionNeededComponents.add(hostComponentStateEntity);
+      }
+    }
+  }
+  List<ClusterVersionEntity> clusterVersions=clusterVersionDAO.findByCluster(this.getClusterName());
+  final int versionedPlusNoVersionNeededSize=versionedHostComponents.size() + noVersionNeededComponents.size();
+  if (clusterVersions.size() <= 1) {
+    if (allHostComponents.size() == versionedPlusNoVersionNeededSize && (hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING) || hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADED)) && ServiceComponentHostImpl.haveSameVersion(versionedHostComponents)) {
+      hostVersionEntity.setState(RepositoryVersionState.CURRENT);
+      hostVersionDAO.merge(hostVersionEntity);
+    }
+  }
+ else {
+    if (allHostComponents.size() == versionedPlusNoVersionNeededSize && hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING) && ServiceComponentHostImpl.haveSameVersion(versionedHostComponents)) {
+      hostVersionEntity.setState(RepositoryVersionState.UPGRADED);
+      hostVersionDAO.merge(hostVersionEntity);
+    }
+ else {
+      if (hostVersionEntity.getState().equals(RepositoryVersionState.INSTALLED) && versionedHostComponents.size() > 0 && !ServiceComponentHostImpl.haveSameVersion(versionedHostComponents)) {
+        hostVersionEntity.setState(RepositoryVersionState.UPGRADING);
+        hostVersionDAO.merge(hostVersionEntity);
+      }
+    }
+  }
+  return hostVersionEntity;
+}

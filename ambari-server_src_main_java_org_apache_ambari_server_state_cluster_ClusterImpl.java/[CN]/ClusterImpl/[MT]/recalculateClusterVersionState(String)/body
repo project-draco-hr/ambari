@@ -17,18 +17,18 @@
           throw new AmbariException(String.format("Repository version %s not found for cluster %s",repositoryVersion,getClusterName()));
         }
       }
-      RepositoryVersionState lowestPriorityState;
       if (clusterVersion.getState() != RepositoryVersionState.INSTALL_FAILED && clusterVersion.getState() != RepositoryVersionState.OUT_OF_SYNC && clusterVersion.getState() != RepositoryVersionState.INSTALLING && clusterVersion.getState() != RepositoryVersionState.INSTALLED && clusterVersion.getState() != RepositoryVersionState.UPGRADING && clusterVersion.getState() != RepositoryVersionState.UPGRADED) {
         return;
       }
       Map<String,Host> hosts=clusters.getHostsForCluster(this.getClusterName());
+      Set<Host> hostsWithoutHostVersion=new HashSet<Host>();
       Map<RepositoryVersionState,Set<String>> stateToHosts=new HashMap<RepositoryVersionState,Set<String>>();
       for (      Host host : hosts.values()) {
         String hostName=host.getHostName();
         HostVersionEntity hostVersion=hostVersionDAO.findByClusterStackVersionAndHost(this.getClusterName(),stackId.getStackId(),repositoryVersion,hostName);
         if (hostVersion == null) {
-          LOG.debug("Skipping transitioning the cluster version because host " + hostName + " does not have a version yet.");
-          return;
+          hostsWithoutHostVersion.add(host);
+          continue;
         }
         RepositoryVersionState hostState=hostVersion.getState();
         if (host.getState() != HostState.HEALTHY) {
@@ -42,6 +42,19 @@
           Set<String> hostsInState=new HashSet<String>();
           hostsInState.add(hostName);
           stateToHosts.put(hostState,hostsInState);
+        }
+      }
+      for (      Host host : hostsWithoutHostVersion) {
+        HostEntity hostEntity=hostDAO.findByName(host.getHostName());
+        final Collection<HostComponentStateEntity> allHostComponents=hostEntity.getHostComponentStateEntities();
+        for (        HostComponentStateEntity hostComponentStateEntity : allHostComponents) {
+          if (hostComponentStateEntity.getVersion().equalsIgnoreCase(State.UNKNOWN.toString())) {
+            ComponentInfo compInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),hostComponentStateEntity.getServiceName(),hostComponentStateEntity.getComponentName());
+            if (compInfo.isVersionAdvertised()) {
+              LOG.debug("Skipping transitioning the cluster version because host " + host.getHostName() + " does not have a version yet.");
+              return;
+            }
+          }
         }
       }
       RepositoryVersionState effectiveClusterVersionState=getEffectiveState(stateToHosts);
