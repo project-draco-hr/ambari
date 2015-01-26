@@ -1,0 +1,19 @@
+def run_setup(argv=None):
+    (expected_hostname, passPhrase, hostname, user_run_as, projectVersion, server_port) = parseArguments(argv)
+    checkServerReachability(hostname, server_port)
+    if ((projectVersion == 'null') or (projectVersion == '{ambariVersion}') or (projectVersion == '')):
+        retcode = getOptimalVersion('')
+    else:
+        retcode = getOptimalVersion(projectVersion)
+    if ((retcode['exitstatus'] == 0) and (retcode['log'] != None) and (retcode['log'] != '') and (retcode['log'][0].strip() != '')):
+        availiableProjectVersion = retcode['log'].strip()
+        if (not isAgentPackageAlreadyInstalled(availiableProjectVersion)):
+            ret = installAgent(availiableProjectVersion)
+            if (not (ret['exitstatus'] == 0)):
+                sys.exit(ret)
+    elif ((retcode['exitstatus'] == 1) and (retcode['log'][0].strip() != '')):
+        sys.exit({'exitstatus': 1, 'log': ((('Desired version (' + projectVersion) + ') of ambari-agent package is not available. Repository has following versions of ambari-agent:') + retcode['log'][0].strip()), })
+    else:
+        sys.exit(retcode)
+    configureAgent(hostname, user_run_as)
+    sys.exit(runAgent(passPhrase, expected_hostname, user_run_as, verbose))
