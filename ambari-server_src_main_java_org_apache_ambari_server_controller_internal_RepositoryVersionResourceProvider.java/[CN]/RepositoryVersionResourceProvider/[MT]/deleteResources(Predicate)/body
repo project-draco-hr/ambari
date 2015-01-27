@@ -14,9 +14,11 @@
       throw new NoSuchResourceException("There is no repository version with id " + id);
     }
     final List<ClusterVersionEntity> clusterVersionEntities=clusterVersionDAO.findByStackAndVersion(entity.getStack(),entity.getVersion());
-    if (!clusterVersionEntities.isEmpty()) {
-      final ClusterVersionEntity firstClusterVersion=clusterVersionEntities.get(0);
-      throw new SystemException("Repository version can't be deleted as it is " + firstClusterVersion.getState().name() + " on cluster "+ firstClusterVersion.getClusterEntity().getClusterName());
+    final List<RepositoryVersionState> forbiddenToDeleteStates=Lists.newArrayList(RepositoryVersionState.CURRENT,RepositoryVersionState.INSTALLED,RepositoryVersionState.INSTALLING,RepositoryVersionState.UPGRADED,RepositoryVersionState.UPGRADING);
+    for (    ClusterVersionEntity clusterVersionEntity : clusterVersionEntities) {
+      if (clusterVersionEntity.getRepositoryVersion().getId().equals(id) && forbiddenToDeleteStates.contains(clusterVersionEntity.getState())) {
+        throw new SystemException("Repository version can't be deleted as it is " + clusterVersionEntity.getState().name() + " on cluster "+ clusterVersionEntity.getClusterEntity().getClusterName());
+      }
     }
     entitiesToBeRemoved.add(entity);
   }
