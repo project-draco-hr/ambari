@@ -125,7 +125,7 @@ def test_start(self, perform_housekeeping_mock, chdir_mock, getuser_mock, find_j
     p.process_pair(JDBC_DATABASE_PROPERTY, 'oracle')
     p.process_pair(PERSISTENCE_TYPE_PROPERTY, 'remote')
     find_jdbc_driver_mock.reset_mock()
-    find_jdbc_driver_mock.return_value = 0
+    find_jdbc_driver_mock.return_value = (-1)
     try:
         _ambari_server_.start(args)
     except FatalException as e:
@@ -133,6 +133,8 @@ def test_start(self, perform_housekeeping_mock, chdir_mock, getuser_mock, find_j
     args = reset_mocks()
     p.process_pair(JDBC_DATABASE_PROPERTY, 'oracle')
     p.process_pair(PERSISTENCE_TYPE_PROPERTY, 'remote')
+    find_jdbc_driver_mock.reset_mock()
+    find_jdbc_driver_mock.return_value = 0
     perform_housekeeping_mock.reset_mock()
     perform_housekeeping_mock.side_effect = KeeperException('some_reason')
     try:
@@ -161,6 +163,18 @@ def test_start(self, perform_housekeeping_mock, chdir_mock, getuser_mock, find_j
     p.process_pair(PERSISTENCE_TYPE_PROPERTY, 'local')
     check_postgre_up_mock.return_value = ('running', 0, 'success', '')
     read_ambari_user_mock.return_value = 'root'
+    proc = MagicMock()
+    proc.pid = (-186)
+    popenMock.return_value = proc
+    try:
+        _ambari_server_.start(args)
+    except FatalException as e:
+        self.assertTrue(popenMock.called)
+        self.assertTrue(('Ambari Server java process died' in e.reason))
+        self.assertTrue(perform_housekeeping_mock.called)
+    args = reset_mocks()
+    proc.pid = 186
+    popenMock.reset_mock()
     _ambari_server_.start(args)
     self.assertTrue(popenMock.called)
     popen_arg = popenMock.call_args[0][0]
