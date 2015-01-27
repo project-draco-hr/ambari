@@ -10,6 +10,7 @@
   if (clusterName != null && !clusterName.isEmpty()) {
     clusterNames.add(clusterName);
   }
+  boolean addKerberosStages=false;
   for (  ServiceComponentHostRequest request : requests) {
     validateServiceComponentHostRequest(request);
     Cluster cluster=clusters.getCluster(request.getClusterName());
@@ -48,6 +49,7 @@
     State newState=null;
     if (request.getDesiredState() != null) {
       newState=State.valueOf(request.getDesiredState());
+      addKerberosStages=addKerberosStages || requiresKerberosStageAddition(oldState,newState,cluster);
       if (!newState.isValidDesiredState()) {
         throw new IllegalArgumentException("Invalid arguments, invalid" + " desired state, desiredState=" + newState.toString());
       }
@@ -105,5 +107,9 @@
   }
   doDirectTransitions(directTransitionScHosts);
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
-  return getManagementController().addStages(stages,cluster,requestProperties,null,null,null,changedScHosts,ignoredScHosts,runSmokeTest,false);
+  RequestStageContainer requestStages=getManagementController().addStages(stages,cluster,requestProperties,null,null,null,changedScHosts,ignoredScHosts,runSmokeTest,false);
+  if (addKerberosStages) {
+    kerberosHelper.toggleKerberos(cluster,SecurityType.KERBEROS,null,requestStages);
+  }
+  return requestStages;
 }
