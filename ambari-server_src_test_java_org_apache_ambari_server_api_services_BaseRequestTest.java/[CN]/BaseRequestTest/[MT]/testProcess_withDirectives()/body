@@ -1,7 +1,8 @@
 {
   HttpHeaders headers=createNiceMock(HttpHeaders.class);
-  String uriString="http://localhost.com:8080/api/v1/clusters/c1?bar=value";
-  URI uri=new URI(URLEncoder.encode(uriString,"UTF-8"));
+  String path=URLEncoder.encode("http://localhost.com:8080/api/v1/clusters/c1","UTF-8");
+  String query=URLEncoder.encode("foo=foo-value&bar=bar-value","UTF-8");
+  URI uri=new URI(path + "?" + query);
   PredicateCompiler compiler=createStrictMock(PredicateCompiler.class);
   Predicate predicate=createNiceMock(Predicate.class);
   UriInfo uriInfo=createMock(UriInfo.class);
@@ -13,16 +14,25 @@
   RequestBody body=createNiceMock(RequestBody.class);
   ResourceInstance resource=createNiceMock(ResourceInstance.class);
   ResourceDefinition resourceDefinition=createNiceMock(ResourceDefinition.class);
+  Set<String> directives=new HashSet<String>();
+  directives.add("my_directive");
   Renderer renderer=new DefaultRenderer();
   Request request=getTestRequest(headers,body,uriInfo,compiler,handler,processor,resource);
   expect(uriInfo.getQueryParameters()).andReturn(queryParams).anyTimes();
   expect(queryParams.getFirst(QueryLexer.QUERY_MINIMAL)).andReturn(null);
   expect(queryParams.getFirst(QueryLexer.QUERY_FORMAT)).andReturn(null);
   expect(resource.getResourceDefinition()).andReturn(resourceDefinition).anyTimes();
+  expect(resourceDefinition.getUpdateDirectives()).andReturn(directives).anyTimes();
+  expect(resourceDefinition.getCreateDirectives()).andReturn(directives).anyTimes();
   expect(resourceDefinition.getRenderer(null)).andReturn(renderer);
   expect(uriInfo.getRequestUri()).andReturn(uri).anyTimes();
-  expect(body.getQueryString()).andReturn("foo=bar");
-  expect(compiler.compile("foo=bar")).andReturn(predicate);
+  expect(body.getQueryString()).andReturn(null);
+  if (request.getRequestType().equals(Request.Type.POST) || request.getRequestType().equals(Request.Type.PUT)) {
+    expect(compiler.compile("foo=foo-value&bar=bar-value",directives)).andReturn(predicate);
+  }
+ else {
+    expect(compiler.compile("foo=foo-value&bar=bar-value")).andReturn(predicate);
+  }
   expect(handler.handleRequest(request)).andReturn(result);
   expect(result.getStatus()).andReturn(resultStatus).anyTimes();
   expect(resultStatus.isErrorState()).andReturn(false).anyTimes();
