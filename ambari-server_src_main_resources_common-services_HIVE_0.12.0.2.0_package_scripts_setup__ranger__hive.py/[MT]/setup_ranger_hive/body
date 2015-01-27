@@ -2,6 +2,10 @@ def setup_ranger_hive(env):
     import params
     env.set_params(params)
     if params.has_ranger_admin:
+        environment = {'no_proxy': format('{params.ambari_server_hostname}'), }
+        Execute(('curl', '-kf', '-x', '', '--retry', '10', params.ranger_driver_curl_source, '-o', params.ranger_downloaded_custom_connector), not_if=format('test -f {params.ranger_downloaded_custom_connector}'), path=['/bin', '/usr/bin/'], environment=environment, sudo=True)
+        if (not os.path.isfile(params.ranger_driver_curl_target)):
+            Execute(('cp', '--remove-destination', params.ranger_downloaded_custom_connector, params.ranger_driver_curl_target), path=['/bin', '/usr/bin/'], sudo=True)
         try:
             command = 'hdp-select status hive-server2'
             (return_code, hdp_output) = shell.call(command, timeout=20)
@@ -23,15 +27,22 @@ def setup_ranger_hive(env):
             ranger_adm_obj = Rangeradmin(url=ranger_hive_dict['POLICY_MGR_URL'])
             (response_code, response_recieved) = ranger_adm_obj.check_ranger_login_urllib2((ranger_hive_dict['POLICY_MGR_URL'] + '/login.jsp'), 'test:test')
             if ((response_code is not None) and (response_code == 200)):
-                repo = ranger_adm_obj.get_repository_by_name_urllib2(ranger_hive_dict['REPOSITORY_NAME'], 'hive', 'true', 'admin:admin')
-                if (repo and (repo['name'] == ranger_hive_dict['REPOSITORY_NAME'])):
-                    Logger.info('Hive Repository exist')
-                else:
-                    response = ranger_adm_obj.create_repository_urllib2(hive_repo_data, 'admin:admin')
-                    if (response is not None):
-                        Logger.info('Hive Repository created in Ranger Admin')
+                ambari_ranger_admin = params.config['configurations']['ranger-env']['ranger_admin_username']
+                ambari_ranger_password = params.config['configurations']['ranger-env']['ranger_admin_password']
+                (ambari_ranger_admin, ambari_ranger_password) = ranger_adm_obj.create_ambari_admin_user(ambari_ranger_admin, ambari_ranger_password, 'admin:admin')
+                ambari_username_password_for_ranger = ((ambari_ranger_admin + ':') + ambari_ranger_password)
+                if ((ambari_ranger_admin != '') and (ambari_ranger_password != '')):
+                    repo = ranger_adm_obj.get_repository_by_name_urllib2(ranger_hive_dict['REPOSITORY_NAME'], 'hive', 'true', ambari_username_password_for_ranger)
+                    if (repo and (repo['name'] == ranger_hive_dict['REPOSITORY_NAME'])):
+                        Logger.info('Hive Repository exist')
                     else:
-                        Logger.info('Hive Repository creation failed in Ranger Admin')
+                        response = ranger_adm_obj.create_repository_urllib2(hive_repo_data, ambari_username_password_for_ranger)
+                        if (response is not None):
+                            Logger.info('Hive Repository created in Ranger Admin')
+                        else:
+                            Logger.info('Hive Repository creation failed in Ranger Admin')
+                else:
+                    Logger.info('Ambari admin username and password are blank ')
             else:
                 Logger.info('Ranger service is not started on given host')
         else:

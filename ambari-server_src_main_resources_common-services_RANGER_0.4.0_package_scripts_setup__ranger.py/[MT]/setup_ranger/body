@@ -2,6 +2,10 @@ def setup_ranger(env):
     import params
     env.set_params(params)
     if check_db_connnection(env):
+        environment = {'no_proxy': format('{params.ambari_server_hostname}'), }
+        Execute(('curl', '-kf', '-x', '', '--retry', '10', params.driver_curl_source, '-o', params.downloaded_custom_connector), not_if=format('test -f {params.downloaded_custom_connector}'), path=['/bin', '/usr/bin/'], environment=environment, sudo=True)
+        if (not os.path.isfile(params.driver_curl_target)):
+            Execute(('cp', '--remove-destination', params.downloaded_custom_connector, params.driver_curl_target), path=['/bin', '/usr/bin/'], sudo=True)
         file_path = (params.ranger_home + '/install.properties')
         if os.path.isfile(file_path):
             shutil.copyfile(file_path, (params.ranger_home + '/install-bk.properties'))
@@ -16,6 +20,7 @@ def setup_ranger(env):
                 os.remove(file_path)
                 os.rename((params.ranger_home + '/install-bk.properties'), file_path)
             raise Fail('Ranger installation Failed, {0}'.format(str(e)))
+        do_post_installation(env)
         if os.path.isfile((params.ranger_home + '/install-bk.properties')):
             os.remove(file_path)
             os.rename((params.ranger_home + '/install-bk.properties'), file_path)
