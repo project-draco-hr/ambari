@@ -3,22 +3,21 @@
   Set<String> requestPropertyIds=getRequestPropertyIds(request,predicate);
   for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
     String upgradeIdStr=(String)propertyMap.get(UPGRADE_REQUEST_ID);
-    String clusterName=(String)propertyMap.get(UPGRADE_CLUSTER_NAME);
     if (null == upgradeIdStr || upgradeIdStr.isEmpty()) {
       throw new IllegalArgumentException("The upgrade id is required when querying for upgrades");
     }
     Long upgradeId=Long.valueOf(upgradeIdStr);
     UpgradeEntity upgrade=m_dao.findUpgradeByRequestId(upgradeId);
+    Long requestId=upgrade.getRequestId();
     List<UpgradeGroupEntity> groups=upgrade.getUpgradeGroups();
     if (null != groups) {
       for (      UpgradeGroupEntity group : upgrade.getUpgradeGroups()) {
         Resource r=toResource(upgrade,group,requestPropertyIds);
-        List<Long> stageIds=new ArrayList<Long>();
+        Set<Long> stageIds=new HashSet<Long>();
         for (        UpgradeItemEntity itemEntity : group.getItems()) {
           stageIds.add(itemEntity.getStageId());
         }
-        Set<Resource> stages=s_upgradeHelper.getStageResources(clusterName,upgrade.getRequestId(),stageIds);
-        aggregate(r,stages,requestPropertyIds);
+        aggregate(r,requestId,stageIds,requestPropertyIds);
         results.add(r);
       }
     }
