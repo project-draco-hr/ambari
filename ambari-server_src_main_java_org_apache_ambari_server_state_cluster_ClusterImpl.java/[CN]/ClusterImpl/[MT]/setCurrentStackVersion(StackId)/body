@@ -1,34 +1,28 @@
 {
-  clusterGlobalLock.readLock().lock();
+  clusterGlobalLock.writeLock().lock();
   try {
-    writeLock.lock();
-    try {
-      ClusterStateEntity clusterStateEntity=clusterStateDAO.findByPK(clusterEntity.getClusterId());
-      if (clusterStateEntity == null) {
-        clusterStateEntity=new ClusterStateEntity();
-        clusterStateEntity.setClusterId(clusterEntity.getClusterId());
-        clusterStateEntity.setCurrentStackVersion(gson.toJson(stackVersion));
-        clusterStateEntity.setClusterEntity(clusterEntity);
-        clusterStateDAO.create(clusterStateEntity);
-        clusterStateEntity=clusterStateDAO.merge(clusterStateEntity);
-        clusterEntity.setClusterStateEntity(clusterStateEntity);
-        clusterEntity=clusterDAO.merge(clusterEntity);
-      }
+    ClusterStateEntity clusterStateEntity=clusterStateDAO.findByPK(clusterEntity.getClusterId());
+    if (clusterStateEntity == null) {
+      clusterStateEntity=new ClusterStateEntity();
+      clusterStateEntity.setClusterId(clusterEntity.getClusterId());
+      clusterStateEntity.setCurrentStackVersion(gson.toJson(stackVersion));
+      clusterStateEntity.setClusterEntity(clusterEntity);
+      clusterStateDAO.create(clusterStateEntity);
+      clusterStateEntity=clusterStateDAO.merge(clusterStateEntity);
+      clusterEntity.setClusterStateEntity(clusterStateEntity);
+      clusterEntity=clusterDAO.merge(clusterEntity);
+    }
  else {
-        clusterStateEntity.setCurrentStackVersion(gson.toJson(stackVersion));
-        clusterStateDAO.merge(clusterStateEntity);
-        clusterEntity=clusterDAO.merge(clusterEntity);
-      }
-    }
- catch (    RollbackException e) {
-      LOG.warn("Unable to set version " + stackVersion + " for cluster "+ getClusterName());
-      throw new AmbariException("Unable to set" + " version=" + stackVersion + " for cluster "+ getClusterName(),e);
-    }
- finally {
-      writeLock.unlock();
+      clusterStateEntity.setCurrentStackVersion(gson.toJson(stackVersion));
+      clusterStateDAO.merge(clusterStateEntity);
+      clusterEntity=clusterDAO.merge(clusterEntity);
     }
   }
-  finally {
-    clusterGlobalLock.readLock().unlock();
+ catch (  RollbackException e) {
+    LOG.warn("Unable to set version " + stackVersion + " for cluster "+ getClusterName());
+    throw new AmbariException("Unable to set" + " version=" + stackVersion + " for cluster "+ getClusterName(),e);
+  }
+ finally {
+    clusterGlobalLock.writeLock().unlock();
   }
 }

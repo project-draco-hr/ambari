@@ -1,10 +1,16 @@
 {
-  clusterGlobalLock.readLock().lock();
+  boolean clusterWriteLockAcquired=false;
+  if (!persisted) {
+    clusterGlobalLock.writeLock().lock();
+    clusterWriteLockAcquired=true;
+  }
   try {
     writeLock.lock();
     try {
       if (!persisted) {
         persistEntities();
+        clusterGlobalLock.writeLock().unlock();
+        clusterWriteLockAcquired=false;
         refresh();
         host.refresh();
         serviceComponent.refresh();
@@ -22,6 +28,8 @@
     }
   }
   finally {
-    clusterGlobalLock.readLock().unlock();
+    if (clusterWriteLockAcquired) {
+      clusterGlobalLock.writeLock().unlock();
+    }
   }
 }

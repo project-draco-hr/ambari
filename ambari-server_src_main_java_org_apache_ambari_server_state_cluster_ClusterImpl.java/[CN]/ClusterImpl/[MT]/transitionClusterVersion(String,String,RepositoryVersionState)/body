@@ -1,22 +1,20 @@
 {
   Set<RepositoryVersionState> allowedStates=new HashSet<RepositoryVersionState>();
-  clusterGlobalLock.readLock().lock();
+  clusterGlobalLock.writeLock().lock();
   try {
-    readWriteLock.writeLock().lock();
-    try {
-      ClusterVersionEntity existingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(this.getClusterName(),stack,version);
-      if (existingClusterVersion == null) {
-        throw new AmbariException("Existing cluster version not found for cluster=" + this.getClusterName() + ", stack="+ stack+ ", version="+ version);
-      }
-      if (existingClusterVersion.getState() != state) {
+    ClusterVersionEntity existingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(getClusterName(),stack,version);
+    if (existingClusterVersion == null) {
+      throw new AmbariException("Existing cluster version not found for cluster=" + getClusterName() + ", stack="+ stack+ ", version="+ version);
+    }
+    if (existingClusterVersion.getState() != state) {
 switch (existingClusterVersion.getState()) {
 case CURRENT:
-          break;
+        break;
 case INSTALLING:
-        allowedStates.add(RepositoryVersionState.INSTALLED);
-      allowedStates.add(RepositoryVersionState.INSTALL_FAILED);
-    allowedStates.add(RepositoryVersionState.OUT_OF_SYNC);
-  break;
+      allowedStates.add(RepositoryVersionState.INSTALLED);
+    allowedStates.add(RepositoryVersionState.INSTALL_FAILED);
+  allowedStates.add(RepositoryVersionState.OUT_OF_SYNC);
+break;
 case INSTALL_FAILED:
 allowedStates.add(RepositoryVersionState.INSTALLING);
 break;
@@ -46,7 +44,7 @@ if (!allowedStates.contains(state)) {
 throw new AmbariException("Invalid cluster version transition from " + existingClusterVersion.getState() + " to "+ state);
 }
 if (state == RepositoryVersionState.CURRENT) {
-ClusterVersionEntity currentVersion=clusterVersionDAO.findByClusterAndStateCurrent(this.getClusterName());
+ClusterVersionEntity currentVersion=clusterVersionDAO.findByClusterAndStateCurrent(getClusterName());
 if (currentVersion != null) {
 currentVersion.setState(RepositoryVersionState.INSTALLED);
 clusterVersionDAO.merge(currentVersion);
@@ -63,10 +61,6 @@ LOG.warn(message);
 throw new AmbariException(message,e);
 }
  finally {
-readWriteLock.writeLock().unlock();
-}
-}
-  finally {
-clusterGlobalLock.readLock().unlock();
+clusterGlobalLock.writeLock().unlock();
 }
 }

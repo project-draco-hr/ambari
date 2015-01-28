@@ -2,34 +2,28 @@
   if (null == user) {
     throw new NullPointerException("User must be specified.");
   }
-  clusterGlobalLock.readLock().lock();
+  clusterGlobalLock.writeLock().lock();
   try {
-    readWriteLock.writeLock().lock();
-    try {
-      if (configs == null) {
-        return null;
-      }
-      Iterator<Config> configIterator=configs.iterator();
-      while (configIterator.hasNext()) {
-        Config config=configIterator.next();
-        if (config == null) {
-          configIterator.remove();
-          continue;
-        }
-        Config currentDesired=getDesiredConfigByType(config.getType());
-        if (null != currentDesired && currentDesired.getTag().equals(config.getTag())) {
-          configIterator.remove();
-        }
-      }
-      ServiceConfigVersionResponse serviceConfigVersionResponse=applyConfigs(configs,user,serviceConfigVersionNote);
-      configHelper.invalidateStaleConfigsCache();
-      return serviceConfigVersionResponse;
+    if (configs == null) {
+      return null;
     }
-  finally {
-      readWriteLock.writeLock().unlock();
+    Iterator<Config> configIterator=configs.iterator();
+    while (configIterator.hasNext()) {
+      Config config=configIterator.next();
+      if (config == null) {
+        configIterator.remove();
+        continue;
+      }
+      Config currentDesired=getDesiredConfigByType(config.getType());
+      if (null != currentDesired && currentDesired.getTag().equals(config.getTag())) {
+        configIterator.remove();
+      }
     }
+    ServiceConfigVersionResponse serviceConfigVersionResponse=applyConfigs(configs,user,serviceConfigVersionNote);
+    configHelper.invalidateStaleConfigsCache();
+    return serviceConfigVersionResponse;
   }
   finally {
-    clusterGlobalLock.readLock().unlock();
+    clusterGlobalLock.writeLock().unlock();
   }
 }

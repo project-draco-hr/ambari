@@ -1,6 +1,6 @@
 {
   if (currentClusterVersion == null) {
-    throw new AmbariException("Could not find current stack version of cluster " + this.getClusterName());
+    throw new AmbariException("Could not find current stack version of cluster " + getClusterName());
   }
   final Set<RepositoryVersionState> validStates=new HashSet<RepositoryVersionState>(){
 {
@@ -11,45 +11,39 @@
   if (!validStates.contains(desiredState)) {
     throw new AmbariException("The state must be one of [" + StringUtils.join(validStates,", ") + "]");
   }
-  clusterGlobalLock.readLock().lock();
+  clusterGlobalLock.writeLock().lock();
   try {
-    readWriteLock.writeLock().lock();
-    try {
-      Map<String,HostVersionEntity> existingHostToHostVersionEntity=new HashMap<String,HostVersionEntity>();
-      List<HostVersionEntity> existingHostVersionEntities=hostVersionDAO.findByClusterStackAndVersion(this.getClusterName(),currentClusterVersion.getRepositoryVersion().getStack(),currentClusterVersion.getRepositoryVersion().getVersion());
-      if (existingHostVersionEntities != null) {
-        for (        HostVersionEntity entity : existingHostVersionEntities) {
-          existingHostToHostVersionEntity.put(entity.getHostName(),entity);
-        }
-      }
-      Sets.SetView<String> intersection=Sets.intersection(existingHostToHostVersionEntity.keySet(),hostNames);
-      for (      String hostname : hostNames) {
-        List<HostVersionEntity> currentHostVersions=hostVersionDAO.findByClusterHostAndState(this.getClusterName(),hostname,RepositoryVersionState.CURRENT);
-        HostVersionEntity currentHostVersionEntity=(currentHostVersions != null && currentHostVersions.size() == 1) ? currentHostVersions.get(0) : null;
-        if (!intersection.contains(hostname)) {
-          HostEntity hostEntity=hostDAO.findByName(hostname);
-          HostVersionEntity hostVersionEntity=new HostVersionEntity(hostname,currentClusterVersion.getRepositoryVersion(),desiredState);
-          hostVersionEntity.setHostEntity(hostEntity);
-          hostVersionDAO.create(hostVersionEntity);
-        }
- else {
-          HostVersionEntity hostVersionEntity=existingHostToHostVersionEntity.get(hostname);
-          if (hostVersionEntity.getState() != desiredState) {
-            hostVersionEntity.setState(desiredState);
-            hostVersionDAO.merge(hostVersionEntity);
-          }
-          if (currentHostVersionEntity != null && !currentHostVersionEntity.getRepositoryVersion().equals(hostVersionEntity.getRepositoryVersion()) && desiredState == RepositoryVersionState.CURRENT && currentHostVersionEntity.getState() == RepositoryVersionState.CURRENT) {
-            currentHostVersionEntity.setState(RepositoryVersionState.INSTALLED);
-            hostVersionDAO.merge(currentHostVersionEntity);
-          }
-        }
+    Map<String,HostVersionEntity> existingHostToHostVersionEntity=new HashMap<String,HostVersionEntity>();
+    List<HostVersionEntity> existingHostVersionEntities=hostVersionDAO.findByClusterStackAndVersion(getClusterName(),currentClusterVersion.getRepositoryVersion().getStack(),currentClusterVersion.getRepositoryVersion().getVersion());
+    if (existingHostVersionEntities != null) {
+      for (      HostVersionEntity entity : existingHostVersionEntities) {
+        existingHostToHostVersionEntity.put(entity.getHostName(),entity);
       }
     }
-  finally {
-      readWriteLock.writeLock().unlock();
+    Sets.SetView<String> intersection=Sets.intersection(existingHostToHostVersionEntity.keySet(),hostNames);
+    for (    String hostname : hostNames) {
+      List<HostVersionEntity> currentHostVersions=hostVersionDAO.findByClusterHostAndState(getClusterName(),hostname,RepositoryVersionState.CURRENT);
+      HostVersionEntity currentHostVersionEntity=(currentHostVersions != null && currentHostVersions.size() == 1) ? currentHostVersions.get(0) : null;
+      if (!intersection.contains(hostname)) {
+        HostEntity hostEntity=hostDAO.findByName(hostname);
+        HostVersionEntity hostVersionEntity=new HostVersionEntity(hostname,currentClusterVersion.getRepositoryVersion(),desiredState);
+        hostVersionEntity.setHostEntity(hostEntity);
+        hostVersionDAO.create(hostVersionEntity);
+      }
+ else {
+        HostVersionEntity hostVersionEntity=existingHostToHostVersionEntity.get(hostname);
+        if (hostVersionEntity.getState() != desiredState) {
+          hostVersionEntity.setState(desiredState);
+          hostVersionDAO.merge(hostVersionEntity);
+        }
+        if (currentHostVersionEntity != null && !currentHostVersionEntity.getRepositoryVersion().equals(hostVersionEntity.getRepositoryVersion()) && desiredState == RepositoryVersionState.CURRENT && currentHostVersionEntity.getState() == RepositoryVersionState.CURRENT) {
+          currentHostVersionEntity.setState(RepositoryVersionState.INSTALLED);
+          hostVersionDAO.merge(currentHostVersionEntity);
+        }
+      }
     }
   }
   finally {
-    clusterGlobalLock.readLock().unlock();
+    clusterGlobalLock.writeLock().unlock();
   }
 }
