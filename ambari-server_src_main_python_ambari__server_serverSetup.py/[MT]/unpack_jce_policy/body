@@ -1,0 +1,33 @@
+def unpack_jce_policy():
+    properties = get_ambari_properties()
+    jdk_path = properties.get_property(JAVA_HOME_PROPERTY)
+    jdk_security_path = ((jdk_path + os.sep) + configDefaults.JDK_SECURITY_DIR)
+    jce_name = properties.get_property(JCE_NAME_PROPERTY)
+    jce_zip_path = ((configDefaults.SERVER_RESOURCES_DIR + os.sep) + jce_name)
+    f = None
+    import zipfile
+    if (os.path.exists(jdk_security_path) and os.path.exists(jce_zip_path)):
+        try:
+            f = zipfile.ZipFile(jce_zip_path, 'r')
+            zip_members = f.namelist()
+            unziped_jce_path = os.path.split(zip_members[(len(zip_members) - 1)])[0]
+            f.extractall(jdk_security_path)
+        finally:
+            try:
+                f.close()
+            except Exception as e:
+                err = 'Fail during the extraction of {0}.'.format(jce_zip_path)
+                raise FatalException(1, err)
+    else:
+        err = 'The path {0} or {1} is invalid.'.format(jdk_security_path, jce_zip_path)
+        raise FatalException(1, err)
+    if unziped_jce_path:
+        from_path = ((jdk_security_path + os.sep) + unziped_jce_path)
+        jce_files = os.listdir(from_path)
+        for i in range(len(jce_files)):
+            jce_files[i] = ((from_path + os.sep) + jce_files[i])
+        from ambari_commons.os_utils import copy_files
+        copy_files(jce_files, jdk_security_path)
+        dir_to_delete = ((jdk_security_path + os.sep) + unziped_jce_path.split(os.sep)[0])
+        shutil.rmtree(dir_to_delete)
+    return 0

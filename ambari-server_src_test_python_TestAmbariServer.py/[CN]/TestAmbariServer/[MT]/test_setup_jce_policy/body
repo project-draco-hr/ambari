@@ -1,0 +1,52 @@
+@patch('os.path.exists')
+@patch('shutil.copy')
+@patch('ambari_server.serverSetup.os.path.split')
+@patch('ambari_server.serverSetup.unpack_jce_policy')
+@patch('ambari_server.serverSetup.get_ambari_properties')
+@patch('ambari_commons.os_utils.search_file')
+@patch('__builtin__.open')
+def test_setup_jce_policy(self, open_mock, search_file_mock, get_ambari_properties_mock, unpack_jce_policy_mock, path_split_mock, shutil_copy_mock, exists_mock):
+    exists_mock.return_value = True
+    properties = MagicMock()
+    unpack_jce_policy_mock.return_value = 0
+    get_ambari_properties_mock.return_value = properties
+    conf_file = 'etc/ambari-server/conf/ambari.properties'
+    search_file_mock.return_value = conf_file
+    path_split_mock.return_value = ['/path/to', 'JCEPolicy.zip']
+    args = ['setup-jce', '/path/to/JCEPolicy.zip']
+    setup_jce_policy(args)
+    shutil_copy_mock.assert_called_with(args[1], configDefaults.SERVER_RESOURCES_DIR)
+    self.assertTrue(unpack_jce_policy_mock.called)
+    self.assertTrue(get_ambari_properties_mock.called)
+    self.assertTrue(properties.store.called)
+    path_split_mock.return_value = [configDefaults.SERVER_RESOURCES_DIR, 'JCEPolicy.zip']
+    shutil_copy_mock.reset_mock()
+    setup_jce_policy(args)
+    self.assertFalse(shutil_copy_mock.called)
+    self.assertTrue(unpack_jce_policy_mock.called)
+    self.assertTrue(get_ambari_properties_mock.called)
+    self.assertTrue(properties.store.called)
+    path_split_mock.return_value = ['/path/to', 'JCEPolicy.zip']
+    exists_mock.return_value = False
+    try:
+        setup_jce_policy(args)
+    except FatalException:
+        self.assertTrue(True)
+    exists_mock.return_value = True
+    shutil_copy_mock.reset_mock()
+    shutil_copy_mock.side_effect = FatalException(1, 'Error trying to copy the file.')
+    try:
+        setup_jce_policy(args)
+    except FatalException:
+        self.assertTrue(True)
+    properties.store.side_effect = Exception('Invalid file.')
+    try:
+        setup_jce_policy(args)
+    except Exception:
+        self.assertTrue(True)
+    properties.reset_mock()
+    unpack_jce_policy_mock.side_effect = FatalException(1, 'Can not install JCE policy')
+    try:
+        setup_jce_policy(args)
+    except FatalException:
+        self.assertTrue(True)
