@@ -1,0 +1,22 @@
+{
+  Collection<HostRoleCommandEntity> tasks=stage.getHostRoleCommands();
+  HostRoleStatus currentStatus=CalculatedStatus.statusFromTaskEntities(tasks,stage.isSkippable()).getStatus();
+  if (!isValidManualTransition(currentStatus,desiredStatus)) {
+    throw new IllegalArgumentException("Can not transition a stage from " + currentStatus + " to "+ desiredStatus);
+  }
+  if (desiredStatus == HostRoleStatus.ABORTED) {
+    controller.getActionManager().cancelRequest(stage.getRequestId(),"User aborted.");
+  }
+ else {
+    for (    HostRoleCommandEntity hostRoleCommand : tasks) {
+      HostRoleStatus hostRoleStatus=hostRoleCommand.getStatus();
+      if (hostRoleStatus.equals(currentStatus)) {
+        hostRoleCommand.setStatus(desiredStatus);
+        if (desiredStatus == HostRoleStatus.PENDING) {
+          hostRoleCommand.setStartTime(-1L);
+        }
+        hostRoleCommandDAO.merge(hostRoleCommand);
+      }
+    }
+  }
+}
