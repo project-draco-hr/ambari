@@ -1,0 +1,46 @@
+{
+  Capture<ArtifactEntity> deleteEntityCapture=new Capture<ArtifactEntity>();
+  Capture<ArtifactEntity> deleteEntityCapture2=new Capture<ArtifactEntity>();
+  TreeMap<String,String> foreignKeys=new TreeMap<String,String>();
+  foreignKeys.put("cluster","500");
+  List<ArtifactEntity> entities=new ArrayList<ArtifactEntity>();
+  entities.add(entity);
+  entities.add(entity2);
+  Map<String,Object> artifact_data=Collections.<String,Object>singletonMap("foo","bar");
+  Map<String,Object> artifact_data2=Collections.<String,Object>singletonMap("foo2","bar2");
+  Map<String,String> responseForeignKeys=new HashMap<String,String>();
+  responseForeignKeys.put("cluster","500");
+  expect(controller.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getCluster("test-cluster")).andReturn(cluster).anyTimes();
+  expect(clusters.getClusterById(500L)).andReturn(cluster).anyTimes();
+  expect(cluster.getClusterId()).andReturn(500L).anyTimes();
+  expect(cluster.getClusterName()).andReturn("test-cluster").anyTimes();
+  expect(dao.findByForeignKeys(eq(foreignKeys))).andReturn(entities).anyTimes();
+  expect(entity.getArtifactName()).andReturn("test-artifact").anyTimes();
+  expect(entity.getForeignKeys()).andReturn(responseForeignKeys).anyTimes();
+  expect(entity.getArtifactData()).andReturn(artifact_data).anyTimes();
+  expect(entity2.getArtifactName()).andReturn("test-artifact2").anyTimes();
+  expect(entity2.getForeignKeys()).andReturn(responseForeignKeys).anyTimes();
+  expect(entity2.getArtifactData()).andReturn(artifact_data2).anyTimes();
+  dao.remove(capture(deleteEntityCapture));
+  dao.remove(capture(deleteEntityCapture2));
+  replay(dao,em,controller,request,clusters,cluster,entity,entity2);
+  PredicateBuilder pb=new PredicateBuilder();
+  Predicate predicate=pb.begin().property("Artifacts/cluster_name").equals("test-cluster").end().toPredicate();
+  RequestStatus response=resourceProvider.deleteResources(predicate);
+  ArtifactEntity deleteEntity=deleteEntityCapture.getValue();
+  ArtifactEntity deleteEntity2=deleteEntityCapture2.getValue();
+  if (deleteEntity.getArtifactName().equals("test-artifact")) {
+    assertEquals("test-artifact2",deleteEntity2.getArtifactName());
+  }
+ else   if (deleteEntity.getArtifactName().equals("test-artifact2")) {
+    assertEquals("test-artifact",deleteEntity2.getArtifactName());
+  }
+ else {
+    fail("Unexpected artifact name: " + deleteEntity.getArtifactName());
+  }
+  assertEquals(foreignKeys,deleteEntity.getForeignKeys());
+  assertEquals(foreignKeys,deleteEntity2.getForeignKeys());
+  assertEquals(RequestStatus.Status.Complete,response.getStatus());
+  verify(dao,em,controller,request,clusters,cluster,entity,entity2);
+}
