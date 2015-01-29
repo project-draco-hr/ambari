@@ -1,0 +1,19 @@
+@patch('time.sleep')
+@patch('urllib2.urlopen')
+def test_post_rolling_restart(self, urlopen_mock, time_mock):
+    journalnode_jmx_file = os.path.join(RMFTestCase._getStackTestsFolder(), self.UPGRADE_STACK_VERSION, 'configs', 'journalnode-upgrade-jmx.json')
+    namenode_jmx_file = os.path.join(RMFTestCase._getStackTestsFolder(), self.UPGRADE_STACK_VERSION, 'configs', 'journalnode-upgrade-namenode-jmx.json')
+    journalnode_jmx = open(journalnode_jmx_file, 'r').read()
+    namenode_jmx = open(namenode_jmx_file, 'r').read()
+    url_stream_mock = MagicMock()
+    url_stream_mock.read.side_effect = [namenode_jmx, journalnode_jmx, journalnode_jmx, journalnode_jmx]
+    urlopen_mock.return_value = url_stream_mock
+    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/journalnode.py'), classname='JournalNode', command='post_rolling_restart', config_file='journalnode-upgrade.json', hdp_stack_version=self.UPGRADE_STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES)
+    urlopen_mock.assert_called
+    urlopen_mock.assert_called_with('http://c6403.ambari.apache.org:8480/jmx')
+    url_stream_mock.reset_mock()
+    url_stream_mock.read.side_effect = [namenode_jmx, journalnode_jmx, journalnode_jmx, journalnode_jmx]
+    urlopen_mock.return_value = url_stream_mock
+    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/journalnode.py'), classname='JournalNode', command='post_rolling_restart', config_file='journalnode-upgrade-hdfs-secure.json', hdp_stack_version=self.UPGRADE_STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES)
+    urlopen_mock.assert_called
+    urlopen_mock.assert_called_with('https://c6403.ambari.apache.org:8481/jmx')
