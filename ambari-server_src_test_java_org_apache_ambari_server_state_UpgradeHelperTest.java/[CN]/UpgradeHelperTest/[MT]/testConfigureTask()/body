@@ -1,0 +1,39 @@
+{
+  Map<String,UpgradePack> upgrades=ambariMetaInfo.getUpgradePacks("HDP","2.1.1");
+  assertTrue(upgrades.containsKey("upgrade_test"));
+  UpgradePack upgrade=upgrades.get("upgrade_test");
+  assertNotNull(upgrade);
+  Cluster cluster=makeCluster();
+  UpgradeContext context=new UpgradeContext(m_masterHostResolver,UPGRADE_VERSION,Direction.UPGRADE);
+  List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgrade,context);
+  assertEquals(6,groups.size());
+  UpgradeGroupHolder hiveGroup=groups.get(4);
+  assertEquals("HIVE",hiveGroup.name);
+  ConfigureTask configureTask=(ConfigureTask)hiveGroup.items.get(1).getTasks().get(0).getTasks().get(0);
+  Map<String,String> configProperties=configureTask.getConfigurationProperties(cluster);
+  assertFalse(configProperties.isEmpty());
+  assertEquals(configProperties.get(ConfigureTask.PARAMETER_CONFIG_TYPE),"hive-site");
+  assertEquals(configProperties.get(ConfigureTask.PARAMETER_KEY),"hive.server2.thrift.port");
+  assertEquals(configProperties.get(ConfigureTask.PARAMETER_VALUE),"10010");
+  Map<String,String> hiveConfigs=new HashMap<String,String>();
+  hiveConfigs.put("hive.server2.transport.mode","http");
+  hiveConfigs.put("hive.server2.thrift.port","10001");
+  ConfigurationRequest configurationRequest=new ConfigurationRequest();
+  configurationRequest.setClusterName(cluster.getClusterName());
+  configurationRequest.setType("hive-site");
+  configurationRequest.setVersionTag("version2");
+  configurationRequest.setProperties(hiveConfigs);
+  final ClusterRequest clusterRequest=new ClusterRequest(cluster.getClusterId(),cluster.getClusterName(),cluster.getDesiredStackVersion().getStackVersion(),null);
+  clusterRequest.setDesiredConfig(Collections.singletonList(configurationRequest));
+  m_managementController.updateClusters(new HashSet<ClusterRequest>(){
+{
+      add(clusterRequest);
+    }
+  }
+,null);
+  configProperties=configureTask.getConfigurationProperties(cluster);
+  assertFalse(configProperties.isEmpty());
+  assertEquals(configProperties.get(ConfigureTask.PARAMETER_CONFIG_TYPE),"hive-site");
+  assertEquals(configProperties.get(ConfigureTask.PARAMETER_KEY),"hive.server2.http.port");
+  assertEquals(configProperties.get(ConfigureTask.PARAMETER_VALUE),"10011");
+}

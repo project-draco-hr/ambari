@@ -21,6 +21,7 @@
   c.addService(serviceFactory.createNew(c,"HDFS"));
   c.addService(serviceFactory.createNew(c,"YARN"));
   c.addService(serviceFactory.createNew(c,"ZOOKEEPER"));
+  c.addService(serviceFactory.createNew(c,"HIVE"));
   Service s=c.getService("HDFS");
   ServiceComponent sc=s.addServiceComponent("NAMENODE");
   sc.addServiceComponentHost("h1");
@@ -39,6 +40,25 @@
   sc=s.addServiceComponent("NODEMANAGER");
   sc.addServiceComponentHost("h1");
   sc.addServiceComponentHost("h3");
+  s=c.getService("HIVE");
+  sc=s.addServiceComponent("HIVE_SERVER");
+  sc.addServiceComponentHost("h2");
+  Map<String,String> hiveConfigs=new HashMap<String,String>();
+  hiveConfigs.put("hive.server2.transport.mode","binary");
+  hiveConfigs.put("hive.server2.thrift.port","10001");
+  ConfigurationRequest configurationRequest=new ConfigurationRequest();
+  configurationRequest.setClusterName(clusterName);
+  configurationRequest.setType("hive-site");
+  configurationRequest.setVersionTag("version1");
+  configurationRequest.setProperties(hiveConfigs);
+  final ClusterRequest clusterRequest=new ClusterRequest(c.getClusterId(),clusterName,c.getDesiredStackVersion().getStackVersion(),null);
+  clusterRequest.setDesiredConfig(Collections.singletonList(configurationRequest));
+  m_managementController.updateClusters(new HashSet<ClusterRequest>(){
+{
+      add(clusterRequest);
+    }
+  }
+,null);
   HostsType type=new HostsType();
   type.hosts=new HashSet<String>(Arrays.asList("h1","h2","h3"));
   expect(m_masterHostResolver.getMasterAndHosts("ZOOKEEPER","ZOOKEEPER_SERVER")).andReturn(type).anyTimes();
@@ -56,6 +76,7 @@
   type=new HostsType();
   type.hosts=new HashSet<String>(Arrays.asList("h1","h3"));
   expect(m_masterHostResolver.getMasterAndHosts("YARN","NODEMANAGER")).andReturn(type).anyTimes();
+  expect(m_masterHostResolver.getMasterAndHosts("HIVE","HIVE_SERVER")).andReturn(type).anyTimes();
   expect(m_masterHostResolver.getCluster()).andReturn(c).anyTimes();
   replay(m_masterHostResolver);
   return c;
