@@ -1,0 +1,35 @@
+{
+  Map<String,UpgradePack> upgrades=ambariMetaInfo.getUpgradePacks("foo","bar");
+  assertTrue(upgrades.isEmpty());
+  upgrades=ambariMetaInfo.getUpgradePacks("HDP","2.1.1");
+  assertTrue(upgrades.containsKey("upgrade_test"));
+  UpgradePack upgrade=upgrades.get("upgrade_test");
+  assertNotNull(upgrade);
+  Cluster cluster=makeCluster(false);
+  Clusters clusters=injector.getInstance(Clusters.class);
+  Host h4=clusters.getHost("h4");
+  h4.setState(HostState.HEARTBEAT_LOST);
+  h4.persist();
+  List<ServiceComponentHost> schs=cluster.getServiceComponentHosts("h4");
+  assertEquals(1,schs.size());
+  assertEquals(HostState.HEARTBEAT_LOST,schs.get(0).getHostState());
+  UpgradeContext context=new UpgradeContext(m_masterHostResolver,UPGRADE_VERSION,Direction.UPGRADE);
+  List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgrade,context);
+  assertEquals(6,groups.size());
+  assertEquals("PRE_CLUSTER",groups.get(0).name);
+  assertEquals("ZOOKEEPER",groups.get(1).name);
+  assertEquals("CORE_MASTER",groups.get(2).name);
+  assertEquals("CORE_SLAVES",groups.get(3).name);
+  UpgradeGroupHolder postGroup=groups.get(5);
+  assertEquals("POST_CLUSTER",postGroup.name);
+  assertEquals("Finalize Upgrade",postGroup.title);
+  assertEquals(4,postGroup.items.size());
+  assertEquals("Check Unhealthy Hosts",postGroup.items.get(0).getText());
+  assertEquals("Confirm Finalize",postGroup.items.get(1).getText());
+  assertEquals("Execute HDFS Finalize",postGroup.items.get(2).getText());
+  assertEquals("Save Cluster State",postGroup.items.get(3).getText());
+  assertEquals(StageWrapper.Type.SERVER_SIDE_ACTION,postGroup.items.get(3).getType());
+  assertEquals(6,groups.get(1).items.size());
+  assertEquals(8,groups.get(2).items.size());
+  assertEquals(7,groups.get(3).items.size());
+}
