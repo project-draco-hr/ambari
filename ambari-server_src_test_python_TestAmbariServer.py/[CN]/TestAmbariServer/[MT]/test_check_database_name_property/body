@@ -1,7 +1,8 @@
 @not_for_platform(PLATFORM_WINDOWS)
+@patch('ambari_server.serverConfiguration.write_property')
 @patch('ambari_server.serverConfiguration.get_ambari_properties')
 @patch('ambari_server.serverConfiguration.get_ambari_version')
-def test_check_database_name_property(self, get_ambari_version_mock, get_ambari_properties_mock):
+def test_check_database_name_property(self, get_ambari_version_mock, get_ambari_properties_mock, write_property_mock):
     parser = OptionParser()
     parser.add_option('--database', default=None, help='Database to use embedded|oracle|mysql|postgres', dest='dbms')
     args = parser.parse_args()
@@ -18,4 +19,13 @@ def test_check_database_name_property(self, get_ambari_version_mock, get_ambari_
         result = check_database_name_property()
     except FatalException:
         self.fail('Setup should be successful')
-    pass
+    dbname = 'ambari'
+    database = 'ambari'
+    persistence = 'local'
+    get_ambari_properties_mock.reset_mock()
+    get_ambari_properties_mock.return_value = {JDBC_DATABASE_NAME_PROPERTY: dbname, JDBC_DATABASE_PROPERTY: database, PERSISTENCE_TYPE_PROPERTY: persistence, }
+    try:
+        result = check_database_name_property(upgrade=True)
+    except FatalException:
+        self.fail('Setup should be successful')
+    self.assertTrue(write_property_mock.called)
