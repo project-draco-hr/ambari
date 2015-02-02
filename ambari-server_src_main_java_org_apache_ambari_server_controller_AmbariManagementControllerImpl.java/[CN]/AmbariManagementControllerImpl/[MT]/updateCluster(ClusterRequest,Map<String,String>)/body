@@ -24,7 +24,35 @@
     }
     cluster.setClusterName(request.getClusterName());
   }
-  if (null != request.getDesiredConfig()) {
+  boolean isConfigurationCreationNeeded=false;
+  if (request.getDesiredConfig() != null) {
+    for (    ConfigurationRequest desiredConfig : request.getDesiredConfig()) {
+      Map<String,String> requestConfigProperties=desiredConfig.getProperties();
+      Config clusterConfig=cluster.getDesiredConfigByType(desiredConfig.getType());
+      Map<String,String> clusterConfigProperties=null;
+      if (clusterConfig != null) {
+        clusterConfigProperties=clusterConfig.getProperties();
+      }
+ else {
+        isConfigurationCreationNeeded=true;
+      }
+      if (requestConfigProperties != null && clusterConfigProperties != null) {
+        if (requestConfigProperties.size() != clusterConfigProperties.size()) {
+          isConfigurationCreationNeeded=true;
+          break;
+        }
+ else {
+          for (          Entry<String,String> property : requestConfigProperties.entrySet()) {
+            if (!property.getValue().equals(clusterConfigProperties.get(property.getKey()))) {
+              isConfigurationCreationNeeded=true;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  if (isConfigurationCreationNeeded) {
     Set<Config> configs=new HashSet<Config>();
     String note=null;
     for (    ConfigurationRequest cr : request.getDesiredConfig()) {
