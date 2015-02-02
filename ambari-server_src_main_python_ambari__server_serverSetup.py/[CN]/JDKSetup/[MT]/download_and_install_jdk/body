@@ -1,11 +1,5 @@
-def download_and_install_jdk(self, args):
-    global IS_CUSTOM_JDK
-    properties = get_ambari_properties()
-    if (properties == (-1)):
-        err = 'Error getting ambari properties'
-        raise FatalException((-1), err)
+def download_and_install_jdk(self, args, properties):
     conf_file = properties.fileName
-    ok = False
     jcePolicyWarn = 'JCE Policy files are required for configuring Kerberos security. If you plan to use Kerberos,please make sure JCE Unlimited Strength Jurisdiction Policy Files are valid on all hosts.'
     if args.java_home:
         if (not validate_jdk(args.java_home)):
@@ -17,9 +11,9 @@ def download_and_install_jdk(self, args):
         properties.process_pair(JAVA_HOME_PROPERTY, args.java_home)
         properties.removeOldProp(JDK_NAME_PROPERTY)
         properties.removeOldProp(JCE_NAME_PROPERTY)
-        update_properties(properties)
         self._ensure_java_home_env_var_is_set(args.java_home)
-        return 0
+        self.jdk_index = self.custom_jdk_number
+        return
     java_home_var = get_JAVA_HOME()
     if get_silent():
         if (not java_home_var):
@@ -28,21 +22,22 @@ def download_and_install_jdk(self, args):
                 properties.process_pair(JAVA_HOME_PROPERTY, args.java_home)
                 properties.removeOldProp(JDK_NAME_PROPERTY)
                 properties.removeOldProp(JCE_NAME_PROPERTY)
-                update_properties(properties)
                 self._ensure_java_home_env_var_is_set(args.java_home)
-                return 0
+                self.jdk_index = self.custom_jdk_number
+                return
             else:
                 pass
     if java_home_var:
         change_jdk = get_YN_input('Do you want to change Oracle JDK [y/n] (n)? ', False)
         if (not change_jdk):
             self._ensure_java_home_env_var_is_set(java_home_var)
-            return 0
+            self.jdk_index = self.custom_jdk_number
+            return
     jdk_num = str((self.jdk_index + 1))
-    (jdks, jdk_choice_prompt, jdk_valid_choices, custom_jdk_number) = self._populate_jdk_configs(properties, jdk_num)
+    (self.jdks, jdk_choice_prompt, jdk_valid_choices, self.custom_jdk_number) = self._populate_jdk_configs(properties, jdk_num)
     jdk_num = get_validated_string_input(jdk_choice_prompt, jdk_num, jdk_valid_choices, 'Invalid number.', False)
-    if (jdk_num == str(custom_jdk_number)):
-        IS_CUSTOM_JDK = True
+    self.jdk_index = (int(jdk_num) - 1)
+    if (self.jdk_index == self.custom_jdk_number):
         print_warning_msg('JDK must be installed on all hosts and JAVA_HOME must be valid on all hosts.')
         print_warning_msg(jcePolicyWarn)
         args.java_home = get_validated_string_input('Path to JAVA_HOME: ', None, None, None, False, False)
@@ -53,11 +48,9 @@ def download_and_install_jdk(self, args):
         properties.process_pair(JAVA_HOME_PROPERTY, args.java_home)
         properties.removeOldProp(JDK_NAME_PROPERTY)
         properties.removeOldProp(JCE_NAME_PROPERTY)
-        update_properties(properties)
         self._ensure_java_home_env_var_is_set(args.java_home)
-        return 0
-    self.jdk_index = (int(jdk_num) - 1)
-    jdk_cfg = jdks[self.jdk_index]
+        return
+    jdk_cfg = self.jdks[self.jdk_index]
     try:
         resources_dir = properties[RESOURCES_DIR_PROPERTY]
     except KeyError as e:
@@ -100,13 +93,4 @@ def download_and_install_jdk(self, args):
             raise FatalException(1, err)
     properties.process_pair(JDK_NAME_PROPERTY, jdk_cfg.dest_file)
     properties.process_pair(JAVA_HOME_PROPERTY, java_home_dir)
-    try:
-        self._download_jce_policy(jdk_cfg, resources_dir, properties)
-    except FatalException as e:
-        print 'JCE Policy files are required for secure HDP setup. Please ensure  all hosts have the JCE unlimited strength policy 6, files.'
-        print_error_msg('Failed to download JCE policy files:')
-        if (e.reason is not None):
-            print_error_msg('\nREASON: {0}'.format(e.reason))
-    update_properties(properties)
     self._ensure_java_home_env_var_is_set(java_home_dir)
-    return 0
