@@ -1,0 +1,66 @@
+{
+  Cluster cluster=ctx.getCluster();
+  MasterHostResolver mhr=ctx.getResolver();
+  String version=ctx.getVersion();
+  String result=source;
+  List<String> tokens=new ArrayList<String>(5);
+  Matcher matcher=PLACEHOLDER_REGEX.matcher(source);
+  while (matcher.find()) {
+    tokens.add(matcher.group(1));
+  }
+  for (  String token : tokens) {
+    String value=null;
+    Placeholder p=Placeholder.find(token);
+switch (p) {
+case HOST_ALL:
+{
+        if (null != service && null != component) {
+          HostsType hostsType=mhr.getMasterAndHosts(service,component);
+          if (null != hostsType) {
+            value=StringUtils.join(hostsType.hosts,", ");
+          }
+        }
+        break;
+      }
+case HOST_MASTER:
+{
+      if (null != service && null != component) {
+        HostsType hostsType=mhr.getMasterAndHosts(service,component);
+        if (null != hostsType) {
+          value=hostsType.master;
+        }
+      }
+      break;
+    }
+case VERSION:
+  value=version;
+break;
+case DIRECTION_VERB:
+case DIRECTION_VERB_PROPER:
+value=ctx.getDirection().getVerb(p == Placeholder.DIRECTION_VERB_PROPER);
+break;
+case DIRECTION_PAST:
+case DIRECTION_PAST_PROPER:
+value=ctx.getDirection().getPast(p == Placeholder.DIRECTION_PAST_PROPER);
+break;
+case DIRECTION_PLURAL:
+case DIRECTION_PLURAL_PROPER:
+value=ctx.getDirection().getPlural(p == Placeholder.DIRECTION_PLURAL_PROPER);
+break;
+case DIRECTION_TEXT:
+case DIRECTION_TEXT_PROPER:
+value=ctx.getDirection().getText(p == Placeholder.DIRECTION_TEXT_PROPER);
+break;
+case UNHEALTHY_HOSTS:
+value=StringUtils.join(ctx.getUnhealthy().keySet(),", ");
+break;
+default :
+value=m_configHelper.get().getPlaceholderValueFromDesiredConfigurations(cluster,token);
+break;
+}
+if (null != value) {
+result=result.replace(token,value);
+}
+}
+return result;
+}
