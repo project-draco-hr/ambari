@@ -1,19 +1,19 @@
 def format_namenode(force=None):
     import params
-    old_mark_dir = params.namenode_formatted_old_mark_dir
-    mark_dir = params.namenode_formatted_mark_dir
+    old_mark_dir = params.namenode_formatted_old_mark_dirs
+    mark_dir = params.namenode_formatted_mark_dirs
     dfs_name_dir = params.dfs_name_dir
     hdfs_user = params.hdfs_user
     hadoop_conf_dir = params.hadoop_conf_dir
     if (not params.dfs_ha_enabled):
         if force:
             ExecuteHadoop('namenode -format', kinit_override=True, bin_dir=params.hadoop_bin_dir, conf_dir=hadoop_conf_dir)
-        else:
-            File(format('{tmp_dir}/checkForFormat.sh'), content=StaticFile('checkForFormat.sh'), mode=493)
-            Execute(format('{tmp_dir}/checkForFormat.sh {hdfs_user} {hadoop_conf_dir} {hadoop_bin_dir} {old_mark_dir} {mark_dir} {dfs_name_dir}'), not_if=format('test -d {old_mark_dir} || test -d {mark_dir}'), path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin')
-            Directory(mark_dir, recursive=True)
+        elif (not is_namenode_formatted(params)):
+            Execute(format('sudo su {hdfs_user} - -s /bin/bash -c "export PATH=$PATH:{hadoop_bin_dir} ; yes Y | hdfs --config {hadoop_conf_dir} namenode -format"'), path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin')
+            for m_dir in mark_dir:
+                Directory(m_dir, recursive=True)
     elif (params.dfs_ha_namenode_active is not None):
         if (params.hostname == params.dfs_ha_namenode_active):
-            File(format('{tmp_dir}/checkForFormat.sh'), content=StaticFile('checkForFormat.sh'), mode=493)
-            Execute(format('{tmp_dir}/checkForFormat.sh {hdfs_user} {hadoop_conf_dir} {hadoop_bin_dir} {old_mark_dir} {mark_dir} {dfs_name_dir}'), not_if=format('test -d {old_mark_dir} || test -d {mark_dir}'), path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin')
-            Directory(mark_dir, recursive=True)
+            Execute(format('sudo su {hdfs_user} - -s /bin/bash -c "export PATH=$PATH:{hadoop_bin_dir} ; yes Y | hdfs --config {hadoop_conf_dir} namenode -format"'), path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin')
+            for m_dir in mark_dir:
+                Directory(m_dir, recursive=True)

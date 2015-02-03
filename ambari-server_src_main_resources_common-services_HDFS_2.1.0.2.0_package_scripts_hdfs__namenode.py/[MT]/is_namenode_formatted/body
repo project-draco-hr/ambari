@@ -1,0 +1,33 @@
+def is_namenode_formatted(params):
+    old_mark_dirs = params.namenode_formatted_old_mark_dirs
+    mark_dirs = params.namenode_formatted_mark_dirs
+    nn_name_dirs = params.dfs_name_dir.split(',')
+    marked = False
+    for mark_dir in mark_dirs:
+        if os.path.isdir(mark_dir):
+            marked = True
+            print format('{mark_dir} exists. Namenode DFS already formatted')
+    if marked:
+        for mark_dir in mark_dirs:
+            Directory(mark_dir, recursive=True)
+        return marked
+    for old_mark_dir in old_mark_dirs:
+        if os.path.isdir(old_mark_dir):
+            for mark_dir in mark_dirs:
+                Execute(format('sudo cp -ar {old_mark_dir} {mark_dir}'), path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin')
+                marked = True
+            Execute(format('sudo rm -rf {old_mark_dir}'), path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin')
+        elif os.path.isfile(old_mark_dir):
+            for mark_dir in mark_dirs:
+                Execute(format('sudo mkdir -p ${mark_dir}'), path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin')
+            Execute(format('sudo rm -f {old_mark_dir}'), path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin')
+            marked = True
+    for name_dir in nn_name_dirs:
+        try:
+            Execute(format('sudo ls {name_dir} | wc -l  | grep -q ^0$'), path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin')
+            marked = False
+        except Exception:
+            marked = True
+            print format('ERROR: Namenode directory(s) is non empty. Will not format the namenode. List of non-empty namenode dirs {nn_name_dirs}')
+            break
+    return marked
