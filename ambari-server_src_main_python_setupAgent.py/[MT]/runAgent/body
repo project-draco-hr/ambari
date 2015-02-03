@@ -4,15 +4,18 @@ def runAgent(passPhrase, expected_hostname, user_run_as, verbose):
     if verbose:
         vo = ' -v'
     cmd = ("su - %1s -c '/usr/sbin/ambari-agent restart --expected-hostname=%2s %3s'" % (user_run_as, expected_hostname, vo))
-    agent_retcode = subprocess.call(cmd, shell=True)
+    log = ''
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    p.communicate()
+    agent_retcode = p.returncode
     for i in range(3):
         time.sleep(1)
         ret = execOsCommand(['tail', '-20', '/var/log/ambari-agent/ambari-agent.log'])
-        if ((not (ret is None)) and (0 == ret['exitstatus'])):
+        if (0 == ret['exitstatus']):
             try:
                 log = ret['log']
             except Exception:
                 log = 'Log not found'
             print log
-            return agent_retcode
-    return agent_retcode
+            break
+    return {'exitstatus': agent_retcode, 'log': log, }

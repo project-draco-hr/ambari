@@ -1,44 +1,47 @@
 @patch.object(setup_agent, 'execOsCommand')
 @patch('os.environ')
-@patch('subprocess.call')
+@patch('subprocess.Popen')
 @patch('time.sleep')
-def test_runAgent(self, sleep_mock, call_mock, environ_mock, execOsCommand_mock):
+def test_runAgent(self, sleep_mock, popen_mock, environ_mock, execOsCommand_mock):
     expected_hostname = 'test.hst'
     passphrase = 'passphrase'
-    call_mock.return_value = 0
+    agent_status = MagicMock()
+    agent_status.returncode = 0
+    popen_mock.return_value = agent_status
     execOsCommand_mock.return_value = {'log': 'log', 'exitstatus': 0, }
     ret = setup_agent.runAgent(passphrase, expected_hostname, 'root', False)
-    cmdStr = str(call_mock.call_args_list[0][0])
+    cmdStr = str(popen_mock.call_args_list[0][0])
     self.assertTrue((expected_hostname in cmdStr))
     self.assertFalse(('-v' in cmdStr))
-    self.assertEqual(ret, 0)
+    self.assertEqual(ret['exitstatus'], 0)
     self.assertTrue(sleep_mock.called)
     self.assertEqual(execOsCommand_mock.call_count, 1)
     execOsCommand_mock.reset_mock()
-    call_mock.reset_mock()
+    popen_mock.reset_mock()
     sleep_mock.reset_mock()
     ret = setup_agent.runAgent(passphrase, expected_hostname, 'root', True)
     self.assertTrue((expected_hostname in cmdStr))
-    cmdStr = str(call_mock.call_args_list[0][0])
+    cmdStr = str(popen_mock.call_args_list[0][0])
     self.assertTrue(('-v' in cmdStr))
-    self.assertEqual(ret, 0)
+    self.assertEqual(ret['exitstatus'], 0)
     self.assertTrue(sleep_mock.called)
     self.assertEqual(execOsCommand_mock.call_count, 1)
     execOsCommand_mock.reset_mock()
-    call_mock.reset_mock()
+    popen_mock.reset_mock()
     sleep_mock.reset_mock()
-    execOsCommand_mock.return_value = None
+    execOsCommand_mock.return_value = {'log': 'log', 'exitstatus': 1, }
     ret = setup_agent.runAgent(passphrase, expected_hostname, 'root', False)
-    cmdStr = str(call_mock.call_args_list[0][0])
+    cmdStr = str(popen_mock.call_args_list[0][0])
     self.assertTrue((expected_hostname in cmdStr))
-    self.assertEqual(ret, 0)
+    self.assertEqual(ret['exitstatus'], 0)
     self.assertEqual(execOsCommand_mock.call_count, 3)
     execOsCommand_mock.reset_mock()
-    call_mock.reset_mock()
-    call_mock.return_value = 2
+    popen_mock.reset_mock()
+    agent_status.returncode = 2
     execOsCommand_mock.return_value = {'log': 'log', 'exitstatus': 2, }
     ret = setup_agent.runAgent(passphrase, expected_hostname, 'root', False)
-    cmdStr = str(call_mock.call_args_list[0][0])
+    cmdStr = str(popen_mock.call_args_list[0][0])
     self.assertTrue((expected_hostname in cmdStr))
-    self.assertEqual(ret, 2)
+    self.assertEqual(ret['exitstatus'], 2)
     execOsCommand_mock.reset_mock()
+    pass
