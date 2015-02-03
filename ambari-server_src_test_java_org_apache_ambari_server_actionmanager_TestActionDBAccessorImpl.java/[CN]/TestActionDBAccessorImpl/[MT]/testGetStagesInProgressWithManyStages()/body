@@ -1,0 +1,31 @@
+{
+  populateActionDBMultipleStages(3,db,hostName,requestId,stageId);
+  populateActionDBMultipleStages(3,db,hostName,requestId + 1,stageId + 3);
+  populateActionDBMultipleStages(3,db,hostName,requestId + 2,stageId + 3);
+  int commandsInProgressCount=db.getCommandsInProgressCount();
+  List<Stage> stages=db.getStagesInProgress();
+  assertEquals(18,commandsInProgressCount);
+  assertEquals(9,stages.size());
+  long lastRequestId=Integer.MIN_VALUE;
+  for (  Stage stage : stages) {
+    assertTrue(stage.getRequestId() >= lastRequestId);
+    lastRequestId=stage.getRequestId();
+  }
+  db.abortOperation(requestId);
+  commandsInProgressCount=db.getCommandsInProgressCount();
+  stages=db.getStagesInProgress();
+  assertEquals(12,commandsInProgressCount);
+  assertEquals(6,stages.size());
+  stages.get(0).setHostRoleStatus(hostName,Role.HBASE_MASTER.toString(),HostRoleStatus.COMPLETED);
+  db.hostRoleScheduled(stages.get(0),hostName,Role.HBASE_MASTER.toString());
+  commandsInProgressCount=db.getCommandsInProgressCount();
+  stages=db.getStagesInProgress();
+  assertEquals(11,commandsInProgressCount);
+  assertEquals(6,stages.size());
+  stages.get(0).setHostRoleStatus(hostName,Role.HBASE_REGIONSERVER.toString(),HostRoleStatus.COMPLETED);
+  db.hostRoleScheduled(stages.get(0),hostName,Role.HBASE_REGIONSERVER.toString());
+  commandsInProgressCount=db.getCommandsInProgressCount();
+  stages=db.getStagesInProgress();
+  assertEquals(10,commandsInProgressCount);
+  assertEquals(5,stages.size());
+}
