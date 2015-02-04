@@ -1,0 +1,25 @@
+{
+  Map<String,UpgradePack> upgrades=ambariMetaInfo.getUpgradePacks("HDP","2.1.1");
+  assertTrue(upgrades.containsKey("upgrade_test"));
+  UpgradePack upgrade=upgrades.get("upgrade_test");
+  assertNotNull(upgrade);
+  makeCluster();
+  UpgradeContext context=new UpgradeContext(m_masterHostResolver,UPGRADE_VERSION,Direction.UPGRADE);
+  List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgrade,context);
+  assertEquals(6,groups.size());
+  UpgradeGroupHolder mastersGroup=groups.get(2);
+  assertEquals("CORE_MASTER",mastersGroup.name);
+  List<String> orderedNameNodes=new LinkedList<String>();
+  for (  StageWrapper sw : mastersGroup.items) {
+    if (sw.getType().equals(StageWrapper.Type.RESTART)) {
+      for (      TaskWrapper tw : sw.getTasks()) {
+        for (        String hostName : tw.getHosts()) {
+          orderedNameNodes.add(hostName);
+        }
+      }
+    }
+  }
+  assertEquals(2,orderedNameNodes.size());
+  assertEquals("h2",orderedNameNodes.get(0));
+  assertEquals("h1",orderedNameNodes.get(1));
+}
