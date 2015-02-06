@@ -1,3 +1,31 @@
 {
-  throw new SystemException("Cannot update Upgrades");
+  Set<Map<String,Object>> requestMaps=request.getProperties();
+  if (requestMaps.size() > 1) {
+    throw new SystemException("Can only update one upgrade per request.");
+  }
+  final Map<String,Object> propertyMap=requestMaps.iterator().next();
+  String requestId=(String)propertyMap.get(UPGRADE_REQUEST_ID);
+  if (null == requestId) {
+    throw new IllegalArgumentException(String.format("%s is required",UPGRADE_REQUEST_ID));
+  }
+  String requestStatus=(String)propertyMap.get(UPGRADE_REQUEST_STATUS);
+  if (null == requestStatus) {
+    throw new IllegalArgumentException(String.format("%s is required",UPGRADE_REQUEST_STATUS));
+  }
+  HostRoleStatus status=HostRoleStatus.valueOf(requestStatus);
+  if (status != HostRoleStatus.ABORTED) {
+    throw new IllegalArgumentException(String.format("Cannot set status %s, only %s is allowed",status,HostRoleStatus.ABORTED));
+  }
+  String reason=(String)propertyMap.get(UPGRADE_ABORT_REASON);
+  if (null == reason) {
+    reason=String.format(DEFAULT_REASON_TEMPLATE,requestId);
+  }
+  ActionManager actionManager=getManagementController().getActionManager();
+  List<org.apache.ambari.server.actionmanager.Request> requests=actionManager.getRequests(Collections.singletonList(Long.valueOf(requestId)));
+  org.apache.ambari.server.actionmanager.Request internalRequest=requests.get(0);
+  HostRoleStatus internalStatus=CalculatedStatus.statusFromStages(internalRequest.getStages()).getStatus();
+  if (!internalStatus.isCompletedState()) {
+    actionManager.cancelRequest(internalRequest.getRequestId(),reason);
+  }
+  return getRequestStatus(null);
 }
