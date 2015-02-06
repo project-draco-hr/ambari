@@ -1,6 +1,5 @@
-def setup_ranger_hbase(env):
+def setup_ranger_hbase():
     import params
-    env.set_params(params)
     if params.has_ranger_admin:
         environment = {'no_proxy': format('{params.ambari_server_hostname}'), }
         Execute(('curl', '-kf', '-x', '', '--retry', '10', params.driver_curl_source, '-o', params.downloaded_custom_connector), not_if=format('test -f {params.downloaded_custom_connector}'), path=['/bin', '/usr/bin/'], environment=environment, sudo=True)
@@ -19,24 +18,22 @@ def setup_ranger_hbase(env):
         if (match is None):
             raise Fail('Failed to get extracted version')
         file_path = (('/usr/hdp/' + hdp_version) + '/ranger-hbase-plugin/install.properties')
-        ranger_hbase_dict = ranger_hbase_properties(params)
-        hbase_repo_data = hbase_repo_properties(params)
+        ranger_hbase_dict = ranger_hbase_properties()
+        hbase_repo_data = hbase_repo_properties()
         write_properties_to_file(file_path, ranger_hbase_dict)
         if params.enable_ranger_hbase:
             cmd = format('cd /usr/hdp/{hdp_version}/ranger-hbase-plugin/ && sh enable-hbase-plugin.sh')
             ranger_adm_obj = Rangeradmin(url=ranger_hbase_dict['POLICY_MGR_URL'])
             (response_code, response_recieved) = ranger_adm_obj.check_ranger_login_urllib2((ranger_hbase_dict['POLICY_MGR_URL'] + '/login.jsp'), 'test:test')
             if ((response_code is not None) and (response_code == 200)):
-                ambari_ranger_admin = params.config['configurations']['ranger-env']['ranger_admin_username']
-                ambari_ranger_password = params.config['configurations']['ranger-env']['ranger_admin_password']
-                (ambari_ranger_admin, ambari_ranger_password) = ranger_adm_obj.create_ambari_admin_user(ambari_ranger_admin, ambari_ranger_password, 'admin:admin')
+                (ambari_ranger_admin, ambari_ranger_password) = ranger_adm_obj.create_ambari_admin_user(params.ambari_ranger_admin, params.ambari_ranger_password, params.admin_uname_password)
                 ambari_username_password_for_ranger = ((ambari_ranger_admin + ':') + ambari_ranger_password)
                 if ((ambari_ranger_admin != '') and (ambari_ranger_password != '')):
                     repo = ranger_adm_obj.get_repository_by_name_urllib2(ranger_hbase_dict['REPOSITORY_NAME'], 'hbase', 'true', ambari_username_password_for_ranger)
                     if (repo and (repo['name'] == ranger_hbase_dict['REPOSITORY_NAME'])):
                         Logger.info('Hbase Repository exist')
                     else:
-                        response = ranger_adm_obj.create_repository_urllib2(hbase_repo_data, ambari_username_password_for_ranger)
+                        response = ranger_adm_obj.create_repository_urllib2(hbase_repo_data, ambari_username_password_for_ranger, params.policy_user)
                         if (response is not None):
                             Logger.info('Hbase Repository created in Ranger admin')
                         else:

@@ -1,7 +1,6 @@
-def setup_ranger(env):
+def setup_ranger():
     import params
-    env.set_params(params)
-    if check_db_connnection(env):
+    if check_db_connnection():
         environment = {'no_proxy': format('{params.ambari_server_hostname}'), }
         Execute(('curl', '-kf', '-x', '', '--retry', '10', params.driver_curl_source, '-o', params.downloaded_custom_connector), not_if=format('test -f {params.downloaded_custom_connector}'), path=['/bin', '/usr/bin/'], environment=environment, sudo=True)
         if (not os.path.isfile(params.driver_curl_target)):
@@ -11,16 +10,20 @@ def setup_ranger(env):
             shutil.copyfile(file_path, (params.ranger_home + '/install-bk.properties'))
         else:
             raise Fail('Ranger admin install.properties file doesnot exist')
-        write_properties_to_file(file_path, params.config['configurations']['admin-properties'])
-        cmd = format('cd {ranger_home} && {ranger_home}/setup.sh')
+        write_properties_to_file(file_path, admin_properties())
+        if ((params.db_flavor.lower() == 'oracle') and params.oracle_home):
+            env_dict = {'JAVA_HOME': params.java_home, 'ORACLE_HOME': params.oracle_home, }
+        else:
+            env_dict = {'JAVA_HOME': params.java_home, }
+        cmd = format('cd {params.ranger_home} && {params.ranger_home}/setup.sh')
         try:
-            opt = Execute(cmd, environment={'JAVA_HOME': params.java_home, }, logoutput=True)
+            Execute(cmd, environment=env_dict, logoutput=True)
         except Exception as e:
             if os.path.isfile((params.ranger_home + '/install-bk.properties')):
                 os.remove(file_path)
                 os.rename((params.ranger_home + '/install-bk.properties'), file_path)
             raise Fail('Ranger installation Failed, {0}'.format(str(e)))
-        do_post_installation(env)
+        do_post_installation()
         if os.path.isfile((params.ranger_home + '/install-bk.properties')):
             os.remove(file_path)
             os.rename((params.ranger_home + '/install-bk.properties'), file_path)
