@@ -28,6 +28,25 @@
     if (hostRoleCommand.getStatus() == HostRoleStatus.QUEUED && report.getStatus().equals("IN_PROGRESS")) {
       hostRoleCommand.setStartTime(now);
     }
+    if ("KERBEROS".equalsIgnoreCase(report.getServiceName()) && "KERBEROS_CLIENT".equalsIgnoreCase(report.getRole()) && RoleCommand.CUSTOM_COMMAND.name().equalsIgnoreCase(report.getRoleCommand())&& "SET_KEYTAB".equalsIgnoreCase(report.getCustomCommand())&& RequestExecution.Status.COMPLETED.name().equalsIgnoreCase(report.getStatus())) {
+      Map<String,String> structuredOutput;
+      try {
+        structuredOutput=gson.fromJson(report.getStructuredOut(),new TypeToken<Map<String,String>>(){
+        }
+.getType());
+      }
+ catch (      JsonSyntaxException ex) {
+        structuredOutput=null;
+      }
+      if (structuredOutput != null) {
+        for (        Map.Entry<String,String> entry : structuredOutput.entrySet()) {
+          String principal=entry.getKey();
+          if (!kerberosPrincipalHostDAO.exists(principal,hostname)) {
+            kerberosPrincipalHostDAO.create(principal,hostname);
+          }
+        }
+      }
+    }
     if (RoleCommand.ACTIONEXECUTE.toString().equals(report.getRoleCommand()) || (RoleCommand.CUSTOM_COMMAND.toString().equals(report.getRoleCommand()) && !("RESTART".equals(report.getCustomCommand()) || "START".equals(report.getCustomCommand()) || "STOP".equals(report.getCustomCommand())))) {
       continue;
     }

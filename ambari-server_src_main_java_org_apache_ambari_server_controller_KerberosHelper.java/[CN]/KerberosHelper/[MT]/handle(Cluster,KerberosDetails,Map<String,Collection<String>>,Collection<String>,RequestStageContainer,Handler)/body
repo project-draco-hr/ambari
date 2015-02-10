@@ -24,53 +24,51 @@
       indexFile=new File(dataDirectory,KerberosActionDataFile.DATA_FILE_NAME);
       try {
         for (        Host host : hosts.values()) {
-          if (host.getState() == HostState.HEALTHY) {
-            String hostname=host.getHostName();
-            List<ServiceComponentHost> serviceComponentHosts=cluster.getServiceComponentHosts(hostname);
-            if ((serviceComponentHosts != null) && !serviceComponentHosts.isEmpty()) {
-              Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,hostname);
-              Map<String,String> generalProperties=new HashMap<String,String>();
-              if (configurations == null) {
-                configurations=new HashMap<String,Map<String,String>>();
-              }
-              if (kerberosDescriptorProperties != null) {
-                generalProperties.putAll(kerberosDescriptorProperties);
-              }
-              generalProperties.put("host",hostname);
-              generalProperties.put("hostname",hostname);
-              generalProperties.put("cluster_name",clusterName);
-              if (configurations.get("") == null) {
-                configurations.put("",generalProperties);
-              }
+          String hostname=host.getHostName();
+          List<ServiceComponentHost> serviceComponentHosts=cluster.getServiceComponentHosts(hostname);
+          if ((serviceComponentHosts != null) && !serviceComponentHosts.isEmpty()) {
+            Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,hostname);
+            Map<String,String> generalProperties=new HashMap<String,String>();
+            if (configurations == null) {
+              configurations=new HashMap<String,Map<String,String>>();
+            }
+            if (kerberosDescriptorProperties != null) {
+              generalProperties.putAll(kerberosDescriptorProperties);
+            }
+            generalProperties.put("host",hostname);
+            generalProperties.put("hostname",hostname);
+            generalProperties.put("cluster_name",clusterName);
+            if (configurations.get("") == null) {
+              configurations.put("",generalProperties);
+            }
  else {
-                configurations.get("").putAll(generalProperties);
-              }
-              for (              ServiceComponentHost sch : serviceComponentHosts) {
-                String serviceName=sch.getServiceName();
-                if ((serviceComponentFilter == null) || serviceComponentFilter.containsKey(serviceName)) {
-                  Collection<String> componentFilter=(serviceComponentFilter == null) ? null : serviceComponentFilter.get(serviceName);
-                  KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
-                  if (serviceDescriptor != null) {
-                    String componentName=sch.getServiceComponentName();
-                    if (((componentFilter == null) || componentFilter.contains(componentName)) && handler.shouldProcess(desiredSecurityState,sch)) {
-                      KerberosComponentDescriptor componentDescriptor=serviceDescriptor.getComponent(componentName);
-                      List<KerberosIdentityDescriptor> serviceIdentities=serviceDescriptor.getIdentities(true);
-                      if (componentDescriptor != null) {
-                        List<KerberosIdentityDescriptor> componentIdentities=componentDescriptor.getIdentities(true);
-                        int identitiesAdded=0;
-                        mergeConfigurations(kerberosConfigurations,componentDescriptor.getConfigurations(true),configurations);
-                        if (kerberosActionDataFileBuilder == null) {
-                          kerberosActionDataFileBuilder=new KerberosActionDataFileBuilder(indexFile);
-                        }
-                        identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,serviceIdentities,identityFilter,hostname,serviceName,componentName,configurations);
-                        identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,componentIdentities,identityFilter,hostname,serviceName,componentName,configurations);
-                        if (identitiesAdded > 0) {
-                          serviceComponentHostsToProcess.add(sch);
-                        }
-                        addIdentities(authToLocalBuilder,componentIdentities,identityFilter,configurations);
+              configurations.get("").putAll(generalProperties);
+            }
+            for (            ServiceComponentHost sch : serviceComponentHosts) {
+              String serviceName=sch.getServiceName();
+              if ((serviceComponentFilter == null) || serviceComponentFilter.containsKey(serviceName)) {
+                Collection<String> componentFilter=(serviceComponentFilter == null) ? null : serviceComponentFilter.get(serviceName);
+                KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
+                if (serviceDescriptor != null) {
+                  String componentName=sch.getServiceComponentName();
+                  if (((componentFilter == null) || componentFilter.contains(componentName)) && handler.shouldProcess(desiredSecurityState,sch)) {
+                    KerberosComponentDescriptor componentDescriptor=serviceDescriptor.getComponent(componentName);
+                    List<KerberosIdentityDescriptor> serviceIdentities=serviceDescriptor.getIdentities(true);
+                    if (componentDescriptor != null) {
+                      List<KerberosIdentityDescriptor> componentIdentities=componentDescriptor.getIdentities(true);
+                      int identitiesAdded=0;
+                      mergeConfigurations(kerberosConfigurations,componentDescriptor.getConfigurations(true),configurations);
+                      if (kerberosActionDataFileBuilder == null) {
+                        kerberosActionDataFileBuilder=new KerberosActionDataFileBuilder(indexFile);
                       }
-                      addIdentities(authToLocalBuilder,serviceIdentities,identityFilter,configurations);
+                      identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,serviceIdentities,identityFilter,hostname,serviceName,componentName,configurations);
+                      identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,componentIdentities,identityFilter,hostname,serviceName,componentName,configurations);
+                      if (identitiesAdded > 0) {
+                        serviceComponentHostsToProcess.add(sch);
+                      }
+                      addIdentities(authToLocalBuilder,componentIdentities,identityFilter,configurations);
                     }
+                    addIdentities(authToLocalBuilder,serviceIdentities,identityFilter,configurations);
                   }
                 }
               }
