@@ -1,0 +1,61 @@
+{
+  StringBuilder out=new StringBuilder();
+  StringBuilder err=new StringBuilder();
+  try {
+    Cluster cluster=clusters.getCluster(clusterName);
+    StackId stackId=cluster.getDesiredStackVersion();
+    out.append(String.format("Searching for current version for %s\n",clusterName));
+    ClusterVersionEntity clusterVersion=clusterVersionDAO.findByClusterAndStateCurrent(clusterName);
+    if (null == clusterVersion) {
+      throw new AmbariException("Could not find current cluster version");
+    }
+    out.append(String.format("Comparing downgrade version %s to current cluster version %s\n",version,clusterVersion.getRepositoryVersion().getVersion()));
+    if (!version.equals(clusterVersion.getRepositoryVersion().getVersion())) {
+      throw new AmbariException(String.format("Downgrade version %s is not the current cluster version of %s",version,clusterVersion.getRepositoryVersion().getVersion()));
+    }
+ else {
+      out.append(String.format("Downgrade version is the same as current.  Searching " + "for cluster versions that do not match %s\n",version));
+    }
+    Set<String> badVersions=new HashSet<String>();
+    for (    ClusterVersionEntity cve : clusterVersionDAO.findByCluster(clusterName)) {
+switch (cve.getState()) {
+case UPGRADE_FAILED:
+case UPGRADED:
+case UPGRADING:
+{
+          badVersions.add(cve.getRepositoryVersion().getVersion());
+          cve.setState(RepositoryVersionState.INSTALLED);
+          clusterVersionDAO.merge(cve);
+          break;
+        }
+default :
+      break;
+  }
+}
+out.append(String.format("Found %d other version(s) not matching downgrade: %s\n",badVersions.size(),StringUtils.join(badVersions,", ")));
+Set<String> badHosts=new HashSet<String>();
+for (String badVersion : badVersions) {
+  List<HostVersionEntity> hostVersions=hostVersionDAO.findByClusterStackAndVersion(clusterName,stackId.getStackId(),badVersion);
+  for (  HostVersionEntity hostVersion : hostVersions) {
+    badHosts.add(hostVersion.getHostName());
+    hostVersion.setState(RepositoryVersionState.INSTALLED);
+    hostVersionDAO.merge(hostVersion);
+  }
+}
+out.append(String.format("Found %d hosts not matching downgrade version: %s\n",badHosts.size(),version));
+for (String badHost : badHosts) {
+  List<HostComponentStateEntity> hostComponentStates=hostComponentStateDAO.findByHost(badHost);
+  for (  HostComponentStateEntity hostComponentState : hostComponentStates) {
+    hostComponentState.setUpgradeState(UpgradeState.NONE);
+    hostComponentStateDAO.merge(hostComponentState);
+  }
+}
+return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",out.toString(),err.toString());
+}
+ catch (Exception e) {
+StringWriter sw=new StringWriter();
+e.printStackTrace(new PrintWriter(sw));
+err.append(sw.toString());
+return createCommandReport(-1,HostRoleStatus.FAILED,"{}",out.toString(),err.toString());
+}
+}
