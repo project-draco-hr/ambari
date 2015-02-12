@@ -1,13 +1,28 @@
 {
+  Set<String> hosts=new HashSet<String>();
+  final String SECONDARY_NAMENODE="SECONDARY_NAMENODE";
   final String clusterName=request.getClusterName();
   final Cluster cluster=clustersProvider.get().getCluster(clusterName);
-  ServiceComponent serviceComponent=cluster.getService(MasterHostResolver.Service.HDFS.name()).getServiceComponent("SECONDARY_NAMENODE");
-  if (serviceComponent != null) {
-    Set<String> hosts=serviceComponent.getServiceComponentHosts().keySet();
-    if (!hosts.isEmpty()) {
-      prerequisiteCheck.getFailedOn().add(serviceComponent.getName());
-      prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
-      prerequisiteCheck.setFailReason("The SECONDARY_NAMENODE component must be deleted from host(s): " + StringUtils.join(hosts,", ") + ". Please use the REST API to delete it.");
+  try {
+    ServiceComponent serviceComponent=cluster.getService(MasterHostResolver.Service.HDFS.name()).getServiceComponent(SECONDARY_NAMENODE);
+    if (serviceComponent != null) {
+      hosts=serviceComponent.getServiceComponentHosts().keySet();
     }
+  }
+ catch (  ServiceComponentNotFoundException err) {
+    ;
+  }
+  if (hosts.isEmpty()) {
+    List<HostComponentStateEntity> allHostComponents=hostComponentStateDao.findAll();
+    for (    HostComponentStateEntity hc : allHostComponents) {
+      if (hc.getServiceName().equalsIgnoreCase(MasterHostResolver.Service.HDFS.name()) && hc.getComponentName().equalsIgnoreCase(SECONDARY_NAMENODE)) {
+        hosts.add(hc.getHostName());
+      }
+    }
+  }
+  if (!hosts.isEmpty()) {
+    prerequisiteCheck.getFailedOn().add(SECONDARY_NAMENODE);
+    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+    prerequisiteCheck.setFailReason("The SECONDARY_NAMENODE component must be deleted from host(s): " + StringUtils.join(hosts,", ") + ". Please use the REST API to delete it.");
   }
 }
