@@ -2,11 +2,15 @@ def _collect(self):
     uri_value = self._lookup_property_value(self.uri)
     if (uri_value is None):
         uri_value = self.host_name
+        logger.debug("[Alert][{0}] Setting the URI to this host since it wasn't specified".format(self.get_name()))
     uri_value_array = uri_value.split(',')
     if (len(uri_value_array) > 1):
         for item in uri_value_array:
             if (self.host_name in item):
                 uri_value = item
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug('[Alert][{0}] Extracted {1} as the host name while parsing the CSV URI {2}'.format(self.get_name(), uri_value, str(uri_value_array)))
+                break
     host = BaseAlert.get_host_from_url(uri_value)
     if (host is None):
         host = self.host_name
@@ -18,16 +22,16 @@ def _collect(self):
             return (self.RESULT_UNKNOWN, [label])
         port = self.default_port
     if logger.isEnabledFor(logging.DEBUG):
-        logger.debug('checking {0} listening on port {1}'.format(host, str(port)))
+        logger.debug('[Alert][{0}] Checking {1} on port {2}'.format(self.get_name(), host, str(port)))
     try:
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(self.critical_timeout)
-            t = time.time()
             if OSCheck.is_windows_family():
                 host = resolve_address(host)
+            start_time = time.time()
             s.connect((host, port))
-            milliseconds = (time.time() - t)
+            milliseconds = (time.time() - start_time)
             seconds = (milliseconds / 1000.0)
             if (seconds >= self.critical_timeout):
                 return (self.RESULT_CRITICAL, ['Socket Timeout', host, port])

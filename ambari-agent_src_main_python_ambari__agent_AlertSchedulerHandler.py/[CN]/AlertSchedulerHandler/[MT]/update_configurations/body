@@ -1,13 +1,16 @@
 def update_configurations(self, commands):
-    '\n    when an execution command comes in, update any necessary values.\n    status commands do not contain useful configurations\n    '
+    "\n    Checks the execution command's configurations against those stored in\n    memory. If there are differences, this will reschedule alerts. The\n    on-disk JSON file is always updated so that it reflects the correct state\n    of configurations\n    "
     for command in commands:
         clusterName = command['clusterName']
         if (not (clusterName in self.__config_maps)):
             continue
-        if ('configurations' in command):
-            configmap = command['configurations']
-            keylist = self.__config_maps[clusterName].keys()
-            vals = self.__find_config_values(configmap, keylist)
-            if (vals != self.__config_maps[clusterName]):
-                self.__config_maps[clusterName].update(vals)
-                self.__update_definition_configs()
+        if (not ('configurations' in command)):
+            continue
+        existingConfigurationKeys = self.__config_maps[clusterName].keys()
+        newConfigurations = command['configurations']
+        newConfigurationValues = self.__find_config_values(newConfigurations, existingConfigurationKeys)
+        rescheduleJobs = False
+        if (newConfigurationValues != self.__config_maps[clusterName]):
+            rescheduleJobs = True
+            self.__config_maps[clusterName].update(newConfigurationValues)
+        self.__update_definition_configs(newConfigurations, rescheduleJobs)
