@@ -1,0 +1,44 @@
+{
+  verifyCondition(condition);
+  Connection conn=getConnection();
+  PreparedStatement stmt=null;
+  ResultSet rs=null;
+  TimelineMetrics metrics=new TimelineMetrics();
+  try {
+    if (condition.isPointInTime()) {
+      stmt=getLatestAggregateMetricRecords(condition,conn,metrics);
+    }
+ else {
+      stmt=PhoenixTransactSQL.prepareGetAggregateSqlStmt(conn,condition);
+      rs=stmt.executeQuery();
+      while (rs.next()) {
+        appendAggregateMetricFromResultSet(metrics,condition,metricFunctions,rs);
+      }
+    }
+  }
+  finally {
+    if (rs != null) {
+      try {
+        rs.close();
+      }
+ catch (      SQLException e) {
+      }
+    }
+    if (stmt != null) {
+      try {
+        stmt.close();
+      }
+ catch (      SQLException e) {
+      }
+    }
+    if (conn != null) {
+      try {
+        conn.close();
+      }
+ catch (      SQLException sql) {
+      }
+    }
+  }
+  LOG.info("Aggregate records size: " + metrics.getMetrics().size());
+  return metrics;
+}
