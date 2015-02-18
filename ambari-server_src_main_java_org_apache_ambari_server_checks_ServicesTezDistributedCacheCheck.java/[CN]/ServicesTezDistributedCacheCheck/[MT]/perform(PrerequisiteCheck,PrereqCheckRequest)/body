@@ -1,0 +1,28 @@
+{
+  final String clusterName=request.getClusterName();
+  final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+  final String configType="tez-site";
+  final Map<String,DesiredConfig> desiredConfigs=cluster.getDesiredConfigs();
+  final DesiredConfig desiredConfig=desiredConfigs.get(configType);
+  final Config config=cluster.getConfig(configType,desiredConfig.getTag());
+  final String libUris=config.getProperties().get("tez.lib.uris");
+  final String useHadoopLibs=config.getProperties().get("tez.use.cluster.hadoop-libs");
+  if (libUris == null || useHadoopLibs == null) {
+    prerequisiteCheck.getFailedOn().add("TEZ");
+    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+    prerequisiteCheck.setFailReason("tez-site should have properties tez.lib.uris and tez.use.cluster.hadoop-libs");
+    return;
+  }
+  if (!libUris.startsWith("hdfs:/") || !libUris.contains("tar.gz")) {
+    prerequisiteCheck.getFailedOn().add("TEZ");
+    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+    prerequisiteCheck.setFailReason("tez-site property tez.lib.uris should point to hdfs:/... url with .tar.gz archive of TEZ binaries");
+    return;
+  }
+  if (Boolean.parseBoolean(useHadoopLibs)) {
+    prerequisiteCheck.getFailedOn().add("TEZ");
+    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+    prerequisiteCheck.setFailReason("tez-site property tez.use.cluster.hadoop-libs should be set to false");
+    return;
+  }
+}
