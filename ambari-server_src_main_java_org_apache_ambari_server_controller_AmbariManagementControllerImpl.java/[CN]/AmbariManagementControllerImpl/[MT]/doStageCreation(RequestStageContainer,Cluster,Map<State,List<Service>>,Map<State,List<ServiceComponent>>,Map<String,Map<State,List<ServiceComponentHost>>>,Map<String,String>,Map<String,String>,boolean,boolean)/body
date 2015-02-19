@@ -1,6 +1,7 @@
 {
   if ((changedServices == null || changedServices.isEmpty()) && (changedComps == null || changedComps.isEmpty()) && (changedScHosts == null || changedScHosts.isEmpty())) {
-    return null;
+    LOG.debug("Created 0 stages");
+    return requestStages;
   }
   Set<String> smokeTestServices=getServicesForSmokeTests(cluster,changedServices,changedScHosts,runSmokeTest);
   if (reconfigureClients) {
@@ -11,7 +12,8 @@
     Map<String,Set<String>> clusterHostInfo=StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster);
     String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
     String HostParamsJson=StageUtils.getGson().toJson(customCommandExecutionHelper.createDefaultHostParams(cluster));
-    Stage stage=createNewStage(requestStages.getLastStageId() + 1,cluster,requestStages.getId(),requestProperties.get(REQUEST_CONTEXT_PROPERTY),clusterHostInfoJson,"{}",HostParamsJson);
+    Stage stage=createNewStage(requestStages.getLastStageId(),cluster,requestStages.getId(),requestProperties.get(REQUEST_CONTEXT_PROPERTY),clusterHostInfoJson,"{}",HostParamsJson);
+    Collection<ServiceComponentHost> componentsToEnableKerberos=new ArrayList<ServiceComponentHost>();
     String jobtrackerHost=getJobTrackerHost(cluster);
     for (    String compName : changedScHosts.keySet()) {
       for (      State newState : changedScHosts.get(compName).keySet()) {
@@ -28,6 +30,15 @@ case INSTALLED:
             if (oldSchState == State.INIT || oldSchState == State.UNINSTALLED || oldSchState == State.INSTALLED || oldSchState == State.INSTALLING || oldSchState == State.UNKNOWN || oldSchState == State.INSTALL_FAILED) {
               roleCommand=RoleCommand.INSTALL;
               event=new ServiceComponentHostInstallEvent(scHost.getServiceComponentName(),scHost.getHostName(),nowTimestamp,scHost.getDesiredStackVersion().getStackId());
+              if ((oldSchState == State.INIT) && kerberosHelper.isClusterKerberosEnabled(cluster)) {
+                try {
+                  kerberosHelper.configureService(cluster,scHost);
+                }
+ catch (                KerberosInvalidConfigurationException e) {
+                  throw new AmbariException(e.getMessage(),e);
+                }
+                componentsToEnableKerberos.add(scHost);
+              }
             }
  else             if (oldSchState == State.STARTED || oldSchState == State.STOPPING) {
               roleCommand=RoleCommand.STOP;
@@ -125,7 +136,25 @@ customCommandExecutionHelper.addServiceCheckAction(stage,clientHost,smokeTestRol
 RoleCommandOrder rco=getRoleCommandOrder(cluster);
 RoleGraph rg=new RoleGraph(rco);
 rg.build(stage);
-return rg.getStages();
+requestStages.addStages(rg.getStages());
+if (!componentsToEnableKerberos.isEmpty()) {
+Map<String,Collection<String>> serviceFilter=new HashMap<String,Collection<String>>();
+for (ServiceComponentHost scHost : componentsToEnableKerberos) {
+String serviceName=scHost.getServiceName();
+Collection<String> componentFilter=serviceFilter.get(serviceName);
+if (componentFilter == null) {
+componentFilter=new HashSet<String>();
+serviceFilter.put(serviceName,componentFilter);
 }
-return null;
+componentFilter.add(scHost.getServiceComponentName());
+}
+kerberosHelper.ensureIdentities(cluster,serviceFilter,null,requestStages);
+}
+List<Stage> stages=requestStages.getStages();
+LOG.debug("Created {} stages",((stages != null) ? stages.size() : 0));
+}
+ else {
+LOG.debug("Created 0 stages");
+}
+return requestStages;
 }

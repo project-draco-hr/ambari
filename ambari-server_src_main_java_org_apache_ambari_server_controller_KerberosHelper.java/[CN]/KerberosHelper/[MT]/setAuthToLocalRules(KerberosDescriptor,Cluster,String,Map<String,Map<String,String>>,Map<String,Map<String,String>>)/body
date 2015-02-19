@@ -1,0 +1,58 @@
+{
+  if (kerberosDescriptor != null) {
+    Set<String> authToLocalProperties;
+    Set<String> authToLocalPropertiesToSet=new HashSet<String>();
+    AuthToLocalBuilder authToLocalBuilder=new AuthToLocalBuilder();
+    addIdentities(authToLocalBuilder,kerberosDescriptor.getIdentities(),null,existingConfigurations);
+    authToLocalProperties=kerberosDescriptor.getAuthToLocalProperties();
+    if (authToLocalProperties != null) {
+      authToLocalPropertiesToSet.addAll(authToLocalProperties);
+    }
+    Map<String,KerberosServiceDescriptor> services=kerberosDescriptor.getServices();
+    if (services != null) {
+      Map<String,Service> installedServices=cluster.getServices();
+      for (      KerberosServiceDescriptor service : services.values()) {
+        if (installedServices.containsKey(service.getName())) {
+          addIdentities(authToLocalBuilder,service.getIdentities(true),null,existingConfigurations);
+          authToLocalProperties=service.getAuthToLocalProperties();
+          if (authToLocalProperties != null) {
+            authToLocalPropertiesToSet.addAll(authToLocalProperties);
+          }
+          Map<String,KerberosComponentDescriptor> components=service.getComponents();
+          if (components != null) {
+            for (            KerberosComponentDescriptor component : components.values()) {
+              addIdentities(authToLocalBuilder,component.getIdentities(true),null,existingConfigurations);
+              authToLocalProperties=component.getAuthToLocalProperties();
+              if (authToLocalProperties != null) {
+                authToLocalPropertiesToSet.addAll(authToLocalProperties);
+              }
+            }
+          }
+        }
+      }
+    }
+    if (!authToLocalPropertiesToSet.isEmpty()) {
+      for (      String authToLocalProperty : authToLocalPropertiesToSet) {
+        String[] parts=authToLocalProperty.split("/");
+        if (parts.length == 2) {
+          AuthToLocalBuilder builder=authToLocalBuilder.copy();
+          String configType=parts[0];
+          String propertyName=parts[1];
+          Map<String,String> existingConfiguration=existingConfigurations.get(configType);
+          if (existingConfiguration != null) {
+            builder.addRules(existingConfiguration.get(propertyName));
+          }
+          Map<String,String> kerberosConfiguration=kerberosConfigurations.get(configType);
+          if (kerberosConfiguration != null) {
+            builder.addRules(kerberosConfiguration.get(propertyName));
+          }
+ else {
+            kerberosConfiguration=new HashMap<String,String>();
+            kerberosConfigurations.put(configType,kerberosConfiguration);
+          }
+          kerberosConfiguration.put(propertyName,builder.generate(realm));
+        }
+      }
+    }
+  }
+}
