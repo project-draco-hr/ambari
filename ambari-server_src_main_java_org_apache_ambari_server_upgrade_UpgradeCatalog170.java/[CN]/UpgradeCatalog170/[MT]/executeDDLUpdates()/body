@@ -1,6 +1,6 @@
 {
+  DatabaseType databaseType=configuration.getDatabaseType();
   renameSequenceValueColumnName();
-  String dbType=getDbType();
   List<DBColumnInfo> columns;
   columns=new ArrayList<DBColumnInfo>();
   columns.add(new DBColumnInfo("group_id",Integer.class,null,null,false));
@@ -52,7 +52,7 @@
   columns.add(new DBColumnInfo("principal_id",Long.class,null,null,false));
   dbAccessor.createTable("adminprivilege",columns,"privilege_id");
   dbAccessor.insertRow("adminprivilege",new String[]{"privilege_id","permission_id","resource_id","principal_id"},new String[]{"1","1","1","1"},true);
-  if (dbType.equals(Configuration.ORACLE_DB_NAME)) {
+  if (databaseType == DatabaseType.ORACLE) {
     dbAccessor.executeQuery("ALTER TABLE clusterconfig ADD config_attributes CLOB NULL");
   }
  else {
@@ -88,45 +88,45 @@
     dbAccessor.dropTable("serviceconfigmapping");
   }
   dbAccessor.dropConstraint("confgroupclusterconfigmapping","FK_confg");
-  if (Configuration.ORACLE_DB_NAME.equals(dbType) || Configuration.MYSQL_DB_NAME.equals(dbType) || Configuration.DERBY_DB_NAME.equals(dbType)) {
+  if (databaseType == DatabaseType.ORACLE || databaseType == DatabaseType.MYSQL || databaseType == DatabaseType.DERBY) {
     dbAccessor.executeQuery("ALTER TABLE clusterconfig DROP PRIMARY KEY",true);
   }
- else   if (Configuration.POSTGRES_DB_NAME.equals(dbType)) {
+ else   if (databaseType == DatabaseType.POSTGRES) {
     dbAccessor.executeQuery("ALTER TABLE clusterconfig DROP CONSTRAINT clusterconfig_pkey CASCADE",true);
   }
   dbAccessor.addColumn("clusterconfig",new DBColumnInfo("config_id",Long.class,null,null,true));
-  if (Configuration.ORACLE_DB_NAME.equals(dbType)) {
+  if (databaseType == DatabaseType.ORACLE) {
     if (dbAccessor.tableHasData("clusterconfig")) {
       dbAccessor.executeQuery("CREATE SEQUENCE TEMP_SEQ " + "  START WITH 1 " + "  MAXVALUE 999999999999999999999999999 "+ "  MINVALUE 1 "+ "  NOCYCLE "+ "  NOCACHE "+ "  NOORDER");
       dbAccessor.executeQuery("UPDATE clusterconfig SET config_id = TEMP_SEQ.NEXTVAL");
       dbAccessor.dropSequence("TEMP_SEQ");
     }
   }
- else   if (Configuration.MYSQL_DB_NAME.equals(dbType)) {
+ else   if (databaseType == DatabaseType.MYSQL) {
     if (dbAccessor.tableHasData("clusterconfig")) {
       dbAccessor.executeQuery("UPDATE clusterconfig " + "SET config_id = (SELECT @a := @a + 1 FROM (SELECT @a := 1) s)");
     }
   }
- else   if (Configuration.POSTGRES_DB_NAME.equals(dbType)) {
+ else   if (databaseType == DatabaseType.POSTGRES) {
     if (dbAccessor.tableHasData("clusterconfig")) {
       dbAccessor.executeQuery("CREATE SEQUENCE temp_seq START WITH 1");
       dbAccessor.executeQuery("UPDATE clusterconfig SET config_id = nextval('temp_seq')");
       dbAccessor.dropSequence("temp_seq");
     }
   }
-  if (dbType.equals(Configuration.ORACLE_DB_NAME) || dbType.equals(Configuration.MYSQL_DB_NAME)) {
+  if (databaseType == DatabaseType.ORACLE || databaseType == DatabaseType.MYSQL) {
     dbAccessor.executeQuery("ALTER TABLE viewinstance MODIFY description VARCHAR(2048)");
     dbAccessor.executeQuery("ALTER TABLE viewparameter MODIFY description VARCHAR(2048)");
   }
- else   if (Configuration.POSTGRES_DB_NAME.equals(dbType)) {
+ else   if (databaseType == DatabaseType.POSTGRES) {
     dbAccessor.executeQuery("ALTER TABLE viewinstance ALTER COLUMN description TYPE VARCHAR(2048)");
     dbAccessor.executeQuery("ALTER TABLE viewparameter ALTER COLUMN description TYPE VARCHAR(2048)");
   }
- else   if (dbType.equals(Configuration.DERBY_DB_NAME)) {
+ else   if (databaseType == DatabaseType.DERBY) {
     dbAccessor.executeQuery("ALTER TABLE viewinstance ALTER COLUMN description SET DATA TYPE VARCHAR(2048)");
     dbAccessor.executeQuery("ALTER TABLE viewparameter ALTER COLUMN description SET DATA TYPE VARCHAR(2048)");
   }
-  if (Configuration.DERBY_DB_NAME.equals(dbType)) {
+  if (databaseType == DatabaseType.DERBY) {
     dbAccessor.executeQuery("ALTER TABLE clusterconfig ALTER COLUMN config_id DEFAULT 0");
     dbAccessor.executeQuery("ALTER TABLE clusterconfig ALTER COLUMN config_id NOT NULL");
   }
@@ -136,7 +136,7 @@
   dbAccessor.setNullable("clusterconfig",new DBColumnInfo("version",Long.class,null),false);
   dbAccessor.executeQuery("ALTER TABLE clusterconfig ADD CONSTRAINT UQ_config_type_tag UNIQUE (cluster_id, type_name, version_tag)",true);
   dbAccessor.executeQuery("ALTER TABLE clusterconfig ADD CONSTRAINT UQ_config_type_version UNIQUE (cluster_id, type_name, version)",true);
-  if (!Configuration.ORACLE_DB_NAME.equals(dbType)) {
+  if (databaseType != DatabaseType.ORACLE) {
     dbAccessor.alterColumn("clusterconfig",new DBColumnInfo("config_data",char[].class,null,null,false));
     dbAccessor.alterColumn("blueprint_configuration",new DBColumnInfo("config_data",char[].class,null,null,false));
     dbAccessor.alterColumn("hostgroup_configuration",new DBColumnInfo("config_data",char[].class,null,null,false));

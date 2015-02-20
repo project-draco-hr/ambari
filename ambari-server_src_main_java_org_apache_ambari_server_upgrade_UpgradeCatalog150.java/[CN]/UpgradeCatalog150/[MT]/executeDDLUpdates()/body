@@ -1,6 +1,6 @@
 {
   LOG.debug("Upgrading schema...");
-  String dbType=getDbType();
+  DatabaseType databaseType=configuration.getDatabaseType();
   List<DBColumnInfo> columns=new ArrayList<DBColumnInfo>();
   columns.add(new DBColumnInfo("cluster_id",Long.class,null,null,false));
   columns.add(new DBColumnInfo("type_name",String.class,255,null,false));
@@ -133,19 +133,19 @@
   dbAccessor.addColumn("host_role_command",new DBColumnInfo("structured_out",byte[].class,null,null,true));
   dbAccessor.addColumn("host_role_command",new DBColumnInfo("command_detail",String.class,255,null,true));
   dbAccessor.addColumn("host_role_command",new DBColumnInfo("custom_command_name",String.class,255,null,true));
-  if (dbType.equals(Configuration.POSTGRES_DB_NAME)) {
+  if (databaseType == DatabaseType.POSTGRES) {
     if (dbAccessor.tableExists("hostcomponentdesiredconfigmapping")) {
       dbAccessor.executeQuery("ALTER TABLE hostcomponentdesiredconfigmapping rename to hcdesiredconfigmapping",true);
     }
     dbAccessor.executeQuery("ALTER TABLE users ALTER column user_id DROP DEFAULT",true);
     dbAccessor.executeQuery("ALTER TABLE users ALTER column ldap_user TYPE INTEGER USING CASE WHEN ldap_user=true THEN 1 ELSE 0 END",true);
   }
-  if (Configuration.ORACLE_DB_NAME.equals(dbType) || Configuration.POSTGRES_DB_NAME.equals(dbType)) {
+  if (databaseType == DatabaseType.ORACLE || databaseType == DatabaseType.POSTGRES) {
     if (dbAccessor.tableHasColumn("hosts","disks_info")) {
       dbAccessor.executeQuery("ALTER TABLE hosts DROP COLUMN disks_info",true);
     }
   }
-  if (dbType.equals(Configuration.MYSQL_DB_NAME)) {
+  if (databaseType == DatabaseType.MYSQL) {
     String dbName=configuration.getServerJDBCPostgresSchemaName();
     moveRCATableInMySQL("workflow",dbName);
     moveRCATableInMySQL("job",dbName);
@@ -164,13 +164,13 @@
   }
  else   if (!dbAccessor.tableHasData(tableName)) {
     String query=null;
-    if (dbType.equals(Configuration.POSTGRES_DB_NAME)) {
+    if (databaseType == DatabaseType.POSTGRES) {
       query=getPostgresRequestUpgradeQuery();
     }
- else     if (dbType.equals(Configuration.ORACLE_DB_NAME)) {
+ else     if (databaseType == DatabaseType.ORACLE) {
       query=getOracleRequestUpgradeQuery();
     }
- else     if (Configuration.MYSQL_DB_NAME.equals(dbType)) {
+ else     if (databaseType == DatabaseType.MYSQL) {
       query=getMysqlRequestUpgradeQuery();
     }
     if (query != null) {
@@ -180,7 +180,7 @@
  else {
     LOG.info("Table {} already filled",tableName);
   }
-  if (Configuration.POSTGRES_DB_NAME.equals(dbType) || Configuration.MYSQL_DB_NAME.equals(dbType) || Configuration.DERBY_DB_NAME.equals(dbType)) {
+  if (databaseType == DatabaseType.POSTGRES || databaseType == DatabaseType.MYSQL || databaseType == DatabaseType.DERBY) {
     dbAccessor.dropConstraint("clusterconfigmapping","FK_clusterconfigmapping_cluster_id");
     dbAccessor.dropConstraint("hostcomponentdesiredstate","FK_hostcomponentdesiredstate_host_name");
     dbAccessor.dropConstraint("hostcomponentdesiredstate","FK_hostcomponentdesiredstate_component_name");
