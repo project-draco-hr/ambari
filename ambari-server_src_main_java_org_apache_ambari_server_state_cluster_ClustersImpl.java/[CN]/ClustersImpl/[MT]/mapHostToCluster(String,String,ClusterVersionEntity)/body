@@ -1,29 +1,45 @@
 {
+  Host host=null;
+  Cluster cluster=null;
   checkLoaded();
-  w.lock();
+  r.lock();
   try {
-    Host host=getHost(hostname);
-    Cluster cluster=getCluster(clusterName);
+    host=getHost(hostname);
+    cluster=getCluster(clusterName);
     for (    Cluster c : hostClusterMap.get(hostname)) {
       if (c.getClusterName().equals(clusterName)) {
         throw new DuplicateResourceException("Attempted to create a host which already exists: clusterName=" + clusterName + ", hostName="+ hostname);
       }
     }
-    if (!isOsSupportedByClusterStack(cluster,host)) {
-      String message="Trying to map host to cluster where stack does not" + " support host's os type" + ", clusterName=" + clusterName + ", clusterStackId="+ cluster.getDesiredStackVersion().getStackId()+ ", hostname="+ hostname+ ", hostOsFamily="+ host.getOsFamily();
-      LOG.warn(message);
-      throw new AmbariException(message);
-    }
-    mapHostClusterEntities(hostname,cluster.getClusterId());
-    host.refresh();
-    cluster.refresh();
+  }
+  finally {
+    r.unlock();
+  }
+  if (!isOsSupportedByClusterStack(cluster,host)) {
+    String message="Trying to map host to cluster where stack does not" + " support host's os type" + ", clusterName=" + clusterName + ", clusterStackId="+ cluster.getDesiredStackVersion().getStackId()+ ", hostname="+ hostname+ ", hostOsFamily="+ host.getOsFamily();
+    LOG.warn(message);
+    throw new AmbariException(message);
+  }
+  long clusterId=cluster.getClusterId();
+  if (LOG.isDebugEnabled()) {
+    LOG.debug("Mapping host {} to cluster {} (id={})",hostname,clusterName,clusterId);
+  }
+  w.lock();
+  try {
+    mapHostClusterEntities(hostname,clusterId);
     hostClusterMap.get(hostname).add(cluster);
     clusterHostMap.get(clusterName).add(host);
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Mapping a host to a cluster" + ", clusterName=" + clusterName + ", clusterId="+ cluster.getClusterId()+ ", hostname="+ hostname);
-    }
   }
   finally {
     w.unlock();
+  }
+  ReadWriteLock clusterLock=cluster.getClusterGlobalLock();
+  clusterLock.writeLock().lock();
+  try {
+    host.refresh();
+    cluster.refresh();
+  }
+  finally {
+    clusterLock.writeLock().unlock();
   }
 }
