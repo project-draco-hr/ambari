@@ -1,0 +1,38 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  ConfigHelper configHelper=injector.getInstance(ConfigHelper.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (clusterMap != null) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        Config configClusterEnv=cluster.getDesiredConfigByType("cluster-env");
+        if (configClusterEnv != null) {
+          Map<String,String> properties=configClusterEnv.getProperties();
+          if (properties != null) {
+            if (!properties.containsKey("smokeuser_principal_name")) {
+              String smokeUser=properties.get("smokeuser");
+              if ((smokeUser == null) || smokeUser.isEmpty()) {
+                Set<PropertyInfo> stackProperties=configHelper.getStackProperties(cluster);
+                if (stackProperties != null) {
+                  for (                  PropertyInfo propertyInfo : stackProperties) {
+                    String filename=propertyInfo.getFilename();
+                    if ((filename != null) && "cluster-env".equals(ConfigHelper.fileNameToConfigType(filename))) {
+                      smokeUser=propertyInfo.getValue();
+                      break;
+                    }
+                  }
+                }
+                if ((smokeUser == null) || smokeUser.isEmpty()) {
+                  smokeUser="ambari-qa";
+                }
+              }
+              properties.put("smokeuser_principal_name",smokeUser);
+            }
+            configHelper.createConfigType(cluster,ambariManagementController,"cluster-env",properties,AUTHENTICATED_USER_NAME,"Upgrading to Ambari 2.0");
+          }
+        }
+      }
+    }
+  }
+}
