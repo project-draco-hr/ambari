@@ -53,6 +53,44 @@ clusterVersionDAO.merge(currentVersion);
 existingClusterVersion.setState(state);
 existingClusterVersion.setEndTime(System.currentTimeMillis());
 clusterVersionDAO.merge(existingClusterVersion);
+if (RepositoryVersionState.CURRENT == state) {
+for (HostEntity he : clusterEntity.getHostEntities()) {
+if (hostHasReportables(existingClusterVersion.getRepositoryVersion(),he)) {
+continue;
+}
+Collection<HostVersionEntity> versions=hostVersionDAO.findByHost(he.getHostName());
+if (null == versions || versions.isEmpty()) {
+HostVersionEntity hve=new HostVersionEntity();
+hve.setHostEntity(he);
+hve.setHostName(he.getHostName());
+hve.setRepositoryVersion(existingClusterVersion.getRepositoryVersion());
+hve.setState(state);
+hostVersionDAO.create(hve);
+}
+ else {
+HostVersionEntity target=null;
+for (HostVersionEntity entity : versions) {
+if (entity.getRepositoryVersion().getId().equals(existingClusterVersion.getRepositoryVersion().getId())) {
+target=entity;
+target.setState(state);
+hostVersionDAO.merge(target);
+}
+ else if (entity.getState() == state) {
+entity.setState(RepositoryVersionState.INSTALLED);
+hostVersionDAO.merge(entity);
+}
+}
+if (null == target) {
+HostVersionEntity hve=new HostVersionEntity();
+hve.setHostEntity(he);
+hve.setHostName(he.getHostName());
+hve.setRepositoryVersion(existingClusterVersion.getRepositoryVersion());
+hve.setState(state);
+hostVersionDAO.create(hve);
+}
+}
+}
+}
 }
 }
  catch (RollbackException e) {
