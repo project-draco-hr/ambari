@@ -11,6 +11,7 @@
       KerberosActionDataFileBuilder kerberosActionDataFileBuilder=null;
       Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
       Map<String,Map<String,String>> kerberosConfigurations=new HashMap<String,Map<String,String>>();
+      Set<String> hostsWithValidKerberosClient=new HashSet<String>();
       File dataDirectory;
       try {
         dataDirectory=createTemporaryDirectory();
@@ -29,11 +30,14 @@
             Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,hostname,kerberosDescriptorProperties);
             for (            ServiceComponentHost sch : serviceComponentHosts) {
               String serviceName=sch.getServiceName();
+              String componentName=sch.getServiceComponentName();
+              if (Service.Type.KERBEROS.name().equals(serviceName) && Role.KERBEROS_CLIENT.name().equals(componentName) && (sch.getState() == State.INSTALLED)) {
+                hostsWithValidKerberosClient.add(hostname);
+              }
               if ((serviceComponentFilter == null) || serviceComponentFilter.containsKey(serviceName)) {
                 Collection<String> componentFilter=(serviceComponentFilter == null) ? null : serviceComponentFilter.get(serviceName);
                 KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
                 if (serviceDescriptor != null) {
-                  String componentName=sch.getServiceComponentName();
                   int identitiesAdded=0;
                   List<KerberosIdentityDescriptor> serviceIdentities=serviceDescriptor.getIdentities(true);
                   if (kerberosActionDataFileBuilder == null) {
@@ -70,6 +74,13 @@
  catch (          IOException e) {
             LOG.warn("Failed to close the index file writer",e);
           }
+        }
+      }
+      Iterator<ServiceComponentHost> iterator=serviceComponentHostsToProcess.iterator();
+      while (iterator.hasNext()) {
+        ServiceComponentHost sch=iterator.next();
+        if (!hostsWithValidKerberosClient.contains(sch.getHostName())) {
+          iterator.remove();
         }
       }
       if (!serviceComponentHostsToProcess.isEmpty()) {
