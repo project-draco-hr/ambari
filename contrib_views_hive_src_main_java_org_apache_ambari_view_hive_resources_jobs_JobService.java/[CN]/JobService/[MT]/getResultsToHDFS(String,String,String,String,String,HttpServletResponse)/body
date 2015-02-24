@@ -1,0 +1,59 @@
+{
+  try {
+    final JobController jobController=getResourceManager().readController(Integer.valueOf(jobId));
+    String backgroundJobId="csv" + String.valueOf(jobController.getJob().getId());
+    if (commence != null && commence.equals("true")) {
+      if (targetFile == null)       throw new MisconfigurationFormattedException("targetFile should not be empty");
+      BackgroundJobController.getInstance(context).startJob(String.valueOf(backgroundJobId),new Runnable(){
+        @Override public void run(){
+          try {
+            Cursor resultSet=jobController.getResults();
+            resultSet.selectColumns(requestedColumns);
+            FSDataOutputStream stream=HdfsApi.getInstance(context).create(targetFile,true);
+            Writer writer=new BufferedWriter(new OutputStreamWriter(stream));
+            CSVPrinter csvPrinter=new CSVPrinter(writer,CSVFormat.DEFAULT);
+            try {
+              while (resultSet.hasNext() && !Thread.currentThread().isInterrupted()) {
+                csvPrinter.printRecord(resultSet.next().getRow());
+                writer.flush();
+              }
+            }
+  finally {
+              writer.close();
+            }
+            stream.close();
+          }
+ catch (          IOException e) {
+            throw new ServiceFormattedException("Could not write CSV to HDFS for job#" + jobController.getJob().getId(),e);
+          }
+catch (          InterruptedException e) {
+            throw new ServiceFormattedException("Could not write CSV to HDFS for job#" + jobController.getJob().getId(),e);
+          }
+catch (          ItemNotFound itemNotFound) {
+            throw new NotFoundFormattedException("Job results are expired",itemNotFound);
+          }
+        }
+      }
+);
+    }
+    if (stop != null && stop.equals("true")) {
+      BackgroundJobController.getInstance(context).interrupt(backgroundJobId);
+    }
+    JSONObject object=new JSONObject();
+    object.put("stopped",BackgroundJobController.getInstance(context).isInterrupted(backgroundJobId));
+    object.put("jobId",jobController.getJob().getId());
+    object.put("backgroundJobId",backgroundJobId);
+    object.put("operationType","CSV2HDFS");
+    object.put("status",BackgroundJobController.getInstance(context).state(backgroundJobId).toString());
+    return Response.ok(object).build();
+  }
+ catch (  WebApplicationException ex) {
+    throw ex;
+  }
+catch (  ItemNotFound itemNotFound) {
+    throw new NotFoundFormattedException(itemNotFound.getMessage(),itemNotFound);
+  }
+catch (  Exception ex) {
+    throw new ServiceFormattedException(ex.getMessage(),ex);
+  }
+}

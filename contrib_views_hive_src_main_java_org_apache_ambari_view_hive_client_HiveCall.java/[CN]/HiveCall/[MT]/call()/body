@@ -1,0 +1,29 @@
+{
+  T result=null;
+  boolean needRetry=false;
+  int attempts=0;
+  do {
+    if (needRetry) {
+      needRetry=false;
+      attempts+=1;
+      conn.closeConnection();
+      conn.openConnection();
+    }
+    try {
+synchronized (conn) {
+        result=body();
+      }
+    }
+ catch (    HiveClientException ex) {
+      Throwable root=ExceptionUtils.getRootCause(ex);
+      if (attempts < 2 && root instanceof TTransportException) {
+        needRetry=true;
+        LOG.error("Retry call because of Transport Exception: " + root.toString());
+        continue;
+      }
+      throw ex;
+    }
+  }
+ while (needRetry);
+  return result;
+}

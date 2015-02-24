@@ -1,0 +1,54 @@
+{
+  TTransport transport;
+  boolean assumeSubject=Utils.HiveAuthenticationParams.AUTH_KERBEROS_AUTH_TYPE_FROM_SUBJECT.equals(authParams.get(Utils.HiveAuthenticationParams.AUTH_KERBEROS_AUTH_TYPE));
+  try {
+    if (!Utils.HiveAuthenticationParams.AUTH_SIMPLE.equalsIgnoreCase(authParams.get(Utils.HiveAuthenticationParams.AUTH_TYPE))) {
+      Map<String,String> saslProps=new HashMap<String,String>();
+      SaslQOP saslQOP=SaslQOP.AUTH;
+      if (authParams.containsKey(Utils.HiveAuthenticationParams.AUTH_PRINCIPAL)) {
+        if (authParams.containsKey(Utils.HiveAuthenticationParams.AUTH_QOP)) {
+          try {
+            saslQOP=SaslQOP.fromString(authParams.get(Utils.HiveAuthenticationParams.AUTH_QOP));
+          }
+ catch (          IllegalArgumentException e) {
+            throw new HiveClientException("Invalid " + Utils.HiveAuthenticationParams.AUTH_QOP + " parameter. "+ e.getMessage(),e);
+          }
+        }
+        saslProps.put(Sasl.QOP,saslQOP.toString());
+        saslProps.put(Sasl.SERVER_AUTH,"true");
+        transport=KerberosSaslHelper.getKerberosTransport(authParams.get(Utils.HiveAuthenticationParams.AUTH_PRINCIPAL),host,HiveAuthFactory.getSocketTransport(host,port,10000),saslProps,assumeSubject);
+      }
+ else {
+        String tokenStr=getClientDelegationToken(authParams);
+        if (tokenStr != null) {
+          transport=KerberosSaslHelper.getTokenTransport(tokenStr,host,HiveAuthFactory.getSocketTransport(host,port,10000),saslProps);
+        }
+ else {
+          String userName=getAuthParamDefault(Utils.HiveAuthenticationParams.AUTH_USER,Utils.HiveAuthenticationParams.ANONYMOUS_USER);
+          String passwd=getAuthParamDefault(Utils.HiveAuthenticationParams.AUTH_PASSWD,Utils.HiveAuthenticationParams.ANONYMOUS_USER);
+          if (isSslConnection()) {
+            String sslTrustStore=authParams.get(Utils.HiveAuthenticationParams.SSL_TRUST_STORE);
+            String sslTrustStorePassword=authParams.get(Utils.HiveAuthenticationParams.SSL_TRUST_STORE_PASSWORD);
+            if (sslTrustStore == null || sslTrustStore.isEmpty()) {
+              transport=HiveAuthFactory.getSSLSocket(host,port,10000);
+            }
+ else {
+              transport=HiveAuthFactory.getSSLSocket(host,port,10000,sslTrustStore,sslTrustStorePassword);
+            }
+          }
+ else {
+            transport=HiveAuthFactory.getSocketTransport(host,port,10000);
+          }
+          transport=PlainSaslHelper.getPlainTransport(userName,passwd,transport);
+        }
+      }
+    }
+ else {
+      return HiveAuthFactory.getSocketTransport(host,port,10000);
+    }
+  }
+ catch (  SaslException e) {
+    throw new HiveClientException("Could not create secure connection to " + host + ": "+ e.getMessage(),e);
+  }
+  return transport;
+}

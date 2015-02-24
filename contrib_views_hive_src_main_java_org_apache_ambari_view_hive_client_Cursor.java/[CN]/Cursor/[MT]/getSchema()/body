@@ -1,0 +1,35 @@
+{
+  if (this.schema == null) {
+    TGetResultSetMetadataResp fetchResp=new HiveCall<TGetResultSetMetadataResp>(connection){
+      @Override public TGetResultSetMetadataResp body() throws HiveClientException {
+        TGetResultSetMetadataReq fetchReq=new TGetResultSetMetadataReq(opHandle);
+        try {
+          return client.GetResultSetMetadata(fetchReq);
+        }
+ catch (        TException e) {
+          throw new HiveClientException("Unable to fetch results metadata",e);
+        }
+      }
+    }
+.call();
+    Utils.verifySuccess(fetchResp.getStatus(),"Unable to fetch results metadata");
+    TTableSchema schema=fetchResp.getSchema();
+    List<TColumnDesc> thriftColumns=schema.getColumns();
+    ArrayList<ColumnDescription> columnDescriptions=new ArrayList<ColumnDescription>(thriftColumns.size());
+    for (    TColumnDesc columnDesc : thriftColumns) {
+      String name=columnDesc.getColumnName();
+      String type=TYPE_NAMES.get(columnDesc.getTypeDesc().getTypes().get(0).getPrimitiveEntry().getType());
+      int position=columnDesc.getPosition();
+      columnDescriptions.add(ColumnDescriptionShort.createShortColumnDescription(name,type,position));
+    }
+    if (selectedColumns.size() == 0)     this.schema=columnDescriptions;
+ else {
+      ArrayList<ColumnDescription> selectedColumnsSchema=new ArrayList<ColumnDescription>();
+      for (      Integer selectedIndex : selectedColumns) {
+        selectedColumnsSchema.add(columnDescriptions.get(selectedIndex));
+      }
+      this.schema=selectedColumnsSchema;
+    }
+  }
+  return this.schema;
+}
