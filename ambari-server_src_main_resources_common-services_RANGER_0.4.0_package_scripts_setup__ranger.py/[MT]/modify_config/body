@@ -5,7 +5,9 @@ def modify_config(filepath, variable, setting):
     S = str(setting)
     if (' ' in S):
         S = ('%s' % S)
-    for line in fileinput.input(filepath, inplace=1):
+    tmp_filepath = format('{tmp_dir}/temporary_ranger_config.properties')
+    File(tmp_filepath, content=StaticFile(filepath))
+    for line in fileinput.input(tmp_filepath, inplace=1):
         if ((not line.lstrip(' ').startswith('#')) and ('=' in line)):
             _infile_var = str(line.split('=')[0].rstrip(' '))
             _infile_set = str(line.split('=')[1].lstrip(' ').rstrip())
@@ -14,11 +16,11 @@ def modify_config(filepath, variable, setting):
                 if (_infile_set.lstrip(' ') == S):
                     already_set = True
                 else:
-                    line = ('%s=%s\n' % (V, S))
+                    line = format('{V}={S}\n')
         sys.stdout.write(line)
+    File(filepath, content=StaticFile(tmp_filepath))
     if (not var_found):
-        with open(filepath, 'a') as f:
-            f.write(('%s=%s\n' % (V, S)))
+        Execute((format("echo '{V}={S}\\n' | ") + as_sudo(['tee', '-a', filepath])))
     elif (already_set == True):
         pass
     else:
