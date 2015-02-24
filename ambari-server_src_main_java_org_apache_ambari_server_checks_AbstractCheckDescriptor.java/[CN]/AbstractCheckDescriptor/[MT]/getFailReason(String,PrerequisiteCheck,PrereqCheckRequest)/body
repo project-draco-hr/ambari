@@ -1,0 +1,32 @@
+{
+  String fail=m_description.getFail(key);
+  if (-1 != fail.indexOf("{{version}}") && null != request.getRepositoryVersion()) {
+    fail=fail.replace("{{version}}",request.getRepositoryVersion());
+  }
+  if (-1 != fail.indexOf("{{fails}}")) {
+    List<String> names=prerequisiteCheck.getFailedOn();
+    if (getDescription().getType() == PrereqCheckType.SERVICE) {
+      Clusters clusters=clustersProvider.get();
+      AmbariMetaInfo metaInfo=ambariMetaInfo.get();
+      try {
+        Cluster c=clusters.getCluster(request.getClusterName());
+        Map<String,ServiceInfo> services=metaInfo.getServices(c.getDesiredStackVersion().getStackName(),c.getDesiredStackVersion().getStackVersion());
+        List<String> displays=new ArrayList<String>();
+        for (        String name : names) {
+          if (services.containsKey(name)) {
+            displays.add(services.get(name).getDisplayName());
+          }
+ else {
+            displays.add(name);
+          }
+        }
+        names=displays;
+      }
+ catch (      Exception e) {
+        LOG.warn("Could not load service info map");
+      }
+      fail=fail.replace("{{fails}}",formatEntityList(names));
+    }
+  }
+  return fail;
+}
