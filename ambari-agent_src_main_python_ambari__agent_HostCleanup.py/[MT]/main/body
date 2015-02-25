@@ -3,10 +3,12 @@ def main():
     config = h.resolve_ambari_config()
     hostCheckFileDir = config.get('agent', 'prefix')
     hostCheckFilePath = os.path.join(hostCheckFileDir, HOST_CHECK_FILE_NAME)
+    hostCheckCustomActionsFilePath = os.path.join(hostCheckFileDir, HOST_CHECK_CUSTOM_ACTIONS_FILE)
+    hostCheckFilesPaths = ((hostCheckFilePath + ',') + hostCheckCustomActionsFilePath)
     hostCheckResultPath = os.path.join(hostCheckFileDir, OUTPUT_FILE_NAME)
     parser = optparse.OptionParser()
     parser.add_option('-v', '--verbose', dest='verbose', action='store_false', default=False, help='output verbosity.')
-    parser.add_option('-f', '--file', dest='inputfile', default=hostCheckFilePath, help='host check result file to read.', metavar='FILE')
+    parser.add_option('-f', '--file', dest='inputfiles', default=hostCheckFilesPaths, help='host check result file to read.', metavar='FILE')
     parser.add_option('-o', '--out', dest='outputfile', default=hostCheckResultPath, help='log file to store results.', metavar='FILE')
     parser.add_option('-k', '--skip', dest='skip', help=('(packages|users|directories|repositories|processes|alternatives).' + ' Use , as separator.'))
     parser.add_option('-s', '--silent', action='store_true', dest='silent', default=False, help='Silently accepts default prompt values')
@@ -34,8 +36,13 @@ def main():
             if (not delete_users):
                 print 'Exiting. Use option --skip="users" to skip deleting users'
                 sys.exit(1)
-    hostcheckfile = options.inputfile
-    propMap = h.read_host_check_file(hostcheckfile)
+    (hostcheckfile, hostcheckfileca) = options.inputfiles.split(',')
+    with open(TMP_HOST_CHECK_FILE_NAME, 'wb') as tmp_f:
+        with open(hostcheckfile, 'rb') as f1:
+            with open(hostcheckfileca, 'rb') as f2:
+                tmp_f.write(f1.read())
+                tmp_f.write(f2.read())
+    propMap = h.read_host_check_file(TMP_HOST_CHECK_FILE_NAME)
     if propMap:
         h.do_cleanup(propMap)
     if os.path.exists(config.get('agent', 'cache_dir')):
