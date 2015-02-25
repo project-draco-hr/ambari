@@ -1,39 +1,34 @@
 {
-  List<HostVersionEntity> hostVersions=hostVersionDAO.findByHost(host.getHostName());
-  boolean currentHostVerExists=false;
-  if (hostVersions != null && !hostVersions.isEmpty()) {
-    for (    HostVersionEntity hostVersion : hostVersions) {
-      if (hostVersion.getState() == RepositoryVersionState.CURRENT) {
-        currentHostVerExists=true;
-      }
-    }
-  }
   HostVersionEntity hostVersionEntity=hostVersionDAO.findByClusterStackVersionAndHost(getClusterName(),repositoryVersion.getStack(),repositoryVersion.getVersion(),host.getHostName());
-  if (hostVersionEntity == null) {
-    hostVersionEntity=new HostVersionEntity(host.getHostName(),repositoryVersion,RepositoryVersionState.UPGRADING);
-    hostVersionEntity.setHostEntity(host);
-    hostVersionDAO.create(hostVersionEntity);
-  }
-  final ServiceComponentHostSummary hostSummary=new ServiceComponentHostSummary(ambariMetaInfo,host,stack);
-  final Collection<HostComponentStateEntity> versionedHostComponents=hostSummary.getVersionedHostComponents();
-  List<ClusterVersionEntity> clusterVersions=clusterVersionDAO.findByCluster(getClusterName());
-  if (clusterVersions.size() <= 1 || !currentHostVerExists) {
-    if (hostSummary.haveAllComponentsFinishedAdvertisingVersion() && (hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING) || hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADED)) && ServiceComponentHostSummary.haveSameVersion(versionedHostComponents)) {
-      hostVersionEntity.setState(RepositoryVersionState.CURRENT);
-      hostVersionDAO.merge(hostVersionEntity);
+  hostTransitionStateWriteLock.lock();
+  try {
+    if (hostVersionEntity == null) {
+      hostVersionEntity=new HostVersionEntity(host.getHostName(),repositoryVersion,RepositoryVersionState.UPGRADING);
+      hostVersionEntity.setHostEntity(host);
+      hostVersionDAO.create(hostVersionEntity);
     }
-  }
- else {
-    if (hostSummary.haveAllComponentsFinishedAdvertisingVersion() && hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING) && ServiceComponentHostSummary.haveSameVersion(versionedHostComponents)) {
-      hostVersionEntity.setState(RepositoryVersionState.UPGRADED);
-      hostVersionDAO.merge(hostVersionEntity);
-    }
- else {
-      if (hostVersionEntity.getState().equals(RepositoryVersionState.INSTALLED) && versionedHostComponents.size() > 0 && !ServiceComponentHostSummary.haveSameVersion(versionedHostComponents)) {
-        hostVersionEntity.setState(RepositoryVersionState.UPGRADING);
+    HostVersionEntity currentVersionEntity=hostVersionDAO.findByHostAndStateCurrent(getClusterName(),host.getHostName());
+    boolean isCurrentPresent=(currentVersionEntity != null);
+    final ServiceComponentHostSummary hostSummary=new ServiceComponentHostSummary(ambariMetaInfo,host,stack);
+    if (!isCurrentPresent) {
+      if (hostSummary.isUpgradeFinished() && hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING)) {
+        hostVersionEntity.setState(RepositoryVersionState.CURRENT);
         hostVersionDAO.merge(hostVersionEntity);
       }
     }
+ else {
+      if (hostSummary.isUpgradeInProgress(currentVersionEntity.getRepositoryVersion().getVersion()) && hostVersionEntity.getState().equals(RepositoryVersionState.INSTALLED)) {
+        hostVersionEntity.setState(RepositoryVersionState.UPGRADING);
+        hostVersionDAO.merge(hostVersionEntity);
+      }
+      if (hostSummary.isUpgradeFinished() && hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING)) {
+        hostVersionEntity.setState(RepositoryVersionState.UPGRADED);
+        hostVersionDAO.merge(hostVersionEntity);
+      }
+    }
+  }
+  finally {
+    hostTransitionStateWriteLock.unlock();
   }
   return hostVersionEntity;
 }

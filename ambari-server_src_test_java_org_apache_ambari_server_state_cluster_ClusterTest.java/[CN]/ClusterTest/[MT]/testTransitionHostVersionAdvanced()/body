@@ -1,0 +1,120 @@
+{
+  String clusterName="c1";
+  String v1="2.2.0-123";
+  StackId stackId=new StackId("HDP-2.2.0");
+  Map<String,String> hostAttributes=new HashMap<String,String>();
+  hostAttributes.put("os_family","redhat");
+  hostAttributes.put("os_release_version","5.9");
+  Cluster cluster=createClusterForRU(clusterName,stackId,hostAttributes);
+  int versionedComponentCount=0;
+  List<HostComponentStateEntity> hostComponentStates=hostComponentStateDAO.findAll();
+  for (int i=0; i < hostComponentStates.size(); i++) {
+    HostComponentStateEntity hce=hostComponentStates.get(i);
+    ComponentInfo compInfo=metaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),hce.getServiceName(),hce.getComponentName());
+    if (compInfo.isVersionAdvertised()) {
+      hce.setVersion(v1);
+      hostComponentStateDAO.merge(hce);
+      versionedComponentCount++;
+    }
+    Service svc=cluster.getService(hce.getServiceName());
+    ServiceComponent svcComp=svc.getServiceComponent(hce.getComponentName());
+    ServiceComponentHost scHost=svcComp.getServiceComponentHost(hce.getHostName());
+    scHost.recalculateHostVersionState();
+    cluster.recalculateClusterVersionState(v1);
+    Collection<ClusterVersionEntity> clusterVersions=cluster.getAllClusterVersions();
+    if (versionedComponentCount > 0) {
+      RepositoryVersionEntity repositoryVersion=repositoryVersionDAO.findByStackAndVersion(stackId.getStackId(),v1);
+      Assert.assertNotNull(repositoryVersion);
+      Assert.assertTrue(clusterVersions != null && clusterVersions.size() == 1);
+      if (versionedComponentCount == 1 && i < (hostComponentStates.size() - 1)) {
+        Assert.assertEquals(clusterVersions.iterator().next().getState(),RepositoryVersionState.UPGRADING);
+      }
+      if (i == hostComponentStates.size() - 1) {
+        Assert.assertEquals(clusterVersions.iterator().next().getState(),RepositoryVersionState.CURRENT);
+      }
+    }
+  }
+  addHost("h-4",hostAttributes);
+  clusters.mapHostToCluster("h-4",clusterName);
+  Service svc2=cluster.getService("ZOOKEEPER");
+  Service svc3=cluster.getService("GANGLIA");
+  ServiceComponent sc2CompA=svc2.getServiceComponent("ZOOKEEPER_SERVER");
+  ServiceComponent sc2CompB=svc2.getServiceComponent("ZOOKEEPER_CLIENT");
+  ServiceComponent sc3CompB=svc3.getServiceComponent("GANGLIA_MONITOR");
+  ServiceComponentHost schHost4Serv2CompA=serviceComponentHostFactory.createNew(sc2CompA,"h-4");
+  ServiceComponentHost schHost4Serv2CompB=serviceComponentHostFactory.createNew(sc2CompB,"h-4");
+  ServiceComponentHost schHost4Serv3CompB=serviceComponentHostFactory.createNew(sc3CompB,"h-4");
+  sc2CompA.addServiceComponentHost(schHost4Serv2CompA);
+  sc2CompB.addServiceComponentHost(schHost4Serv2CompB);
+  sc3CompB.addServiceComponentHost(schHost4Serv3CompB);
+  schHost4Serv2CompA.persist();
+  schHost4Serv2CompB.persist();
+  schHost4Serv3CompB.persist();
+  simulateStackVersionListener(stackId,v1,cluster,hostComponentStateDAO.findByHost("h-4"));
+  Collection<HostVersionEntity> hostVersions=hostVersionDAO.findAll();
+  Assert.assertEquals(hostVersions.size(),clusters.getHosts().size());
+  HostVersionEntity h4Version1=hostVersionDAO.findByClusterStackVersionAndHost(clusterName,stackId.getStackId(),v1,"h-4");
+  Assert.assertNotNull(h4Version1);
+  Assert.assertEquals(h4Version1.getState(),RepositoryVersionState.CURRENT);
+  String v2="2.2.0-456";
+  RepositoryVersionEntity rv2=helper.getOrCreateRepositoryVersion(stackId.getStackId(),v2);
+  for (  String hostName : clusters.getHostsForCluster(clusterName).keySet()) {
+    HostEntity host=hostDAO.findByName(hostName);
+    HostVersionEntity hve=new HostVersionEntity(hostName,rv2,RepositoryVersionState.INSTALLED);
+    hve.setHostEntity(host);
+    hostVersionDAO.create(hve);
+  }
+  cluster.createClusterVersion(stackId.getStackId(),v2,"admin",RepositoryVersionState.INSTALLING);
+  cluster.transitionClusterVersion(stackId.getStackId(),v2,RepositoryVersionState.INSTALLED);
+  ClusterVersionEntity cv2=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,stackId.getStackId(),v2);
+  Assert.assertNotNull(cv2);
+  Assert.assertEquals(cv2.getState(),RepositoryVersionState.INSTALLED);
+  addHost("h-5",hostAttributes);
+  clusters.mapHostToCluster("h-5",clusterName);
+  ServiceComponentHost schHost5Serv3CompB=serviceComponentHostFactory.createNew(sc3CompB,"h-5");
+  sc3CompB.addServiceComponentHost(schHost5Serv3CompB);
+  schHost5Serv3CompB.persist();
+  HostVersionEntity h5Version2=hostVersionDAO.findByClusterStackVersionAndHost(clusterName,stackId.getStackId(),v2,"h-5");
+  Assert.assertNotNull(h5Version2);
+  Assert.assertEquals(h5Version2.getState(),RepositoryVersionState.OUT_OF_SYNC);
+  h5Version2.setState(RepositoryVersionState.INSTALLED);
+  hostVersionDAO.merge(h5Version2);
+  versionedComponentCount=0;
+  hostComponentStates=hostComponentStateDAO.findAll();
+  for (int i=0; i < hostComponentStates.size(); i++) {
+    HostComponentStateEntity hce=hostComponentStates.get(i);
+    ComponentInfo compInfo=metaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),hce.getServiceName(),hce.getComponentName());
+    if (compInfo.isVersionAdvertised()) {
+      hce.setVersion(v2);
+      hostComponentStateDAO.merge(hce);
+      versionedComponentCount++;
+    }
+    Service svc=cluster.getService(hce.getServiceName());
+    ServiceComponent svcComp=svc.getServiceComponent(hce.getComponentName());
+    ServiceComponentHost scHost=svcComp.getServiceComponentHost(hce.getHostName());
+    scHost.recalculateHostVersionState();
+    cluster.recalculateClusterVersionState(v2);
+    Collection<ClusterVersionEntity> clusterVersions=cluster.getAllClusterVersions();
+    if (versionedComponentCount > 0) {
+      RepositoryVersionEntity repositoryVersion=repositoryVersionDAO.findByStackAndVersion(stackId.getStackId(),v2);
+      Assert.assertNotNull(repositoryVersion);
+      Assert.assertTrue(clusterVersions != null && clusterVersions.size() == 2);
+      if (versionedComponentCount == 1 && i < (hostComponentStates.size() - 1)) {
+        cv2=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,stackId.getStackId(),v2);
+        Assert.assertEquals(cv2.getState(),RepositoryVersionState.UPGRADING);
+      }
+    }
+  }
+  cv2=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,stackId.getStackId(),v2);
+  Assert.assertEquals(cv2.getState(),RepositoryVersionState.UPGRADING);
+  Collection<HostVersionEntity> v2HostVersions=hostVersionDAO.findByClusterStackAndVersion(clusterName,stackId.getStackId(),v2);
+  Assert.assertEquals(v2HostVersions.size(),clusters.getHostsForCluster(clusterName).size());
+  for (  HostVersionEntity hve : v2HostVersions) {
+    if (hve.getHostName().equals("h-3") || hve.getHostName().equals("h-5")) {
+      Assert.assertEquals(hve.getState(),RepositoryVersionState.INSTALLED);
+    }
+ else {
+      Assert.assertEquals(hve.getState(),RepositoryVersionState.UPGRADED);
+    }
+  }
+}

@@ -1,0 +1,130 @@
+{
+  clusters.addCluster(clusterName);
+  Cluster cluster=clusters.getCluster(clusterName);
+  Assert.assertEquals(clusterName,cluster.getClusterName());
+  Assert.assertEquals(1,cluster.getClusterId());
+  List<String> hostNames=new ArrayList<String>(){
+{
+      add("h-1");
+      add("h-2");
+      add("h-3");
+    }
+  }
+;
+  for (  String hostName : hostNames) {
+    addHost(hostName,hostAttributes);
+  }
+  cluster.setDesiredStackVersion(stackId);
+  cluster.setCurrentStackVersion(stackId);
+  for (  String hostName : hostNames) {
+    clusters.mapHostToCluster(hostName,clusterName);
+  }
+  Service s1=serviceFactory.createNew(cluster,"HDFS");
+  Service s2=serviceFactory.createNew(cluster,"ZOOKEEPER");
+  Service s3=serviceFactory.createNew(cluster,"GANGLIA");
+  cluster.addService(s1);
+  cluster.addService(s2);
+  cluster.addService(s3);
+  s1.persist();
+  s2.persist();
+  s3.persist();
+  ServiceComponent sc1CompA=serviceComponentFactory.createNew(s1,"NAMENODE");
+  ServiceComponent sc1CompB=serviceComponentFactory.createNew(s1,"DATANODE");
+  ServiceComponent sc1CompC=serviceComponentFactory.createNew(s1,"HDFS_CLIENT");
+  s1.addServiceComponent(sc1CompA);
+  s1.addServiceComponent(sc1CompB);
+  s1.addServiceComponent(sc1CompC);
+  sc1CompA.persist();
+  sc1CompB.persist();
+  sc1CompC.persist();
+  ServiceComponent sc2CompA=serviceComponentFactory.createNew(s2,"ZOOKEEPER_SERVER");
+  ServiceComponent sc2CompB=serviceComponentFactory.createNew(s2,"ZOOKEEPER_CLIENT");
+  s2.addServiceComponent(sc2CompA);
+  s2.addServiceComponent(sc2CompB);
+  sc2CompA.persist();
+  sc2CompB.persist();
+  ServiceComponent sc3CompA=serviceComponentFactory.createNew(s3,"GANGLIA_SERVER");
+  ServiceComponent sc3CompB=serviceComponentFactory.createNew(s3,"GANGLIA_MONITOR");
+  s3.addServiceComponent(sc3CompA);
+  s3.addServiceComponent(sc3CompB);
+  sc3CompA.persist();
+  sc3CompB.persist();
+  ServiceComponentHost schHost1Serv1CompA=serviceComponentHostFactory.createNew(sc1CompA,"h-1");
+  ServiceComponentHost schHost1Serv1CompB=serviceComponentHostFactory.createNew(sc1CompB,"h-1");
+  ServiceComponentHost schHost1Serv1CompC=serviceComponentHostFactory.createNew(sc1CompC,"h-1");
+  ServiceComponentHost schHost1Serv2CompA=serviceComponentHostFactory.createNew(sc2CompA,"h-1");
+  ServiceComponentHost schHost1Serv2CompB=serviceComponentHostFactory.createNew(sc2CompB,"h-1");
+  ServiceComponentHost schHost1Serv3CompA=serviceComponentHostFactory.createNew(sc3CompA,"h-1");
+  ServiceComponentHost schHost1Serv3CompB=serviceComponentHostFactory.createNew(sc3CompB,"h-1");
+  sc1CompA.addServiceComponentHost(schHost1Serv1CompA);
+  sc1CompB.addServiceComponentHost(schHost1Serv1CompB);
+  sc1CompC.addServiceComponentHost(schHost1Serv1CompC);
+  sc2CompA.addServiceComponentHost(schHost1Serv2CompA);
+  sc2CompB.addServiceComponentHost(schHost1Serv2CompB);
+  sc3CompA.addServiceComponentHost(schHost1Serv3CompA);
+  sc3CompB.addServiceComponentHost(schHost1Serv3CompB);
+  schHost1Serv1CompA.persist();
+  schHost1Serv1CompB.persist();
+  schHost1Serv1CompC.persist();
+  schHost1Serv2CompA.persist();
+  schHost1Serv2CompB.persist();
+  schHost1Serv3CompA.persist();
+  schHost1Serv3CompB.persist();
+  ServiceComponentHost schHost2Serv2CompB=serviceComponentHostFactory.createNew(sc2CompB,"h-2");
+  ServiceComponentHost schHost2Serv3CompB=serviceComponentHostFactory.createNew(sc3CompB,"h-2");
+  sc2CompB.addServiceComponentHost(schHost2Serv2CompB);
+  sc3CompB.addServiceComponentHost(schHost2Serv3CompB);
+  schHost2Serv2CompB.persist();
+  schHost2Serv3CompB.persist();
+  ServiceComponentHost schHost3Serv3CompB=serviceComponentHostFactory.createNew(sc3CompB,"h-3");
+  sc3CompB.addServiceComponentHost(schHost3Serv3CompB);
+  schHost3Serv3CompB.persist();
+  List<ServiceComponentHost> scHost1=cluster.getServiceComponentHosts("h-1");
+  Assert.assertEquals(7,scHost1.size());
+  List<ServiceComponentHost> scHost2=cluster.getServiceComponentHosts("h-2");
+  Assert.assertEquals(2,scHost2.size());
+  List<ServiceComponentHost> scHost3=cluster.getServiceComponentHosts("h-3");
+  Assert.assertEquals(1,scHost3.size());
+  HashMap<String,Set<String>> componentsThatAdvertiseVersion=new HashMap<String,Set<String>>();
+  HashMap<String,Set<String>> componentsThatDontAdvertiseVersion=new HashMap<String,Set<String>>();
+  Set<String> hdfsComponents=new HashSet<String>(){
+{
+      add("NAMENODE");
+      add("DATANODE");
+      add("HDFS_CLIENT");
+    }
+  }
+;
+  Set<String> zkComponents=new HashSet<String>(){
+{
+      add("ZOOKEEPER_SERVER");
+      add("ZOOKEEPER_CLIENT");
+    }
+  }
+;
+  Set<String> gangliaComponents=new HashSet<String>(){
+{
+      add("GANGLIA_SERVER");
+      add("GANGLIA_MONITOR");
+    }
+  }
+;
+  componentsThatAdvertiseVersion.put("HDFS",hdfsComponents);
+  componentsThatAdvertiseVersion.put("ZOOKEEPER",zkComponents);
+  componentsThatDontAdvertiseVersion.put("GANGLIA",gangliaComponents);
+  for (  String service : componentsThatAdvertiseVersion.keySet()) {
+    Set<String> components=componentsThatAdvertiseVersion.get(service);
+    for (    String componentName : components) {
+      ComponentInfo component=metaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),service,componentName);
+      Assert.assertTrue(component.isVersionAdvertised());
+    }
+  }
+  for (  String service : componentsThatDontAdvertiseVersion.keySet()) {
+    Set<String> components=componentsThatDontAdvertiseVersion.get(service);
+    for (    String componentName : components) {
+      ComponentInfo component=metaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),service,componentName);
+      Assert.assertFalse(component.isVersionAdvertised());
+    }
+  }
+  return cluster;
+}
