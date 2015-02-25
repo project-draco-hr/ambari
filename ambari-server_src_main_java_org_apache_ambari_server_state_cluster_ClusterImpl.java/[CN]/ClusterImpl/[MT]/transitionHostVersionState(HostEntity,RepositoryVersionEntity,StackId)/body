@@ -1,21 +1,23 @@
 {
-  HostVersionEntity hostVersionEntity=null;
   List<HostVersionEntity> hostVersions=hostVersionDAO.findByHost(host.getHostName());
-  if (hostVersions == null || hostVersions.isEmpty()) {
+  boolean currentHostVerExists=false;
+  if (hostVersions != null && !hostVersions.isEmpty()) {
+    for (    HostVersionEntity hostVersion : hostVersions) {
+      if (hostVersion.getState() == RepositoryVersionState.CURRENT) {
+        currentHostVerExists=true;
+      }
+    }
+  }
+  HostVersionEntity hostVersionEntity=hostVersionDAO.findByClusterStackVersionAndHost(getClusterName(),repositoryVersion.getStack(),repositoryVersion.getVersion(),host.getHostName());
+  if (hostVersionEntity == null) {
     hostVersionEntity=new HostVersionEntity(host.getHostName(),repositoryVersion,RepositoryVersionState.UPGRADING);
     hostVersionEntity.setHostEntity(host);
     hostVersionDAO.create(hostVersionEntity);
   }
- else {
-    hostVersionEntity=hostVersionDAO.findByClusterStackVersionAndHost(getClusterName(),repositoryVersion.getStack(),repositoryVersion.getVersion(),host.getHostName());
-    if (hostVersionEntity == null) {
-      throw new AmbariException("Host " + host.getHostName() + " is expected to have a Host Version for stack "+ repositoryVersion.getStackVersion());
-    }
-  }
   final ServiceComponentHostSummary hostSummary=new ServiceComponentHostSummary(ambariMetaInfo,host,stack);
   final Collection<HostComponentStateEntity> versionedHostComponents=hostSummary.getVersionedHostComponents();
   List<ClusterVersionEntity> clusterVersions=clusterVersionDAO.findByCluster(getClusterName());
-  if (clusterVersions.size() <= 1) {
+  if (clusterVersions.size() <= 1 || !currentHostVerExists) {
     if (hostSummary.haveAllComponentsFinishedAdvertisingVersion() && (hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING) || hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADED)) && ServiceComponentHostSummary.haveSameVersion(versionedHostComponents)) {
       hostVersionEntity.setState(RepositoryVersionState.CURRENT);
       hostVersionDAO.merge(hostVersionEntity);
