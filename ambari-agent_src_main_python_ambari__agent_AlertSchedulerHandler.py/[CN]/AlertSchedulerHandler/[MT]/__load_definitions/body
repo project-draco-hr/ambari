@@ -1,5 +1,5 @@
 def __load_definitions(self):
-    ' loads all alert commands from the file.  all clusters are stored in one file '
+    '\n    Loads all alert definitions from a file. All clusters are stored in\n    a single file.\n    :return:\n    '
     definitions = []
     all_commands = None
     alerts_definitions_path = os.path.join(self.cachedir, self.FILENAME)
@@ -7,21 +7,15 @@ def __load_definitions(self):
         with open(alerts_definitions_path) as fp:
             all_commands = json.load(fp)
     except:
-        logger.warning('[AlertScheduler] {0} not found. No alerts will be scheduled.'.format(alerts_definitions_path))
+        logger.warning('[AlertScheduler] {0} not found or invalid. No alerts will be scheduled until registration occurs.'.format(alerts_definitions_path))
         return definitions
     for command_json in all_commands:
         clusterName = ('' if (not ('clusterName' in command_json)) else command_json['clusterName'])
         hostName = ('' if (not ('hostName' in command_json)) else command_json['hostName'])
-        configmap = None
-        self.__config_maps[clusterName] = {}
-        if ('configurations' in command_json):
-            configmap = command_json['configurations']
         for definition in command_json['alertDefinitions']:
             alert = self.__json_to_callable(clusterName, hostName, definition)
             if (alert is None):
                 continue
-            vals = self.__find_config_values(configmap, alert.get_lookup_keys())
-            self.__config_maps[clusterName].update(vals)
-            alert.set_helpers(self._collector, self.__config_maps[clusterName])
+            alert.set_helpers(self._collector, self._cluster_configuration)
             definitions.append(alert)
     return definitions
