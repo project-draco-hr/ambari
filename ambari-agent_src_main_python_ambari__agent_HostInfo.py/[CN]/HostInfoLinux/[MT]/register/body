@@ -12,6 +12,8 @@ def register(self, dict, componentsMapped=True, commandsInProgress=True):
     dict['iptablesIsRunning'] = self.checkIptables()
     dict['reverseLookup'] = self.checkReverseLookup()
     if (componentsMapped or commandsInProgress):
+        dict['existingRepos'] = [self.RESULT_UNAVAILABLE]
+        dict['installedPackages'] = []
         dict['alternatives'] = []
         dict['stackFoldersAndFiles'] = []
         dict['existingUsers'] = []
@@ -25,6 +27,18 @@ def register(self, dict, componentsMapped=True, commandsInProgress=True):
         dirs = []
         self.checkFolders(self.DEFAULT_DIRS, self.DEFAULT_PROJECT_NAMES, existingUsers, dirs)
         dict['stackFoldersAndFiles'] = dirs
+        installedPackages = []
+        availablePackages = []
+        packages_analyzer.allInstalledPackages(installedPackages)
+        packages_analyzer.allAvailablePackages(availablePackages)
+        repos = []
+        packages_analyzer.getInstalledRepos(self.PACKAGES, (installedPackages + availablePackages), self.IGNORE_PACKAGES_FROM_REPOS, repos)
+        packagesInstalled = packages_analyzer.getInstalledPkgsByRepo(repos, self.IGNORE_PACKAGES, installedPackages)
+        additionalPkgsInstalled = packages_analyzer.getInstalledPkgsByNames(self.ADDITIONAL_PACKAGES, installedPackages)
+        allPackages = list(set((packagesInstalled + additionalPkgsInstalled)))
+        dict['installedPackages'] = packages_analyzer.getPackageDetails(installedPackages, allPackages)
+        repos = self.getReposToRemove(repos, self.IGNORE_REPOS)
+        dict['existingRepos'] = repos
         self.reportFileHandler.writeHostCheckFile(dict)
         pass
     dict['hostHealth']['agentTimeStampAtReporting'] = int((time.time() * 1000))
