@@ -1,0 +1,43 @@
+{
+  List<String> compNames=new ArrayList<String>();
+  Map<String,Set<String>> compLocations=new HashMap<String,Set<String>>();
+  for (  StageWrapper sw : wrappers) {
+    for (    TaskWrapper tw : sw.getTasks()) {
+      if (StringUtils.isNotEmpty(tw.getService()) && StringUtils.isNotBlank(tw.getComponent())) {
+        for (        String host : tw.getHosts()) {
+          if (!compLocations.containsKey(host)) {
+            compLocations.put(host,new HashSet<String>());
+          }
+          compLocations.get(host).add(tw.getComponent());
+        }
+        compNames.add(ctx.getComponentDisplay(tw.getService(),tw.getComponent()));
+      }
+    }
+  }
+  if (task.message.contains("{{components}}")) {
+    StringBuilder sb=new StringBuilder();
+    if (compNames.size() == 1) {
+      sb.append(compNames.get(0));
+    }
+ else     if (compNames.size() > 1) {
+      String last=compNames.remove(compNames.size() - 1);
+      sb.append(StringUtils.join(compNames,", "));
+      sb.append(" and ").append(last);
+    }
+    task.message=task.message.replace("{{components}}",sb.toString());
+  }
+  JsonArray arr=new JsonArray();
+  for (  Entry<String,Set<String>> entry : compLocations.entrySet()) {
+    JsonObject obj=new JsonObject();
+    obj.addProperty("host_name",entry.getKey());
+    JsonArray comps=new JsonArray();
+    for (    String comp : entry.getValue()) {
+      comps.add(new JsonPrimitive(comp));
+    }
+    obj.add("components",comps);
+    arr.add(obj);
+  }
+  JsonObject master=new JsonObject();
+  master.add("topology",arr);
+  task.structuredOut=master.toString();
+}
