@@ -12,10 +12,24 @@ def _make_web_request(self, url):
         if (self.uri_property_keys.kerberos_keytab is not None):
             kerberos_keytab = self._get_configuration_value(self.uri_property_keys.kerberos_keytab)
         if ((kerberos_principal is not None) and (kerberos_keytab is not None)):
-            os.system('kinit -kt {0} {1} > /dev/null'.format(kerberos_keytab, kerberos_principal))
+            tmp_dir = self.config.get('agent', 'tmp_dir')
+            if (tmp_dir is None):
+                tmp_dir = gettempdir()
+            ccache_file_name = _md5('{0}|{1}'.format(kerberos_principal, kerberos_keytab)).hexdigest()
+            ccache_file_path = '{0}{1}web_alert_cc_{2}'.format(tmp_dir, os.sep, ccache_file_name)
+            kerberos_env = {'KRB5CCNAME': ccache_file_path, }
+            klist_path_local = get_klist_path()
+            if (os.system('{0} -s {1}'.format(klist_path_local, ccache_file_path)) != 0):
+                kinit_path_local = get_kinit_path()
+                logger.debug('[Alert][{0}] Enabling Kerberos authentication via GSSAPI using ccache at {1}.'.format(self.get_name(), ccache_file_path))
+                os.system('{0} -l 5m -c {1} -kt {2} {3} > /dev/null'.format(kinit_path_local, ccache_file_path, kerberos_keytab, kerberos_principal))
+            else:
+                logger.debug('[Alert][{0}] Kerberos authentication via GSSAPI already enabled using ccache at {1}.'.format(self.get_name(), ccache_file_path))
+        else:
+            kerberos_env = None
         url = url.replace('0.0.0.0', self.host_name)
         start_time = time.time()
-        curl = subprocess.Popen(['curl', '--negotiate', '-u', ':', '-sL', '-w', '%{http_code}', url, '--connect-timeout', CURL_CONNECTION_TIMEOUT, '-o', '/dev/null'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        curl = subprocess.Popen(['curl', '--negotiate', '-u', ':', '-sL', '-w', '%{http_code}', url, '--connect-timeout', CURL_CONNECTION_TIMEOUT, '-o', '/dev/null'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=kerberos_env)
         (out, err) = curl.communicate()
         if (err != ''):
             raise Exception(err)
