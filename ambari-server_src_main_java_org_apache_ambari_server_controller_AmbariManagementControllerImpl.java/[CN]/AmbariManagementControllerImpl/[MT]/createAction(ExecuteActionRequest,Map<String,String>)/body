@@ -22,10 +22,12 @@
   long requestId=actionManager.getNextRequestId();
   RequestStageContainer requestStageContainer=new RequestStageContainer(requestId,null,requestFactory,actionManager,actionRequest);
   if (Role.KERBEROS_SERVICE_CHECK.name().equals(actionRequest.getCommandName())) {
-    Map<String,Collection<String>> serviceComponentFilter=new HashMap<String,Collection<String>>();
-    Collection<String> identityFilter=Arrays.asList("/smokeuser");
-    serviceComponentFilter.put("KERBEROS",null);
-    requestStageContainer=kerberosHelper.ensureIdentities(cluster,serviceComponentFilter,identityFilter,requestStageContainer);
+    try {
+      requestStageContainer=kerberosHelper.ensureIdentities(cluster,Collections.<String,Collection<String>>singletonMap(Service.Type.KERBEROS.name(),null),Collections.singleton("/smokeuser"),requestStageContainer);
+    }
+ catch (    KerberosOperationException e) {
+      throw new IllegalArgumentException(e.getMessage(),e);
+    }
   }
   ExecuteCommandJson jsons=customCommandExecutionHelper.getCommandJson(actionExecContext,cluster);
   Stage stage=createNewStage(requestStageContainer.getLastStageId(),cluster,requestId,requestContext,jsons.getClusterHostInfo(),jsons.getCommandParamsForStage(),jsons.getHostParamsForStage());
@@ -47,6 +49,14 @@
   List<Stage> stages=rg.getStages();
   if (stages != null && !stages.isEmpty()) {
     requestStageContainer.addStages(stages);
+  }
+  if (Role.KERBEROS_SERVICE_CHECK.name().equals(actionRequest.getCommandName()) && !kerberosHelper.isClusterKerberosEnabled(cluster)) {
+    try {
+      requestStageContainer=kerberosHelper.deleteIdentities(cluster,Collections.<String,Collection<String>>singletonMap(Service.Type.KERBEROS.name(),null),Collections.singleton("/smokeuser"),requestStageContainer);
+    }
+ catch (    KerberosOperationException e) {
+      throw new IllegalArgumentException(e.getMessage(),e);
+    }
   }
   requestStageContainer.persist();
   return requestStageContainer.getRequestStatusResponse();
