@@ -16,7 +16,12 @@ def hive_service(name, action='start', rolling_restart=False):
         if params.security_enabled:
             hive_kinit_cmd = format('{kinit_path_local} -kt {hive_server2_keytab} {hive_principal}; ')
             Execute(hive_kinit_cmd, user=params.hive_user)
-        Execute(demon_cmd, user=params.hive_user, environment={'HADOOP_HOME': params.hadoop_home, }, path=params.execute_path, not_if=process_id_exists_command)
+        oldmask = os.umask(18)
+        os.umask(oldmask)
+        if (oldmask == 23):
+            Execute(tuple(demon_cmd.split()), user=params.hive_user, environment={'HADOOP_HOME': params.hadoop_home, }, path=params.execute_path, not_if=process_id_exists_command, sudo=True)
+        else:
+            Execute(demon_cmd, user=params.hive_user, environment={'HADOOP_HOME': params.hadoop_home, }, path=params.execute_path, not_if=process_id_exists_command)
         if ((params.hive_jdbc_driver == 'com.mysql.jdbc.Driver') or (params.hive_jdbc_driver == 'org.postgresql.Driver') or (params.hive_jdbc_driver == 'oracle.jdbc.driver.OracleDriver')):
             db_connection_check_command = format("{java64_home}/bin/java -cp {check_db_connection_jar}:{target} org.apache.ambari.server.DBConnectionVerification '{hive_jdbc_connection_url}' {hive_metastore_user_name} {hive_metastore_user_passwd!p} {hive_jdbc_driver}")
             Execute(db_connection_check_command, path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin', tries=5, try_sleep=10)
