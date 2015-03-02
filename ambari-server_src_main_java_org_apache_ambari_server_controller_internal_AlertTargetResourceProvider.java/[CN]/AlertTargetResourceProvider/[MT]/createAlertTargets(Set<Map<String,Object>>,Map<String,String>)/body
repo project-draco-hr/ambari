@@ -1,7 +1,5 @@
 {
-  List<AlertTargetEntity> entities=new ArrayList<AlertTargetEntity>();
   for (  Map<String,Object> requestMap : requestMaps) {
-    AlertTargetEntity entity=new AlertTargetEntity();
     String name=(String)requestMap.get(ALERT_TARGET_NAME);
     String description=(String)requestMap.get(ALERT_TARGET_DESCRIPTION);
     String notificationType=(String)requestMap.get(ALERT_TARGET_NOTIFICATION_TYPE);
@@ -18,9 +16,13 @@
     if (StringUtils.isEmpty(propertiesJson)) {
       throw new IllegalArgumentException("Alert targets must be created with their connection properties");
     }
-    String validationProperty=requestInfoProps.get(AlertTargetResourceDefinition.VALIDATE_CONFIG_DIRECTIVE);
-    if (validationProperty != null && validationProperty.equalsIgnoreCase("true")) {
+    String validationDirective=requestInfoProps.get(AlertTargetResourceDefinition.VALIDATE_CONFIG_DIRECTIVE);
+    if (validationDirective != null && validationDirective.equalsIgnoreCase("true")) {
       validateTargetConfig(notificationType,properties);
+    }
+    boolean overwriteExisting=false;
+    if (requestInfoProps.containsKey(AlertTargetResourceDefinition.OVERWRITE_DIRECTIVE)) {
+      overwriteExisting=true;
     }
     boolean isGlobal=false;
     if (null != globalProperty) {
@@ -35,6 +37,13 @@
     }
  else {
       alertStateSet=EnumSet.allOf(AlertState.class);
+    }
+    AlertTargetEntity entity=null;
+    if (overwriteExisting) {
+      entity=s_dao.findTargetByName(name);
+    }
+    if (null == entity) {
+      entity=new AlertTargetEntity();
     }
     if (requestMap.containsKey(ALERT_TARGET_GROUPS)) {
       Collection<Long> groupIds=(Collection<Long>)requestMap.get(ALERT_TARGET_GROUPS);
@@ -51,7 +60,11 @@
     entity.setTargetName(name);
     entity.setAlertStates(alertStateSet);
     entity.setGlobal(isGlobal);
-    entities.add(entity);
+    if (null == entity.getTargetId() || 0 == entity.getTargetId()) {
+      s_dao.create(entity);
+    }
+ else {
+      s_dao.merge(entity);
+    }
   }
-  s_dao.createTargets(entities);
 }
