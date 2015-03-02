@@ -1,5 +1,5 @@
-def _copy_files(source_and_dest_pairs, file_owner, group_owner, kinit_if_needed):
-    '\n  :param source_and_dest_pairs: List of tuples (x, y), where x is the source file in the local file system,\n  and y is the destination file path in HDFS\n  :param file_owner: Owner to set for the file copied to HDFS (typically hdfs account)\n  :param group_owner: Owning group to set for the file copied to HDFS (typically hadoop group)\n  :param kinit_if_needed: kinit command if it is needed, otherwise an empty string\n  :return: Returns 0 if at least one file was copied and no exceptions occurred, and 1 otherwise.\n\n  Must kinit before calling this function.\n  '
+def _copy_files(source_and_dest_pairs, component_user, file_owner, group_owner, kinit_if_needed):
+    '\n  :param source_and_dest_pairs: List of tuples (x, y), where x is the source file in the local file system,\n  and y is the destination file path in HDFS\n  :param component_user:  User that will execute the Hadoop commands, usually smokeuser\n  :param file_owner: Owner to set for the file copied to HDFS (typically hdfs account)\n  :param group_owner: Owning group to set for the file copied to HDFS (typically hadoop group)\n  :param kinit_if_needed: kinit command if it is needed, otherwise an empty string\n  :return: Returns 0 if at least one file was copied and no exceptions occurred, and 1 otherwise.\n\n  Must kinit before calling this function.\n  '
     import params
     return_value = 1
     if (source_and_dest_pairs and (len(source_and_dest_pairs) > 0)):
@@ -7,8 +7,9 @@ def _copy_files(source_and_dest_pairs, file_owner, group_owner, kinit_if_needed)
         for (source, destination) in source_and_dest_pairs:
             try:
                 destination_dir = os.path.dirname(destination)
-                params.HdfsDirectory(destination_dir, action='create', owner=file_owner, mode=365)
-                CopyFromLocal(source, mode=292, owner=file_owner, group=group_owner, dest_dir=destination_dir, kinnit_if_needed=kinit_if_needed, hdfs_user=params.hdfs_user, hadoop_bin_dir=params.hadoop_bin_dir, hadoop_conf_dir=params.hadoop_conf_dir)
-            except:
+                params.HdfsDirectory(destination_dir, action='create', owner=file_owner, hdfs_user=params.hdfs_user, mode=365)
+                CopyFromLocal(source, mode=292, owner=file_owner, group=group_owner, user=params.hdfs_user, dest_dir=destination_dir, kinnit_if_needed=kinit_if_needed, hdfs_user=params.hdfs_user, hadoop_bin_dir=params.hadoop_bin_dir, hadoop_conf_dir=params.hadoop_conf_dir)
+            except Exception as e:
+                Logger.error(('Failed to copy file. Source: %s, Destination: %s. Error: %s' % (source, destination, e.message)))
                 return_value = 1
     return return_value
