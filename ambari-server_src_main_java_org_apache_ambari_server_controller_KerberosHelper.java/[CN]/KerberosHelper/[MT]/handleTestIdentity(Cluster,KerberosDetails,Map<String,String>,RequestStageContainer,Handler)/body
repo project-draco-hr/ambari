@@ -1,7 +1,9 @@
 {
+  if (commandParameters == null) {
+    throw new AmbariException("The properties map must not be null.  It is needed to store data related to the service check identity");
+  }
   Map<String,Service> services=cluster.getServices();
   if ((services != null) && !services.isEmpty()) {
-    SecurityState desiredSecurityState=handler.getNewServiceSecurityState();
     String clusterName=cluster.getClusterName();
     Map<String,Host> hosts=clusters.getHostsForCluster(clusterName);
     if ((hosts != null) && !hosts.isEmpty()) {
@@ -9,43 +11,65 @@
       KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
       KerberosActionDataFileBuilder kerberosActionDataFileBuilder=null;
       Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
-      Map<String,Map<String,String>> kerberosConfigurations=new HashMap<String,Map<String,String>>();
       Set<String> hostsWithValidKerberosClient=new HashSet<String>();
       File dataDirectory=createTemporaryDirectory();
       File indexFile=new File(dataDirectory,KerberosActionDataFile.DATA_FILE_NAME);
+      KerberosIdentityDescriptor identity=new KerberosIdentityDescriptor(new HashMap<String,Object>(){
+{
+          put("principal",new HashMap<String,Object>(){
+{
+              put("value","${cluster-env/smokeuser}_${service_check_id}@${realm}");
+              put("type","user");
+            }
+          }
+);
+          put("keytab",new HashMap<String,Object>(){
+{
+              put("file","${keytab_dir}/kerberos.service_check.${service_check_id}.keytab");
+              put("owner",new HashMap<String,Object>(){
+{
+                  put("name","${cluster-env/smokeuser}");
+                  put("access","rw");
+                }
+              }
+);
+              put("group",new HashMap<String,Object>(){
+{
+                  put("name","${cluster-env/user_group}");
+                  put("access","r");
+                }
+              }
+);
+            }
+          }
+);
+        }
+      }
+);
+      String serviceCheckId=getKerberosServiceCheckIdentifier(cluster,true);
       try {
         for (        Host host : hosts.values()) {
           String hostname=host.getHostName();
           List<ServiceComponentHost> serviceComponentHosts=cluster.getServiceComponentHosts(hostname);
           if ((serviceComponentHosts != null) && !serviceComponentHosts.isEmpty()) {
             Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,hostname,kerberosDescriptorProperties);
+            configurations.get("").put("service_check_id",serviceCheckId);
             for (            ServiceComponentHost sch : serviceComponentHosts) {
               String serviceName=sch.getServiceName();
               String componentName=sch.getServiceComponentName();
               if (Service.Type.KERBEROS.name().equals(serviceName) && Role.KERBEROS_CLIENT.name().equals(componentName) && (sch.getState() == State.INSTALLED)) {
                 hostsWithValidKerberosClient.add(hostname);
-              }
-              if ((serviceComponentFilter == null) || serviceComponentFilter.containsKey(serviceName)) {
-                Collection<String> componentFilter=(serviceComponentFilter == null) ? null : serviceComponentFilter.get(serviceName);
-                KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
-                if (serviceDescriptor != null) {
-                  int identitiesAdded=0;
-                  List<KerberosIdentityDescriptor> serviceIdentities=serviceDescriptor.getIdentities(true);
-                  if (kerberosActionDataFileBuilder == null) {
-                    kerberosActionDataFileBuilder=new KerberosActionDataFileBuilder(indexFile);
+                int identitiesAdded=0;
+                if (kerberosActionDataFileBuilder == null) {
+                  kerberosActionDataFileBuilder=new KerberosActionDataFileBuilder(indexFile);
+                }
+                identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,Collections.singleton(identity),null,hostname,serviceName,componentName,configurations);
+                if (identitiesAdded > 0) {
+                  if (!commandParameters.containsKey("principal_name") || !commandParameters.containsKey("keytab_file")) {
+                    commandParameters.put("principal_name",KerberosDescriptor.replaceVariables(identity.getPrincipalDescriptor().getValue(),configurations));
+                    commandParameters.put("keytab_file",KerberosDescriptor.replaceVariables(identity.getKeytabDescriptor().getFile(),configurations));
                   }
-                  identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,serviceIdentities,identityFilter,hostname,serviceName,componentName,configurations);
-                  if (((componentFilter == null) || componentFilter.contains(componentName)) && handler.shouldProcess(desiredSecurityState,sch)) {
-                    KerberosComponentDescriptor componentDescriptor=serviceDescriptor.getComponent(componentName);
-                    if (componentDescriptor != null) {
-                      List<KerberosIdentityDescriptor> componentIdentities=componentDescriptor.getIdentities(true);
-                      mergeConfigurations(kerberosConfigurations,componentDescriptor.getConfigurations(true),configurations);
-                      identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,componentIdentities,identityFilter,hostname,serviceName,componentName,configurations);
-                    }
-                  }
-                  if (identitiesAdded > 0) {
-                    serviceComponentHostsToProcess.add(sch);
-                  }
+                  serviceComponentHostsToProcess.add(sch);
                 }
               }
             }
@@ -80,14 +104,7 @@
           }
           throw e;
         }
-        setAuthToLocalRules(kerberosDescriptor,cluster,kerberosDetails.getDefaultRealm(),calculateConfigurations(cluster,null,kerberosDescriptorProperties),kerberosConfigurations);
       }
-      Map<String,String> clusterEnvProperties=kerberosConfigurations.get(SECURITY_ENABLED_CONFIG_TYPE);
-      if (clusterEnvProperties == null) {
-        clusterEnvProperties=new HashMap<String,String>();
-        kerberosConfigurations.put(SECURITY_ENABLED_CONFIG_TYPE,clusterEnvProperties);
-      }
-      clusterEnvProperties.put(SECURITY_ENABLED_PROPERTY_NAME,(kerberosDetails.getSecurityType() == SecurityType.KERBEROS) ? "true" : "false");
       Map<String,Set<String>> clusterHostInfo=StageUtils.getClusterHostInfo(hosts,cluster);
       String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
       Map<String,String> hostParams=customCommandExecutionHelper.createDefaultHostParams(cluster);
@@ -98,26 +115,8 @@
       if (requestStageContainer == null) {
         requestStageContainer=new RequestStageContainer(actionManager.getNextRequestId(),null,requestFactory,actionManager);
       }
-      handler.createStages(cluster,hosts,kerberosConfigurations,clusterHostInfoJson,hostParamsJson,event,roleCommandOrder,kerberosDetails,dataDirectory,requestStageContainer,serviceComponentHostsToProcess,hostsWithValidKerberosClient);
+      handler.createStages(cluster,hosts,Collections.<String,Map<String,String>>emptyMap(),clusterHostInfoJson,hostParamsJson,event,roleCommandOrder,kerberosDetails,dataDirectory,requestStageContainer,serviceComponentHostsToProcess,hostsWithValidKerberosClient);
       handler.addFinalizeOperationStage(cluster,clusterHostInfoJson,hostParamsJson,event,dataDirectory,roleCommandOrder,requestStageContainer);
-      for (      ServiceComponentHost sch : serviceComponentHostsToProcess) {
-        SecurityState newSecurityState;
-        newSecurityState=handler.getNewDesiredSCHSecurityState();
-        if (newSecurityState != null) {
-          sch.setDesiredSecurityState(newSecurityState);
-        }
-        newSecurityState=handler.getNewSCHSecurityState();
-        if (newSecurityState != null) {
-          sch.setSecurityState(newSecurityState);
-        }
-      }
-    }
-    if (desiredSecurityState != null) {
-      for (      Service service : services.values()) {
-        if ((serviceComponentFilter == null) || serviceComponentFilter.containsKey(service.getName())) {
-          service.setSecurityState(desiredSecurityState);
-        }
-      }
     }
   }
   return requestStageContainer;
