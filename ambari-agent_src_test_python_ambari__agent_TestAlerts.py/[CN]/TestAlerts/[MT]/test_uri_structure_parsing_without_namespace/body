@@ -1,0 +1,15 @@
+def test_uri_structure_parsing_without_namespace(self):
+    '\n    Tests that we can parse an HA URI that only includes an alias and\n    not a namespace\n    :return:\n    '
+    uri_structure = {'http': '{{yarn-site/yarn.resourcemanager.webapp.address}}', 'https': '{{yarn-site/yarn.resourcemanager.webapp.http.address}}', 'https_property': '{{yarn-site/yarn.http.policy}}', 'https_property_value': 'HTTPS_ONLY', 'high_availability': {'alias_key': '{{yarn-site/yarn.resourcemanager.ha.rm-ids}}', 'http_pattern': '{{yarn-site/yarn.resourcemanager.webapp.address.{{alias}}}}', 'https_pattern': '{{yarn-site/yarn.resourcemanager.webapp.https.address.{{alias}}}}', }, }
+    configuration = {'yarn-site': {'yarn.http.policy': 'HTTPS_ONLY', 'yarn.resourcemanager.webapp.address': 'c6401.ambari.apache.org:80', 'yarn.resourcemanager.webapp.http.address': 'c6401.ambari.apache.org:443', 'yarn.resourcemanager.webapp.address.rm1': 'c6401.ambari.apache.org:8080', 'yarn.resourcemanager.webapp.https.address.rm1': 'c6401.ambari.apache.org:8443', 'yarn.resourcemanager.webapp.address.rm2': 'c6402.ambari.apache.org:8080', 'yarn.resourcemanager.webapp.https.address.rm2': 'c6402.ambari.apache.org:8443', 'yarn.resourcemanager.ha.rm-ids': 'rm1, rm2', }, }
+    collector = AlertCollector()
+    cluster_configuration = self.__get_cluster_configuration()
+    self.__update_cluster_configuration(cluster_configuration, configuration)
+    alert = MockAlert()
+    alert.set_helpers(collector, cluster_configuration)
+    alert.set_cluster('c1', 'c6402.ambari.apache.org')
+    uri_keys = alert._lookup_uri_property_keys(uri_structure)
+    self.assertTrue(alert._check_uri_ssl_property(uri_keys))
+    uri = alert._get_uri_from_structure(uri_keys)
+    self.assertEqual('c6402.ambari.apache.org:8443', uri.uri)
+    self.assertEqual(True, uri.is_ssl_enabled)

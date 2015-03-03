@@ -1,6 +1,6 @@
 def _get_uri_from_ha_structure(self, alert_uri_lookup_keys):
     '\n    Attempts to parse the HA URI structure in order to build a dynamic key\n    that represents the correct host URI to check.\n    :param alert_uri_lookup_keys:\n    :return: the AlertUri named tuple if there is a valid HA URL, otherwise None\n    '
-    if ((alert_uri_lookup_keys is None) or (alert_uri_lookup_keys.ha_nameservice is None)):
+    if (alert_uri_lookup_keys is None):
         return None
     logger.debug('[Alert][{0}] HA URI structure detected in definition, attempting to lookup dynamic HA properties'.format(self.get_name()))
     ha_nameservice = self._get_configuration_value(alert_uri_lookup_keys.ha_nameservice)
@@ -22,7 +22,11 @@ def _get_uri_from_ha_structure(self, alert_uri_lookup_keys):
     if (ha_pattern is None):
         logger.warning('[Alert][{0}] There is no matching http(s) pattern for the HA URI'.format(self.get_name()))
         return None
-    ha_pattern = ha_pattern.replace(self.HA_NAMESERVICE_PARAM, ha_nameservice)
+    if ((self.HA_NAMESERVICE_PARAM in ha_pattern) and (ha_nameservice is None)):
+        logger.warning('[Alert][{0}] An HA URI pattern of {1} was detected, but there is no nameservice key'.format(self.get_name(), ha_pattern))
+        return None
+    if (ha_nameservice is not None):
+        ha_pattern = ha_pattern.replace(self.HA_NAMESERVICE_PARAM, ha_nameservice)
     for alias in ha_nameservice_alias.split(','):
         key = ha_pattern.replace(self.HA_ALIAS_PARAM, alias.strip())
         value = self._get_configuration_value(key)

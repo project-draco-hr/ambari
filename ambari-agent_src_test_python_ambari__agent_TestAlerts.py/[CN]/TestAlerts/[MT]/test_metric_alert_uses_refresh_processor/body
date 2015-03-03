@@ -1,0 +1,28 @@
+@patch('httplib.HTTPConnection')
+@patch.object(RefreshHeaderProcessor, 'http_response')
+def test_metric_alert_uses_refresh_processor(self, http_response_mock, http_connection_mock):
+    '\n    Tests that the RefreshHeaderProcessor is correctly chained and called\n    :param http_response_mock:\n    :param http_connection_mock:\n    :return:\n    '
+    http_conn = http_connection_mock.return_value
+    http_conn.getresponse.return_value = MagicMock(status=200)
+    http_response_mock.return_value = MagicMock(code=200)
+    url_opener = urllib2.build_opener(RefreshHeaderProcessor())
+    response = url_opener.open('http://foo.bar.baz/jmx')
+    self.assertFalse((response is None))
+    self.assertTrue(http_conn.request.called)
+    self.assertTrue(http_conn.getresponse.called)
+    self.assertTrue(http_response_mock.called)
+    MagicMock.reset_mock(http_response_mock)
+    MagicMock.reset_mock(http_connection_mock)
+    definition_json = self._get_metric_alert_definition()
+    configuration = {'hdfs-site': {'dfs.datanode.http.address': 'c6401.ambari.apache.org:80', }, }
+    collector = AlertCollector()
+    cluster_configuration = self.__get_cluster_configuration()
+    self.__update_cluster_configuration(cluster_configuration, configuration)
+    alert = MetricAlert(definition_json, definition_json['source'])
+    alert.set_helpers(collector, cluster_configuration)
+    alert.set_cluster('c1', 'c6401.ambari.apache.org')
+    alert.collect()
+    self.assertFalse((response is None))
+    self.assertTrue(http_conn.request.called)
+    self.assertTrue(http_conn.getresponse.called)
+    self.assertTrue(http_response_mock.called)

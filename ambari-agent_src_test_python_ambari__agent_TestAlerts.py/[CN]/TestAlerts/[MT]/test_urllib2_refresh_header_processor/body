@@ -1,0 +1,32 @@
+def test_urllib2_refresh_header_processor(self):
+    from urllib2 import Request
+    original_url = 'http://foo.bar.baz/jmx?qry=someQuery'
+    request = Request(original_url)
+    response = MagicMock(code=200)
+    info_response = MagicMock()
+    info_response.keys.return_value = ['Refresh']
+    info_response.getheader.return_value = '3; url=http://foobar.baz.qux:8080'
+    response.info.return_value = info_response
+    parent_mock = MagicMock()
+    refresh_processor = RefreshHeaderProcessor()
+    refresh_processor.parent = parent_mock
+    refresh_processor.http_response(request, response)
+    parent_mock.open.assert_called_with('http://foobar.baz.qux:8080/jmx?qry=someQuery')
+    MagicMock.reset_mock(parent_mock)
+    info_response.getheader.return_value = 'url=http://foobar.baz.qux:8443'
+    refresh_processor.http_response(request, response)
+    parent_mock.open.assert_called_with('http://foobar.baz.qux:8443/jmx?qry=someQuery')
+    MagicMock.reset_mock(parent_mock)
+    info_response.getheader.return_value = 'http://foobar.baz.qux:8443'
+    refresh_processor.http_response(request, response)
+    self.assertFalse(parent_mock.open.called)
+    MagicMock.reset_mock(parent_mock)
+    info_response.keys.return_value = ['SomeOtherHeaders']
+    refresh_processor.http_response(request, response)
+    self.assertFalse(parent_mock.open.called)
+    MagicMock.reset_mock(parent_mock)
+    response.code = 401
+    info_response.keys.return_value = ['Refresh']
+    info_response.getheader.return_value = '3; url=http://foobar.baz.qux:8080'
+    refresh_processor.http_response(request, response)
+    self.assertFalse(parent_mock.open.called)
