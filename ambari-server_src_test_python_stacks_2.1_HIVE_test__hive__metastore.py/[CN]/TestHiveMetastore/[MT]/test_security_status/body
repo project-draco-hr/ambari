@@ -4,7 +4,6 @@
 @patch('resource_management.libraries.functions.security_commons.cached_kinit_executor')
 @patch('resource_management.libraries.script.Script.put_structured_out')
 def test_security_status(self, put_structured_out_mock, cached_kinit_executor_mock, validate_security_config_mock, get_params_mock, build_exp_mock):
-    import status_params
     security_params = {'hive-site': {'hive.server2.authentication': 'KERBEROS', 'hive.metastore.sasl.enabled': 'true', 'hive.security.authorization.enabled': 'true', 'hive.metastore.kerberos.keytab.file': 'path/to/keytab', 'hive.metastore.kerberos.principal': 'principal', }, }
     result_issues = []
     props_value_check = {'hive.server2.authentication': 'KERBEROS', 'hive.metastore.sasl.enabled': 'true', 'hive.security.authorization.enabled': 'true', }
@@ -13,11 +12,11 @@ def test_security_status(self, put_structured_out_mock, cached_kinit_executor_mo
     get_params_mock.return_value = security_params
     validate_security_config_mock.return_value = result_issues
     self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/hive_metastore.py'), classname='HiveMetastore', command='security_status', config_file='../../2.1/configs/secured.json', hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES)
-    get_params_mock.assert_called_with(status_params.hive_conf_dir, {'hive-site.xml': 'XML', })
+    get_params_mock.assert_called_with('/etc/hive/conf', {'hive-site.xml': 'XML', })
     build_exp_mock.assert_called_with('hive-site', props_value_check, props_empty_check, props_read_check)
     put_structured_out_mock.assert_called_with({'securityState': 'SECURED_KERBEROS', })
     self.assertTrue(cached_kinit_executor_mock.call_count, 2)
-    cached_kinit_executor_mock.assert_called_with(status_params.kinit_path_local, status_params.hive_user, security_params['hive-site']['hive.metastore.kerberos.keytab.file'], security_params['hive-site']['hive.metastore.kerberos.principal'], status_params.hostname, status_params.tmp_dir)
+    cached_kinit_executor_mock.assert_called_with('/usr/bin/kinit', self.config_dict['configurations']['hive-env']['hive_user'], security_params['hive-site']['hive.metastore.kerberos.keytab.file'], security_params['hive-site']['hive.metastore.kerberos.principal'], self.config_dict['hostname'], '/tmp')
     cached_kinit_executor_mock.reset_mock()
     cached_kinit_executor_mock.side_effect = Exception('Invalid command')
     try:
@@ -31,8 +30,7 @@ def test_security_status(self, put_structured_out_mock, cached_kinit_executor_mo
     get_params_mock.return_value = empty_security_params
     self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/hive_metastore.py'), classname='HiveMetastore', command='security_status', config_file='../../2.1/configs/secured.json', hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES)
     put_structured_out_mock.assert_called_with({'securityIssuesFound': 'Keytab file or principal are not set property.', })
-    result_issues_with_params = {}
-    result_issues_with_params['hive-site'] = 'Something bad happened'
+    result_issues_with_params = {'hive-site': 'Something bad happened', }
     validate_security_config_mock.reset_mock()
     get_params_mock.reset_mock()
     validate_security_config_mock.return_value = result_issues_with_params
