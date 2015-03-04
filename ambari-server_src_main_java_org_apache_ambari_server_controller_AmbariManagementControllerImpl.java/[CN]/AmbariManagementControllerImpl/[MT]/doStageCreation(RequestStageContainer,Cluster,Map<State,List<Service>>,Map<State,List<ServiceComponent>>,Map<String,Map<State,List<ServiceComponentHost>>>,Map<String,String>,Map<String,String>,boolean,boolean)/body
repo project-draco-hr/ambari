@@ -14,6 +14,7 @@
     String HostParamsJson=StageUtils.getGson().toJson(customCommandExecutionHelper.createDefaultHostParams(cluster));
     Stage stage=createNewStage(requestStages.getLastStageId(),cluster,requestStages.getId(),requestProperties.get(REQUEST_CONTEXT_PROPERTY),clusterHostInfoJson,"{}",HostParamsJson);
     Collection<ServiceComponentHost> componentsToEnableKerberos=new ArrayList<ServiceComponentHost>();
+    Set<String> hostsToForceKerberosOperations=new HashSet<String>();
     String jobtrackerHost=getJobTrackerHost(cluster);
     for (    String compName : changedScHosts.keySet()) {
       for (      State newState : changedScHosts.get(compName).keySet()) {
@@ -38,6 +39,9 @@ case INSTALLED:
                   throw new AmbariException(e.getMessage(),e);
                 }
                 componentsToEnableKerberos.add(scHost);
+                if (Service.Type.KERBEROS.name().equalsIgnoreCase(scHost.getServiceName()) && Role.KERBEROS_CLIENT.name().equalsIgnoreCase(scHost.getServiceComponentName())) {
+                  hostsToForceKerberosOperations.add(scHost.getHostName());
+                }
               }
             }
  else             if (oldSchState == State.STARTED || oldSchState == State.STOPPING) {
@@ -149,7 +153,7 @@ serviceFilter.put(serviceName,componentFilter);
 componentFilter.add(scHost.getServiceComponentName());
 }
 try {
-kerberosHelper.ensureIdentities(cluster,serviceFilter,null,requestStages);
+kerberosHelper.ensureIdentities(cluster,serviceFilter,null,hostsToForceKerberosOperations,requestStages);
 }
  catch (KerberosOperationException e) {
 throw new IllegalArgumentException(e.getMessage(),e);
