@@ -9,3 +9,33 @@ def recommendHBASEConfigurations(self, configurations, clusterData, services, ho
             putHbaseSiteProperty('hbase.security.authorization', 'true')
             putHbaseSiteProperty('hbase.coprocessor.master.classes', 'com.xasecure.authorization.hbase.XaSecureAuthorizationCoprocessor')
             putHbaseSiteProperty('hbase.coprocessor.region.classes', 'com.xasecure.authorization.hbase.XaSecureAuthorizationCoprocessor')
+    threshold = 23
+    mb = 1024
+    if (int(clusterData['hbaseRam']) > threshold):
+        regionserver_total_ram = (int(clusterData['hbaseRam']) * mb)
+        regionserver_heap_size = 20480
+        regionserver_max_direct_memory_size = (regionserver_total_ram - regionserver_heap_size)
+        hfile_block_cache_size = '0.4'
+        block_cache_heap = 8192
+        hbase_regionserver_global_memstore_size = '0.4'
+        reserved_offheap_memory = 2048
+        bucketcache_offheap_memory = (regionserver_max_direct_memory_size - reserved_offheap_memory)
+        hbase_bucketcache_size = (block_cache_heap + bucketcache_offheap_memory)
+        hbase_bucketcache_percentage_in_combinedcache = (float(bucketcache_offheap_memory) / hbase_bucketcache_size)
+        hbase_bucketcache_percentage_in_combinedcache_str = '{0:.4f}'.format((math.ceil((hbase_bucketcache_percentage_in_combinedcache * 10000)) / 10000.0))
+        putHbaseProperty = self.putProperty(configurations, 'hbase-site')
+        putHbaseProperty('hfile.block.cache.size', hfile_block_cache_size)
+        putHbaseProperty('hbase.regionserver.global.memstore.upperLimit', hbase_regionserver_global_memstore_size)
+        putHbaseProperty('hbase.bucketcache.ioengine', 'offheap')
+        putHbaseProperty('hbase.bucketcache.size', hbase_bucketcache_size)
+        putHbaseProperty('hbase.bucketcache.percentage.in.combinedcache', hbase_bucketcache_percentage_in_combinedcache_str)
+        putHbaseEnvProperty = self.putProperty(configurations, 'hbase-env')
+        putHbaseEnvProperty('hbase_max_direct_memory_size', regionserver_max_direct_memory_size)
+        putHbaseEnvProperty('hbase_regionserver_heapsize', regionserver_heap_size)
+    else:
+        putHbaseProperty = self.putProperty(configurations, 'hbase-site')
+        putHbaseProperty('hbase.bucketcache.ioengine', '')
+        putHbaseProperty('hbase.bucketcache.size', '')
+        putHbaseProperty('hbase.bucketcache.percentage.in.combinedcache', '')
+        putHbaseEnvProperty = self.putProperty(configurations, 'hbase-env')
+        putHbaseEnvProperty('hbase_max_direct_memory_size', '')
