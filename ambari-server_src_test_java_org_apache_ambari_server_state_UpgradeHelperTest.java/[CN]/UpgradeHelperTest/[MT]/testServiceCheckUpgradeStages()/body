@@ -4,20 +4,47 @@
   UpgradePack upgrade=upgrades.get("upgrade_test_checks");
   assertNotNull(upgrade);
   Cluster c=makeCluster();
-  c.addService("HBASE");
+  Set<String> additionalServices=new HashSet<String>(){
+{
+      add("HBASE");
+      add("PIG");
+      add("TEZ");
+    }
+  }
+;
+  for (  String service : additionalServices) {
+    c.addService(service);
+  }
+  int numServiceChecksExpected=0;
+  Collection<Service> services=c.getServices().values();
+  for (  Service service : services) {
+    ServiceInfo si=ambariMetaInfo.getService(c.getCurrentStackVersion().getStackName(),c.getCurrentStackVersion().getStackVersion(),service.getName());
+    if (null != si.getCommandScript()) {
+      numServiceChecksExpected++;
+      if (service.getName().equalsIgnoreCase("TEZ")) {
+        assertTrue("Expect Tez to not have any service checks",false);
+      }
+      continue;
+    }
+  }
   UpgradeContext context=new UpgradeContext(m_masterHostResolver,UPGRADE_VERSION,Direction.UPGRADE);
   List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgrade,context);
   assertEquals(7,groups.size());
   UpgradeGroupHolder holder=groups.get(3);
   assertEquals(holder.name,"SERVICE_CHECK_1");
-  assertEquals(5,holder.items.size());
-  boolean found=false;
+  assertEquals(6,holder.items.size());
+  int numServiceChecksActual=0;
   for (  StageWrapper sw : holder.items) {
-    if (sw.getText().contains("HBase")) {
-      found=true;
+    for (    Service service : services) {
+      Pattern p=Pattern.compile(".*" + service.getName(),Pattern.CASE_INSENSITIVE);
+      Matcher matcher=p.matcher(sw.getText());
+      if (matcher.matches()) {
+        numServiceChecksActual++;
+        continue;
+      }
     }
   }
-  assertTrue("Expected string 'HBase' in text",found);
+  assertEquals(numServiceChecksActual,numServiceChecksExpected);
   UpgradeGroupHolder zookeeperGroup=groups.get(1);
   assertEquals("ZOOKEEPER",zookeeperGroup.name);
   ManualTask manualTask=(ManualTask)zookeeperGroup.items.get(0).getTasks().get(0).getTasks().get(0);
