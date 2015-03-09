@@ -1,0 +1,29 @@
+{
+  File cacheDirectory=configuration.getKerberosKeytabCacheDir();
+  if (cacheDirectory == null) {
+    String message="The Kerberos keytab cache directory is not configured in the Ambari properties";
+    LOG.error(message);
+    throw new AmbariException(message);
+  }
+  if (!cacheDirectory.exists()) {
+    if (cacheDirectory.mkdirs()) {
+      ensureAmbariOnlyAccess(cacheDirectory);
+      if (!cacheDirectory.exists()) {
+        String message=String.format("Failed to create the keytab cache directory %s",cacheDirectory.getAbsolutePath());
+        LOG.error(message);
+        throw new AmbariException(message);
+      }
+    }
+  }
+  File cachedKeytabFile=new File(cacheDirectory,DigestUtils.sha1Hex(principal + String.valueOf(System.currentTimeMillis())));
+  try {
+    keytab.write(cachedKeytabFile);
+    ensureAmbariOnlyAccess(cachedKeytabFile);
+  }
+ catch (  IOException e) {
+    String message=String.format("Failed to write the keytab for %s to the cache location (%s)",principal,cachedKeytabFile.getAbsolutePath());
+    LOG.error(message,e);
+    throw new AmbariException(message,e);
+  }
+  return cachedKeytabFile;
+}
