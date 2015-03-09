@@ -8,7 +8,13 @@ def _copy_files(source_and_dest_pairs, component_user, file_owner, group_owner, 
             try:
                 destination_dir = os.path.dirname(destination)
                 params.HdfsDirectory(destination_dir, action='create', owner=file_owner, hdfs_user=params.hdfs_user, mode=365)
-                CopyFromLocal(source, mode=292, owner=file_owner, group=group_owner, user=params.hdfs_user, dest_dir=destination_dir, kinnit_if_needed=kinit_if_needed, hdfs_user=params.hdfs_user, hadoop_bin_dir=params.hadoop_bin_dir, hadoop_conf_dir=params.hadoop_conf_dir)
+                orig_dest_file_name = os.path.split(destination)[1]
+                unique_string = str(uuid.uuid4())[:8]
+                new_dest_file_name = ((orig_dest_file_name + '.') + unique_string)
+                new_destination = os.path.join(destination_dir, new_dest_file_name)
+                CopyFromLocal(source, mode=292, owner=file_owner, group=group_owner, user=params.hdfs_user, dest_dir=destination_dir, dest_file=new_dest_file_name, kinnit_if_needed=kinit_if_needed, hdfs_user=params.hdfs_user, hadoop_bin_dir=params.hadoop_bin_dir, hadoop_conf_dir=params.hadoop_conf_dir)
+                mv_command = format('fs -mv {new_destination} {destination}')
+                ExecuteHadoop(mv_command, user=params.hdfs_user, bin_dir=params.hadoop_bin_dir, conf_dir=params.hadoop_conf_dir)
             except Exception as e:
                 Logger.error(('Failed to copy file. Source: %s, Destination: %s. Error: %s' % (source, destination, e.message)))
                 return_value = 1
