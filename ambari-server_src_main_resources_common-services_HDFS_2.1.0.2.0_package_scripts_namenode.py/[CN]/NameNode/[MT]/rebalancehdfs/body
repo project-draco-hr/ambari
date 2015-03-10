@@ -4,14 +4,23 @@ def rebalancehdfs(self, env):
     name_node_parameters = json.loads(params.name_node_params)
     threshold = name_node_parameters['threshold']
     _print(('Starting balancer with threshold = %s\n' % threshold))
+    rebalance_env = {'PATH': params.hadoop_bin_dir, }
+    if params.security_enabled:
+        ccache_file_name = ('hdfs_rebalance_cc_' + _md5(format('{hdfs_principal_name}|{hdfs_user_keytab}')).hexdigest())
+        ccache_file_path = os.path.join(tempfile.gettempdir(), ccache_file_name)
+        rebalance_env['KRB5CCNAME'] = ccache_file_path
+        klist_cmd = format('{klist_path_local} -s {ccache_file_path}')
+        kinit_cmd = format('{kinit_path_local} -c {ccache_file_path} -kt {hdfs_user_keytab} {hdfs_principal_name}')
+        if (os.system(klist_cmd) != 0):
+            Execute(kinit_cmd, user=params.hdfs_user)
 
     def calculateCompletePercent(first, current):
         return (1.0 - (current.bytesLeftToMove / first.bytesLeftToMove))
 
-    def startRebalancingProcess(threshold):
+    def startRebalancingProcess(threshold, rebalance_env):
         rebalanceCommand = format('hdfs --config {hadoop_conf_dir} balancer -threshold {threshold}')
-        return as_user(rebalanceCommand, params.hdfs_user, env={'PATH': params.hadoop_bin_dir, })
-    command = startRebalancingProcess(threshold)
+        return as_user(rebalanceCommand, params.hdfs_user, env=rebalance_env)
+    command = startRebalancingProcess(threshold, rebalance_env)
     basedir = os.path.join(env.config.basedir, 'scripts')
     if (threshold == 'DEBUG'):
         basedir = os.path.join(env.config.basedir, 'scripts', 'balancer-emulator')
@@ -31,3 +40,5 @@ def rebalancehdfs(self, env):
             self.put_structured_out({'completePercent': 1, })
             return
     Execute(command, on_new_line=handle_new_line, logoutput=False)
+    if (params.security_enabled and os.path.exists(ccache_file_path)):
+        os.remove(ccache_file_path)
