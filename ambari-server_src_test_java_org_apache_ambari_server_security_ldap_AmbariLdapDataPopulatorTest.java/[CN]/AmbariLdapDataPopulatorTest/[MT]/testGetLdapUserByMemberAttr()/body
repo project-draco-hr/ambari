@@ -4,17 +4,20 @@
   LdapTemplate ldapTemplate=createNiceMock(LdapTemplate.class);
   LdapServerProperties ldapServerProperties=createNiceMock(LdapServerProperties.class);
   Capture<ContextMapper> contextMapperCapture=new Capture<ContextMapper>();
-  List list=new LinkedList();
+  LdapUserDto dto=new LdapUserDto();
+  List<LdapUserDto> list=new LinkedList<LdapUserDto>();
+  list.add(dto);
   expect(configuration.getLdapServerProperties()).andReturn(ldapServerProperties).anyTimes();
   expect(ldapServerProperties.getUserObjectClass()).andReturn("objectClass").anyTimes();
   expect(ldapServerProperties.getDnAttribute()).andReturn("dn").anyTimes();
   expect(ldapServerProperties.getBaseDN()).andReturn("baseDN").anyTimes();
+  expect(ldapTemplate.lookup(eq("uid=foo,dc=example,dc=com"),capture(contextMapperCapture))).andReturn(dto);
+  expect(ldapTemplate.lookup(eq("foo"),capture(contextMapperCapture))).andReturn(null);
   expect(ldapTemplate.search(eq("baseDN"),eq("(&(objectClass=objectClass)(|(dn=foo)(uid=foo)))"),capture(contextMapperCapture))).andReturn(list);
-  expect(ldapTemplate.search(eq("baseDN"),eq("(&(objectClass=objectClass)(uid=foo))"),capture(contextMapperCapture))).andReturn(list);
   replay(ldapTemplate,ldapServerProperties,users,configuration);
   AmbariLdapDataPopulatorTestInstance populator=new AmbariLdapDataPopulatorTestInstance(configuration,users);
   populator.setLdapTemplate(ldapTemplate);
-  populator.getLdapUserByMemberAttr("foo");
-  populator.getLdapUserByMemberAttr("uid=foo,dc=example,dc=com");
+  assertEquals(dto,populator.getLdapUserByMemberAttr("uid=foo,dc=example,dc=com"));
+  assertEquals(dto,populator.getLdapUserByMemberAttr("foo"));
   verify(ldapTemplate,ldapServerProperties,users,configuration);
 }
