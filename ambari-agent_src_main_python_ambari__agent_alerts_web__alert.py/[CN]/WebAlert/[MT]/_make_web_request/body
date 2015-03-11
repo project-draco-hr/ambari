@@ -3,40 +3,50 @@ def _make_web_request(self, url):
     WebResponse = namedtuple('WebResponse', 'status_code time_millis error_msg')
     time_millis = 0
     try:
-        kerberos_keytab = None
-        kerberos_principal = None
-        if (self.uri_property_keys.kerberos_principal is not None):
-            kerberos_principal = self._get_configuration_value(self.uri_property_keys.kerberos_principal)
-            if (kerberos_principal is not None):
-                kerberos_principal = kerberos_principal.replace('_HOST', self.host_name)
-        if (self.uri_property_keys.kerberos_keytab is not None):
-            kerberos_keytab = self._get_configuration_value(self.uri_property_keys.kerberos_keytab)
-        if ((kerberos_principal is not None) and (kerberos_keytab is not None)):
-            tmp_dir = self.config.get('agent', 'tmp_dir')
-            if (tmp_dir is None):
-                tmp_dir = gettempdir()
-            ccache_file_name = _md5('{0}|{1}'.format(kerberos_principal, kerberos_keytab)).hexdigest()
-            ccache_file_path = '{0}{1}web_alert_cc_{2}'.format(tmp_dir, os.sep, ccache_file_name)
-            kerberos_env = {'KRB5CCNAME': ccache_file_path, }
-            klist_path_local = get_klist_path()
-            if (os.system('{0} -s {1}'.format(klist_path_local, ccache_file_path)) != 0):
-                kinit_path_local = get_kinit_path()
-                logger.debug('[Alert][{0}] Enabling Kerberos authentication via GSSAPI using ccache at {1}.'.format(self.get_name(), ccache_file_path))
-                os.system('{0} -l 5m -c {1} -kt {2} {3} > /dev/null'.format(kinit_path_local, ccache_file_path, kerberos_keytab, kerberos_principal))
+        try:
+            kerberos_keytab = None
+            kerberos_principal = None
+            if (self.uri_property_keys.kerberos_principal is not None):
+                kerberos_principal = self._get_configuration_value(self.uri_property_keys.kerberos_principal)
+                if (kerberos_principal is not None):
+                    kerberos_principal = kerberos_principal.replace('_HOST', self.host_name)
+            if (self.uri_property_keys.kerberos_keytab is not None):
+                kerberos_keytab = self._get_configuration_value(self.uri_property_keys.kerberos_keytab)
+            if ((kerberos_principal is not None) and (kerberos_keytab is not None)):
+                tmp_dir = self.config.get('agent', 'tmp_dir')
+                if (tmp_dir is None):
+                    tmp_dir = gettempdir()
+                ccache_file_name = _md5('{0}|{1}'.format(kerberos_principal, kerberos_keytab)).hexdigest()
+                ccache_file_path = '{0}{1}web_alert_cc_{2}'.format(tmp_dir, os.sep, ccache_file_name)
+                kerberos_env = {'KRB5CCNAME': ccache_file_path, }
+                klist_path_local = get_klist_path()
+                if (os.system('{0} -s {1}'.format(klist_path_local, ccache_file_path)) != 0):
+                    kinit_path_local = get_kinit_path()
+                    logger.debug('[Alert][{0}] Enabling Kerberos authentication via GSSAPI using ccache at {1}.'.format(self.get_name(), ccache_file_path))
+                    os.system('{0} -l 5m -c {1} -kt {2} {3} > /dev/null'.format(kinit_path_local, ccache_file_path, kerberos_keytab, kerberos_principal))
+                else:
+                    logger.debug('[Alert][{0}] Kerberos authentication via GSSAPI already enabled using ccache at {1}.'.format(self.get_name(), ccache_file_path))
             else:
-                logger.debug('[Alert][{0}] Kerberos authentication via GSSAPI already enabled using ccache at {1}.'.format(self.get_name(), ccache_file_path))
-        else:
-            kerberos_env = None
-        url = url.replace('0.0.0.0', self.host_name)
-        start_time = time.time()
-        curl = subprocess.Popen(['curl', '--negotiate', '-u', ':', '-sL', '-w', '%{http_code}', url, '--connect-timeout', CURL_CONNECTION_TIMEOUT, '-o', '/dev/null'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=kerberos_env)
-        (out, err) = curl.communicate()
-        if (err != ''):
-            raise Exception(err)
-        response_code = int(out)
-        time_millis = (time.time() - start_time)
-    except Exception as exc:
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.exception('[Alert][{0}] Unable to make a web request.'.format(self.get_name()))
-        return WebResponse(status_code=0, time_millis=0, error_msg=str(exc))
+                kerberos_env = None
+            tmp_dir = self.config.get('agent', 'tmp_dir')
+            cookies_dir = os.path.join(tmp_dir, 'cookies')
+            if (not os.path.exists(cookies_dir)):
+                os.makedirs(cookies_dir)
+            url = url.replace('0.0.0.0', self.host_name)
+            cookie_file_name = str(uuid.uuid4())
+            cookie_file = os.path.join(cookies_dir, cookie_file_name)
+            start_time = time.time()
+            curl = subprocess.Popen(['curl', '--negotiate', '-u', ':', '-b', cookie_file, '-c', cookie_file, '-sL', '-w', '%{http_code}', url, '--connect-timeout', CURL_CONNECTION_TIMEOUT, '-o', '/dev/null'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=kerberos_env)
+            (out, err) = curl.communicate()
+            if (err != ''):
+                raise Exception(err)
+            response_code = int(out)
+            time_millis = (time.time() - start_time)
+        except Exception as exc:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception('[Alert][{0}] Unable to make a web request.'.format(self.get_name()))
+            return WebResponse(status_code=0, time_millis=0, error_msg=str(exc))
+    finally:
+        if os.path.isfile(cookie_file):
+            os.remove(cookie_file)
     return WebResponse(status_code=response_code, time_millis=time_millis, error_msg=None)
