@@ -30,18 +30,28 @@ def execute(parameters=None, host_name=None):
         (uri_host, uri_port) = uri.split(':')
         uri_host = resolve_address(uri_host)
         uri = '{0}:{1}'.format(uri_host, uri_port)
+    query = '{0}://{1}/ws/v1/node/info'.format(scheme, uri)
     try:
-        query = '{0}://{1}/ws/v1/node/info'.format(scheme, uri)
         url_response = urllib2.urlopen(query)
-    except:
-        label = CRITICAL_CONNECTION_MESSAGE.format(uri)
+    except urllib2.HTTPError as httpError:
+        label = CRITICAL_HTTP_STATUS_MESSAGE.format(str(httpError.code), query, str(httpError))
+        return (RESULT_CODE_CRITICAL, [label])
+    except Exception as exception:
+        label = CRITICAL_CONNECTION_MESSAGE.format(query, str(exception))
         return (RESULT_CODE_CRITICAL, [label])
     try:
-        json_response = json.loads(url_response.read())
-        node_healthy = json_response['nodeInfo']['nodeHealthy']
-        node_healthy = str(node_healthy)
-    except:
-        return (RESULT_CODE_CRITICAL, [query])
+        try:
+            json_response = json.loads(url_response.read())
+            node_healthy = json_response['nodeInfo']['nodeHealthy']
+            node_healthy = str(node_healthy)
+        except:
+            return (RESULT_CODE_CRITICAL, [query])
+    finally:
+        if (url_response is not None):
+            try:
+                url_response.close()
+            except:
+                pass
     if (node_healthy.lower() == 'true'):
         result_code = RESULT_CODE_OK
         label = OK_MESSAGE

@@ -5,9 +5,17 @@ def _load_jmx(self, ssl, host, port, jmx_metric):
         logger.debug(str(jmx_metric.property_map))
     for (jmx_property_key, jmx_property_value) in jmx_metric.property_map.iteritems():
         url = '{0}://{1}:{2}/jmx?qry={3}'.format(('https' if ssl else 'http'), host, str(port), jmx_property_key)
-        url_opener = urllib2.build_opener(RefreshHeaderProcessor())
-        response = url_opener.open(url)
-        content = response.read()
+        response = None
+        try:
+            url_opener = urllib2.build_opener(RefreshHeaderProcessor())
+            response = url_opener.open(url)
+            content = response.read()
+        finally:
+            if (response is not None):
+                try:
+                    response.close()
+                except:
+                    logger.debug('[Alert][{0}] Unable to close JMX URL connection to {1}'.format(self.get_name(), url))
         json_response = json.loads(content)
         json_data = json_response['beans'][0]
         for attr in jmx_property_value:
