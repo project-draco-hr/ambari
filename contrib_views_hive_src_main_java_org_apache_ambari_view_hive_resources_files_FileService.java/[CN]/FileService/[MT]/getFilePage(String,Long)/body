@@ -1,14 +1,17 @@
 {
   LOG.debug("Reading file " + filePath);
   try {
-    FilePaginator paginator=new FilePaginator(filePath,context);
-    if (page == null)     page=0L;
     FileResource file=new FileResource();
-    file.setFilePath(filePath);
-    file.setFileContent(paginator.readPage(page));
-    file.setHasNext(paginator.pageCount() > page + 1);
-    file.setPage(page);
-    file.setPageCount(paginator.pageCount());
+    if (page == null)     page=0L;
+    if (filePath.startsWith(FAKE_FILE)) {
+      if (page > 1)       throw new IllegalArgumentException("There's only one page in fake files");
+      String content=filePath.substring(FAKE_FILE.length());
+      fillFakeFileObject(filePath,file,content);
+    }
+ else {
+      FilePaginator paginator=new FilePaginator(filePath,getSharedObjectsFactory().getHdfsApi());
+      fillRealFileObject(filePath,page,file,paginator);
+    }
     JSONObject object=new JSONObject();
     object.put("file",file);
     return Response.ok(object).status(200).build();
