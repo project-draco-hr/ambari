@@ -1,18 +1,22 @@
 def setup_jce_policy(args):
-    if os.path.exists(args[1]):
-        if (not (os.path.split(args[1])[0] == configDefaults.SERVER_RESOURCES_DIR)):
-            try:
-                shutil.copy(args[1], configDefaults.SERVER_RESOURCES_DIR)
-            except Exception as e:
-                err = 'Fail while trying to copy {0} to {1}. {2}'.format(args[1], configDefaults.SERVER_RESOURCES_DIR, e)
-                raise FatalException(1, err)
-    else:
+    if (not os.path.exists(args[1])):
         err = "Can not run 'setup-jce'. Invalid path {0}.".format(args[1])
         raise FatalException(1, err)
     properties = get_ambari_properties()
+    resources_dir = get_resources_location(properties)
+    zip_path = os.path.split(args[1])
+    zip_dir = zip_path[0]
+    if (not (zip_dir == resources_dir)):
+        try:
+            shutil.copy(args[1], resources_dir)
+        except Exception as e:
+            err = 'Fail while trying to copy {0} to {1}. {2}'.format(args[1], resources_dir, e)
+            raise FatalException(1, err)
     jdk_path = properties.get_property(JAVA_HOME_PROPERTY)
-    resources_dir = properties.get_property(RESOURCES_DIR_PROPERTY)
-    zip_name = os.path.split(args[1])[1]
+    if ((not jdk_path) or (not os.path.exists(jdk_path))):
+        err = "JDK not installed, you need to run 'ambari-server setup' before attempting to install the JCE policy."
+        raise FatalException(1, err)
+    zip_name = zip_path[1]
     properties.process_pair(JCE_NAME_PROPERTY, zip_name)
     print 'Installing JCE policy...'
     try:
