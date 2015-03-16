@@ -12,14 +12,14 @@ def execute(parameters=None, host_name=None):
     if (SMOKEUSER_KEY in parameters):
         smokeuser = parameters[SMOKEUSER_KEY]
     result_code = None
-    if security_enabled:
-        smokeuser_keytab = SMOKEUSER_KEYTAB_DEFAULT
-        if (SMOKEUSER_KEYTAB_KEY in parameters):
-            smokeuser_keytab = parameters[SMOKEUSER_KEYTAB_KEY]
-        kinit_path_local = get_kinit_path()
-        kinitcmd = format('{kinit_path_local} -kt {smokeuser_keytab} {smokeuser}; ')
-        Execute(kinitcmd, user=smokeuser, path=['/bin/', '/usr/bin/', '/usr/lib/hive/bin/', '/usr/sbin/'])
     try:
+        if security_enabled:
+            smokeuser_keytab = SMOKEUSER_KEYTAB_DEFAULT
+            if (SMOKEUSER_KEYTAB_KEY in parameters):
+                smokeuser_keytab = parameters[SMOKEUSER_KEYTAB_KEY]
+            kinit_path_local = get_kinit_path()
+            kinitcmd = format('{kinit_path_local} -kt {smokeuser_keytab} {smokeuser}; ')
+            Execute(kinitcmd, user=smokeuser, path=['/bin/', '/usr/bin/', '/usr/lib/hive/bin/', '/usr/sbin/'], timeout=10)
         if (host_name is None):
             host_name = socket.getfqdn()
         for uri in metastore_uris:
@@ -28,17 +28,13 @@ def execute(parameters=None, host_name=None):
         cmd = format("hive --hiveconf hive.metastore.uris={metastore_uri} -e 'show databases;'")
         start_time = time.time()
         try:
-            Execute(cmd, user=smokeuser, path=['/bin/', '/usr/bin/', '/usr/lib/hive/bin/', '/usr/sbin/'], timeout=240)
-            is_metastore_ok = True
-        except:
-            is_metastore_ok = False
-        if (is_metastore_ok == True):
-            result_code = 'OK'
+            Execute(cmd, user=smokeuser, path=['/bin/', '/usr/bin/', '/usr/lib/hive/bin/', '/usr/sbin/'], timeout=30)
             total_time = (time.time() - start_time)
-            label = (OK_MESSAGE % total_time)
-        else:
+            result_code = 'OK'
+            label = OK_MESSAGE.format(total_time)
+        except Exception as exception:
             result_code = 'CRITICAL'
-            label = CRITICAL_MESSAGE.format(host_name)
+            label = CRITICAL_MESSAGE.format(host_name, exception.message)
     except Exception as e:
         label = str(e)
         result_code = 'UNKNOWN'
