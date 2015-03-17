@@ -7,30 +7,11 @@ def execute(parameters=None, host_name=None):
     localhost_address = ('localhost' if (OSCheck.get_os_family() == OSConst.WINSRV_FAMILY) else '0.0.0.0')
     oozie_url = parameters[OOZIE_URL_KEY]
     oozie_url = oozie_url.replace(urlparse(oozie_url).hostname, localhost_address)
-    security_enabled = False
-    if (SECURITY_ENABLED in parameters):
-        security_enabled = (str(parameters[SECURITY_ENABLED]).upper() == 'TRUE')
-    command = format('source /etc/oozie/conf/oozie-env.sh ; oozie admin -oozie {oozie_url} -status')
     try:
-        kerberos_env = None
-        if security_enabled:
-            if ((OOZIE_KEYTAB in parameters) and (OOZIE_PRINCIPAL in parameters)):
-                oozie_keytab = parameters[OOZIE_KEYTAB]
-                oozie_principal = parameters[OOZIE_PRINCIPAL]
-                oozie_principal = oozie_principal.replace('_HOST', host_name)
-            else:
-                return (RESULT_CODE_UNKNOWN, ['The Oozie keytab and principal are required parameters when security is enabled.'])
-            env = Environment.get_instance()
-            ccache_file = '{0}{1}oozie_alert_cc_{2}'.format(env.tmp_dir, sep, getpid())
-            kerberos_env = {'KRB5CCNAME': ccache_file, }
-            klist_path_local = get_klist_path()
-            klist_command = format('{klist_path_local} -s {ccache_file}')
-            (return_code, _) = call(klist_command)
-            if (return_code != 0):
-                kinit_path_local = get_kinit_path()
-                kinit_command = format('{kinit_path_local} -l 5m -kt {oozie_keytab} {oozie_principal}; ')
-                Execute(kinit_command, environment=kerberos_env)
-        Execute(command, environment=kerberos_env)
+        (command, env) = get_check_command(oozie_url, host_name, parameters)
+        Execute(command, environment=env)
         return (RESULT_CODE_OK, ['Successful connection to {0}'.format(oozie_url)])
+    except KerberosPropertiesNotFound as ex:
+        return (RESULT_CODE_UNKNOWN, [str(ex)])
     except Exception as ex:
         return (RESULT_CODE_CRITICAL, [str(ex)])
