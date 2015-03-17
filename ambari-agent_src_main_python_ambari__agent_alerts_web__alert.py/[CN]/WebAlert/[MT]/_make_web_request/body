@@ -1,6 +1,7 @@
 def _make_web_request(self, url):
     '\n    Makes an http(s) request to a web resource and returns the http code. If\n    there was an error making the request, return 0 for the status code.\n    '
     try:
+        response_code = 0
         kerberos_keytab = None
         kerberos_principal = None
         if (self.uri_property_keys.kerberos_principal is not None):
@@ -32,17 +33,18 @@ def _make_web_request(self, url):
             start_time = time.time()
             try:
                 curl = subprocess.Popen(['curl', '--negotiate', '-u', ':', '-b', cookie_file, '-c', cookie_file, '-sL', '-w', '%{http_code}', url, '--connect-timeout', CURL_CONNECTION_TIMEOUT, '-o', '/dev/null'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=kerberos_env)
-                (out, err) = curl.communicate()
+                (curl_stdout, curl_stderr) = curl.communicate()
             finally:
                 if os.path.isfile(cookie_file):
                     os.remove(cookie_file)
-            if (err != ''):
-                raise Exception(err)
-            response_code = int(out)
+            if curl_stderr:
+                raise Exception(curl_stderr)
+            if curl_stdout:
+                response_code = int(curl_stdout)
             time_millis = (time.time() - start_time)
         else:
-            (response_code, time_millis) = self._make_web_request_urllib(url)
-        return WebResponse(status_code=response_code, time_millis=time_millis, error_msg=None)
+            (response_code, time_millis, error_msg) = self._make_web_request_urllib(url)
+        return WebResponse(status_code=response_code, time_millis=time_millis, error_msg=error_msg)
     except Exception as exception:
         if logger.isEnabledFor(logging.DEBUG):
             logger.exception('[Alert][{0}] Unable to make a web request.'.format(self.get_name()))
