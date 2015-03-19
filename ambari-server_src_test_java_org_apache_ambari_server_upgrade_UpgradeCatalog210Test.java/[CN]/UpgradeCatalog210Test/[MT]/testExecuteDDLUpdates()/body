@@ -1,0 +1,22 @@
+{
+  final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
+  Connection connection=createNiceMock(Connection.class);
+  Configuration configuration=createNiceMock(Configuration.class);
+  ResultSet resultSet=createNiceMock(ResultSet.class);
+  expect(configuration.getDatabaseUrl()).andReturn(Configuration.JDBC_IN_MEMORY_URL).anyTimes();
+  HostDAO hostDao=createNiceMock(HostDAO.class);
+  HostEntity mockHost=createNiceMock(HostEntity.class);
+  expect(hostDao.findByName("foo")).andReturn(mockHost).anyTimes();
+  Capture<DBAccessor.DBColumnInfo> hostsColumnCapture=new Capture<DBAccessor.DBColumnInfo>();
+  dbAccessor.addColumn(eq("hosts"),capture(hostsColumnCapture));
+  replay(dbAccessor,configuration,resultSet);
+  replay(hostDao,mockHost);
+  AbstractUpgradeCatalog upgradeCatalog=getUpgradeCatalog(dbAccessor);
+  Class<?> c=AbstractUpgradeCatalog.class;
+  Field f=c.getDeclaredField("configuration");
+  f.setAccessible(true);
+  f.set(upgradeCatalog,configuration);
+  upgradeCatalog.executeDDLUpdates();
+  verify(dbAccessor,configuration,resultSet);
+  verifyHosts(hostsColumnCapture);
+}
