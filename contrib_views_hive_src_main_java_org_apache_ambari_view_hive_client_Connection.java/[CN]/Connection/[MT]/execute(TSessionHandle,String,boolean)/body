@@ -1,0 +1,34 @@
+{
+  TOperationHandle handle=null;
+  String[] commands=cmd.split(";");
+  for (int i=0; i < commands.length; i++) {
+    final String oneCmd=commands[i];
+    final boolean lastCommand=i == commands.length - 1;
+    TExecuteStatementResp execResp=new HiveCall<TExecuteStatementResp>(this){
+      @Override public TExecuteStatementResp body() throws HiveClientException {
+        TExecuteStatementReq execReq=null;
+        execReq=new TExecuteStatementReq(session,oneCmd);
+        if (lastCommand) {
+          execReq.setRunAsync(async);
+        }
+ else {
+          execReq.setRunAsync(false);
+        }
+        execReq.setConfOverlay(new HashMap<String,String>());
+        try {
+          return client.ExecuteStatement(execReq);
+        }
+ catch (        TException e) {
+          throw new HiveClientException("Unable to submit statement " + cmd,e);
+        }
+      }
+    }
+.call();
+    Utils.verifySuccess(execResp.getStatus(),"Unable to submit statement " + cmd);
+    handle=execResp.getOperationHandle();
+  }
+  if (handle == null) {
+    throw new HiveClientException("Empty command given",null);
+  }
+  return handle;
+}
