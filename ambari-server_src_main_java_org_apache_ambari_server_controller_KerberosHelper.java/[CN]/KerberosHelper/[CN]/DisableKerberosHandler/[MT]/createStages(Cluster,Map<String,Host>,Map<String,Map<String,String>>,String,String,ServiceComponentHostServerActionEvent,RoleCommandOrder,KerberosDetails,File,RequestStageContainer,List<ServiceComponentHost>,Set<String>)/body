@@ -9,8 +9,13 @@
   commandParameters.put(KerberosServerAction.KDC_TYPE,kerberosDetails.getKdcType().name());
   commandParameters.put(KerberosServerAction.ADMINISTRATOR_CREDENTIAL,getEncryptedAdministratorCredentials(cluster));
   if (!kerberosConfigurations.isEmpty()) {
+    Map<String,Collection<String>> configurationsToRemove=new HashMap<String,Collection<String>>();
     File configFile=new File(dataDirectory,KerberosConfigDataFile.DATA_FILE_NAME);
     KerberosConfigDataFileBuilder kerberosConfDataFileBuilder=null;
+    for (    Map.Entry<String,Map<String,String>> entry : kerberosConfigurations.entrySet()) {
+      configurationsToRemove.put(entry.getKey(),new HashSet<String>(entry.getValue().keySet()));
+    }
+    configurationsToRemove.remove("cluster-env");
     if (serviceComponentHosts != null) {
       Set<String> visitedServices=new HashSet<String>();
       for (      ServiceComponentHost sch : serviceComponentHosts) {
@@ -24,9 +29,15 @@
               for (              PropertyInfo propertyInfo : serviceProperties) {
                 String filename=propertyInfo.getFilename();
                 if (filename != null) {
-                  Map<String,String> kerberosConfiguration=kerberosConfigurations.get(ConfigHelper.fileNameToConfigType(filename));
-                  if ((kerberosConfiguration != null) && (kerberosConfiguration.containsKey(propertyInfo.getName()))) {
-                    kerberosConfiguration.put(propertyInfo.getName(),propertyInfo.getValue());
+                  String type=ConfigHelper.fileNameToConfigType(filename);
+                  String propertyName=propertyInfo.getName();
+                  Map<String,String> kerberosConfiguration=kerberosConfigurations.get(type);
+                  if ((kerberosConfiguration != null) && (kerberosConfiguration.containsKey(propertyName))) {
+                    kerberosConfiguration.put(propertyName,propertyInfo.getValue());
+                  }
+                  Collection<String> propertiesToRemove=configurationsToRemove.get(type);
+                  if (propertiesToRemove != null) {
+                    propertiesToRemove.remove(propertyName);
                   }
                 }
               }
@@ -42,7 +53,17 @@
         Map<String,String> properties=entry.getValue();
         if (properties != null) {
           for (          Map.Entry<String,String> configTypeEntry : properties.entrySet()) {
-            kerberosConfDataFileBuilder.addRecord(type,configTypeEntry.getKey(),configTypeEntry.getValue());
+            String value=configTypeEntry.getValue();
+            kerberosConfDataFileBuilder.addRecord(type,configTypeEntry.getKey(),value,(value == null) ? KerberosConfigDataFile.OPERATION_TYPE_REMOVE : KerberosConfigDataFile.OPERATION_TYPE_SET);
+          }
+        }
+      }
+      for (      Map.Entry<String,Collection<String>> entry : configurationsToRemove.entrySet()) {
+        String type=entry.getKey();
+        Collection<String> properties=entry.getValue();
+        if (properties != null) {
+          for (          String propertyName : properties) {
+            kerberosConfDataFileBuilder.addRecord(type,propertyName,null,KerberosConfigDataFile.OPERATION_TYPE_REMOVE);
           }
         }
       }

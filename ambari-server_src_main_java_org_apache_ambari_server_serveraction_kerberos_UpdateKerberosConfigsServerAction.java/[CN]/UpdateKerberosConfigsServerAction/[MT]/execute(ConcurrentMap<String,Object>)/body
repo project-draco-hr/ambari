@@ -5,7 +5,8 @@
   Cluster cluster=clusters.getCluster(clusterName);
   String authenticatedUserName=getCommandParameterValue(getCommandParameters(),KerberosServerAction.AUTHENTICATED_USER_NAME);
   String dataDirectoryPath=getCommandParameterValue(getCommandParameters(),KerberosServerAction.DATA_DIRECTORY);
-  HashMap<String,Map<String,String>> configurations=new HashMap<String,Map<String,String>>();
+  HashMap<String,Map<String,String>> propertiesToSet=new HashMap<String,Map<String,String>>();
+  HashMap<String,Collection<String>> propertiesToRemove=new HashMap<String,Collection<String>>();
   if (dataDirectoryPath != null) {
     File dataDirectory=new File(dataDirectoryPath);
     if (dataDirectory.exists()) {
@@ -22,7 +23,7 @@
             if (principalTokens.length == 2) {
               String principalConfigType=principalTokens[0];
               String principalConfigProp=principalTokens[1];
-              addConfigTypePropVal(configurations,principalConfigType,principalConfigProp,principal);
+              addConfigTypePropVal(propertiesToSet,principalConfigType,principalConfigProp,principal);
             }
             String keytabPath=record.get(KerberosActionDataFile.KEYTAB_FILE_PATH);
             String keytabConfig=record.get(KerberosActionDataFile.KEYTAB_FILE_CONFIGURATION);
@@ -30,7 +31,7 @@
             if (keytabTokens.length == 2) {
               String keytabConfigType=keytabTokens[0];
               String keytabConfigProp=keytabTokens[1];
-              addConfigTypePropVal(configurations,keytabConfigType,keytabConfigProp,keytabPath);
+              addConfigTypePropVal(propertiesToSet,keytabConfigType,keytabConfigProp,keytabPath);
             }
           }
         }
@@ -41,13 +42,20 @@
             String configType=record.get(KerberosConfigDataFile.CONFIGURATION_TYPE);
             String configKey=record.get(KerberosConfigDataFile.KEY);
             String configVal=record.get(KerberosConfigDataFile.VALUE);
-            addConfigTypePropVal(configurations,configType,configKey,configVal);
+            String configOp=record.get(KerberosConfigDataFile.OPERATION);
+            if (KerberosConfigDataFile.OPERATION_TYPE_REMOVE.equals(configOp)) {
+              removeConfigTypeProp(propertiesToRemove,configType,configKey);
+            }
+ else {
+              addConfigTypePropVal(propertiesToSet,configType,configKey,configVal);
+            }
           }
         }
-        if (!configurations.isEmpty()) {
+        if (!propertiesToSet.isEmpty()) {
           String configNote=cluster.getSecurityType() == SecurityType.KERBEROS ? "Enabling Kerberos" : "Disabling Kerberos";
-          for (          Map.Entry<String,Map<String,String>> entry : configurations.entrySet()) {
-            configHelper.updateConfigType(cluster,controller,entry.getKey(),entry.getValue(),authenticatedUserName,configNote);
+          for (          Map.Entry<String,Map<String,String>> entry : propertiesToSet.entrySet()) {
+            String type=entry.getKey();
+            configHelper.updateConfigType(cluster,controller,type,entry.getValue(),propertiesToRemove.get(type),authenticatedUserName,configNote);
           }
         }
       }
