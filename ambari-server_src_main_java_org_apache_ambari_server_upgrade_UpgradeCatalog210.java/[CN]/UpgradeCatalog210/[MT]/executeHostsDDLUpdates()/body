@@ -1,10 +1,10 @@
 {
   Configuration.DatabaseType databaseType=configuration.getDatabaseType();
-  dbAccessor.addColumn(HOSTS_TABLE,new DBColumnInfo("id",Long.class,null,null,true));
+  dbAccessor.addColumn(HOSTS_TABLE,new DBColumnInfo(HOST_ID_COL,Long.class,null,null,true));
   Long hostId=0L;
   ResultSet resultSet=null;
   try {
-    resultSet=dbAccessor.executeSelect("SELECT host_name FROM hosts");
+    resultSet=dbAccessor.executeSelect("SELECT host_name, host_id FROM hosts ORDER BY host_id ASC, host_name ASC");
     hostId=populateHostsId(resultSet);
   }
   finally {
@@ -14,30 +14,30 @@
   }
   dbAccessor.executeQuery("INSERT INTO ambari_sequences (sequence_name, sequence_value) VALUES ('host_id_seq', " + hostId + ")");
   if (databaseType == Configuration.DatabaseType.DERBY) {
-    dbAccessor.executeQuery("ALTER TABLE hosts ALTER column id NOT NULL");
+    dbAccessor.executeQuery("ALTER TABLE " + HOSTS_TABLE + " ALTER column "+ HOST_ID_COL+ " NOT NULL");
   }
  else {
-    dbAccessor.alterColumn("hosts",new DBColumnInfo("id",Long.class,null,null,false));
+    dbAccessor.alterColumn(HOSTS_TABLE,new DBColumnInfo(HOST_ID_COL,Long.class,null,null,false));
   }
   if (databaseType == Configuration.DatabaseType.DERBY) {
-    dbAccessor.executeQuery("ALTER TABLE hostcomponentdesiredstate DROP CONSTRAINT hstcmponentdesiredstatehstname");
-    dbAccessor.executeQuery("ALTER TABLE hostcomponentstate DROP CONSTRAINT hostcomponentstate_host_name");
-    dbAccessor.executeQuery("ALTER TABLE hoststate DROP CONSTRAINT FK_hoststate_host_name");
-    dbAccessor.executeQuery("ALTER TABLE host_version DROP CONSTRAINT FK_host_version_host_name");
-    dbAccessor.executeQuery("ALTER TABLE host_role_command DROP CONSTRAINT FK_host_role_command_host_name");
-    dbAccessor.executeQuery("ALTER TABLE hostconfigmapping DROP CONSTRAINT FK_hostconfigmapping_host_name");
-    dbAccessor.executeQuery("ALTER TABLE configgrouphostmapping DROP CONSTRAINT FK_cghm_hname");
-    dbAccessor.executeQuery("ALTER TABLE kerberos_principal_host DROP CONSTRAINT FK_krb_pr_host_hostname");
+    dbAccessor.executeQuery("ALTER TABLE " + HOST_COMPONENT_STATE_TABLE + " DROP CONSTRAINT hostcomponentstate_host_name");
+    dbAccessor.executeQuery("ALTER TABLE " + HOST_COMPONENT_DESIRED_STATE_TABLE + " DROP CONSTRAINT hstcmponentdesiredstatehstname");
+    dbAccessor.executeQuery("ALTER TABLE " + HOST_ROLE_COMMAND_TABLE + " DROP CONSTRAINT FK_host_role_command_host_name");
+    dbAccessor.executeQuery("ALTER TABLE " + HOST_STATE_TABLE + " DROP CONSTRAINT FK_hoststate_host_name");
+    dbAccessor.executeQuery("ALTER TABLE " + HOST_VERSION_TABLE + " DROP CONSTRAINT FK_host_version_host_name");
+    dbAccessor.executeQuery("ALTER TABLE " + CONFIG_GROUP_HOST_MAPPING_TABLE + " DROP CONSTRAINT FK_cghm_hname");
+    dbAccessor.executeQuery("ALTER TABLE " + KERBEROS_PRINCIPAL_HOST_TABLE + " DROP CONSTRAINT FK_krb_pr_host_hostname");
+    dbAccessor.executeQuery("ALTER TABLE " + HOST_CONFIG_MAPPING_TABLE + " DROP CONSTRAINT FK_hostconfigmapping_host_name");
   }
  else {
-    dbAccessor.dropConstraint(HOST_COMPONENT_DESIRED_STATE_TABLE,"hstcmponentdesiredstatehstname");
     dbAccessor.dropConstraint(HOST_COMPONENT_STATE_TABLE,"hostcomponentstate_host_name");
+    dbAccessor.dropConstraint(HOST_COMPONENT_DESIRED_STATE_TABLE,"hstcmponentdesiredstatehstname");
+    dbAccessor.dropConstraint(HOST_ROLE_COMMAND_TABLE,"FK_host_role_command_host_name");
     dbAccessor.dropConstraint(HOST_STATE_TABLE,"FK_hoststate_host_name");
     dbAccessor.dropConstraint(HOST_VERSION_TABLE,"FK_host_version_host_name");
-    dbAccessor.dropConstraint(HOST_ROLE_COMMAND_TABLE,"FK_host_role_command_host_name");
-    dbAccessor.dropConstraint(HOST_CONFIG_MAPPING_TABLE,"FK_hostconfmapping_host_name");
     dbAccessor.dropConstraint(CONFIG_GROUP_HOST_MAPPING_TABLE,"FK_cghm_hname");
     dbAccessor.dropConstraint(KERBEROS_PRINCIPAL_HOST_TABLE,"FK_krb_pr_host_hostname");
+    dbAccessor.dropConstraint(HOST_CONFIG_MAPPING_TABLE,"FK_hostconfmapping_host_name");
   }
   try {
     dbAccessor.dropConstraint(CLUSTER_HOST_MAPPING_TABLE,"ClusterHostMapping_host_name",true);
@@ -55,32 +55,57 @@
   if (databaseType == Configuration.DatabaseType.DERBY) {
     String constraintName=getDerbyTableConstraintName("p",HOSTS_TABLE);
     if (null != constraintName) {
-      dbAccessor.executeQuery("ALTER TABLE hosts DROP CONSTRAINT " + constraintName);
+      dbAccessor.executeQuery("ALTER TABLE " + HOSTS_TABLE + " DROP CONSTRAINT "+ constraintName);
     }
   }
  else {
     dbAccessor.dropConstraint(HOSTS_TABLE,"hosts_pkey");
   }
-  dbAccessor.executeQuery("ALTER TABLE hosts ADD CONSTRAINT PK_hosts_id PRIMARY KEY (id)");
-  dbAccessor.executeQuery("ALTER TABLE hosts ADD CONSTRAINT UQ_hosts_host_name UNIQUE (host_name)");
-  dbAccessor.addFKConstraint(HOST_COMPONENT_DESIRED_STATE_TABLE,"hstcmponentdesiredstatehstname","host_name",HOSTS_TABLE,"host_name",false);
-  dbAccessor.addFKConstraint(HOST_COMPONENT_STATE_TABLE,"hostcomponentstate_host_name","host_name",HOSTS_TABLE,"host_name",false);
-  dbAccessor.addFKConstraint(HOST_STATE_TABLE,"FK_hoststate_host_name","host_name",HOSTS_TABLE,"host_name",false);
+  dbAccessor.executeQuery("ALTER TABLE " + HOSTS_TABLE + " ADD CONSTRAINT PK_hosts_id PRIMARY KEY (host_id)");
+  dbAccessor.executeQuery("ALTER TABLE " + HOSTS_TABLE + " ADD CONSTRAINT UQ_hosts_host_name UNIQUE (host_name)");
   dbAccessor.addFKConstraint(HOST_VERSION_TABLE,"FK_host_version_host_name","host_name",HOSTS_TABLE,"host_name",false);
   dbAccessor.addFKConstraint(HOST_ROLE_COMMAND_TABLE,"FK_host_role_command_host_name","host_name",HOSTS_TABLE,"host_name",false);
   dbAccessor.addFKConstraint(HOST_CONFIG_MAPPING_TABLE,"FK_hostconfmapping_host_name","host_name",HOSTS_TABLE,"host_name",false);
   dbAccessor.addFKConstraint(CONFIG_GROUP_HOST_MAPPING_TABLE,"FK_cghm_hname","host_name",HOSTS_TABLE,"host_name",false);
   dbAccessor.addFKConstraint(KERBEROS_PRINCIPAL_HOST_TABLE,"FK_krb_pr_host_host_name","host_name",HOSTS_TABLE,"host_name",false);
-  dbAccessor.addColumn(CLUSTER_HOST_MAPPING_TABLE,new DBColumnInfo("host_id",Long.class,null,null,true));
-  dbAccessor.executeQuery("UPDATE clusterhostmapping chm SET host_id = (SELECT id FROM hosts h WHERE h.host_name = chm.host_name) WHERE chm.host_id IS NULL AND chm.host_name IS NOT NULL");
+  String[] tablesToAddHostID=new String[]{CLUSTER_HOST_MAPPING_TABLE,HOST_COMPONENT_STATE_TABLE,HOST_COMPONENT_DESIRED_STATE_TABLE,HOST_STATE_TABLE};
+  for (  String tableName : tablesToAddHostID) {
+    dbAccessor.addColumn(tableName,new DBColumnInfo(HOST_ID_COL,Long.class,null,null,true));
+    dbAccessor.executeQuery("UPDATE " + tableName + " t SET host_id = (SELECT host_id FROM hosts h WHERE h.host_name = t.host_name) WHERE t.host_id IS NULL AND t.host_name IS NOT NULL");
+    if (databaseType == Configuration.DatabaseType.DERBY) {
+      dbAccessor.executeQuery("ALTER TABLE " + tableName + " ALTER column "+ HOST_ID_COL+ " NOT NULL");
+    }
+ else {
+      dbAccessor.executeQuery("ALTER TABLE " + tableName + " ALTER column "+ HOST_ID_COL+ " SET NOT NULL");
+    }
+  }
+  dbAccessor.addFKConstraint(CLUSTER_HOST_MAPPING_TABLE,"FK_clusterhostmapping_host_id","host_id",HOSTS_TABLE,"host_id",false);
+  dbAccessor.addFKConstraint(HOST_COMPONENT_STATE_TABLE,"FK_hostcomponentstate_host_id","host_id",HOSTS_TABLE,"host_id",false);
+  dbAccessor.addFKConstraint(HOST_COMPONENT_DESIRED_STATE_TABLE,"FK_hostcomponentdesiredstate_host_id","host_id",HOSTS_TABLE,"host_id",false);
+  dbAccessor.addFKConstraint(HOST_STATE_TABLE,"FK_hoststate_host_id","host_id",HOSTS_TABLE,"host_id",false);
+  String[] tablesWithHostNameInPK=new String[]{CLUSTER_HOST_MAPPING_TABLE,HOST_COMPONENT_STATE_TABLE,HOST_COMPONENT_DESIRED_STATE_TABLE,HOST_STATE_TABLE};
   if (databaseType == Configuration.DatabaseType.DERBY) {
-    dbAccessor.executeQuery("ALTER TABLE clusterhostmapping ALTER column host_id NOT NULL");
+    for (    String tableName : tablesWithHostNameInPK) {
+      String constraintName=getDerbyTableConstraintName("p",tableName);
+      if (null != constraintName) {
+        dbAccessor.executeQuery("ALTER TABLE " + tableName + " DROP CONSTRAINT "+ constraintName);
+      }
+    }
   }
  else {
-    dbAccessor.executeQuery("ALTER TABLE clusterhostmapping ALTER column host_id SET NOT NULL");
+    dbAccessor.dropConstraint(CLUSTER_HOST_MAPPING_TABLE,"clusterhostmapping_pkey");
+    dbAccessor.dropConstraint(HOST_COMPONENT_STATE_TABLE,"hostcomponentstate_pkey");
+    dbAccessor.dropConstraint(HOST_COMPONENT_DESIRED_STATE_TABLE,"hostcomponentdesiredstate_pkey");
+    dbAccessor.dropConstraint(HOST_STATE_TABLE,"hoststate_pkey");
   }
-  dbAccessor.addFKConstraint(CLUSTER_HOST_MAPPING_TABLE,"FK_clusterhostmapping_host_id","host_id",HOSTS_TABLE,"id",false);
+  dbAccessor.executeQuery("ALTER TABLE " + CLUSTER_HOST_MAPPING_TABLE + " ADD CONSTRAINT clusterhostmapping_pkey PRIMARY KEY (cluster_id, host_id)");
+  dbAccessor.executeQuery("ALTER TABLE " + HOST_COMPONENT_STATE_TABLE + " ADD CONSTRAINT hostcomponentstate_pkey PRIMARY KEY (cluster_id, component_name, host_id, service_name)");
+  dbAccessor.executeQuery("ALTER TABLE " + HOST_COMPONENT_DESIRED_STATE_TABLE + " ADD CONSTRAINT hostcomponentdesiredstate_pkey PRIMARY KEY (cluster_id, component_name, host_id, service_name)");
+  dbAccessor.executeQuery("ALTER TABLE " + HOST_STATE_TABLE + " ADD CONSTRAINT hoststate_pkey PRIMARY KEY (host_id)");
   dbAccessor.dropColumn(CLUSTER_HOST_MAPPING_TABLE,"host_name");
+  dbAccessor.dropColumn(HOST_COMPONENT_STATE_TABLE,"host_name");
+  dbAccessor.dropColumn(HOST_COMPONENT_DESIRED_STATE_TABLE,"host_name");
+  dbAccessor.dropColumn(HOST_STATE_TABLE,"host_name");
   dbAccessor.addColumn(VIEW_INSTANCE_TABLE,new DBColumnInfo("cluster_handle",String.class,255,null,true));
   dbAccessor.addColumn(VIEW_PARAMETER_TABLE,new DBColumnInfo("cluster_config",String.class,255,null,true));
 }

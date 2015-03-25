@@ -8,12 +8,24 @@
   }
   this.serviceComponent=serviceComponent;
   clusterGlobalLock=serviceComponent.getClusterGlobalLock();
+  HostEntity hostEntity=null;
+  try {
+    host=clusters.getHost(hostName);
+    hostEntity=hostDAO.findByName(hostName);
+    if (hostEntity == null) {
+      throw new AmbariException("Could not find host " + hostName);
+    }
+  }
+ catch (  AmbariException e) {
+    LOG.error("Host '{}' was not found" + hostName);
+    throw new RuntimeException(e);
+  }
   stateEntity=new HostComponentStateEntity();
   stateEntity.setClusterId(serviceComponent.getClusterId());
   stateEntity.setComponentName(serviceComponent.getName());
   stateEntity.setServiceName(serviceComponent.getServiceName());
   stateEntity.setVersion(State.UNKNOWN.toString());
-  stateEntity.setHostName(hostName);
+  stateEntity.setHostEntity(hostEntity);
   stateEntity.setCurrentState(stateMachine.getCurrentState());
   stateEntity.setUpgradeState(UpgradeState.NONE);
   stateEntity.setCurrentStackVersion(gson.toJson(new StackId()));
@@ -22,7 +34,7 @@
   desiredStateEntity.setClusterId(serviceComponent.getClusterId());
   desiredStateEntity.setComponentName(serviceComponent.getName());
   desiredStateEntity.setServiceName(serviceComponent.getServiceName());
-  desiredStateEntity.setHostName(hostName);
+  desiredStateEntity.setHostEntity(hostEntity);
   desiredStateEntity.setDesiredState(State.INIT);
   desiredStateEntity.setDesiredStackVersion(gson.toJson(serviceComponent.getDesiredStackVersion()));
   if (!serviceComponent.isMasterComponent() && !serviceComponent.isClientComponent()) {
@@ -32,12 +44,5 @@
     desiredStateEntity.setAdminState(null);
   }
   desiredStateEntityPK=getHostComponentDesiredStateEntityPK(desiredStateEntity);
-  try {
-    host=clusters.getHost(hostName);
-  }
- catch (  AmbariException e) {
-    LOG.error("Host '{}' was not found" + hostName);
-    throw new RuntimeException(e);
-  }
   resetLastOpInfo();
 }
