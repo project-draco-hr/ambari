@@ -1,0 +1,22 @@
+def _parse_reparse_buffer(original, reparse_type=SYMBOLIC_LINK):
+    ' Implementing the below in Python:\n\n  typedef struct _REPARSE_DATA_BUFFER {\n      ULONG  ReparseTag;\n      USHORT ReparseDataLength;\n      USHORT Reserved;\n      union {\n          struct {\n              USHORT SubstituteNameOffset;\n              USHORT SubstituteNameLength;\n              USHORT PrintNameOffset;\n              USHORT PrintNameLength;\n              ULONG Flags;\n              WCHAR PathBuffer[1];\n          } SymbolicLinkReparseBuffer;\n          struct {\n              USHORT SubstituteNameOffset;\n              USHORT SubstituteNameLength;\n              USHORT PrintNameOffset;\n              USHORT PrintNameLength;\n              WCHAR PathBuffer[1];\n          } MountPointReparseBuffer;\n          struct {\n              UCHAR  DataBuffer[1];\n          } GenericReparseBuffer;\n      } DUMMYUNIONNAME;\n  } REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;\n\n  '
+    SZULONG = 4
+    SZUSHORT = 2
+    buffer = {'tag': SZULONG, 'data_length': SZUSHORT, 'reserved': SZUSHORT, SYMBOLIC_LINK: {'substitute_name_offset': SZUSHORT, 'substitute_name_length': SZUSHORT, 'print_name_offset': SZUSHORT, 'print_name_length': SZUSHORT, 'flags': SZULONG, 'buffer': u'', 'pkeys': ['substitute_name_offset', 'substitute_name_length', 'print_name_offset', 'print_name_length', 'flags'], }, MOUNTPOINT: {'substitute_name_offset': SZUSHORT, 'substitute_name_length': SZUSHORT, 'print_name_offset': SZUSHORT, 'print_name_length': SZUSHORT, 'buffer': u'', 'pkeys': ['substitute_name_offset', 'substitute_name_length', 'print_name_offset', 'print_name_length'], }, GENERIC: {'pkeys': [], 'buffer': '', }, }
+    buffer['tag'] = original[:SZULONG]
+    buffer['data_length'] = original[SZULONG:SZUSHORT]
+    buffer['reserved'] = original[(SZULONG + SZUSHORT):SZUSHORT]
+    original = original[8:]
+    k = reparse_type
+    for c in buffer[k]['pkeys']:
+        if (type(buffer[k][c]) == int):
+            sz = buffer[k][c]
+            bytes = original[:sz]
+            buffer[k][c] = 0
+            for b in bytes:
+                n = ord(b)
+                if n:
+                    buffer[k][c] += n
+            original = original[sz:]
+    buffer[k]['buffer'] = original
+    return buffer

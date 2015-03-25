@@ -1,0 +1,22 @@
+def readlink(fpath):
+    ' Windows readlink implementation. '
+    if (not islink(fpath)):
+        return None
+    try:
+        if (type(fpath) == unicode):
+            handle = win32file.CreateFileW(fpath, win32file.GENERIC_READ, 0, None, win32file.OPEN_EXISTING, (win32file.FILE_FLAG_OPEN_REPARSE_POINT | win32file.FILE_FLAG_BACKUP_SEMANTICS), 0)
+        else:
+            handle = win32file.CreateFile(fpath, win32file.GENERIC_READ, 0, None, win32file.OPEN_EXISTING, (win32file.FILE_FLAG_OPEN_REPARSE_POINT | win32file.FILE_FLAG_BACKUP_SEMANTICS), 0)
+        buffer = win32file.DeviceIoControl(handle, winioctlcon.FSCTL_GET_REPARSE_POINT, None, (16 * 1024))
+        win32file.CloseHandle(handle)
+        if (len(buffer) < 9):
+            return None
+        result = _parse_reparse_buffer(buffer)
+        offset = result[SYMBOLIC_LINK]['substitute_name_offset']
+        ending = (offset + result[SYMBOLIC_LINK]['substitute_name_length'])
+        rpath = result[SYMBOLIC_LINK]['buffer'][offset:ending].replace('\x00', '')
+        if ((len(rpath) > 4) and (rpath[0:4] == '\\??\\')):
+            rpath = rpath[4:]
+        return rpath
+    except pywintypes.error as e:
+        raise OSError(e.winerror, e.strerror, fpath)
