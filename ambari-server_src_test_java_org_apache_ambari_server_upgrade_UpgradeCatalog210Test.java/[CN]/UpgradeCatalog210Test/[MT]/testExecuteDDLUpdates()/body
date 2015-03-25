@@ -4,13 +4,13 @@
   Configuration configuration=createNiceMock(Configuration.class);
   ResultSet resultSet=createNiceMock(ResultSet.class);
   expect(configuration.getDatabaseUrl()).andReturn(Configuration.JDBC_IN_MEMORY_URL).anyTimes();
+  HostDAO hostDao=createNiceMock(HostDAO.class);
+  HostEntity mockHost=createNiceMock(HostEntity.class);
+  expect(hostDao.findByName("foo")).andReturn(mockHost).anyTimes();
   Capture<DBAccessor.DBColumnInfo> hostsColumnCapture=new Capture<DBAccessor.DBColumnInfo>();
-  List<Capture<DBColumnInfo>> hostRelatedCaptures=new ArrayList<Capture<DBColumnInfo>>();
-  Capture<DBAccessor.DBColumnInfo> hostStateColumnCapture=new Capture<DBAccessor.DBColumnInfo>();
-  hostRelatedCaptures.add(hostStateColumnCapture);
   dbAccessor.addColumn(eq("hosts"),capture(hostsColumnCapture));
-  dbAccessor.addColumn(eq("hoststate"),capture(hostStateColumnCapture));
   replay(dbAccessor,configuration,resultSet);
+  replay(hostDao,mockHost);
   AbstractUpgradeCatalog upgradeCatalog=getUpgradeCatalog(dbAccessor);
   Class<?> c=AbstractUpgradeCatalog.class;
   Field f=c.getDeclaredField("configuration");
@@ -19,7 +19,4 @@
   upgradeCatalog.executeDDLUpdates();
   verify(dbAccessor,configuration,resultSet);
   verifyHosts(hostsColumnCapture);
-  for (  Capture<DBColumnInfo> columnCapture : hostRelatedCaptures) {
-    verifyContainsHostIdColumn(columnCapture);
-  }
 }
