@@ -1,0 +1,50 @@
+{
+  Set<Resource> resources=new HashSet<Resource>();
+  for (  Map<String,Object> properties : getPropertyMaps(predicate)) {
+    String artifactName=(String)properties.get(ARTIFACT_NAME_PROPERTY_ID);
+    if (artifactName == null || artifactName.equals(METRICS_DESCRIPTOR_NAME)) {
+      String stackName=(String)properties.get(STACK_NAME_PROPERTY_ID);
+      String stackVersion=(String)properties.get(STACK_VERSION_PROPERTY_ID);
+      String stackService=(String)properties.get(STACK_SERVICE_NAME_PROPERTY_ID);
+      String componentName=(String)properties.get(STACK_COMPONENT_NAME_PROPERTY_ID);
+      Map<String,Object> descriptor;
+      AmbariMetaInfo metaInfo=getManagementController().getAmbariMetaInfo();
+      try {
+        List<MetricDefinition> componentMetrics;
+        Map<String,Map<String,List<MetricDefinition>>> serviceMetrics;
+        if (stackService != null) {
+          if (componentName == null) {
+            serviceMetrics=metaInfo.getServiceMetrics(stackName,stackVersion,stackService);
+            descriptor=Collections.singletonMap(stackService,(Object)serviceMetrics);
+          }
+ else {
+            componentMetrics=metaInfo.getMetrics(stackName,stackVersion,stackService,componentName,Resource.Type.Component.name());
+            descriptor=Collections.singletonMap(componentName,(Object)componentMetrics);
+          }
+        }
+ else {
+          Map<String,Map<String,PropertyInfo>> clusterMetrics=PropertyHelper.getMetricPropertyIds(Resource.Type.Cluster);
+          Map<String,Map<String,PropertyInfo>> hostMetrics=PropertyHelper.getMetricPropertyIds(Resource.Type.Host);
+          descriptor=new HashMap<String,Object>();
+          descriptor.put(Resource.Type.Cluster.name(),clusterMetrics);
+          descriptor.put(Resource.Type.Host.name(),hostMetrics);
+        }
+      }
+ catch (      IOException e) {
+        LOG.error("Unable to process Kerberos Descriptor. Properties: " + properties,e);
+        throw new SystemException("An internal exception occurred while attempting to build a Kerberos Descriptor " + "artifact. See ambari server logs for more information",e);
+      }
+      Resource resource=new ResourceImpl(Resource.Type.StackArtifact);
+      Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+      setResourceProperty(resource,ARTIFACT_NAME_PROPERTY_ID,METRICS_DESCRIPTOR_NAME,requestedIds);
+      setResourceProperty(resource,ARTIFACT_DATA_PROPERTY_ID,descriptor,requestedIds);
+      setResourceProperty(resource,STACK_NAME_PROPERTY_ID,stackName,requestedIds);
+      setResourceProperty(resource,STACK_VERSION_PROPERTY_ID,stackVersion,requestedIds);
+      if (stackService != null) {
+        setResourceProperty(resource,STACK_SERVICE_NAME_PROPERTY_ID,stackService,requestedIds);
+      }
+      resources.add(resource);
+    }
+  }
+  return resources;
+}
