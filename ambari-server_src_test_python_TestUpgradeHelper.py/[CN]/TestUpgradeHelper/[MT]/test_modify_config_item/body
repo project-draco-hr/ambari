@@ -1,0 +1,18 @@
+@patch.object(upgradeHelper, 'read_mapping')
+@patch.object(upgradeHelper, 'get_config')
+@patch.object(upgradeHelper, 'update_config_using_existing_properties')
+@patch.object(upgradeHelper, 'update_config')
+@patch.object(upgradeHelper, 'get_config_resp')
+def test_modify_config_item(self, get_config_resp_mock, upgrade_config_mock, update_config_using_existing_properties_mock, get_config_mock, read_mapping_mock):
+    catalog_factory = UpgradeCatalogFactoryMock(self.test_catalog)
+    get_config_resp_mock.return_value = ('', {})
+    catalog = catalog_factory.get_catalog(self.catalog_from, self.catalog_to)
+    cfg_type = self.catalog_cfg_type
+    read_mapping_mock.return_value = {'MAPREDUCE_CLIENT': ['test.host.vm'], 'JOBTRACKER': ['test1.host.vm'], 'TASKTRACKER': ['test2.host.vm'], 'HISTORYSERVER': ['test3.host.vm'], }
+    get_config_mock.return_value = ({'my replace property': 'property value 2', }, {})
+    expected_params = [cfg_type, {'my property': {'value': 'my value', }, }, {'my property 2': 'property value 2', }]
+    upgradeHelper.modify_config_item(cfg_type, catalog)
+    actual_params = [update_config_using_existing_properties_mock.call_args[0][0], update_config_using_existing_properties_mock.call_args[0][1], update_config_using_existing_properties_mock.call_args[0][2]]
+    self.assertEquals(update_config_using_existing_properties_mock.call_count, 1)
+    self.assertEqual(upgrade_config_mock.call_count, 0)
+    self.assertEqual(expected_params, actual_params)
