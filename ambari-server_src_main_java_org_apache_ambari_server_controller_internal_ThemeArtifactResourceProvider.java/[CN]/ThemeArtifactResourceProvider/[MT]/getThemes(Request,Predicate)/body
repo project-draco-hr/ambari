@@ -1,0 +1,58 @@
+{
+  Set<Resource> resources=new LinkedHashSet<Resource>();
+  for (  Map<String,Object> properties : getPropertyMaps(predicate)) {
+    String themeFileName=(String)properties.get(THEME_FILE_NAME_PROPERTY_ID);
+    String stackName=(String)properties.get(STACK_NAME_PROPERTY_ID);
+    String stackVersion=(String)properties.get(STACK_VERSION_PROPERTY_ID);
+    String stackService=(String)properties.get(STACK_SERVICE_NAME_PROPERTY_ID);
+    StackInfo stackInfo;
+    try {
+      stackInfo=getManagementController().getAmbariMetaInfo().getStack(stackName,stackVersion);
+    }
+ catch (    AmbariException e) {
+      throw new NoSuchParentResourceException(String.format("Parent stack resource doesn't exist: stackName='%s', stackVersion='%s'",stackName,stackVersion));
+    }
+    List<ServiceInfo> serviceInfoList=new ArrayList<ServiceInfo>();
+    if (stackService == null) {
+      serviceInfoList.addAll(stackInfo.getServices());
+    }
+ else {
+      ServiceInfo service=stackInfo.getService(stackService);
+      if (service == null) {
+        throw new NoSuchParentResourceException(String.format("Parent stack/service resource doesn't exist: stackName='%s', stackVersion='%s', serviceName='%s'",stackName,stackVersion,stackService));
+      }
+      serviceInfoList.add(service);
+    }
+    for (    ServiceInfo serviceInfo : serviceInfoList) {
+      List<ThemeInfo> serviceThemes=new ArrayList<ThemeInfo>();
+      if (themeFileName != null) {
+        LOG.debug("Getting themes from service {}, themes = {}",serviceInfo.getName(),serviceInfo.getThemesMap());
+        serviceThemes.add(serviceInfo.getThemesMap().get(themeFileName));
+      }
+ else {
+        for (        ThemeInfo themeInfo : serviceInfo.getThemesMap().values()) {
+          if (themeInfo.getIsDefault()) {
+            serviceThemes.add(0,themeInfo);
+          }
+ else {
+            serviceThemes.add(themeInfo);
+          }
+        }
+      }
+      List<Resource> serviceResources=new ArrayList<Resource>();
+      for (      ThemeInfo themeInfo : serviceThemes) {
+        Resource resource=new ResourceImpl(Resource.Type.Theme);
+        Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+        setResourceProperty(resource,THEME_FILE_NAME_PROPERTY_ID,themeInfo.getFileName(),requestedIds);
+        setResourceProperty(resource,THEME_DEFAULT_PROPERTY_ID,themeInfo.getIsDefault(),requestedIds);
+        setResourceProperty(resource,THEME_DATA_PROPERTY_ID,themeInfo.getThemeMap(),requestedIds);
+        setResourceProperty(resource,STACK_NAME_PROPERTY_ID,stackName,requestedIds);
+        setResourceProperty(resource,STACK_VERSION_PROPERTY_ID,stackVersion,requestedIds);
+        setResourceProperty(resource,STACK_SERVICE_NAME_PROPERTY_ID,serviceInfo.getName(),requestedIds);
+        serviceResources.add(resource);
+      }
+      resources.addAll(serviceResources);
+    }
+  }
+  return resources;
+}
