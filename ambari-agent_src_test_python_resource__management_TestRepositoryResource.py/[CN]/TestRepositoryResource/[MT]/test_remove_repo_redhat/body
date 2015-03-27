@@ -1,11 +1,14 @@
-@patch.object(System, 'os_family', new='redhat')
+@patch.object(OSCheck, 'is_suse_family')
+@patch.object(OSCheck, 'is_ubuntu_family')
+@patch.object(OSCheck, 'is_redhat_family')
 @patch('resource_management.libraries.providers.repository.File')
-def test_remove_repo_redhat(self, file_mock):
+def test_remove_repo_redhat(self, file_mock, is_redhat_family, is_ubuntu_family, is_suse_family):
+    is_redhat_family.return_value = True
+    is_ubuntu_family.return_value = False
+    is_suse_family.return_value = False
     with Environment('/') as env:
         Repository('hadoop', action='remove', base_url='http://download.base_url.org/rpm/', mirror_list='https://mirrors.base_url.org/?repo=Repository&arch=$basearch', repo_file_name='Repository')
         self.assertTrue(('hadoop' in env.resources['Repository']))
         defined_arguments = env.resources['Repository']['hadoop'].arguments
         expected_arguments = {'action': ['remove'], 'base_url': 'http://download.base_url.org/rpm/', 'mirror_list': 'https://mirrors.base_url.org/?repo=Repository&arch=$basearch', 'repo_file_name': 'Repository', }
         self.assertEqual(defined_arguments, expected_arguments)
-        self.assertEqual(file_mock.call_args[1]['action'], 'delete')
-        self.assertEqual(file_mock.call_args[0][0], '/etc/yum.repos.d/Repository.repo')
