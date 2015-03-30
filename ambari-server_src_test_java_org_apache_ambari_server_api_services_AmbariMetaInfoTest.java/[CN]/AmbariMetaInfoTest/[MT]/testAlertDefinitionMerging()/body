@@ -2,19 +2,19 @@
   Injector injector=Guice.createInjector(Modules.override(new InMemoryDefaultTestModule()).with(new MockModule()));
   injector.getInstance(GuiceJpaInitializer.class);
   injector.getInstance(EntityManager.class);
-  injector.getInstance(OrmTestHelper.class).createCluster();
+  long clusterId=injector.getInstance(OrmTestHelper.class).createCluster("cluster" + System.currentTimeMillis());
   metaInfo.alertDefinitionDao=injector.getInstance(AlertDefinitionDAO.class);
   Class<?> c=metaInfo.getClass().getSuperclass();
   Field f=c.getDeclaredField("agentAlertDefinitions");
   f.setAccessible(true);
   f.set(metaInfo,injector.getInstance(AgentAlertDefinitions.class));
   Clusters clusters=injector.getInstance(Clusters.class);
-  Cluster cluster=clusters.getClusterById(1);
+  Cluster cluster=clusters.getClusterById(clusterId);
   cluster.setDesiredStackVersion(new StackId(STACK_NAME_HDP,"2.0.6"));
   cluster.addService("HDFS");
   metaInfo.reconcileAlertDefinitions(clusters);
   AlertDefinitionDAO dao=injector.getInstance(AlertDefinitionDAO.class);
-  List<AlertDefinitionEntity> definitions=dao.findAll();
+  List<AlertDefinitionEntity> definitions=dao.findAll(clusterId);
   assertEquals(7,definitions.size());
   int hostAlertCount=0;
   for (  AlertDefinitionEntity definition : definitions) {
@@ -34,4 +34,28 @@
   for (  AlertDefinitionEntity definition : definitions) {
     assertEquals(28,definition.getScheduleInterval().intValue());
   }
+  definitions=dao.findAllEnabled(cluster.getClusterId());
+  assertEquals(6,definitions.size());
+  AlertDefinitionEntity entity=new AlertDefinitionEntity();
+  entity.setClusterId(clusterId);
+  entity.setDefinitionName("bad_hdfs_alert");
+  entity.setLabel("Bad HDFS Alert");
+  entity.setDescription("A way to fake a component being removed");
+  entity.setEnabled(true);
+  entity.setHash(UUID.randomUUID().toString());
+  entity.setScheduleInterval(1);
+  entity.setServiceName("HDFS");
+  entity.setComponentName("BAD_COMPONENT");
+  entity.setSourceType(SourceType.METRIC);
+  entity.setSource("{\"type\" : \"METRIC\"}");
+  dao.create(entity);
+  definitions=dao.findAllEnabled(cluster.getClusterId());
+  assertEquals(7,definitions.size());
+  metaInfo.reconcileAlertDefinitions(clusters);
+  definitions=dao.findAllEnabled(cluster.getClusterId());
+  assertEquals(6,definitions.size());
+  definitions=dao.findAll();
+  assertEquals(8,definitions.size());
+  entity=dao.findById(entity.getDefinitionId());
+  assertFalse(entity.getEnabled());
 }

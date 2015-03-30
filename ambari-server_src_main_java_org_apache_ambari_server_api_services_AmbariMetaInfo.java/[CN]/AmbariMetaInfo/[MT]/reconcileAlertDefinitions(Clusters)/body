@@ -9,8 +9,13 @@
     StackInfo stackInfo=getStack(stackId.getStackName(),stackId.getStackVersion());
     Collection<ServiceInfo> stackServices=stackInfo.getServices();
     Map<String,ServiceInfo> stackServiceMap=new HashMap<String,ServiceInfo>();
+    Map<String,ComponentInfo> stackComponentMap=new HashMap<String,ComponentInfo>();
     for (    ServiceInfo stackService : stackServices) {
       stackServiceMap.put(stackService.getName(),stackService);
+      List<ComponentInfo> components=stackService.getComponents();
+      for (      ComponentInfo component : components) {
+        stackComponentMap.put(component.getName(),component);
+      }
     }
     Map<String,Service> clusterServiceMap=cluster.getServices();
     Set<String> clusterServiceNames=clusterServiceMap.keySet();
@@ -58,6 +63,29 @@
     for (    AlertDefinitionEntity def : alertDefinitionDao.findAll(cluster.getClusterId())) {
       AlertDefinition realDef=alertDefinitionFactory.coerce(def);
       AlertDefinitionRegistrationEvent event=new AlertDefinitionRegistrationEvent(cluster.getClusterId(),realDef);
+      eventPublisher.publish(event);
+    }
+    List<AlertDefinitionEntity> definitions=alertDefinitionDao.findAllEnabled(clusterId);
+    List<AlertDefinitionEntity> definitionsToDisable=new ArrayList<AlertDefinitionEntity>();
+    for (    AlertDefinitionEntity definition : definitions) {
+      String serviceName=definition.getServiceName();
+      String componentName=definition.getComponentName();
+      if (Services.AMBARI.name().equals(serviceName) && Components.AMBARI_AGENT.name().equals(componentName)) {
+        continue;
+      }
+      if (!stackServiceMap.containsKey(serviceName)) {
+        LOG.info("The {} service has been marked as deleted for stack {}, disabling alert {}",serviceName,stackId,definition.getDefinitionName());
+        definitionsToDisable.add(definition);
+      }
+ else       if (null != componentName && !stackComponentMap.containsKey(componentName)) {
+        LOG.info("The {} component {} has been marked as deleted for stack {}, disabling alert {}",serviceName,componentName,stackId,definition.getDefinitionName());
+        definitionsToDisable.add(definition);
+      }
+    }
+    for (    AlertDefinitionEntity definition : definitionsToDisable) {
+      definition.setEnabled(false);
+      alertDefinitionDao.merge(definition);
+      AlertDefinitionDisabledEvent event=new AlertDefinitionDisabledEvent(clusterId,definition.getDefinitionId());
       eventPublisher.publish(event);
     }
   }
