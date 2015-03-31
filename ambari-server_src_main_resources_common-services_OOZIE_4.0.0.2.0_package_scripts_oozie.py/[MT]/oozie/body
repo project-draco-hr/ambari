@@ -1,21 +1,12 @@
+@OsFamilyFuncImpl(os_family=OSConst.WINSRV_FAMILY)
 def oozie(is_server=False):
     import params
-    if is_server:
-        params.HdfsDirectory(params.oozie_hdfs_user_dir, action='create', owner=params.oozie_user, mode=params.oozie_hdfs_user_mode)
-    Directory(params.conf_dir, recursive=True, owner=params.oozie_user, group=params.user_group)
-    XmlConfig('oozie-site.xml', conf_dir=params.conf_dir, configurations=params.oozie_site, configuration_attributes=params.config['configuration_attributes']['oozie-site'], owner=params.oozie_user, group=params.user_group, mode=436)
-    File(format('{conf_dir}/oozie-env.sh'), owner=params.oozie_user, content=InlineTemplate(params.oozie_env_sh_template))
-    if (params.log4j_props != None):
-        File(format('{params.conf_dir}/oozie-log4j.properties'), mode=420, group=params.user_group, owner=params.oozie_user, content=params.log4j_props)
-    elif os.path.exists(format('{params.conf_dir}/oozie-log4j.properties')):
-        File(format('{params.conf_dir}/oozie-log4j.properties'), mode=420, group=params.user_group, owner=params.oozie_user)
-    if ((params.hdp_stack_version != '') and (compare_versions(params.hdp_stack_version, '2.2') >= 0)):
-        File(format('{params.conf_dir}/adminusers.txt'), mode=420, group=params.user_group, owner=params.oozie_user, content=Template('adminusers.txt.j2', oozie_user=params.oozie_user))
-    else:
-        File(format('{params.conf_dir}/adminusers.txt'), owner=params.oozie_user, group=params.user_group)
-    if ((params.jdbc_driver_name == 'com.mysql.jdbc.Driver') or (params.jdbc_driver_name == 'com.microsoft.sqlserver.jdbc.SQLServerDriver') or (params.jdbc_driver_name == 'org.postgresql.Driver') or (params.jdbc_driver_name == 'oracle.jdbc.driver.OracleDriver')):
-        File(format('/usr/lib/ambari-agent/{check_db_connection_jar_name}'), content=DownloadSource(format('{jdk_location}{check_db_connection_jar_name}')))
-    pass
-    oozie_ownership()
-    if is_server:
-        oozie_server_specific()
+    XmlConfig('oozie-site.xml', conf_dir=params.oozie_conf_dir, configurations=params.config['configurations']['oozie-site'], owner=params.oozie_user, mode='f', configuration_attributes=params.config['configuration_attributes']['oozie-site'])
+    File(os.path.join(params.oozie_conf_dir, 'oozie-env.cmd'), owner=params.oozie_user, content=InlineTemplate(params.oozie_env_cmd_template))
+    Directory(params.oozie_tmp_dir, owner=params.oozie_user, recursive=True)
+    download_file(os.path.join(params.config['hostLevelParams']['jdk_location'], 'sqljdbc4.jar'), os.path.join(params.oozie_root, 'extra_libs', 'sqljdbc4.jar'))
+    webapps_sqljdbc_path = os.path.join(params.oozie_home, 'oozie-server', 'webapps', 'oozie', 'WEB-INF', 'lib', 'sqljdbc4.jar')
+    if os.path.isfile(webapps_sqljdbc_path):
+        download_file(os.path.join(params.config['hostLevelParams']['jdk_location'], 'sqljdbc4.jar'), webapps_sqljdbc_path)
+    download_file(os.path.join(params.config['hostLevelParams']['jdk_location'], 'sqljdbc4.jar'), os.path.join(params.oozie_home, 'share', 'lib', 'oozie', 'sqljdbc4.jar'))
+    download_file(os.path.join(params.config['hostLevelParams']['jdk_location'], 'sqljdbc4.jar'), os.path.join(params.oozie_home, 'temp', 'WEB-INF', 'lib', 'sqljdbc4.jar'))
