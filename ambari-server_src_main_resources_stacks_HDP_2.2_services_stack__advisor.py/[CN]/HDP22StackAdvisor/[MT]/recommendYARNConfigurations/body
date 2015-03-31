@@ -1,4 +1,14 @@
 def recommendYARNConfigurations(self, configurations, clusterData, services, hosts):
     super(HDP22StackAdvisor, self).recommendYARNConfigurations(configurations, clusterData, services, hosts)
-    putYarnProperty = self.putProperty(configurations, 'yarn-site')
+    putYarnProperty = self.putProperty(configurations, 'yarn-site', services)
     putYarnProperty('yarn.nodemanager.resource.cpu-vcores', clusterData['cpu'])
+    putYarnPropertyAttribute = self.putPropertyAttribute(configurations, 'yarn-site')
+    nodeManagerHost = self.getHostWithComponent('YARN', 'NODEMANAGER', services, hosts)
+    if (nodeManagerHost is not None):
+        putYarnProperty('yarn.nodemanager.resource.cpu-vcores', (nodeManagerHost['Hosts']['cpu_count'] * 2))
+        putYarnPropertyAttribute('yarn.nodemanager.resource.memory-mb', 'max', int((nodeManagerHost['Hosts']['total_mem'] / 1024)))
+        putYarnPropertyAttribute('yarn.nodemanager.resource.cpu-vcores', 'max', (nodeManagerHost['Hosts']['cpu_count'] * 4))
+        putYarnPropertyAttribute('yarn.scheduler.minimum-allocation-vcores', 'max', configurations['yarn-site']['properties']['yarn.nodemanager.resource.cpu-vcores'])
+        putYarnPropertyAttribute('yarn.scheduler.maximum-allocation-vcores', 'max', configurations['yarn-site']['properties']['yarn.nodemanager.resource.cpu-vcores'])
+        putYarnPropertyAttribute('yarn.scheduler.minimum-allocation-mb', 'max', configurations['yarn-site']['properties']['yarn.nodemanager.resource.memory-mb'])
+        putYarnPropertyAttribute('yarn.scheduler.maximum-allocation-mb', 'max', configurations['yarn-site']['properties']['yarn.nodemanager.resource.memory-mb'])
