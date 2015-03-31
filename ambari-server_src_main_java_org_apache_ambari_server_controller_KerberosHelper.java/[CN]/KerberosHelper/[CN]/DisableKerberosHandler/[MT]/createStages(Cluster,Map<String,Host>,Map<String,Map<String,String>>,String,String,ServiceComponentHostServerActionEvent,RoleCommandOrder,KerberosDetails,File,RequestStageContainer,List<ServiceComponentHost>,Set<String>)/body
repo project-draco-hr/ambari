@@ -10,8 +10,8 @@
   commandParameters.put(KerberosServerAction.ADMINISTRATOR_CREDENTIAL,getEncryptedAdministratorCredentials(cluster));
   if (!kerberosConfigurations.isEmpty()) {
     Map<String,Collection<String>> configurationsToRemove=new HashMap<String,Collection<String>>();
-    File configFile=new File(dataDirectory,KerberosConfigDataFile.DATA_FILE_NAME);
-    KerberosConfigDataFileBuilder kerberosConfDataFileBuilder=null;
+    File configFile=new File(dataDirectory,KerberosConfigDataFileWriter.DATA_FILE_NAME);
+    KerberosConfigDataFileWriter kerberosConfDataFileWriter=null;
     for (    Map.Entry<String,Map<String,String>> entry : kerberosConfigurations.entrySet()) {
       configurationsToRemove.put(entry.getKey(),new HashSet<String>(entry.getValue().keySet()));
     }
@@ -47,14 +47,19 @@
       }
     }
     try {
-      kerberosConfDataFileBuilder=new KerberosConfigDataFileBuilder(configFile);
+      kerberosConfDataFileWriter=kerberosConfigDataFileWriterFactory.createKerberosConfigDataFileWriter(configFile);
       for (      Map.Entry<String,Map<String,String>> entry : kerberosConfigurations.entrySet()) {
         String type=entry.getKey();
         Map<String,String> properties=entry.getValue();
+        Collection<String> propertiesToRemove=configurationsToRemove.get(type);
         if (properties != null) {
           for (          Map.Entry<String,String> configTypeEntry : properties.entrySet()) {
-            String value=configTypeEntry.getValue();
-            kerberosConfDataFileBuilder.addRecord(type,configTypeEntry.getKey(),value,(value == null) ? KerberosConfigDataFile.OPERATION_TYPE_REMOVE : KerberosConfigDataFile.OPERATION_TYPE_SET);
+            String propertyName=configTypeEntry.getKey();
+            if ((propertiesToRemove == null) || !propertiesToRemove.contains(propertyName)) {
+              String value=configTypeEntry.getValue();
+              String operation=(value == null) ? KerberosConfigDataFileWriter.OPERATION_TYPE_REMOVE : KerberosConfigDataFileWriter.OPERATION_TYPE_SET;
+              kerberosConfDataFileWriter.addRecord(type,propertyName,value,operation);
+            }
           }
         }
       }
@@ -63,7 +68,7 @@
         Collection<String> properties=entry.getValue();
         if (properties != null) {
           for (          String propertyName : properties) {
-            kerberosConfDataFileBuilder.addRecord(type,propertyName,null,KerberosConfigDataFile.OPERATION_TYPE_REMOVE);
+            kerberosConfDataFileWriter.addRecord(type,propertyName,null,KerberosConfigDataFileWriter.OPERATION_TYPE_REMOVE);
           }
         }
       }
@@ -74,9 +79,9 @@
       throw new AmbariException(message,e);
     }
  finally {
-      if (kerberosConfDataFileBuilder != null) {
+      if (kerberosConfDataFileWriter != null) {
         try {
-          kerberosConfDataFileBuilder.close();
+          kerberosConfDataFileWriter.close();
         }
  catch (        IOException e) {
           LOG.warn("Failed to close the kerberos configurations file writer",e);

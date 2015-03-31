@@ -9,11 +9,11 @@
     if ((hosts != null) && !hosts.isEmpty()) {
       List<ServiceComponentHost> serviceComponentHostsToProcess=new ArrayList<ServiceComponentHost>();
       KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
-      KerberosActionDataFileBuilder kerberosActionDataFileBuilder=null;
+      KerberosIdentityDataFileWriter kerberosIdentityDataFileWriter=null;
       Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
       Set<String> hostsWithValidKerberosClient=new HashSet<String>();
       File dataDirectory=createTemporaryDirectory();
-      File indexFile=new File(dataDirectory,KerberosActionDataFile.DATA_FILE_NAME);
+      File identityDataFile=new File(dataDirectory,KerberosIdentityDataFileWriter.DATA_FILE_NAME);
       KerberosIdentityDescriptor identity=new KerberosIdentityDescriptor(new HashMap<String,Object>(){
 {
           put("principal",new HashMap<String,Object>(){
@@ -61,10 +61,10 @@
               if (Service.Type.KERBEROS.name().equals(serviceName) && Role.KERBEROS_CLIENT.name().equals(componentName) && (sch.getState() == State.INSTALLED)) {
                 hostsWithValidKerberosClient.add(hostname);
                 int identitiesAdded=0;
-                if (kerberosActionDataFileBuilder == null) {
-                  kerberosActionDataFileBuilder=new KerberosActionDataFileBuilder(indexFile);
+                if (kerberosIdentityDataFileWriter == null) {
+                  kerberosIdentityDataFileWriter=kerberosIdentityDataFileWriterFactory.createKerberosIdentityDataFileWriter(identityDataFile);
                 }
-                identitiesAdded+=addIdentities(kerberosActionDataFileBuilder,Collections.singleton(identity),null,hostname,serviceName,componentName,configurations);
+                identitiesAdded+=addIdentities(kerberosIdentityDataFileWriter,Collections.singleton(identity),null,hostname,serviceName,componentName,null,configurations);
                 if (identitiesAdded > 0) {
                   if (!commandParameters.containsKey("principal_name") || !commandParameters.containsKey("keytab_file")) {
                     commandParameters.put("principal_name",KerberosDescriptor.replaceVariables(identity.getPrincipalDescriptor().getValue(),configurations));
@@ -78,14 +78,14 @@
         }
       }
  catch (      IOException e) {
-        String message=String.format("Failed to write index file - %s",indexFile.getAbsolutePath());
+        String message=String.format("Failed to write index file - %s",identityDataFile.getAbsolutePath());
         LOG.error(message);
         throw new AmbariException(message,e);
       }
  finally {
-        if (kerberosActionDataFileBuilder != null) {
+        if (kerberosIdentityDataFileWriter != null) {
           try {
-            kerberosActionDataFileBuilder.close();
+            kerberosIdentityDataFileWriter.close();
           }
  catch (          IOException e) {
             LOG.warn("Failed to close the index file writer",e);
