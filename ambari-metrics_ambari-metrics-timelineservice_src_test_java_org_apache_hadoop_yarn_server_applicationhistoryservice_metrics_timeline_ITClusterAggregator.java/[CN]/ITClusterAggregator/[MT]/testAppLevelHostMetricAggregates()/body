@@ -1,0 +1,34 @@
+{
+  Configuration conf=new Configuration();
+  conf.set(CLUSTER_AGGREGATOR_APP_IDS,"app1");
+  TimelineMetricClusterAggregator agg=new TimelineMetricClusterAggregator(hdb,conf);
+  long startTime=System.currentTimeMillis();
+  long ctime=startTime;
+  long minute=60 * 1000;
+  hdb.insertMetricRecords(prepareSingleTimelineMetric((ctime),"local1","app1",null,"app_metric_random",1));
+  ctime+=10;
+  hdb.insertMetricRecords(prepareSingleTimelineMetric(ctime,"local1","cpu_user",1));
+  ctime+=10;
+  hdb.insertMetricRecords(prepareSingleTimelineMetric(ctime,"local2","cpu_user",2));
+  long endTime=ctime + minute;
+  boolean success=agg.doWork(startTime,endTime);
+  Condition condition=new DefaultCondition(Collections.singletonList("cpu_user"),null,"app1",null,startTime,endTime,null,null,true);
+  condition.setStatement(String.format(GET_CLUSTER_AGGREGATE_SQL,PhoenixTransactSQL.getNaiveTimeRangeHint(startTime,NATIVE_TIME_RANGE_DELTA),METRICS_CLUSTER_AGGREGATE_TABLE_NAME));
+  PreparedStatement pstmt=PhoenixTransactSQL.prepareGetMetricsSqlStmt(conn,condition);
+  ResultSet rs=pstmt.executeQuery();
+  int recordCount=0;
+  TimelineClusterMetric currentMetric=null;
+  MetricClusterAggregate currentHostAggregate=null;
+  while (rs.next()) {
+    currentMetric=metricReader.fromResultSet(rs);
+    currentHostAggregate=PhoenixHBaseAccessor.getMetricClusterAggregateFromResultSet(rs);
+    recordCount++;
+  }
+  Assert.assertEquals(4,recordCount);
+  assertNotNull(currentMetric);
+  assertEquals("cpu_user",currentMetric.getMetricName());
+  assertEquals("app1",currentMetric.getAppId());
+  assertNotNull(currentHostAggregate);
+  assertEquals(1,currentHostAggregate.getNumberOfHosts());
+  assertEquals(1.0d,currentHostAggregate.getSum());
+}
