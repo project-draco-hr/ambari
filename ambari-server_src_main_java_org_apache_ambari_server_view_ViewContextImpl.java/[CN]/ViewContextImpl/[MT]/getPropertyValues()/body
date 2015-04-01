@@ -1,0 +1,31 @@
+{
+  Map<String,String> properties=viewInstanceEntity.getPropertyMap();
+  Map<String,ParameterConfig> parameters=new HashMap<String,ParameterConfig>();
+  for (  ParameterConfig paramConfig : viewEntity.getConfiguration().getParameters()) {
+    parameters.put(paramConfig.getName(),paramConfig);
+  }
+  Cluster cluster=getCluster();
+  for (  Entry<String,String> entry : properties.entrySet()) {
+    String propertyName=entry.getKey();
+    String propertyValue=entry.getValue();
+    ParameterConfig parameterConfig=parameters.get(propertyName);
+    if (parameterConfig != null) {
+      String clusterConfig=parameterConfig.getClusterConfig();
+      if (clusterConfig != null && cluster != null) {
+        propertyValue=getClusterConfigurationValue(cluster,clusterConfig);
+      }
+ else {
+        if (parameterConfig.isMasked()) {
+          try {
+            propertyValue=masker.unmask(propertyValue);
+          }
+ catch (          MaskException e) {
+            LOG.error("Failed to unmask view property",e);
+          }
+        }
+      }
+    }
+    properties.put(propertyName,evaluatePropertyTemplates(propertyValue));
+  }
+  return properties;
+}
