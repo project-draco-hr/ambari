@@ -59,7 +59,8 @@
     ScheduledFuture<?> handle=scheduler.scheduleWithFixedDelay(statusCollector,0,10,TimeUnit.SECONDS);
     LOG.info("Kicking off the scheduler for polling on logs in " + this.requestIdDir);
     try {
-      LOG.info("Bootstrap output, log=" + bootStrapErrorFilePath + " "+ bootStrapOutputFilePath);
+      String logInfoMessage="Bootstrap output, log=" + bootStrapErrorFilePath + " "+ bootStrapOutputFilePath+ " at "+ this.ambariHostname;
+      LOG.info(logInfoMessage);
       int exitCode=process.waitFor();
       String outMesg="";
       String errMesg="";
@@ -69,6 +70,28 @@
       }
  catch (      IOException io) {
         LOG.info("Error in reading files ",io);
+      }
+      PrintWriter setupAgentDoneWriter=null;
+      PrintWriter setupAgentLogWriter=null;
+      try {
+        if (exitCode != 0) {
+          for (          String host : hostString.split(",")) {
+            setupAgentDoneWriter=new PrintWriter(new File(requestIdDir,host + BSHostStatusCollector.doneFileFilter));
+            setupAgentLogWriter=new PrintWriter(new File(requestIdDir,host + BSHostStatusCollector.logFileFilter));
+            setupAgentLogWriter.print(logInfoMessage + "\n Error while bootstrapping:\n" + errMesg);
+            setupAgentDoneWriter.print(exitCode);
+            setupAgentDoneWriter.close();
+            setupAgentLogWriter.close();
+          }
+        }
+      }
+  finally {
+        if (setupAgentDoneWriter != null) {
+          setupAgentDoneWriter.close();
+        }
+        if (setupAgentLogWriter != null) {
+          setupAgentLogWriter.close();
+        }
       }
       scriptlog=outMesg + "\n\n" + errMesg;
       LOG.info("Script log Mesg " + scriptlog);
