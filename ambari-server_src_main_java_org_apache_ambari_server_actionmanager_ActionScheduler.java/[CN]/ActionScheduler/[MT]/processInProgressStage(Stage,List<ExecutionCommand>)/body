@@ -59,6 +59,9 @@
         String message=String.format("Host not found when trying to schedule an execution command. " + "The most probable reason for that is that host or host component " + "has been deleted recently. The command has been aborted and dequeued."+ "Execution command details: "+ "cmdId: %s; taskId: %s; roleCommand: %s",c.getCommandId(),c.getTaskId(),c.getRoleCommand());
         LOG.warn("Host {} has been detected as non-available. {}",host,message);
         db.abortHostRole(host,s.getRequestId(),s.getStageId(),c.getRole(),message);
+        if (c.getRoleCommand().equals(RoleCommand.ACTIONEXECUTE)) {
+          processActionDeath(cluster.getClusterName(),c.getHostname(),roleStr);
+        }
         status=HostRoleStatus.ABORTED;
       }
  else       if (timeOutActionNeeded(status,s,hostObj,roleStr,now,commandTimeout)) {
@@ -69,6 +72,9 @@
           status=s.getHostRoleStatus(host,roleStr);
           if (null != cluster) {
             transitionToFailedState(cluster.getClusterName(),c.getServiceName(),roleStr,host,now,false);
+            if (c.getRoleCommand().equals(RoleCommand.ACTIONEXECUTE)) {
+              processActionDeath(cluster.getClusterName(),c.getHostname(),roleStr);
+            }
           }
           LOG.info("Removing command from queue, host={}, commandId={} ",host,c.getCommandId());
           actionQueue.dequeue(host,c.getCommandId());
