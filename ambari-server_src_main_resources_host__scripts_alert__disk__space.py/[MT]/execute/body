@@ -1,24 +1,15 @@
 @OsFamilyFuncImpl(os_family=OsFamilyImpl.DEFAULT)
 def execute(parameters=None, host_name=None):
-    '\n  Performs advanced disk checks under Linux\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  parameters (dictionary): a mapping of parameter key to value\n  host_name (string): the name of this host where the alert is running\n  '
-    try:
-        disk_usage = _get_disk_usage()
-        (result_code, label) = _get_warnings_for_partition(disk_usage)
-    except NotImplementedError as platform_error:
-        return ('CRITICAL', [str(platform_error)])
+    '\n  Performs advanced disk checks under Linux. This will first attempt to\n  check the HDP installation directories if they exist. If they do not exist,\n  it will default to checking /\n\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  parameters (dictionary): a mapping of parameter key to value\n  host_name (string): the name of this host where the alert is running\n  '
     hdp_home = None
     if os.path.isdir(HDP_HOME_DIR):
         hdp_home = HDP_HOME_DIR
     elif os.path.isdir(HDP_HOME_LEGACY_DIR):
         hdp_home = HDP_HOME_LEGACY_DIR
-    if ((result_code == 'OK') and hdp_home):
-        try:
-            disk_usage = _get_disk_usage(hdp_home)
-            (result_code_usr_hdp, label_usr_hdp) = _get_warnings_for_partition(disk_usage)
-            if (result_code_usr_hdp != 'OK'):
-                label = '{0}. Insufficient space at {1}: {2}'.format(label, hdp_home, label_usr_hdp)
-                result_code = 'WARNING'
-        except NotImplementedError as platform_error:
-            return ('CRITICAL', [str(platform_error)])
-        pass
+    path = (hdp_home if (hdp_home is not None) else None)
+    try:
+        disk_usage = _get_disk_usage(path)
+        (result_code, label) = _get_warnings_for_partition(disk_usage)
+    except NotImplementedError as platform_error:
+        return ('CRITICAL', [str(platform_error)])
     return (result_code, [label])
