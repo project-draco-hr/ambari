@@ -15,46 +15,28 @@
         LOG.info("METRICS_COLLECTOR is not live. Skip populating resources" + " with metrics.");
         return Collections.emptySet();
       }
-      String spec=getSpec(hostname,resource);
-      BufferedReader reader=null;
-      try {
-        LOG.debug("Metrics request url =" + spec);
-        reader=new BufferedReader(new InputStreamReader(streamProvider.readFrom(spec)));
-        TimelineMetrics timelineMetrics=timelineObjectReader.readValue(reader);
-        LOG.debug("Timeline metrics response => " + timelineMetrics);
-        Set<String> patterns=createPatterns(metrics.keySet());
+      TimelineMetrics timelineMetrics;
+      if (hostComponentHostMetrics.isEmpty()) {
+        String spec=getSpec(hostname,resource);
+        timelineMetrics=getTimelineMetricsForSpec(spec);
+      }
+ else {
+        Set<String> specs=getSpecsForHostComponentMetrics(hostname,resource);
+        timelineMetrics=new TimelineMetrics();
+        for (        String spec : specs) {
+          if (!StringUtils.isEmpty(spec)) {
+            TimelineMetrics metrics=getTimelineMetricsForSpec(spec);
+            if (metrics != null) {
+              timelineMetrics.getMetrics().addAll(metrics.getMetrics());
+            }
+          }
+        }
+      }
+      Set<String> patterns=createPatterns(metrics.keySet());
+      if (timelineMetrics != null) {
         for (        TimelineMetric metric : timelineMetrics.getMetrics()) {
           if (metric.getMetricName() != null && metric.getMetricValues() != null && checkMetricName(patterns,metric.getMetricName())) {
             populateResource(resource,metric);
-          }
-        }
-      }
- catch (      IOException io) {
-        String errorMsg="Error getting timeline metrics.";
-        if (LOG.isDebugEnabled()) {
-          LOG.error(errorMsg,io);
-        }
- else {
-          if (io instanceof SocketTimeoutException) {
-            errorMsg+=" Can not connect to collector, socket error.";
-          }
-          LOG.error(errorMsg);
-        }
-      }
- finally {
-        if (reader != null) {
-          try {
-            reader.close();
-          }
- catch (          IOException e) {
-            if (LOG.isWarnEnabled()) {
-              if (LOG.isDebugEnabled()) {
-                LOG.warn("Unable to close http input stream : spec=" + spec,e);
-              }
- else {
-                LOG.warn("Unable to close http input stream : spec=" + spec);
-              }
-            }
           }
         }
       }
