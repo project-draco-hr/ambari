@@ -1,0 +1,26 @@
+{
+  if (!entity.getEnabled()) {
+    return;
+  }
+  AlertDefinition definition=m_alertDefinitionFactory.coerce(entity);
+  ServerSource serverSource=(ServerSource)definition.getSource();
+  String sourceClass=serverSource.getSourceClass();
+  int interval=definition.getInterval();
+  try {
+    Class<?> clazz=Class.forName(sourceClass);
+    if (!Runnable.class.isAssignableFrom(clazz)) {
+      LOG.warn("Unable to schedule a server side alert for {} because it is not a Runnable",sourceClass);
+      return;
+    }
+    Runnable runnable=(Runnable)clazz.newInstance();
+    m_injector.injectMembers(runnable);
+    ScheduledFuture<?> scheduledFuture=m_scheduledExecutorService.scheduleWithFixedDelay(runnable,interval,interval,TimeUnit.MINUTES);
+    String definitionName=entity.getDefinitionName();
+    ScheduledAlert scheduledAlert=new ScheduledAlert(scheduledFuture,interval);
+    m_futureMap.put(definitionName,scheduledAlert);
+    LOG.info("Scheduled server alert {} to run every {} minutes",definitionName,interval);
+  }
+ catch (  ClassNotFoundException cnfe) {
+    LOG.warn("Unable to schedule a server side alert for {} because it could not be found in the classpath",sourceClass);
+  }
+}

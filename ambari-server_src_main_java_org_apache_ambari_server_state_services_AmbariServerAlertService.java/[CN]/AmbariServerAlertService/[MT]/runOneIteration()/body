@@ -1,0 +1,24 @@
+{
+  Map<String,Cluster> clusterMap=m_clustersProvider.get().getClusters();
+  for (  Cluster cluster : clusterMap.values()) {
+    List<AlertDefinitionEntity> entities=m_dao.findByServiceComponent(cluster.getClusterId(),Services.AMBARI.name(),Components.AMBARI_SERVER.name());
+    for (    AlertDefinitionEntity entity : entities) {
+      String definitionName=entity.getDefinitionName();
+      ScheduledAlert scheduledAlert=m_futureMap.get(definitionName);
+      ScheduledFuture<?> scheduledFuture=scheduledAlert.getScheduledFuture();
+      if (!entity.getEnabled()) {
+        unschedule(definitionName,scheduledFuture);
+        continue;
+      }
+      if (null == scheduledFuture) {
+        scheduleRunnable(entity);
+        continue;
+      }
+      int scheduledInterval=scheduledAlert.getInterval();
+      if (scheduledInterval != entity.getScheduleInterval()) {
+        unschedule(definitionName,scheduledFuture);
+        scheduleRunnable(entity);
+      }
+    }
+  }
+}

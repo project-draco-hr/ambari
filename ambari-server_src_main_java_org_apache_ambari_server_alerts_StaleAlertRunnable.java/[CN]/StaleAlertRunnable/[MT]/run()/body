@@ -1,0 +1,51 @@
+{
+  try {
+    Map<String,Cluster> clusterMap=m_clustersProvider.get().getClusters();
+    for (    Cluster cluster : clusterMap.values()) {
+      AlertDefinitionEntity entity=m_dao.findByName(cluster.getClusterId(),STALE_ALERT_DEFINITION_NAME);
+      if (null == entity || !entity.getEnabled()) {
+        continue;
+      }
+      long now=System.currentTimeMillis();
+      Set<String> staleAlerts=new HashSet<String>();
+      Set<String> hostsWithStaleAlerts=new HashSet<String>();
+      List<AlertCurrentEntity> currentAlerts=m_alertsDao.findCurrentByCluster(cluster.getClusterId());
+      for (      AlertCurrentEntity current : currentAlerts) {
+        AlertHistoryEntity history=current.getAlertHistory();
+        AlertDefinitionEntity definition=history.getAlertDefinition();
+        if (definition.getSourceType() == SourceType.AGGREGATE) {
+          continue;
+        }
+        if (current.getMaintenanceState() != MaintenanceState.OFF) {
+          continue;
+        }
+        if (current.getLatestTimestamp() == 0) {
+          continue;
+        }
+        long intervalInMillis=definition.getScheduleInterval() * MINUTE_TO_MS_CONVERSION;
+        long timeDifference=now - current.getLatestTimestamp();
+        if (timeDifference >= 2 * intervalInMillis) {
+          staleAlerts.add(definition.getLabel());
+          if (null != history.getHostName()) {
+            hostsWithStaleAlerts.add(history.getHostName());
+          }
+        }
+      }
+      AlertState alertState=AlertState.OK;
+      String alertText=ALL_ALERTS_CURRENT_MSG;
+      if (!staleAlerts.isEmpty()) {
+        alertState=AlertState.CRITICAL;
+        alertText=MessageFormat.format(STALE_ALERTS_MSG,staleAlerts.size(),hostsWithStaleAlerts.size(),StringUtils.join(staleAlerts,", "));
+      }
+      Alert alert=new Alert(entity.getDefinitionName(),null,entity.getServiceName(),entity.getComponentName(),null,alertState);
+      alert.setLabel(entity.getLabel());
+      alert.setText(alertText);
+      alert.setTimestamp(now);
+      AlertReceivedEvent event=new AlertReceivedEvent(cluster.getClusterId(),alert);
+      m_alertEventPublisher.publish(event);
+    }
+  }
+ catch (  Exception exception) {
+    LOG.error("Unable to run the {} alert",STALE_ALERT_DEFINITION_NAME,exception);
+  }
+}
