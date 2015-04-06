@@ -1,6 +1,7 @@
 {
   if (json.has("name") && json.has("typeConfigs") && json.has("resources")&& json.has("typeName")) {
-    final String appType=json.get("typeName").getAsString();
+    final String appTypeId=json.get("typeName").getAsString();
+    SliderAppType sliderAppType=getSliderAppType(appTypeId,null);
     final String appName=json.get("name").getAsString();
     final String queueName=json.has("queue") ? json.get("queue").getAsString() : null;
     final boolean securityEnabled=Boolean.valueOf(getHadoopConfigs().get("security_enabled"));
@@ -34,7 +35,7 @@ synchronized (createAppCounter) {
     appCreateFolder.mkdirs();
     File appConfigJsonFile=new File(appCreateFolder,"appConfig.json");
     File resourcesJsonFile=new File(appCreateFolder,"resources.json");
-    saveAppConfigs(configs,componentsArray,appName,appType,securityEnabled,appConfigJsonFile);
+    saveAppConfigs(configs,componentsArray,appName,sliderAppType.getTypeName(),securityEnabled,appConfigJsonFile);
     saveAppResources(resourcesObj,resourcesJsonFile);
     final ActionCreateArgs createArgs=new ActionCreateArgs();
     createArgs.template=appConfigJsonFile;
@@ -43,14 +44,13 @@ synchronized (createAppCounter) {
       createArgs.queue=queueName;
     }
     final ActionInstallPackageArgs installArgs=new ActionInstallPackageArgs();
-    SliderAppType sliderAppType=getSliderAppType(appType,null);
     String localAppPackageFileName=sliderAppType.getTypePackageFileName();
-    installArgs.name=appType;
+    installArgs.name=sliderAppType.getTypeName();
     installArgs.packageURI=getAppsFolderPath() + "/" + localAppPackageFileName;
     installArgs.replacePkg=true;
     final List<ActionInstallKeytabArgs> installKeytabActions=new ArrayList<ActionInstallKeytabArgs>();
     if (securityEnabled) {
-      for (      String keytab : getUserToRunAsKeytabs(appType)) {
+      for (      String keytab : getUserToRunAsKeytabs(sliderAppType.getTypeName())) {
         ActionInstallKeytabArgs keytabArgs=new ActionInstallKeytabArgs();
         keytabArgs.keytabUri=keytab;
         keytabArgs.folder=appName;
