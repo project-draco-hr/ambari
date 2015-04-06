@@ -1,0 +1,44 @@
+{
+  for (  final Map<String,Object> properties : request.getProperties()) {
+    Void resources=createResources(new Command<Void>(){
+      @Override public Void invoke() throws AmbariException {
+        final String[] requiredProperties={WIDGETLAYOUT_LAYOUT_NAME_PROPERTY_ID,WIDGETLAYOUT_SECTION_NAME_PROPERTY_ID,WIDGETLAYOUT_CLUSTER_NAME_PROPERTY_ID,WIDGETLAYOUT_SCOPE_PROPERTY_ID,WIDGETLAYOUT_INFO_PROPERTY_ID,WIDGETLAYOUT_DISPLAY_NAME_PROPERTY_ID,WIDGETLAYOUT_USERNAME_PROPERTY_ID};
+        for (        String propertyName : requiredProperties) {
+          if (properties.get(propertyName) == null) {
+            throw new AmbariException("Property " + propertyName + " should be provided");
+          }
+        }
+        final WidgetLayoutEntity entity=new WidgetLayoutEntity();
+        Set widgetsSet=(LinkedHashSet)properties.get(WIDGETLAYOUT_INFO_PROPERTY_ID);
+        String clusterName=properties.get(WIDGETLAYOUT_CLUSTER_NAME_PROPERTY_ID).toString();
+        entity.setLayoutName(properties.get(WIDGETLAYOUT_LAYOUT_NAME_PROPERTY_ID).toString());
+        entity.setClusterId(getManagementController().getClusters().getCluster(clusterName).getClusterId());
+        entity.setSectionName(properties.get(WIDGETLAYOUT_SECTION_NAME_PROPERTY_ID).toString());
+        entity.setScope(properties.get(WIDGETLAYOUT_SCOPE_PROPERTY_ID).toString());
+        entity.setUserName(properties.get(WIDGETLAYOUT_USERNAME_PROPERTY_ID).toString());
+        entity.setDisplayName(properties.get(WIDGETLAYOUT_DISPLAY_NAME_PROPERTY_ID).toString());
+        List<WidgetLayoutUserWidgetEntity> widgetLayoutUserWidgetEntityList=new LinkedList<WidgetLayoutUserWidgetEntity>();
+        int order=0;
+        for (        Object widgetObject : widgetsSet) {
+          HashMap<String,Object> widget=(HashMap)widgetObject;
+          long id=Integer.parseInt(widget.get("id").toString());
+          WidgetEntity widgetEntity=widgetDAO.findById(id);
+          if (widgetEntity == null) {
+            throw new AmbariException("Widget with id " + widget.get("id").toString() + " does not exists");
+          }
+          WidgetLayoutUserWidgetEntity widgetLayoutUserWidgetEntity=new WidgetLayoutUserWidgetEntity();
+          widgetLayoutUserWidgetEntity.setWidget(widgetEntity);
+          widgetLayoutUserWidgetEntity.setWidgetOrder(order++);
+          widgetLayoutUserWidgetEntity.setWidgetLayout(entity);
+          widgetLayoutUserWidgetEntityList.add(widgetLayoutUserWidgetEntity);
+        }
+        entity.setListWidgetLayoutUserWidgetEntity(widgetLayoutUserWidgetEntityList);
+        widgetLayoutDAO.create(entity);
+        notifyCreate(Type.WidgetLayout,request);
+        return null;
+      }
+    }
+);
+  }
+  return getRequestStatus(null);
+}
