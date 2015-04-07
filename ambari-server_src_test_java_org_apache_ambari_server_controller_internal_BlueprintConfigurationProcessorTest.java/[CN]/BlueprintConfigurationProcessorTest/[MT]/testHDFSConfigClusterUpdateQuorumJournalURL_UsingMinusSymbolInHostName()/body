@@ -1,0 +1,24 @@
+{
+  final String expectedHostNameOne="c6401.apache.ambari.org";
+  final String expectedHostNameTwo="c6402.apache.ambari.org";
+  final String expectedPortNum="808080";
+  final String expectedHostGroupName="host-group-1";
+  final String expectedHostGroupNameTwo="host-group-2";
+  EasyMockSupport mockSupport=new EasyMockSupport();
+  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
+  HostGroup mockHostGroupTwo=mockSupport.createMock(HostGroup.class);
+  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostNameOne)).atLeastOnce();
+  expect(mockHostGroupTwo.getHostInfo()).andReturn(Arrays.asList(expectedHostNameTwo)).atLeastOnce();
+  mockSupport.replayAll();
+  Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
+  Map<String,String> hdfsSiteProperties=new HashMap<String,String>();
+  configProperties.put("hdfs-site",hdfsSiteProperties);
+  hdfsSiteProperties.put("dfs.namenode.shared.edits.dir","qjournal://" + createExportedAddress(expectedPortNum,expectedHostGroupName) + ";"+ createExportedAddress(expectedPortNum,expectedHostGroupNameTwo)+ "/mycluster");
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
+  Map<String,HostGroup> mapOfHostGroups=new HashMap<String,HostGroup>();
+  mapOfHostGroups.put(expectedHostGroupName,mockHostGroupOne);
+  mapOfHostGroups.put(expectedHostGroupNameTwo,mockHostGroupTwo);
+  configProcessor.doUpdateForClusterCreate(mapOfHostGroups,null);
+  assertEquals("HDFS HA shared edits directory property not properly updated for cluster create.","qjournal://" + createHostAddress(expectedHostNameOne,expectedPortNum) + ";"+ createHostAddress(expectedHostNameTwo,expectedPortNum)+ "/mycluster",hdfsSiteProperties.get("dfs.namenode.shared.edits.dir"));
+  mockSupport.verifyAll();
+}
