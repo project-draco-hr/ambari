@@ -1,0 +1,39 @@
+{
+  Set<Resource> resources=new HashSet<Resource>();
+  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  requestedIds.add(HOST_COMPONENT_HOST_NAME_PROPERTY_ID);
+  Set<ServiceComponentHostResponse> responses=getResources(new Command<Set<ServiceComponentHostResponse>>(){
+    @Override public Set<ServiceComponentHostResponse> invoke() throws AmbariException {
+      return getManagementController().getHostComponents(requests);
+    }
+  }
+);
+  for (  ServiceComponentHostResponse response : responses) {
+    Resource resource=new ResourceImpl(Resource.Type.HostComponent);
+    setResourceProperty(resource,HOST_COMPONENT_CLUSTER_NAME_PROPERTY_ID,response.getClusterName(),requestedIds);
+    setResourceProperty(resource,HOST_COMPONENT_SERVICE_NAME_PROPERTY_ID,response.getServiceName(),requestedIds);
+    setResourceProperty(resource,HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID,response.getComponentName(),requestedIds);
+    setResourceProperty(resource,HOST_COMPONENT_HOST_NAME_PROPERTY_ID,response.getHostname(),requestedIds);
+    setResourceProperty(resource,HOST_COMPONENT_STATE_PROPERTY_ID,response.getLiveState(),requestedIds);
+    setResourceProperty(resource,HOST_COMPONENT_DESIRED_STATE_PROPERTY_ID,response.getDesiredState(),requestedIds);
+    setResourceProperty(resource,HOST_COMPONENT_STACK_ID_PROPERTY_ID,response.getStackVersion(),requestedIds);
+    setResourceProperty(resource,HOST_COMPONENT_DESIRED_STACK_ID_PROPERTY_ID,response.getDesiredStackVersion(),requestedIds);
+    setResourceProperty(resource,HOST_COMPONENT_ACTUAL_CONFIGS_PROPERTY_ID,response.getActualConfigs(),requestedIds);
+    setResourceProperty(resource,HOST_COMPONENT_STALE_CONFIGS_PROPERTY_ID,response.isStaleConfig(),requestedIds);
+    if (response.getAdminState() != null) {
+      setResourceProperty(resource,HOST_COMPONENT_DESIRED_ADMIN_STATE_PROPERTY_ID,response.getAdminState(),requestedIds);
+    }
+    if (null != response.getMaintenanceState()) {
+      setResourceProperty(resource,HOST_COMPONENT_MAINTENANCE_STATE_PROPERTY_ID,response.getMaintenanceState(),requestedIds);
+    }
+    String componentName=(String)resource.getPropertyValue(HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID);
+    PropertyProvider propertyProvider=HOST_COMPONENT_PROPERTIES_PROVIDER.get(componentName);
+    if (propertyProvider != null) {
+      Set<Resource> resourcesToPopulate=new HashSet<Resource>();
+      resourcesToPopulate.add(resource);
+      propertyProvider.populateResources(resourcesToPopulate,request,predicate);
+    }
+    resources.add(resource);
+  }
+  return resources;
+}
