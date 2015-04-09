@@ -1,0 +1,49 @@
+{
+  final Set<Resource> resources=new HashSet<Resource>();
+  final Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  final Set<Map<String,Object>> propertyMaps=getPropertyMaps(predicate);
+  List<WidgetEntity> requestedEntities=new ArrayList<WidgetEntity>();
+  for (  Map<String,Object> propertyMap : propertyMaps) {
+    if (propertyMap.get(WIDGET_ID_PROPERTY_ID) != null) {
+      final Long id;
+      try {
+        id=Long.parseLong(propertyMap.get(WIDGET_ID_PROPERTY_ID).toString());
+      }
+ catch (      Exception ex) {
+        throw new SystemException("WidgetLayout should have numerical id");
+      }
+      final WidgetEntity entity=widgetDAO.findById(id);
+      if (entity == null) {
+        throw new NoSuchResourceException("WidgetLayout with id " + id + " does not exists");
+      }
+      requestedEntities.add(entity);
+    }
+ else {
+      requestedEntities.addAll(widgetDAO.findAll());
+    }
+  }
+  for (  WidgetEntity entity : requestedEntities) {
+    final Resource resource=new ResourceImpl(Type.Widget);
+    resource.setProperty(WIDGET_ID_PROPERTY_ID,entity.getId());
+    resource.setProperty(WIDGET_WIDGET_NAME_PROPERTY_ID,entity.getWidgetName());
+    resource.setProperty(WIDGET_WIDGET_TYPE_PROPERTY_ID,entity.getWidgetType());
+    setResourceProperty(resource,WIDGET_METRICS_PROPERTY_ID,gson.fromJson(entity.getMetrics(),ArrayList.class),requestedIds);
+    setResourceProperty(resource,WIDGET_TIME_CREATED_PROPERTY_ID,entity.getTimeCreated(),requestedIds);
+    resource.setProperty(WIDGET_AUTHOR_PROPERTY_ID,entity.getAuthor());
+    setResourceProperty(resource,WIDGET_DESCRIPTION_PROPERTY_ID,entity.getDescription(),requestedIds);
+    resource.setProperty(WIDGET_DISPLAY_NAME_PROPERTY_ID,entity.getDisplayName());
+    resource.setProperty(WIDGET_SCOPE_PROPERTY_ID,entity.getScope());
+    setResourceProperty(resource,WIDGET_VALUES_PROPERTY_ID,gson.fromJson(entity.getWidgetValues(),ArrayList.class),requestedIds);
+    setResourceProperty(resource,WIDGET_PROPERTIES_PROPERTY_ID,gson.fromJson(entity.getProperties(),Map.class),requestedIds);
+    String clusterName=null;
+    try {
+      clusterName=getManagementController().getClusters().getClusterById(entity.getClusterId()).getClusterName();
+    }
+ catch (    AmbariException e) {
+      throw new SystemException(e.getMessage());
+    }
+    setResourceProperty(resource,WIDGET_CLUSTER_NAME_PROPERTY_ID,clusterName,requestedIds);
+    resources.add(resource);
+  }
+  return resources;
+}

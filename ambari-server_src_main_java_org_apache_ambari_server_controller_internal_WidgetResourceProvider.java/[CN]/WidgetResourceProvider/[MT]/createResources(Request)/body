@@ -1,0 +1,47 @@
+{
+  for (  final Map<String,Object> properties : request.getProperties()) {
+    createResources(new Command<Void>(){
+      @Override public Void invoke() throws AmbariException {
+        final String[] requiredProperties={WIDGET_CLUSTER_NAME_PROPERTY_ID,WIDGET_WIDGET_NAME_PROPERTY_ID,WIDGET_DISPLAY_NAME_PROPERTY_ID,WIDGET_WIDGET_TYPE_PROPERTY_ID,WIDGET_SCOPE_PROPERTY_ID};
+        for (        String propertyName : requiredProperties) {
+          if (properties.get(propertyName) == null) {
+            throw new AmbariException("Property " + propertyName + " should be provided");
+          }
+        }
+        final WidgetEntity entity=new WidgetEntity();
+        String clusterName=properties.get(WIDGET_CLUSTER_NAME_PROPERTY_ID).toString();
+        String userName=properties.get(WIDGET_AUTHOR_PROPERTY_ID).toString();
+        String scope=properties.get(WIDGET_SCOPE_PROPERTY_ID).toString();
+        if (!isScopeAllowedForUser(scope)) {
+          throw new AmbariException("Only cluster operator can create widgets with cluster scope");
+        }
+        entity.setDisplayName(properties.get(WIDGET_DISPLAY_NAME_PROPERTY_ID).toString());
+        entity.setWidgetName(properties.get(WIDGET_WIDGET_NAME_PROPERTY_ID).toString());
+        entity.setWidgetType(properties.get(WIDGET_WIDGET_TYPE_PROPERTY_ID).toString());
+        entity.setClusterId(getManagementController().getClusters().getCluster(clusterName).getClusterId());
+        entity.setDisplayName(properties.get(WIDGET_DISPLAY_NAME_PROPERTY_ID).toString());
+        entity.setScope(scope);
+        String metrics=(properties.containsKey(WIDGET_METRICS_PROPERTY_ID)) ? gson.toJson(properties.get(WIDGET_METRICS_PROPERTY_ID)) : null;
+        entity.setMetrics(metrics);
+        entity.setAuthor(userName);
+        String description=(properties.containsKey(WIDGET_DESCRIPTION_PROPERTY_ID)) ? properties.get(WIDGET_DESCRIPTION_PROPERTY_ID).toString() : null;
+        entity.setDescription(description);
+        String values=(properties.containsKey(WIDGET_VALUES_PROPERTY_ID)) ? gson.toJson(properties.get(WIDGET_VALUES_PROPERTY_ID)) : null;
+        entity.setWidgetValues(values);
+        Map<String,Object> widgetPropertiesMap=new HashMap<String,Object>();
+        for (        Map.Entry<String,Object> entry : properties.entrySet()) {
+          if (PropertyHelper.getPropertyCategory(entry.getKey()).equals(WIDGET_PROPERTIES_PROPERTY_ID)) {
+            widgetPropertiesMap.put(PropertyHelper.getPropertyName(entry.getKey()),entry.getValue());
+          }
+        }
+        String widgetProperties=(widgetPropertiesMap.isEmpty()) ? null : gson.toJson(widgetPropertiesMap);
+        entity.setProperties(widgetProperties);
+        widgetDAO.create(entity);
+        notifyCreate(Type.Widget,request);
+        return null;
+      }
+    }
+);
+  }
+  return getRequestStatus(null);
+}

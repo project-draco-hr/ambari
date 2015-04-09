@@ -1,0 +1,58 @@
+{
+  final Set<Map<String,Object>> propertyMaps=request.getProperties();
+  modifyResources(new Command<Void>(){
+    @Override public Void invoke() throws AmbariException {
+      for (      Map<String,Object> propertyMap : propertyMaps) {
+        final Long id;
+        try {
+          id=Long.parseLong(propertyMap.get(WIDGET_ID_PROPERTY_ID).toString());
+        }
+ catch (        Exception ex) {
+          throw new AmbariException("Widget should have numerical id");
+        }
+        final WidgetEntity entity=widgetDAO.findById(id);
+        if (entity == null) {
+          throw new ObjectNotFoundException("There is no widget with id " + id);
+        }
+        if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(WIDGET_WIDGET_NAME_PROPERTY_ID)))) {
+          entity.setWidgetName(propertyMap.get(WIDGET_WIDGET_NAME_PROPERTY_ID).toString());
+        }
+        if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(WIDGET_WIDGET_TYPE_PROPERTY_ID)))) {
+          entity.setWidgetType(propertyMap.get(WIDGET_WIDGET_TYPE_PROPERTY_ID).toString());
+        }
+        if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(WIDGET_METRICS_PROPERTY_ID)))) {
+          entity.setMetrics(gson.toJson(propertyMap.get(WIDGET_METRICS_PROPERTY_ID)));
+        }
+        if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(WIDGET_AUTHOR_PROPERTY_ID)))) {
+          entity.setAuthor(propertyMap.get(WIDGET_AUTHOR_PROPERTY_ID).toString());
+        }
+        if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(WIDGET_DESCRIPTION_PROPERTY_ID)))) {
+          entity.setDescription(propertyMap.get(WIDGET_DESCRIPTION_PROPERTY_ID).toString());
+        }
+        if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(WIDGET_SCOPE_PROPERTY_ID)))) {
+          String scope=propertyMap.get(WIDGET_SCOPE_PROPERTY_ID).toString();
+          if (!isScopeAllowedForUser(scope)) {
+            throw new AmbariException("Only cluster operator can create widgets with cluster scope");
+          }
+          entity.setScope(scope);
+        }
+        if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(WIDGET_VALUES_PROPERTY_ID)))) {
+          entity.setWidgetValues(gson.toJson(propertyMap.get(WIDGET_VALUES_PROPERTY_ID)));
+        }
+        Map<String,Object> widgetPropertiesMap=new HashMap<String,Object>();
+        for (        Map.Entry<String,Object> entry : propertyMap.entrySet()) {
+          if (PropertyHelper.getPropertyCategory(entry.getKey()).equals(WIDGET_PROPERTIES_PROPERTY_ID)) {
+            widgetPropertiesMap.put(PropertyHelper.getPropertyName(entry.getKey()),entry.getValue());
+          }
+        }
+        if (!widgetPropertiesMap.isEmpty()) {
+          entity.setProperties(gson.toJson(widgetPropertiesMap));
+        }
+        widgetDAO.merge(entity);
+      }
+      return null;
+    }
+  }
+);
+  return getRequestStatus(null);
+}
