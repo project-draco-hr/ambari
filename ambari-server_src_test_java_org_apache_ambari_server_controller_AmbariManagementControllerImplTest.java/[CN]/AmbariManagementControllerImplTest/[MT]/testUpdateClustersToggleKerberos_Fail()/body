@@ -1,7 +1,7 @@
 {
   Capture<AmbariManagementController> controllerCapture=new Capture<AmbariManagementController>();
   Injector injector=createStrictMock(Injector.class);
-  Cluster cluster=createNiceMock(Cluster.class);
+  Cluster cluster=createMock(Cluster.class);
   ActionManager actionManager=createNiceMock(ActionManager.class);
   ClusterRequest clusterRequest=createNiceMock(ClusterRequest.class);
   Set<ClusterRequest> setRequests=Collections.singleton(clusterRequest);
@@ -15,13 +15,26 @@
   expect(clusters.getClusterById(1L)).andReturn(cluster).times(2);
   expect(cluster.getClusterName()).andReturn("cluster").times(2);
   expect(cluster.getSecurityType()).andReturn(SecurityType.KERBEROS).anyTimes();
+  expect(cluster.getCurrentClusterVersion()).andReturn(null).anyTimes();
+  expect(cluster.getCurrentStackVersion()).andReturn(null).anyTimes();
+  expect(cluster.getDesiredStackVersion()).andReturn(null).anyTimes();
+  cluster.setCurrentStackVersion(anyObject(StackId.class));
+  expectLastCall().once();
+  cluster.setClusterName(anyObject(String.class));
+  expectLastCall().once();
   cluster.addSessionAttributes(anyObject(Map.class));
   expectLastCall().once();
   expect(kerberosHelper.shouldExecuteCustomOperations(SecurityType.NONE,null)).andReturn(false).once();
-  expect(kerberosHelper.toggleKerberos(anyObject(Cluster.class),anyObject(SecurityType.class),anyObject(RequestStageContainer.class))).andReturn(null).once();
+  expect(kerberosHelper.getManageIdentitiesDirective(anyObject(Map.class))).andReturn(null).once();
+  expect(kerberosHelper.toggleKerberos(anyObject(Cluster.class),anyObject(SecurityType.class),anyObject(RequestStageContainer.class),anyBoolean())).andThrow(new IllegalArgumentException("bad args!")).once();
   replay(actionManager,cluster,clusters,injector,clusterRequest,sessionManager,kerberosHelper);
   AmbariManagementController controller=new AmbariManagementControllerImpl(actionManager,clusters,injector);
-  controller.updateClusters(setRequests,null);
+  try {
+    controller.updateClusters(setRequests,null);
+    Assert.fail("IllegalArgumentException not thrown");
+  }
+ catch (  IllegalArgumentException e) {
+  }
   assertSame(controller,controllerCapture.getValue());
   verify(actionManager,cluster,clusters,injector,clusterRequest,sessionManager,kerberosHelper);
 }

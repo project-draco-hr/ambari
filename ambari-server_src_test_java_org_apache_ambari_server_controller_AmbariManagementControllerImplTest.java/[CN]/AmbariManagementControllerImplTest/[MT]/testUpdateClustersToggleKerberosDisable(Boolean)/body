@@ -1,10 +1,11 @@
 {
   Capture<AmbariManagementController> controllerCapture=new Capture<AmbariManagementController>();
   Injector injector=createStrictMock(Injector.class);
-  Cluster cluster=createMock(Cluster.class);
+  Cluster cluster=createNiceMock(Cluster.class);
   ActionManager actionManager=createNiceMock(ActionManager.class);
   ClusterRequest clusterRequest=createNiceMock(ClusterRequest.class);
   Set<ClusterRequest> setRequests=Collections.singleton(clusterRequest);
+  Capture<Boolean> manageIdentitiesCapture=new Capture<Boolean>();
   KerberosHelper kerberosHelper=createStrictMock(KerberosHelper.class);
   injector.injectMembers(capture(controllerCapture));
   expect(injector.getInstance(Gson.class)).andReturn(null);
@@ -15,25 +16,15 @@
   expect(clusters.getClusterById(1L)).andReturn(cluster).times(2);
   expect(cluster.getClusterName()).andReturn("cluster").times(2);
   expect(cluster.getSecurityType()).andReturn(SecurityType.KERBEROS).anyTimes();
-  expect(cluster.getCurrentClusterVersion()).andReturn(null).anyTimes();
-  expect(cluster.getCurrentStackVersion()).andReturn(null).anyTimes();
-  expect(cluster.getDesiredStackVersion()).andReturn(null).anyTimes();
-  cluster.setCurrentStackVersion(anyObject(StackId.class));
-  expectLastCall().once();
-  cluster.setClusterName(anyObject(String.class));
-  expectLastCall().once();
   cluster.addSessionAttributes(anyObject(Map.class));
   expectLastCall().once();
   expect(kerberosHelper.shouldExecuteCustomOperations(SecurityType.NONE,null)).andReturn(false).once();
-  expect(kerberosHelper.toggleKerberos(anyObject(Cluster.class),anyObject(SecurityType.class),anyObject(RequestStageContainer.class))).andThrow(new IllegalArgumentException("bad args!")).once();
+  expect(kerberosHelper.getManageIdentitiesDirective(anyObject(Map.class))).andReturn(manageIdentities).once();
+  expect(kerberosHelper.toggleKerberos(anyObject(Cluster.class),anyObject(SecurityType.class),anyObject(RequestStageContainer.class),captureBoolean(manageIdentitiesCapture))).andReturn(null).once();
   replay(actionManager,cluster,clusters,injector,clusterRequest,sessionManager,kerberosHelper);
   AmbariManagementController controller=new AmbariManagementControllerImpl(actionManager,clusters,injector);
-  try {
-    controller.updateClusters(setRequests,null);
-    Assert.fail("IllegalArgumentException not thrown");
-  }
- catch (  IllegalArgumentException e) {
-  }
+  controller.updateClusters(setRequests,null);
   assertSame(controller,controllerCapture.getValue());
+  assertEquals(manageIdentities,manageIdentitiesCapture.getValue());
   verify(actionManager,cluster,clusters,injector,clusterRequest,sessionManager,kerberosHelper);
 }
