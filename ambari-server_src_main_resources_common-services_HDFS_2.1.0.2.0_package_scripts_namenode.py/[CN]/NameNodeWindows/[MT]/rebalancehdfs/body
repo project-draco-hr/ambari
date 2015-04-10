@@ -1,0 +1,33 @@
+def rebalancehdfs(self, env):
+    from ambari_commons.os_windows import run_os_command_impersonated
+    import params
+    env.set_params(params)
+    hdfs_user = params.hdfs_user
+    name_node_parameters = json.loads(params.name_node_params)
+    threshold = name_node_parameters['threshold']
+    _print(('Starting balancer with threshold = %s\n' % threshold))
+
+    def calculateCompletePercent(first, current):
+        return (1.0 - (current.bytesLeftToMove / first.bytesLeftToMove))
+
+    def startRebalancingProcess(threshold):
+        rebalanceCommand = ('hdfs balancer -threshold %s' % threshold)
+        return ['cmd', '/C', rebalanceCommand]
+    command = startRebalancingProcess(threshold)
+    basedir = os.path.join(env.config.basedir, 'scripts')
+    _print(('Executing command %s\n' % command))
+    parser = hdfs_rebalance.HdfsParser()
+    (returncode, stdout, err) = run_os_command_impersonated(' '.join(command), hdfs_user, Script.get_password(hdfs_user))
+    for line in stdout.split('\n'):
+        _print(('[balancer] %s %s' % (str(datetime.now()), line)))
+        pl = parser.parseLine(line)
+        if pl:
+            res = pl.toJson()
+            res['completePercent'] = calculateCompletePercent(parser.initialLine, pl)
+            self.put_structured_out(res)
+        elif (parser.state == 'PROCESS_FINISED'):
+            _print(('[balancer] %s %s' % (str(datetime.now()), 'Process is finished')))
+            self.put_structured_out({'completePercent': 1, })
+            break
+    if ((returncode != None) and (returncode != 0)):
+        raise Fail('Hdfs rebalance process exited with error. See the log output')
