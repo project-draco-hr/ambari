@@ -1,0 +1,50 @@
+{
+  StackId stackId=cluster.getCurrentStackVersion();
+  Type widgetLayoutType=new TypeToken<Map<String,List<WidgetLayout>>>(){
+  }
+.getType();
+  try {
+    Map<String,Object> widgetDescriptor=null;
+    StackInfo stackInfo=ambariMetaInfo.getStack(stackId.getStackName(),stackId.getStackVersion());
+    if (service != null) {
+      ServiceInfo serviceInfo=stackInfo.getService(service.getName());
+      File widgetDescriptorFile=serviceInfo.getWidgetsDescriptorFile();
+      if (widgetDescriptorFile != null && widgetDescriptorFile.exists()) {
+        try {
+          widgetDescriptor=gson.fromJson(new FileReader(widgetDescriptorFile),widgetLayoutType);
+        }
+ catch (        Exception ex) {
+          String msg="Error loading widgets from file: " + widgetDescriptorFile;
+          LOG.error(msg,ex);
+          throw new AmbariException(msg);
+        }
+      }
+    }
+ else {
+      String widgetDescriptorFileLocation=stackInfo.getWidgetsDescriptorFileLocation();
+      if (widgetDescriptorFileLocation != null) {
+        File widgetDescriptorFile=new File(widgetDescriptorFileLocation);
+        if (widgetDescriptorFile.exists()) {
+          try {
+            widgetDescriptor=gson.fromJson(new FileReader(widgetDescriptorFile),widgetLayoutType);
+          }
+ catch (          Exception ex) {
+            String msg="Error loading widgets from file: " + widgetDescriptorFile;
+            LOG.error(msg,ex);
+            throw new AmbariException(msg);
+          }
+        }
+      }
+    }
+    if (widgetDescriptor != null) {
+      LOG.debug("Loaded widgest descriptor: " + widgetDescriptor);
+      for (      Object artifact : widgetDescriptor.values()) {
+        List<WidgetLayout> widgetLayouts=(List<WidgetLayout>)artifact;
+        createWidgetsAndLayouts(cluster,widgetLayouts);
+      }
+    }
+  }
+ catch (  Exception e) {
+    throw new AmbariException("Error creating stack widget artifacts. " + (service != null ? "Service: " + service.getName() + ", " : "") + "Cluster: "+ cluster.getClusterName(),e);
+  }
+}
