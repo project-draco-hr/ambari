@@ -1,19 +1,4 @@
+@OsFamilyFuncImpl(os_family=OSConst.WINSRV_FAMILY)
 def storm():
     import params
-    Directory(params.log_dir, owner=params.storm_user, group=params.user_group, mode=511, recursive=True)
-    Directory([params.pid_dir, params.local_dir], owner=params.storm_user, group=params.user_group, recursive=True, cd_access='a')
-    Directory(params.conf_dir, group=params.user_group, recursive=True, cd_access='a')
-    File(format('{conf_dir}/config.yaml'), content=Template('config.yaml.j2'), owner=params.storm_user, group=params.user_group)
-    configurations = params.config['configurations']['storm-site']
-    File(format('{conf_dir}/storm.yaml'), content=yaml_config_template(configurations), owner=params.storm_user, group=params.user_group)
-    if params.has_metric_collector:
-        File(format('{conf_dir}/storm-metrics2.properties'), owner=params.storm_user, group=params.user_group, content=Template('storm-metrics2.properties.j2'))
-        Execute(format('{sudo} ln -s {metric_collector_sink_jar} {storm_lib_dir}/ambari-metrics-storm-sink.jar'), not_if=format('ls {storm_lib_dir}/ambari-metrics-storm-sink.jar'), only_if=format('ls {metric_collector_sink_jar}'))
-    File(format('{conf_dir}/storm-env.sh'), owner=params.storm_user, content=InlineTemplate(params.storm_env_sh_template))
-    if params.security_enabled:
-        TemplateConfig(format('{conf_dir}/storm_jaas.conf'), owner=params.storm_user)
-        if ((params.hdp_stack_version != '') and (compare_versions(params.hdp_stack_version, '2.2') >= 0)):
-            TemplateConfig(format('{conf_dir}/client_jaas.conf'), owner=params.storm_user)
-            minRuid = (configurations['_storm.min.ruid'] if configurations.has_key('_storm.min.ruid') else '')
-            min_user_ruid = (int(minRuid) if minRuid.isdigit() else _find_real_user_min_uid())
-            File(format('{conf_dir}/worker-launcher.cfg'), content=Template('worker-launcher.cfg.j2', min_user_ruid=min_user_ruid), owner='root', group=params.user_group)
+    yaml_config('storm.yaml', conf_dir=params.conf_dir, configurations=params.config['configurations']['storm-site'], owner=params.storm_user)
