@@ -1,0 +1,17 @@
+def run(self):
+    ' Copy files and run commands on remote host '
+    self.status['start_time'] = time.time()
+    action_queue = [self.createTargetDir, self.copyBootstrapArchive, self.unzippingBootstrapArchive, self.runSetupAgent]
+    last_retcode = 0
+    while (action_queue and (last_retcode == 0)):
+        action = action_queue.pop(0)
+        ret = self.try_to_execute(action)
+        last_retcode = ret['exitstatus']
+        err_msg = ret['errormsg']
+        std_out = ret['log']
+    if (last_retcode != 0):
+        message = 'ERROR: Bootstrap of host {0} fails because previous action finished with non-zero exit code ({1})\nERROR MESSAGE: {2}\nSTDOUT: {3}'.format(self.host, last_retcode, err_msg, std_out)
+        self.host_log.write(message)
+        logging.error(message)
+    self.createDoneFile(last_retcode)
+    self.status['return_code'] = last_retcode
