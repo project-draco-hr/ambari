@@ -1,0 +1,28 @@
+{
+  final AmbariManagementController controller=createStrictMock(AmbariManagementController.class);
+  final Clusters clusters=createStrictMock(Clusters.class);
+  final Cluster cluster=createStrictMock(Cluster.class);
+  final Service service=createStrictMock(Service.class);
+  final Map<String,Cluster> clusterMap=Collections.singletonMap("c1",cluster);
+  final Map<String,Service> services=Collections.singletonMap("HBASE",service);
+  Module module=new Module(){
+    @Override public void configure(    Binder binder){
+      binder.bind(AmbariManagementController.class).toInstance(controller);
+      binder.bind(Clusters.class).toInstance(clusters);
+      binder.bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      binder.bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+;
+  expect(controller.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getClusters()).andReturn(clusterMap).anyTimes();
+  controller.initializeWidgetsAndLayouts(cluster,null);
+  expectLastCall().once();
+  expect(cluster.getServices()).andReturn(services).once();
+  controller.initializeWidgetsAndLayouts(cluster,service);
+  expectLastCall().once();
+  replay(controller,clusters,cluster);
+  Injector injector=Guice.createInjector(module);
+  injector.getInstance(UpgradeCatalog210.class).initializeClusterAndServiceWidgets();
+  verify(controller,clusters,cluster);
+}
