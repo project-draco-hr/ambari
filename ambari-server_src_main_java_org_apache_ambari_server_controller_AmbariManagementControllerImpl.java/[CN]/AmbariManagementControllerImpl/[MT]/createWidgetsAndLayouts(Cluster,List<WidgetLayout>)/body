@@ -1,8 +1,11 @@
 {
   String user="ambari";
-  ClusterEntity clusterEntity=clusterDAO.findById(cluster.getClusterId());
-  Long now=System.currentTimeMillis();
   Long clusterId=cluster.getClusterId();
+  ClusterEntity clusterEntity=clusterDAO.findById(clusterId);
+  if (clusterEntity == null) {
+    return;
+  }
+  Long now=System.currentTimeMillis();
   if (widgetLayouts != null) {
     for (    WidgetLayout widgetLayout : widgetLayouts) {
       List<WidgetLayoutEntity> existingEntities=widgetLayoutDAO.findByName(clusterId,widgetLayout.getLayoutName(),user);
@@ -18,38 +21,47 @@
         List<WidgetLayoutUserWidgetEntity> widgetLayoutUserWidgetEntityList=new LinkedList<WidgetLayoutUserWidgetEntity>();
         int order=0;
         for (        WidgetLayoutInfo layoutInfo : widgetLayout.getWidgetLayoutInfoList()) {
-          WidgetEntity widgetEntity=new WidgetEntity();
-          widgetEntity.setClusterId(clusterId);
-          widgetEntity.setClusterEntity(clusterEntity);
-          widgetEntity.setScope(WidgetResourceProvider.SCOPE.CLUSTER.name());
-          widgetEntity.setWidgetName(layoutInfo.getWidgetName());
-          widgetEntity.setDisplayName(layoutInfo.getDisplayName());
-          widgetEntity.setAuthor(user);
-          widgetEntity.setDescription(layoutInfo.getDescription());
-          widgetEntity.setTimeCreated(now);
-          widgetEntity.setWidgetType(layoutInfo.getType());
-          widgetEntity.setMetrics(gson.toJson(layoutInfo.getMetricsInfo()));
-          widgetEntity.setProperties(gson.toJson(layoutInfo.getProperties()));
-          widgetEntity.setWidgetValues(gson.toJson(layoutInfo.getValues()));
-          widgetDAO.create(widgetEntity);
-          if (layoutInfo.isVisible()) {
-            List<WidgetEntity> createdEntities=widgetDAO.findByName(clusterId,layoutInfo.getWidgetName(),user);
-            if (createdEntities != null && !createdEntities.isEmpty()) {
-              if (createdEntities.size() > 1) {
-                LOG.error("Skipping layout entry for widget. Multiple widgets " + "found with name = " + layoutInfo.getWidgetName() + ", cluster = "+ cluster.getClusterName()+ ", user = "+ user);
-              }
- else {
-                WidgetLayoutUserWidgetEntity widgetLayoutUserWidgetEntity=new WidgetLayoutUserWidgetEntity();
-                widgetLayoutUserWidgetEntity.setWidget(widgetEntity);
-                widgetLayoutUserWidgetEntity.setWidgetOrder(order++);
-                widgetLayoutUserWidgetEntity.setWidgetLayout(layoutEntity);
-                widgetLayoutUserWidgetEntityList.add(widgetLayoutUserWidgetEntity);
-              }
-            }
+          WidgetEntity widgetEntity=addIfNotExistsWidgetEntity(layoutInfo,clusterEntity,user,now);
+          if (widgetEntity != null && layoutInfo.isVisible()) {
+            WidgetLayoutUserWidgetEntity widgetLayoutUserWidgetEntity=new WidgetLayoutUserWidgetEntity();
+            widgetLayoutUserWidgetEntity.setWidget(widgetEntity);
+            widgetLayoutUserWidgetEntity.setWidgetOrder(order++);
+            widgetLayoutUserWidgetEntity.setWidgetLayout(layoutEntity);
+            widgetLayoutUserWidgetEntityList.add(widgetLayoutUserWidgetEntity);
           }
         }
         layoutEntity.setListWidgetLayoutUserWidgetEntity(widgetLayoutUserWidgetEntityList);
         widgetLayoutDAO.create(layoutEntity);
+      }
+ else {
+        if (existingEntities.size() > 1) {
+          LOG.warn("Skip updating layout since multiple widget layouts " + "found with: name = " + widgetLayout.getLayoutName() + ", "+ "user = "+ user+ ", cluster = "+ cluster.getClusterName());
+        }
+ else {
+          WidgetLayoutEntity existingLayoutEntity=existingEntities.iterator().next();
+          existingLayoutEntity.setSectionName(widgetLayout.getSectionName());
+          existingLayoutEntity.setDisplayName(widgetLayout.getDisplayName());
+          List<WidgetLayoutUserWidgetEntity> layoutUserWidgetEntities=existingLayoutEntity.getListWidgetLayoutUserWidgetEntity();
+          if (layoutUserWidgetEntities == null) {
+            layoutUserWidgetEntities=new LinkedList<WidgetLayoutUserWidgetEntity>();
+            existingLayoutEntity.setListWidgetLayoutUserWidgetEntity(layoutUserWidgetEntities);
+          }
+          int order=layoutUserWidgetEntities.size() - 1;
+          List<WidgetLayoutInfo> layoutInfoList=widgetLayout.getWidgetLayoutInfoList();
+          if (layoutInfoList != null && !layoutInfoList.isEmpty()) {
+            for (            WidgetLayoutInfo layoutInfo : layoutInfoList) {
+              WidgetEntity widgetEntity=addIfNotExistsWidgetEntity(layoutInfo,clusterEntity,user,now);
+              if (widgetEntity != null && layoutInfo.isVisible()) {
+                WidgetLayoutUserWidgetEntity widgetLayoutUserWidgetEntity=new WidgetLayoutUserWidgetEntity();
+                widgetLayoutUserWidgetEntity.setWidget(widgetEntity);
+                widgetLayoutUserWidgetEntity.setWidgetOrder(order++);
+                widgetLayoutUserWidgetEntity.setWidgetLayout(existingLayoutEntity);
+                layoutUserWidgetEntities.add(widgetLayoutUserWidgetEntity);
+              }
+            }
+          }
+          widgetLayoutDAO.merge(existingLayoutEntity);
+        }
       }
     }
   }
