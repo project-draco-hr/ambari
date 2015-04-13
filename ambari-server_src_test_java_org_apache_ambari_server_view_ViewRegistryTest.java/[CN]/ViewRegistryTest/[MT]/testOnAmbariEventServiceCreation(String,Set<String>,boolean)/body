@@ -1,0 +1,28 @@
+{
+  ViewConfig config=ViewConfigTest.getConfig(xml);
+  ViewEntity viewDefinition=ViewEntityTest.getViewEntity(config);
+  ViewRegistry registry=ViewRegistry.getInstance();
+  registry.addDefinition(viewDefinition);
+  ViewInstanceEntity viewInstanceEntity=createNiceMock(ViewInstanceEntity.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  Service service=createNiceMock(Service.class);
+  Map<String,Service> serviceMap=new HashMap<String,Service>();
+  for (  String serviceName : serviceNames) {
+    serviceMap.put(serviceName,service);
+  }
+  StackId stackId=new StackId("HDP-2.0");
+  expect(clusters.getClusterById(99L)).andReturn(cluster);
+  expect(cluster.getClusterName()).andReturn("c1").anyTimes();
+  expect(cluster.getCurrentStackVersion()).andReturn(stackId).anyTimes();
+  expect(cluster.getServices()).andReturn(serviceMap).anyTimes();
+  Capture<ViewInstanceEntity> viewInstanceCapture=new Capture<ViewInstanceEntity>();
+  expect(viewInstanceDAO.merge(capture(viewInstanceCapture))).andReturn(viewInstanceEntity).anyTimes();
+  expect(viewInstanceDAO.findByName("MY_VIEW{1.0.0}","AUTO-INSTANCE")).andReturn(viewInstanceEntity).anyTimes();
+  replay(securityHelper,configuration,viewInstanceDAO,clusters,cluster,viewInstanceEntity);
+  ServiceInstalledEvent event=new ServiceInstalledEvent(99L,"HDP","2.0","HIVE");
+  registry.onAmbariEvent(event);
+  if (success) {
+    Assert.assertEquals(viewInstanceCapture.getValue(),registry.getInstanceDefinition("MY_VIEW","1.0.0","AUTO-INSTANCE"));
+  }
+  verify(securityHelper,configuration,viewInstanceDAO,clusters,cluster,viewInstanceEntity);
+}

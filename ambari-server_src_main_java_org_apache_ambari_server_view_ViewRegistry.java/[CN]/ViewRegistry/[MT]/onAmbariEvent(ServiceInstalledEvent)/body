@@ -1,0 +1,29 @@
+{
+  Clusters clusters=clustersProvider.get();
+  Long clusterId=event.getClusterId();
+  try {
+    org.apache.ambari.server.state.Cluster cluster=clusters.getClusterById(clusterId);
+    String clusterName=cluster.getClusterName();
+    StackId stackId=cluster.getCurrentStackVersion();
+    Set<String> serviceNames=cluster.getServices().keySet();
+    for (    ViewEntity viewEntity : getDefinitions()) {
+      String viewName=viewEntity.getName();
+      ViewConfig viewConfig=viewEntity.getConfiguration();
+      AutoInstanceConfig autoConfig=viewConfig.getAutoInstance();
+      try {
+        if (checkAutoInstanceConfig(autoConfig,stackId,event.getServiceName(),serviceNames)) {
+          LOG.info("Auto creating instance of view " + viewName + " for cluster "+ clusterName+ ".");
+          ViewInstanceEntity viewInstanceEntity=createViewInstanceEntity(viewEntity,viewConfig,autoConfig);
+          viewInstanceEntity.setClusterHandle(clusterName);
+          installViewInstance(viewInstanceEntity);
+        }
+      }
+ catch (      Exception e) {
+        LOG.error("Can't auto create instance of view " + viewName + " for cluster "+ clusterName+ ".  Caught exception :"+ e.getMessage(),e);
+      }
+    }
+  }
+ catch (  AmbariException e) {
+    LOG.warn("Unknown cluster id " + clusterId + ".");
+  }
+}
