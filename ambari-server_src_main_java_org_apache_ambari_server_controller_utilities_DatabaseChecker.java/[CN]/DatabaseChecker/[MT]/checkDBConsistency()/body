@@ -1,0 +1,62 @@
+{
+  LOG.info("Checking DB consistency");
+  boolean checkPassed=true;
+  if (ambariMetaInfo == null) {
+    ambariMetaInfo=injector.getInstance(AmbariMetaInfo.class);
+  }
+  ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  List<ClusterEntity> clusters=clusterDAO.findAll();
+  for (  ClusterEntity clusterEntity : clusters) {
+    String desiredStackVersion=clusterEntity.getDesiredStackVersion();
+    StackId stackId=new Gson().fromJson(desiredStackVersion,StackId.class);
+    Collection<ClusterServiceEntity> serviceEntities=clusterEntity.getClusterServiceEntities();
+    for (    ClusterServiceEntity clusterServiceEntity : serviceEntities) {
+      ServiceDesiredStateEntity serviceDesiredStateEntity=clusterServiceEntity.getServiceDesiredStateEntity();
+      if (serviceDesiredStateEntity == null) {
+        checkPassed=false;
+        LOG.error(String.format("ServiceDesiredStateEntity is null for " + "ServiceComponentDesiredStateEntity, clusterName=%s, serviceName=%s ",clusterEntity.getClusterName(),clusterServiceEntity.getServiceName()));
+      }
+      Collection<ServiceComponentDesiredStateEntity> scDesiredStateEntities=clusterServiceEntity.getServiceComponentDesiredStateEntities();
+      if (scDesiredStateEntities == null || scDesiredStateEntities.isEmpty()) {
+        checkPassed=false;
+        LOG.error(String.format("serviceComponentDesiredStateEntities is null or empty for " + "ServiceComponentDesiredStateEntity, clusterName=%s, serviceName=%s ",clusterEntity.getClusterName(),clusterServiceEntity.getServiceName()));
+      }
+ else {
+        for (        ServiceComponentDesiredStateEntity scDesiredStateEnity : scDesiredStateEntities) {
+          Collection<HostComponentDesiredStateEntity> schDesiredStateEntities=scDesiredStateEnity.getHostComponentDesiredStateEntities();
+          Collection<HostComponentStateEntity> schStateEntities=scDesiredStateEnity.getHostComponentStateEntities();
+          ComponentInfo componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),scDesiredStateEnity.getServiceName(),scDesiredStateEnity.getComponentName());
+          boolean zeroCardinality=componentInfo.getCardinality() == null || componentInfo.getCardinality().startsWith("0") || scDesiredStateEnity.getComponentName().equals("SECONDARY_NAMENODE");
+          boolean componentCheckFailed=false;
+          if (schDesiredStateEntities == null) {
+            componentCheckFailed=true;
+            LOG.error(String.format("hostComponentDesiredStateEntities is null for " + "ServiceComponentDesiredStateEntity, clusterName=%s, serviceName=%s, componentName=%s ",clusterEntity.getClusterName(),scDesiredStateEnity.getServiceName(),scDesiredStateEnity.getComponentName()));
+          }
+ else           if (!zeroCardinality && schDesiredStateEntities.isEmpty()) {
+            componentCheckFailed=true;
+            LOG.error(String.format("hostComponentDesiredStateEntities is empty for " + "ServiceComponentDesiredStateEntity, clusterName=%s, serviceName=%s, componentName=%s ",clusterEntity.getClusterName(),scDesiredStateEnity.getServiceName(),scDesiredStateEnity.getComponentName()));
+          }
+          if (schStateEntities == null) {
+            componentCheckFailed=true;
+            LOG.error(String.format("hostComponentStateEntities is null for " + "ServiceComponentDesiredStateEntity, clusterName=%s, serviceName=%s, componentName=%s ",clusterEntity.getClusterName(),scDesiredStateEnity.getServiceName(),scDesiredStateEnity.getComponentName()));
+          }
+ else           if (!zeroCardinality && schStateEntities.isEmpty()) {
+            componentCheckFailed=true;
+            LOG.error(String.format("hostComponentStateEntities is empty for " + "ServiceComponentDesiredStateEntity, clusterName=%s, serviceName=%s, componentName=%s ",clusterEntity.getClusterName(),scDesiredStateEnity.getServiceName(),scDesiredStateEnity.getComponentName()));
+          }
+          if (!componentCheckFailed && schDesiredStateEntities.size() != schStateEntities.size()) {
+            checkPassed=false;
+            LOG.error(String.format("HostComponentStateEntities and HostComponentDesiredStateEntities " + "tables must contain equal number of rows mapped to ServiceComponentDesiredStateEntity, " + "(clusterName=%s, serviceName=%s, componentName=%s) ",clusterEntity.getClusterName(),scDesiredStateEnity.getServiceName(),scDesiredStateEnity.getComponentName()));
+          }
+          checkPassed=checkPassed && !componentCheckFailed;
+        }
+      }
+    }
+  }
+  if (checkPassed) {
+    LOG.info("DB consistency check passed.");
+  }
+ else {
+    LOG.error("DB consistency check failed.");
+  }
+}
