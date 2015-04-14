@@ -1,0 +1,71 @@
+{
+  final AmbariMetaInfo ambariMetaInfo=EasyMock.createMock(AmbariMetaInfo.class);
+  final ClusterVersionDAO clusterVersionDAO=EasyMock.createMock(ClusterVersionDAO.class);
+  RepositoryVersionEntity entity1=new RepositoryVersionEntity();
+  entity1.setDisplayName("name1");
+  entity1.setOperatingSystems(jsonStringRedhat6);
+  entity1.setStack("HDP-1.1");
+  entity1.setVersion("1.1.1.1");
+  RepositoryVersionEntity entity2=new RepositoryVersionEntity();
+  entity2.setDisplayName("name2");
+  entity2.setOperatingSystems(jsonStringRedhat6);
+  entity2.setStack("HDP-2.2");
+  entity2.setVersion("2.2.2.2");
+  final RepositoryVersionDAO repoVersionDAO=EasyMock.createMock(RepositoryVersionDAO.class);
+  expect(repoVersionDAO.findByStack("HDP-1.1")).andReturn(Collections.singletonList(entity1)).atLeastOnce();
+  expect(repoVersionDAO.findByStack("HDP-2.2")).andReturn(Collections.singletonList(entity2)).atLeastOnce();
+  replay(repoVersionDAO);
+  final StackInfo stack1=new StackInfo(){
+    @Override public Map<String,UpgradePack> getUpgradePacks(){
+      Map<String,UpgradePack> map=new HashMap<String,UpgradePack>();
+      UpgradePack pack1=new UpgradePack(){
+        @Override public String getTarget(){
+          return "1.1.*.*";
+        }
+      }
+;
+      final UpgradePack pack2=new UpgradePack(){
+        @Override public String getTarget(){
+          return "2.2.*.*";
+        }
+        @Override public String getTargetStack(){
+          return "HDP-2.2";
+        }
+      }
+;
+      map.put("pack1",pack1);
+      map.put("pack2",pack2);
+      return map;
+    }
+  }
+;
+  final StackInfo stack2=new StackInfo(){
+    @Override public Map<String,UpgradePack> getUpgradePacks(){
+      Map<String,UpgradePack> map=new HashMap<String,UpgradePack>();
+      UpgradePack pack=new UpgradePack(){
+        @Override public String getTarget(){
+          return "2.2.*.*";
+        }
+      }
+;
+      map.put("pack2",pack);
+      return map;
+    }
+  }
+;
+  InMemoryDefaultTestModule injectorModule=new InMemoryDefaultTestModule(){
+    @Override protected void configure(){
+      super.configure();
+      bind(AmbariMetaInfo.class).toInstance(ambariMetaInfo);
+      bind(ClusterVersionDAO.class).toInstance(clusterVersionDAO);
+      bind(RepositoryVersionDAO.class).toInstance(repoVersionDAO);
+      requestStaticInjection(CompatibleRepositoryVersionResourceProvider.class);
+    }
+  }
+;
+  injector=Guice.createInjector(injectorModule);
+  expect(ambariMetaInfo.getUpgradePacks("HDP","1.1")).andReturn(stack1.getUpgradePacks());
+  expect(ambariMetaInfo.getUpgradePacks("HDP","2.2")).andReturn(stack2.getUpgradePacks());
+  replay(ambariMetaInfo);
+  injector.getInstance(GuiceJpaInitializer.class);
+}
