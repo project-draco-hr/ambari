@@ -1,0 +1,43 @@
+@patch.object(threading._Event, 'wait')
+@patch('time.sleep')
+@patch('json.dumps')
+def test_recoveryHbCmd(self, dumpsMock, sleepMock, event_mock):
+    out = StringIO.StringIO()
+    sys.stdout = out
+    hearbeat = MagicMock()
+    self.controller.heartbeat = hearbeat
+    event_mock.return_value = False
+    dumpsMock.return_value = 'data'
+    sendRequest = MagicMock(name='sendRequest')
+    self.controller.sendRequest = sendRequest
+    addToQueue = MagicMock(name='addToQueue')
+    addToStatusQueue = MagicMock(name='addToStatusQueue')
+    self.addToQueue = addToQueue
+    self.addToStatusQueue = addToStatusQueue
+    process_execution_commands = MagicMock(name='process_execution_commands')
+    self.controller.recovery_manager.process_execution_commands = process_execution_commands
+    process_status_commands = MagicMock(name='process_status_commands')
+    self.controller.recovery_manager.process_status_commands = process_status_commands
+    self.controller.responseId = 0
+    response = {'responseId': 1, 'statusCommands': 'commands2', 'executionCommands': 'commands1', 'log': '', 'exitstatus': '0', }
+    sendRequest.return_value = response
+
+    def one_heartbeat(*args, **kwargs):
+        self.controller.DEBUG_STOP_HEARTBEATING = True
+        return response
+    sendRequest.side_effect = one_heartbeat
+    actionQueue = MagicMock()
+    actionQueue.isIdle.return_value = True
+    self.controller.actionQueue = actionQueue
+    self.controller.heartbeatWithServer()
+    self.assertTrue(sendRequest.called)
+    self.assertTrue(process_execution_commands.called)
+    self.assertTrue(process_status_commands.called)
+    process_execution_commands.assert_called_with('commands1')
+    process_status_commands.assert_called_with('commands2')
+    self.controller.heartbeatWithServer()
+    sys.stdout = sys.__stdout__
+    self.controller.sendRequest = Controller.Controller.sendRequest
+    self.controller.sendRequest = Controller.Controller.addToQueue
+    self.controller.sendRequest = Controller.Controller.addToStatusQueue
+    pass

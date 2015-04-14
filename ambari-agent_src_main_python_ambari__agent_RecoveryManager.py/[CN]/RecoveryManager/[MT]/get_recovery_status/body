@@ -1,0 +1,29 @@
+def get_recovery_status(self):
+    '\n    Creates a status in the form\n    {\n      "summary" : "RECOVERABLE|DISABLED|PARTIALLY_RECOVERABLE|UNRECOVERABLE",\n      "component_reports" : [\n        {\n          "name": "component_name",\n          "numAttempts" : "x",\n          "limitReached" : "true|false"\n          "status" : "REQUIRES_RECOVERY|RECOVERY_COMMAND_REQUESTED|RECOVERY_COMMAND_ISSUED|NO_RECOVERY_NEEDED"\n        }\n      ]\n    }\n    '
+    report = {}
+    report['summary'] = 'DISABLED'
+    if self.enabled():
+        report['summary'] = 'RECOVERABLE'
+        num_limits_reached = 0
+        recovery_states = []
+        report['componentReports'] = recovery_states
+        self.__status_lock.acquire()
+        try:
+            for component in self.actions.keys():
+                action = self.actions[component]
+                recovery_state = {}
+                recovery_state['name'] = component
+                recovery_state['numAttempts'] = action['lifetimeCount']
+                recovery_state['limitReached'] = (self.max_lifetime_count <= action['lifetimeCount'])
+                recovery_states.append(recovery_state)
+                if (recovery_state['limitReached'] == True):
+                    num_limits_reached += 1
+                pass
+        finally:
+            self.__status_lock.release()
+        if (num_limits_reached > 0):
+            report['summary'] = 'PARTIALLY_RECOVERABLE'
+            if (num_limits_reached == len(recovery_states)):
+                report['summary'] = 'UNRECOVERABLE'
+    return report
+    pass

@@ -1,0 +1,43 @@
+def _execute_action_(self, action_name):
+    '\n    _private_ implementation of [may] execute\n    '
+    action_counter = self.actions[action_name]
+    now = self._now_()
+    seconds_since_last_attempt = (now - action_counter['lastAttempt'])
+    if (action_counter['lifetimeCount'] < self.max_lifetime_count):
+        if (action_counter['count'] < self.max_count):
+            if (seconds_since_last_attempt > self.retry_gap_in_sec):
+                action_counter['count'] += 1
+                action_counter['lifetimeCount'] += 1
+                if (self.retry_gap > 0):
+                    action_counter['lastAttempt'] = now
+                action_counter['warnedLastAttempt'] = False
+                if (action_counter['count'] == 1):
+                    action_counter['lastReset'] = now
+                return True
+            elif (action_counter['warnedLastAttempt'] == False):
+                action_counter['warnedLastAttempt'] = True
+                logger.warn(('%s seconds has not passed since last occurrence %s seconds back for %s. ' + 'Will silently skip execution without warning till retry gap is passed'), self.retry_gap_in_sec, seconds_since_last_attempt, action_name)
+            else:
+                logger.debug('%s seconds has not passed since last occurrence %s seconds back for %s', self.retry_gap_in_sec, seconds_since_last_attempt, action_name)
+        else:
+            sec_since_last_reset = (now - action_counter['lastReset'])
+            if (sec_since_last_reset > self.window_in_sec):
+                action_counter['count'] = 1
+                action_counter['lifetimeCount'] += 1
+                if (self.retry_gap > 0):
+                    action_counter['lastAttempt'] = now
+                action_counter['lastReset'] = now
+                action_counter['warnedLastReset'] = False
+                return True
+            elif (action_counter['warnedLastReset'] == False):
+                action_counter['warnedLastReset'] = True
+                logger.warn(('%s occurrences in %s minutes reached the limit for %s. ' + 'Will silently skip execution without warning till window is reset'), action_counter['count'], self.window_in_min, action_name)
+            else:
+                logger.debug('%s occurrences in %s minutes reached the limit for %s', action_counter['count'], self.window_in_min, action_name)
+    elif (action_counter['warnedThresholdReached'] == False):
+        action_counter['warnedThresholdReached'] = True
+        logger.warn(('%s occurrences in agent life time reached the limit for %s. ' + 'Will silently skip execution without warning till window is reset'), action_counter['lifetimeCount'], action_name)
+    else:
+        logger.debug('%s occurrences in agent life time reached the limit for %s', action_counter['lifetimeCount'], action_name)
+    return False
+    pass

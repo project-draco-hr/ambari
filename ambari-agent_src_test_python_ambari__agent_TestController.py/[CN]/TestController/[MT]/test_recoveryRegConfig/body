@@ -1,0 +1,33 @@
+@patch('socket.gethostbyname')
+@patch('json.dumps')
+@patch('time.sleep')
+@patch('pprint.pformat')
+@patch.object(Controller, 'randint')
+@patch.object(Controller, 'LiveStatus')
+def test_recoveryRegConfig(self, LiveStatus_mock, randintMock, pformatMock, sleepMock, dumpsMock, socketGhbnMock):
+    self.assertEquals(self.controller.recovery_manager.recovery_enabled, False)
+    self.assertEquals(self.controller.recovery_manager.auto_start_only, False)
+    self.assertEquals(self.controller.recovery_manager.max_count, 6)
+    self.assertEquals(self.controller.recovery_manager.window_in_min, 60)
+    self.assertEquals(self.controller.recovery_manager.retry_gap, 5)
+    out = StringIO.StringIO()
+    sys.stdout = out
+    dumpsMock.return_value = '{"valid_object": true}'
+    socketGhbnMock.return_value = 'host1'
+    sendRequest = MagicMock(name='sendRequest')
+    self.controller.sendRequest = sendRequest
+    register = MagicMock(name='register')
+    self.controller.register = register
+    sendRequest.return_value = {'responseId': 1, 'recoveryConfig': {'type': 'FULL', 'maxCount': 5, 'windowInMinutes': 50, 'retryGap': 3, 'maxLifetimeCount': 7, }, 'log': '', 'exitstatus': '0', }
+    self.controller.isRegistered = False
+    self.controller.registerWithServer()
+    self.assertEquals(self.controller.recovery_manager.recovery_enabled, True)
+    self.assertEquals(self.controller.recovery_manager.auto_start_only, False)
+    self.assertEquals(self.controller.recovery_manager.max_count, 5)
+    self.assertEquals(self.controller.recovery_manager.window_in_min, 50)
+    self.assertEquals(self.controller.recovery_manager.retry_gap, 3)
+    self.assertEquals(self.controller.recovery_manager.max_lifetime_count, 7)
+    sys.stdout = sys.__stdout__
+    self.controller.sendRequest = Controller.Controller.sendRequest
+    self.controller.addToStatusQueue = Controller.Controller.addToStatusQueue
+    pass

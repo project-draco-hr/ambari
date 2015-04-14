@@ -8,13 +8,13 @@
   Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
   Map<String,Map<String,Map<String,String>>> configurationAttributes=new TreeMap<String,Map<String,Map<String,String>>>();
   Collection<Config> clusterConfigs=cluster.getAllConfigs();
+  Map<String,Map<String,String>> allConfigTags=configHelper.getEffectiveDesiredTags(cluster,hostname);
   for (  Config clusterConfig : clusterConfigs) {
     if (!clusterConfig.getType().endsWith("-env")) {
       continue;
     }
     if (clusterConfig != null) {
       Map<String,String> props=new HashMap<String,String>(clusterConfig.getProperties());
-      Map<String,Map<String,String>> allConfigTags=configHelper.getEffectiveDesiredTags(cluster,hostname);
       Map<String,Map<String,String>> configTags=new HashMap<String,Map<String,String>>();
       for (      Map.Entry<String,Map<String,String>> entry : allConfigTags.entrySet()) {
         if (entry.getKey().equals(clusterConfig.getType())) {
@@ -44,6 +44,11 @@
   statusCmd.setConfigurations(configurations);
   statusCmd.setConfigurationAttributes(configurationAttributes);
   statusCmd.setHostname(hostname);
+  statusCmd.setDesiredState(sch.getDesiredState());
+  if (getAgentRequests().shouldSendExecutionDetails(hostname,componentName)) {
+    LOG.info(componentName + " is at " + sch.getState()+ " adding more payload per agent ask");
+    statusCmd.setPayloadLevel(StatusCommand.StatusCommandPayload.EXECUTION_COMMAND);
+  }
   Map<String,String> commandParams=statusCmd.getCommandParams();
   String commandTimeout=configuration.getDefaultAgentTaskTimeout(false);
   CommandScriptDefinition script=componentInfo.getCommandScript();
@@ -67,5 +72,10 @@
   hostLevelParams.put(JDK_LOCATION,ambariManagementController.getJdkResourceUrl());
   hostLevelParams.put(STACK_NAME,stackId.getStackName());
   hostLevelParams.put(STACK_VERSION,stackId.getStackVersion());
+  if (statusCmd.getPayloadLevel() == StatusCommand.StatusCommandPayload.EXECUTION_COMMAND) {
+    ExecutionCommand ec=ambariManagementController.getExecutionCommand(cluster,sch,RoleCommand.START);
+    statusCmd.setExecutionCommand(ec);
+    LOG.debug(componentName + " has more payload for execution command");
+  }
   return statusCmd;
 }

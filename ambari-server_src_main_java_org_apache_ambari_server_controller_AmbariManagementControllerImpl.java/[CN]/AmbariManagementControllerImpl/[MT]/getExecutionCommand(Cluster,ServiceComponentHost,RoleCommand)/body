@@ -1,0 +1,29 @@
+{
+  Map<String,Set<String>> clusterHostInfo=StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster);
+  String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
+  Map<String,String> hostParamsCmd=customCommandExecutionHelper.createDefaultHostParams(cluster);
+  Stage stage=createNewStage(0,cluster,1,"",clusterHostInfoJson,"{}","");
+  Map<String,Map<String,String>> configTags=configHelper.getEffectiveDesiredTags(cluster,scHost.getHostName());
+  Map<String,Map<String,String>> configurations=configHelper.getEffectiveConfigProperties(cluster,configTags);
+  Map<String,Map<String,Map<String,String>>> configurationAttributes=new TreeMap<String,Map<String,Map<String,String>>>();
+  createHostAction(cluster,stage,scHost,configurations,configurationAttributes,configTags,roleCommand,null,null);
+  ExecutionCommand ec=stage.getExecutionCommands().get(scHost.getHostName()).get(0).getExecutionCommand();
+  hostParamsCmd.putAll(ec.getHostLevelParams());
+  ec.getHostLevelParams().putAll(hostParamsCmd);
+  ec.setClusterHostInfo(StageUtils.getClusterHostInfo(clusters.getHostsForCluster(cluster.getClusterName()),cluster));
+  if (ec.getRole().equals(Role.HIVE_CLIENT.toString()) && ec.getConfigurations().containsKey(Configuration.HIVE_CONFIG_TAG)) {
+    ec.getConfigurations().get(Configuration.HIVE_CONFIG_TAG).remove(Configuration.HIVE_METASTORE_PASSWORD_PROPERTY);
+  }
+  Map<String,Map<String,Map<String,String>>> configAttributes=configHelper.getEffectiveConfigAttributes(cluster,ec.getConfigurationTags());
+  for (  Map.Entry<String,Map<String,Map<String,String>>> attributesOccurrence : configAttributes.entrySet()) {
+    String type=attributesOccurrence.getKey();
+    Map<String,Map<String,String>> attributes=attributesOccurrence.getValue();
+    if (ec.getConfigurationAttributes() != null) {
+      if (!ec.getConfigurationAttributes().containsKey(type)) {
+        ec.getConfigurationAttributes().put(type,new TreeMap<String,Map<String,String>>());
+      }
+      configHelper.cloneAttributesMap(attributes,ec.getConfigurationAttributes().get(type));
+    }
+  }
+  return ec;
+}

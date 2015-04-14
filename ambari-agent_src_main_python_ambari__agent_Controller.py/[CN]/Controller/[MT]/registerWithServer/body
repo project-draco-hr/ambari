@@ -14,6 +14,8 @@ def registerWithServer(self):
             except socket.error:
                 logger.warn("Unable to determine the IP address of '%s', agent registration may fail (agent=%s)", self.hostname, prettyData)
             ret = self.sendRequest(self.registerUrl, data)
+            prettyData = pprint.pformat(ret)
+            logger.debug('Registration response is %s', prettyData)
             exitstatus = 0
             if ('exitstatus' in ret.keys()):
                 exitstatus = int(ret['exitstatus'])
@@ -33,14 +35,16 @@ def registerWithServer(self):
             else:
                 self.hasMappedComponents = False
             self.cluster_configuration.update_configurations_from_heartbeat(ret)
+            self.recovery_manager.update_configuration_from_registration(ret)
             self.alert_scheduler_handler.update_definitions(ret)
         except ssl.SSLError:
             self.repeatRegistration = False
             self.isRegistered = False
             return
-        except Exception:
+        except Exception as ex:
             delay = randint(0, self.range)
             logger.error(('Unable to connect to: ' + self.registerUrl), exc_info=True)
-            ' Sleeping for {0} seconds and then retrying again '.format(delay)
+            logger.error(('Error:' + str(ex)))
+            logger.warn(' Sleeping for {0} seconds and then trying again '.format(delay))
             time.sleep(delay)
     return ret
