@@ -1,0 +1,46 @@
+{
+  final Set<Resource> resources=new HashSet<Resource>();
+  final Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  final Set<Map<String,Object>> propertyMaps=getPropertyMaps(predicate);
+  List<WidgetLayoutEntity> layoutEntities=new ArrayList<WidgetLayoutEntity>();
+  for (  Map<String,Object> propertyMap : propertyMaps) {
+    final String userName=propertyMap.get(WIDGETLAYOUT_USERNAME_PROPERTY_ID).toString();
+    java.lang.reflect.Type type=new TypeToken<Set<Map<String,String>>>(){
+    }
+.getType();
+    Set<Map<String,String>> activeWidgetLayouts=gson.fromJson(userDAO.findUserByName(userName).getActiveWidgetLayouts(),type);
+    if (activeWidgetLayouts != null) {
+      for (      Map<String,String> widgetLayoutId : activeWidgetLayouts) {
+        layoutEntities.add(widgetLayoutDAO.findById(Long.parseLong(widgetLayoutId.get(ID))));
+      }
+    }
+  }
+  for (  WidgetLayoutEntity layoutEntity : layoutEntities) {
+    Resource resource=new ResourceImpl(Type.ActiveWidgetLayout);
+    resource.setProperty(WIDGETLAYOUT_ID_PROPERTY_ID,layoutEntity.getId());
+    String clusterName=null;
+    try {
+      clusterName=getManagementController().getClusters().getClusterById(layoutEntity.getClusterId()).getClusterName();
+    }
+ catch (    AmbariException e) {
+      throw new SystemException(e.getMessage());
+    }
+    resource.setProperty(WIDGETLAYOUT_CLUSTER_NAME_PROPERTY_ID,clusterName);
+    resource.setProperty(WIDGETLAYOUT_LAYOUT_NAME_PROPERTY_ID,layoutEntity.getLayoutName());
+    resource.setProperty(WIDGETLAYOUT_SECTION_NAME_PROPERTY_ID,layoutEntity.getSectionName());
+    resource.setProperty(WIDGETLAYOUT_SCOPE_PROPERTY_ID,layoutEntity.getScope());
+    resource.setProperty(WIDGETLAYOUT_USERNAME_PROPERTY_ID,layoutEntity.getUserName());
+    resource.setProperty(WIDGETLAYOUT_DISPLAY_NAME_PROPERTY_ID,layoutEntity.getDisplayName());
+    List<HashMap> widgets=new ArrayList<HashMap>();
+    List<WidgetLayoutUserWidgetEntity> widgetLayoutUserWidgetEntityList=layoutEntity.getListWidgetLayoutUserWidgetEntity();
+    for (    WidgetLayoutUserWidgetEntity widgetLayoutUserWidgetEntity : widgetLayoutUserWidgetEntityList) {
+      WidgetEntity widgetEntity=widgetLayoutUserWidgetEntity.getWidget();
+      HashMap<String,Object> widgetInfoMap=new HashMap<String,Object>();
+      widgetInfoMap.put("Widget",WidgetResponse.coerce(widgetEntity));
+      widgets.add(widgetInfoMap);
+    }
+    resource.setProperty(WIDGETLAYOUT_INFO_PROPERTY_ID,widgets);
+    resources.add(resource);
+  }
+  return resources;
+}
