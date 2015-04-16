@@ -1,6 +1,8 @@
 {
+  final StackDAO stackDAO=injector.getInstance(StackDAO.class);
   final ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
   final ResourceTypeDAO resourceTypeDAO=injector.getInstance(ResourceTypeDAO.class);
+  final StackEntity stackEntity=stackDAO.find("HDP","2.2.0");
   ResourceTypeEntity resourceTypeEntity=resourceTypeDAO.findById(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE);
   if (resourceTypeEntity == null) {
     resourceTypeEntity=new ResourceTypeEntity();
@@ -13,6 +15,7 @@
   ClusterEntity clusterEntity=new ClusterEntity();
   clusterEntity.setClusterName("cluster1");
   clusterEntity.setResource(resourceEntity);
+  clusterEntity.setDesiredStack(stackEntity);
   clusterDAO.create(clusterEntity);
   clusterEntity=clusterDAO.findById(clusterEntity.getClusterId());
   assertEquals("cluster1",clusterEntity.getClusterName());
@@ -21,21 +24,27 @@
       ClusterEntity clusterEntity1=clusterDAO.findByName("cluster1");
       clusterEntity1.setClusterName("anotherName");
       clusterDAO.merge(clusterEntity1);
+      clusterEntity1=clusterDAO.findById(clusterEntity1.getClusterId());
+      assertEquals("anotherName",clusterEntity1.getClusterName());
+      injector.getInstance(EntityManager.class).clear();
     }
   }
 ;
   thread.start();
   thread.join();
+  injector.getInstance(EntityManager.class).clear();
   clusterEntity=clusterDAO.findById(clusterEntity.getClusterId());
   assertEquals("anotherName",clusterEntity.getClusterName());
   thread=new Thread(){
     @Override public void run(){
       clusterDAO.removeByName("anotherName");
+      injector.getInstance(EntityManager.class).clear();
     }
   }
 ;
   thread.start();
   thread.join();
+  injector.getInstance(EntityManager.class).clear();
   assertNull(clusterDAO.findById(clusterEntity.getClusterId()));
   List<ClusterEntity> result=clusterDAO.findAll();
   final ResourceTypeEntity finalResourceTypeEntity=resourceTypeEntity;
@@ -46,6 +55,7 @@
       ClusterEntity temp=new ClusterEntity();
       temp.setClusterName("temp_cluster");
       temp.setResource(resourceEntity);
+      temp.setDesiredStack(stackEntity);
       clusterDAO.create(temp);
     }
   }
@@ -60,6 +70,7 @@
       ClusterEntity temp=new ClusterEntity();
       temp.setClusterName("temp_cluster2");
       temp.setResource(resourceEntity);
+      temp.setDesiredStack(stackEntity);
       clusterDAO.create(temp);
     }
   }
