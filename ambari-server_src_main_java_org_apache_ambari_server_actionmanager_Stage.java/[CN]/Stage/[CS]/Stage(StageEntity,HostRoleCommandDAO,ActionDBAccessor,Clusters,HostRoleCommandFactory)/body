@@ -1,0 +1,34 @@
+{
+  this.hostRoleCommandFactory=hostRoleCommandFactory;
+  this.hostRoleCommandDAO=hostRoleCommandDAO;
+  this.dbAccessor=dbAccessor;
+  requestId=stageEntity.getRequestId();
+  stageId=stageEntity.getStageId();
+  skippable=stageEntity.isSkippable();
+  logDir=stageEntity.getLogInfo();
+  long clusterId=stageEntity.getClusterId().longValue();
+  if (-1L != clusterId) {
+    try {
+      clusterName=clusters.getClusterById(clusterId).getClusterName();
+    }
+ catch (    Exception e) {
+      LOG.debug("Could not load cluster with id {}, the cluster may have been removed for stage {}",Long.valueOf(clusterId),Long.valueOf(stageId));
+    }
+  }
+  requestContext=stageEntity.getRequestContext();
+  clusterHostInfo=stageEntity.getClusterHostInfo();
+  commandParamsStage=stageEntity.getCommandParamsStage();
+  hostParamsStage=stageEntity.getHostParamsStage();
+  List<Long> taskIds=hostRoleCommandDAO.findTaskIdsByStage(requestId,stageId);
+  Collection<HostRoleCommand> commands=dbAccessor.getTasks(taskIds);
+  for (  HostRoleCommand command : commands) {
+    String hostname=command.getHostName();
+    if (!hostRoleCommands.containsKey(hostname)) {
+      hostRoleCommands.put(hostname,new LinkedHashMap<String,HostRoleCommand>());
+    }
+    hostRoleCommands.get(hostname).put(command.getRole().toString(),command);
+  }
+  for (  RoleSuccessCriteriaEntity successCriteriaEntity : stageEntity.getRoleSuccessCriterias()) {
+    successFactors.put(successCriteriaEntity.getRole(),successCriteriaEntity.getSuccessFactor().floatValue());
+  }
+}

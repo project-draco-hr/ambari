@@ -39,13 +39,23 @@
  else {
       throw new IllegalArgumentException(String.format("Invalid desired state %s. Should be either CURRENT or INSTALLED",newStateStr));
     }
+    ClusterEntity cluster=clusterDAO.findByName(clName);
+    String defaultHostName=null;
+    List<HostEntity> hosts=new ArrayList(cluster.getHostEntities());
+    if (hosts != null && !hosts.isEmpty()) {
+      Collections.sort(hosts);
+      defaultHostName=hosts.get(0).getHostName();
+    }
+    if (defaultHostName == null) {
+      throw new AmbariException("Could not find at least one host to set the command for");
+    }
     args.put(FinalizeUpgradeAction.VERSION_KEY,desiredRepoVersion);
     args.put(FinalizeUpgradeAction.CLUSTER_NAME_KEY,clName);
     ExecutionCommand command=new ExecutionCommand();
     command.setCommandParams(args);
     command.setClusterName(clName);
     finalizeUpgradeAction.setExecutionCommand(command);
-    HostRoleCommand hostRoleCommand=new HostRoleCommand("none",Role.AMBARI_SERVER_ACTION,null,null);
+    HostRoleCommand hostRoleCommand=hostRoleCommandFactory.create(defaultHostName,Role.AMBARI_SERVER_ACTION,null,null);
     finalizeUpgradeAction.setHostRoleCommand(hostRoleCommand);
     CommandReport report=finalizeUpgradeAction.execute(null);
     LOG.info("Finalize output:");
