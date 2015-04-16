@@ -1,0 +1,26 @@
+def action_create(self):
+    filename = self.resource.filename
+    comment_symbols = self.resource.comment_symbols
+    delimiter = self.resource.key_value_delimiter
+    properties = self.resource.properties
+    unsaved_values = properties.keys()
+    new_content_lines = []
+    if sudo.path_isfile(filename):
+        file_content = sudo.read_file(filename)
+        new_content_lines += file_content.split('\n')
+        Logger.info(format('Modifying existing properties file: {filename}'))
+        for line_num in range(len(new_content_lines)):
+            line = new_content_lines[line_num]
+            if (line.lstrip() and (not (line.lstrip()[0] in comment_symbols)) and (delimiter in line)):
+                in_var_name = line.split(delimiter)[0].strip()
+                in_var_value = line.split(delimiter)[1].strip()
+                if (in_var_name in properties):
+                    new_content_lines[line_num] = u'{0}{1}{2}'.format(unicode(in_var_name), delimiter, unicode(properties[in_var_name]))
+                    unsaved_values.remove(in_var_name)
+    else:
+        Logger.info(format("Creating new properties file as {filename} doesn't exist"))
+    for property_name in unsaved_values:
+        line = u'{0}{1}{2}'.format(unicode(property_name), delimiter, unicode(properties[property_name]))
+        new_content_lines.append(line)
+    with Environment.get_instance_copy() as env:
+        File(filename, content=(u'\n'.join(new_content_lines) + '\n'), owner=self.resource.owner, group=self.resource.group, mode=self.resource.mode, encoding=self.resource.encoding)

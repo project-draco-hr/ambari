@@ -1,0 +1,14 @@
+def setup_ranger_admin():
+    import params
+    check_db_connnection()
+    File(params.downloaded_custom_connector, content=DownloadSource(params.driver_curl_source))
+    Execute(('cp', '--remove-destination', params.downloaded_custom_connector, params.driver_curl_target), path=['/bin', '/usr/bin/'], not_if=format('test -f {driver_curl_target}'), sudo=True)
+    ModifyPropertiesFile(format('{ranger_home}/install.properties'), properties=params.config['configurations']['admin-properties'])
+    if ((params.db_flavor.lower() == 'oracle') and params.oracle_home):
+        env_dict = {'JAVA_HOME': params.java_home, 'ORACLE_HOME': params.oracle_home, 'LD_LIBRARY_PATH': params.oracle_home, }
+    else:
+        env_dict = {'JAVA_HOME': params.java_home, }
+    setup_sh = (format('cd {ranger_home} && ') + as_sudo([format('{ranger_home}/setup.sh')]))
+    Execute(setup_sh, environment=env_dict, logoutput=True)
+    ModifyPropertiesFile(format('{ranger_conf}/xa_system.properties'), properties=params.config['configurations']['ranger-site'])
+    ModifyPropertiesFile(format('{ranger_conf}/ranger_webserver.properties'), properties=params.config['configurations']['ranger-site'], mode=484)
