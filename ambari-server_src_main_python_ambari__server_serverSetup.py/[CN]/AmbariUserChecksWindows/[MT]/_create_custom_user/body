@@ -1,24 +1,33 @@
 def _create_custom_user(self):
-    user = get_validated_string_input('Enter user account for ambari-server service ({0}):'.format(self.NR_DEFAULT_USER), self.NR_DEFAULT_USER, None, 'Invalid username.', False)
-    if (user == self.NR_DEFAULT_USER):
-        return (0, user)
-    password = get_validated_string_input('Enter password for user {0}:'.format(user), '', None, 'Password', True, False)
+    user = get_validated_string_input('Enter user account for ambari-server service ({0}):'.format(self.username), self.username, None, 'Invalid username.', False)
+    if (user in self.NR_SYSTEM_USERS):
+        self.username = user
+        return 0
     from ambari_commons.os_windows import UserHelper
     uh = UserHelper(user)
-    (status, message) = uh.create_user(password)
-    if (status == UserHelper.USER_EXISTS):
-        print_info_msg('User {0} already exists, make sure that you typed correct password for user, skipping user creation'.format(user))
-    elif (status == UserHelper.ACTION_FAILED):
-        print_warning_msg("Can't create user {0}. Failed with message {1}".format(user, message))
-        return (UserHelper.ACTION_FAILED, None)
+    if (not uh.find_user()):
+        if get_silent():
+            password = self.password
+        else:
+            password = get_validated_string_input('Enter password for user {0}:'.format(user), '', None, 'Password', True, False)
+        (status, message) = uh.create_user(password)
+        if (status == UserHelper.USER_EXISTS):
+            print_info_msg('User {0} already exists, make sure that you typed correct password for user, skipping user creation'.format(user))
+        elif (status == UserHelper.ACTION_FAILED):
+            print_warning_msg("Can't create user {0}. Failed with message {1}".format(user, message))
+            return UserHelper.ACTION_FAILED
+        self.password = password
     (status, message) = uh.add_user_privilege('SeServiceLogonRight')
     if (status == UserHelper.ACTION_FAILED):
         print_warning_msg("Can't add SeServiceLogonRight to user {0}. Failed with message {1}".format(user, message))
-        return (UserHelper.ACTION_FAILED, None)
+        return UserHelper.ACTION_FAILED
+    (status, message) = uh.add_user_privilege('SeBatchLogonRight')
+    if (status == UserHelper.ACTION_FAILED):
+        print_warning_msg("Can't add SeBatchLogonRight to user {0}. Failed with message {1}".format(user, message))
+        return UserHelper.ACTION_FAILED
     print_info_msg('User configuration is done.')
-    print_warning_msg('When using non SYSTEM user make sure that your user has read\\write access to log directories and all server directories. In case of integrated authentication for SQL Server make sure that your user is properly configured to use the ambari database.')
-    if uh.domainName:
-        user = ((uh.domainName + '\\') + user)
-    os.environ[SERVICE_USERNAME_KEY] = user
-    os.environ[SERVICE_PASSWORD_KEY] = password
-    return (0, user)
+    print_warning_msg('When using non SYSTEM user make sure that your user has read\\write access to log directories and all server directories. In case of integrated authentication for SQL Server make sure that your user is properly configured to access the ambari database.')
+    if (user.find('\\') == (-1)):
+        user = ('.\\' + user)
+    self.username = user
+    return 0
