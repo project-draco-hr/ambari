@@ -1,24 +1,23 @@
 def do_checks(self):
     try:
         user = read_ambari_user()
-        if (not user):
-            user = self.NR_DEFAULT_USER
-        if (self.user is not None):
-            update_user_setting = True
-            prompt_msg = self.NR_USER_CUSTOMIZE_PROMPT.format('y')
+        create_user = False
+        update_user_setting = False
+        if (user is not None):
+            create_user = get_YN_input(self.NR_USER_CHANGE_PROMPT.format(user), False)
+            update_user_setting = create_user
         else:
-            update_user_setting = False
-            if (user != self.NR_DEFAULT_USER):
-                prompt_msg = self.NR_USER_CHANGE_PROMPT.format(user, 'n')
-            else:
-                prompt_msg = self.NR_USER_CUSTOMIZE_PROMPT.format('n')
-            self.user = (user if user else self.NR_DEFAULT_USER)
-        self.register_service = get_YN_input(prompt_msg, update_user_setting)
-        if self.register_service:
-            retcode = self._create_custom_user()
+            update_user_setting = True
+            create_user = get_YN_input(self.NR_USER_CUSTOMIZE_PROMPT, False)
+            if (not create_user):
+                user = self.NR_DEFAULT_USER
+        if create_user:
+            (retcode, user) = self._create_custom_user()
             if (retcode != 0):
                 return retcode
-        adjust_directory_permissions(self.user)
+        if update_user_setting:
+            write_property(NR_USER_PROPERTY, user)
+        adjust_directory_permissions(user)
     except OSError as e:
         print_error_msg(('Failed: %s' % str(e)))
         return 4
