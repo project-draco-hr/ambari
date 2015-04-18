@@ -1,0 +1,67 @@
+{
+  Cluster cluster=m_clusters.get().getCluster(clusterName);
+  StackId oldStack=cluster.getCurrentStackVersion();
+  Map<String,Map<String,String>> oldMap=new HashMap<String,Map<String,String>>();
+  Map<String,Map<String,String>> newMap=new HashMap<String,Map<String,String>>();
+  for (  String serviceName : cluster.getServices().keySet()) {
+    Set<PropertyInfo> oldStackProperties=m_ambariMetaInfo.get().getServiceProperties(oldStack.getStackName(),oldStack.getStackVersion(),serviceName);
+    addToMap(oldMap,oldStackProperties);
+    Set<PropertyInfo> newStackProperties=m_ambariMetaInfo.get().getServiceProperties(targetStack.getStackName(),targetStack.getStackVersion(),serviceName);
+    addToMap(newMap,newStackProperties);
+  }
+  Set<PropertyInfo> set=m_ambariMetaInfo.get().getStackProperties(oldStack.getStackName(),oldStack.getStackVersion());
+  addToMap(oldMap,set);
+  set=m_ambariMetaInfo.get().getStackProperties(targetStack.getStackName(),targetStack.getStackVersion());
+  addToMap(newMap,set);
+  Map<String,Map<String,ThreeWayValue>> result=new HashMap<String,Map<String,ThreeWayValue>>();
+  for (  Entry<String,Map<String,String>> entry : oldMap.entrySet()) {
+    if (!newMap.containsKey(entry.getKey())) {
+      LOG.info("Stack {} does not have an equivalent config type {} in {}",oldStack.getStackId(),entry.getKey(),targetStack.getStackId());
+      continue;
+    }
+    Map<String,String> oldPairs=entry.getValue();
+    Map<String,String> newPairs=newMap.get(entry.getKey());
+    Collection<String> customValueKeys=null;
+    Config config=cluster.getDesiredConfigByType(entry.getKey());
+    if (null != config) {
+      Set<String> valueKeys=config.getProperties().keySet();
+      customValueKeys=(Collection<String>)CollectionUtils.subtract(valueKeys,oldPairs.keySet());
+    }
+    if (null != customValueKeys) {
+      for (      String prop : customValueKeys) {
+        String newVal=newPairs.get(prop);
+        String savedVal=config.getProperties().get(prop);
+        if (null != newVal && null != savedVal && !newVal.equals(savedVal)) {
+          ThreeWayValue twv=new ThreeWayValue();
+          twv.oldStackValue=null;
+          twv.newStackValue=normalizeValue(savedVal,newVal.trim());
+          twv.savedValue=savedVal.trim();
+          if (!result.containsKey(entry.getKey())) {
+            result.put(entry.getKey(),new HashMap<String,ThreeWayValue>());
+          }
+          result.get(entry.getKey()).put(prop,twv);
+        }
+      }
+    }
+    Collection<String> common=CollectionUtils.intersection(newPairs.keySet(),oldPairs.keySet());
+    for (    String prop : common) {
+      String oldVal=oldPairs.get(prop);
+      String newVal=newPairs.get(prop);
+      String savedVal="";
+      if (null != config) {
+        savedVal=config.getProperties().get(prop);
+      }
+      if (!oldVal.equals(newVal) || !oldVal.equals(savedVal)) {
+        ThreeWayValue twv=new ThreeWayValue();
+        twv.oldStackValue=normalizeValue(savedVal,oldVal.trim());
+        twv.newStackValue=normalizeValue(savedVal,newVal.trim());
+        twv.savedValue=(null == savedVal) ? null : savedVal.trim();
+        if (!result.containsKey(entry.getKey())) {
+          result.put(entry.getKey(),new HashMap<String,ThreeWayValue>());
+        }
+        result.get(entry.getKey()).put(prop,twv);
+      }
+    }
+  }
+  return result;
+}

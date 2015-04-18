@@ -1,0 +1,28 @@
+{
+  RepositoryVersionEntity rve=findByVersion(request.getRepositoryVersion());
+  Map<String,Map<String,ThreeWayValue>> changes=m_mergeHelper.getConflicts(request.getClusterName(),rve.getStackId());
+  Set<String> failedTypes=new HashSet<String>();
+  for (  Entry<String,Map<String,ThreeWayValue>> entry : changes.entrySet()) {
+    for (    Entry<String,ThreeWayValue> configEntry : entry.getValue().entrySet()) {
+      ThreeWayValue twv=configEntry.getValue();
+      if (null == twv.oldStackValue) {
+        failedTypes.add(entry.getKey());
+        prerequisiteCheck.getFailedOn().add(entry.getKey() + "/" + configEntry.getKey());
+      }
+ else       if (!twv.oldStackValue.equals(twv.savedValue)) {
+        if (null == twv.newStackValue || !twv.oldStackValue.equals(twv.newStackValue)) {
+          failedTypes.add(entry.getKey());
+          prerequisiteCheck.getFailedOn().add(entry.getKey() + "/" + configEntry.getKey());
+        }
+      }
+    }
+  }
+  if (prerequisiteCheck.getFailedOn().size() > 0) {
+    prerequisiteCheck.setStatus(PrereqCheckStatus.WARNING);
+    String failReason=getFailReason(prerequisiteCheck,request);
+    prerequisiteCheck.setFailReason(String.format(failReason,StringUtils.join(failedTypes,", ")));
+  }
+ else {
+    prerequisiteCheck.setStatus(PrereqCheckStatus.PASS);
+  }
+}

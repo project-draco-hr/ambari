@@ -1,0 +1,62 @@
+{
+  ConfigurationMergeCheck cmc=new ConfigurationMergeCheck();
+  final RepositoryVersionDAO repositoryVersionDAO=EasyMock.createMock(RepositoryVersionDAO.class);
+  expect(repositoryVersionDAO.findByVersion("1.0")).andReturn(Collections.singletonList(createFor("1.0"))).anyTimes();
+  expect(repositoryVersionDAO.findByVersion("1.1")).andReturn(Collections.singletonList(createFor("1.1"))).anyTimes();
+  replay(repositoryVersionDAO);
+  cmc.repositoryVersionDaoProvider=new Provider<RepositoryVersionDAO>(){
+    @Override public RepositoryVersionDAO get(){
+      return repositoryVersionDAO;
+    }
+  }
+;
+  cmc.clustersProvider=new Provider<Clusters>(){
+    @Override public Clusters get(){
+      return clusters;
+    }
+  }
+;
+  cmc.m_mergeHelper=new ConfigMergeHelper();
+  Field field=ConfigMergeHelper.class.getDeclaredField("m_clusters");
+  field.setAccessible(true);
+  field.set(cmc.m_mergeHelper,cmc.clustersProvider);
+  final AmbariMetaInfo ami=EasyMock.createMock(AmbariMetaInfo.class);
+  field=ConfigMergeHelper.class.getDeclaredField("m_ambariMetaInfo");
+  field.setAccessible(true);
+  field.set(cmc.m_mergeHelper,new Provider<AmbariMetaInfo>(){
+    @Override public AmbariMetaInfo get(){
+      return ami;
+    }
+  }
+);
+  PropertyInfo pi10=new PropertyInfo();
+  pi10.setFilename(CONFIG_FILE);
+  pi10.setName(CONFIG_PROPERTY);
+  pi10.setValue("1024m");
+  PropertyInfo pi11=new PropertyInfo();
+  pi11.setFilename(CONFIG_FILE);
+  pi11.setName(CONFIG_PROPERTY);
+  pi11.setValue("1024m");
+  expect(ami.getServiceProperties("HDP","1.0","HDFS")).andReturn(Collections.singleton(pi10)).anyTimes();
+  expect(ami.getServiceProperties("HDP","1.1","HDFS")).andReturn(Collections.singleton(pi11)).anyTimes();
+  expect(ami.getStackProperties(anyObject(String.class),anyObject(String.class))).andReturn(Collections.<PropertyInfo>emptySet()).anyTimes();
+  replay(ami);
+  PrereqCheckRequest request=new PrereqCheckRequest("cluster");
+  request.setRepositoryVersion("1.1");
+  PrerequisiteCheck check=new PrerequisiteCheck(null,"cluster");
+  cmc.perform(check,request);
+  Assert.assertEquals("Expect no warnings",0,check.getFailedOn().size());
+  check=new PrerequisiteCheck(null,"cluster");
+  pi11.setValue("1026m");
+  cmc.perform(check,request);
+  Assert.assertEquals("Expect warning when user-set has changed from new default",1,check.getFailedOn().size());
+  check=new PrerequisiteCheck(null,"cluster");
+  pi11.setName(CONFIG_PROPERTY + ".foo");
+  cmc.perform(check,request);
+  Assert.assertEquals("Expect no warning when user new stack is empty",0,check.getFailedOn().size());
+  check=new PrerequisiteCheck(null,"cluster");
+  pi11.setName(CONFIG_PROPERTY);
+  pi10.setName(CONFIG_PROPERTY + ".foo");
+  cmc.perform(check,request);
+  Assert.assertEquals("Expect warning when user old stack is empty, and value changed",1,check.getFailedOn().size());
+}
