@@ -1,0 +1,24 @@
+{
+  ClassPathScanningCandidateComponentProvider scanner=new ClassPathScanningCandidateComponentProvider(false);
+  DispatchFactory dispatchFactory=DispatchFactory.getInstance();
+  bind(DispatchFactory.class).toInstance(dispatchFactory);
+  AssignableTypeFilter filter=new AssignableTypeFilter(NotificationDispatcher.class);
+  scanner.addIncludeFilter(filter);
+  Set<BeanDefinition> beanDefinitions=scanner.findCandidateComponents("org.apache.ambari.server.notifications.dispatchers");
+  if (null == beanDefinitions || beanDefinitions.size() == 0) {
+    LOG.error("No instances of {} found to register",NotificationDispatcher.class);
+    return;
+  }
+  for (  BeanDefinition beanDefinition : beanDefinitions) {
+    String className=beanDefinition.getBeanClassName();
+    Class<?> clazz=ClassUtils.resolveClassName(className,ClassUtils.getDefaultClassLoader());
+    try {
+      NotificationDispatcher dispatcher=(NotificationDispatcher)clazz.newInstance();
+      dispatchFactory.register(dispatcher.getType(),dispatcher);
+      LOG.info("Binding and registering notification dispatcher {}",clazz);
+    }
+ catch (    Exception exception) {
+      LOG.error("Unable to bind and register notification dispatcher {}",clazz,exception);
+    }
+  }
+}
