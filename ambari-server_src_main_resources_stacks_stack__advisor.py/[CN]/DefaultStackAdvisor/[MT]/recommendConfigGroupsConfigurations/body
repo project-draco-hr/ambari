@@ -1,0 +1,29 @@
+def recommendConfigGroupsConfigurations(self, recommendations, services, components, hosts, servicesList):
+    recommendations['recommendations']['config-groups'] = []
+    for configGroup in services['config-groups']:
+        cgServices = services.copy()
+        for configName in configGroup['configurations'].keys():
+            if (configName in cgServices['configurations']):
+                cgServices['configurations'][configName]['properties'].update(configGroup['configurations'][configName]['properties'])
+            else:
+                cgServices['configurations'][configName] = configGroup['configurations'][configName]
+        cgHosts = {'items': [host for host in hosts['items'] if (host['Hosts']['host_name'] in configGroup['hosts'])], }
+        cgClusterSummary = self.getConfigurationClusterSummary(servicesList, cgHosts, components, cgServices)
+        configurations = {}
+        for service in servicesList:
+            calculation = self.getServiceConfigurationRecommender(service)
+            if (calculation is not None):
+                calculation(configurations, cgClusterSummary, cgServices, cgHosts)
+        cgRecommendation = {'configurations': {}, 'dependent_configurations': {}, 'hosts': configGroup['hosts'], }
+        recommendations['recommendations']['config-groups'].append(cgRecommendation)
+        for config in configurations.keys():
+            cgRecommendation['configurations'][config] = {}
+            cgRecommendation['dependent_configurations'][config] = {}
+            for configElement in configurations[config].keys():
+                cgRecommendation['configurations'][config][configElement] = {}
+                cgRecommendation['dependent_configurations'][config][configElement] = {}
+                for (property, value) in configurations[config][configElement].items():
+                    if (config in configGroup['configurations']):
+                        cgRecommendation['configurations'][config][configElement][property] = value
+                    else:
+                        cgRecommendation['dependent_configurations'][config][configElement][property] = value
