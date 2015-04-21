@@ -1,0 +1,26 @@
+{
+  Cluster cluster=clusters.getCluster("c1");
+  Config config=new ConfigImpl("zoo.cfg");
+  config.setProperties(new HashMap<String,String>(){
+{
+      put("a","b");
+    }
+  }
+);
+  config.setTag("abcdefg");
+  cluster.addConfig(config);
+  cluster.addDesiredConfig("admin",Collections.singleton(config));
+  Map<String,Object> requestProps=new HashMap<String,Object>();
+  requestProps.put(UpgradeResourceProvider.UPGRADE_CLUSTER_NAME,"c1");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_VERSION,"2.2.0.0");
+  ResourceProvider upgradeResourceProvider=createProvider(amc);
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  upgradeResourceProvider.createResources(request);
+  List<UpgradeEntity> upgrades=upgradeDao.findUpgrades(cluster.getClusterId());
+  assertEquals(1,upgrades.size());
+  UpgradeEntity upgrade=upgrades.get(0);
+  assertEquals(3,upgrade.getUpgradeGroups().size());
+  UpgradeGroupEntity group=upgrade.getUpgradeGroups().get(2);
+  assertEquals(2,group.getItems().size());
+  assertTrue(cluster.getDesiredConfigs().containsKey("zoo.cfg"));
+}

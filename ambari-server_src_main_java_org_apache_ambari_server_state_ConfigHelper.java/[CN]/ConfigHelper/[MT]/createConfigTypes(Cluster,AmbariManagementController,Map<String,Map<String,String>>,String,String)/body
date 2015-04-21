@@ -1,0 +1,34 @@
+{
+  Map<String,Set<Config>> serviceMapped=new HashMap<String,Set<Config>>();
+  for (  Map.Entry<String,Map<String,String>> entry : batchProperties.entrySet()) {
+    String type=entry.getKey();
+    String tag="version1";
+    if (cluster.getConfigsByType(type) != null) {
+      tag="version" + System.currentTimeMillis();
+    }
+    ConfigurationRequest configurationRequest=new ConfigurationRequest();
+    configurationRequest.setClusterName(cluster.getClusterName());
+    configurationRequest.setVersionTag(tag);
+    configurationRequest.setType(type);
+    configurationRequest.setProperties(entry.getValue());
+    configurationRequest.setServiceConfigVersionNote(serviceVersionNote);
+    controller.createConfiguration(configurationRequest);
+    Config baseConfig=cluster.getConfig(configurationRequest.getType(),configurationRequest.getVersionTag());
+    if (null != baseConfig) {
+      try {
+        String service=cluster.getServiceForConfigTypes(Collections.singleton(type));
+        if (!serviceMapped.containsKey(service)) {
+          serviceMapped.put(service,new HashSet<Config>());
+        }
+        serviceMapped.get(service).add(baseConfig);
+      }
+ catch (      Exception e) {
+      }
+    }
+  }
+  for (  Set<Config> configs : serviceMapped.values()) {
+    if (!configs.isEmpty()) {
+      cluster.addDesiredConfig(authenticatedUserName,configs,serviceVersionNote);
+    }
+  }
+}
