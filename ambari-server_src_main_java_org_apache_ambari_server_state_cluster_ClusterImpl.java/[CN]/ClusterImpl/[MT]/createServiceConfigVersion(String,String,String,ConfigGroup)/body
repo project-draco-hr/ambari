@@ -1,11 +1,5 @@
 {
   ServiceConfigEntity serviceConfigEntity=new ServiceConfigEntity();
-  serviceConfigEntity.setServiceName(serviceName);
-  serviceConfigEntity.setClusterEntity(clusterEntity);
-  serviceConfigEntity.setVersion(configVersionHelper.getNextVersion(serviceName));
-  serviceConfigEntity.setUser(user);
-  serviceConfigEntity.setNote(note);
-  serviceConfigEntity.setStack(clusterEntity.getDesiredStack());
   if (configGroup != null) {
     serviceConfigEntity.setGroupId(configGroup.getId());
     Collection<Config> configs=configGroup.getConfigurations().values();
@@ -20,7 +14,20 @@
     List<ClusterConfigEntity> configEntities=getClusterConfigEntitiesByService(serviceName);
     serviceConfigEntity.setClusterConfigEntities(configEntities);
   }
-  serviceConfigDAO.create(serviceConfigEntity);
+  clusterGlobalLock.writeLock().lock();
+  try {
+    long nextServiceConfigVersion=serviceConfigDAO.findNextServiceConfigVersion(clusterEntity.getClusterId(),serviceName);
+    serviceConfigEntity.setServiceName(serviceName);
+    serviceConfigEntity.setClusterEntity(clusterEntity);
+    serviceConfigEntity.setVersion(nextServiceConfigVersion);
+    serviceConfigEntity.setUser(user);
+    serviceConfigEntity.setNote(note);
+    serviceConfigEntity.setStack(clusterEntity.getDesiredStack());
+    serviceConfigDAO.create(serviceConfigEntity);
+  }
+  finally {
+    clusterGlobalLock.writeLock().unlock();
+  }
   configChangeLog.info("Cluster '{}' changed by: '{}'; service_name='{}' config_group='{}' config_group_id='{}' " + "version='{}'",getClusterName(),user,serviceName,configGroup == null ? "default" : configGroup.getName(),configGroup == null ? "-1" : configGroup.getId(),serviceConfigEntity.getVersion());
   String configGroupName=configGroup != null ? configGroup.getName() : null;
   ServiceConfigVersionResponse response=new ServiceConfigVersionResponse(serviceConfigEntity,configGroupName);
