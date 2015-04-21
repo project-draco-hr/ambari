@@ -6,9 +6,14 @@
     long endTime=condition.getEndTime() == null ? System.currentTimeMillis() : condition.getEndTime();
     long startTime=condition.getStartTime() == null ? 0 : condition.getStartTime();
     Long timeRange=endTime - startTime;
-    if (timeRange > 5 * DAY) {
+    if (timeRange > 7 * DAY) {
+      metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_DAILY_TABLE_NAME;
+      queryStmt=GET_CLUSTER_AGGREGATE_TIME_SQL;
+      condition.setPrecision(Precision.DAYS);
+    }
+ else     if (timeRange < 7 * DAY && timeRange > DAY) {
       metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME;
-      queryStmt=GET_CLUSTER_AGGREGATE_HOURLY_SQL;
+      queryStmt=GET_CLUSTER_AGGREGATE_TIME_SQL;
       condition.setPrecision(Precision.HOURS);
     }
  else {
@@ -19,15 +24,20 @@
   }
  else {
 switch (condition.getPrecision()) {
-case HOURS:
-      metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME;
-    queryStmt=GET_CLUSTER_AGGREGATE_HOURLY_SQL;
+case DAYS:
+      metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_DAILY_TABLE_NAME;
+    queryStmt=GET_CLUSTER_AGGREGATE_TIME_SQL;
   break;
+case HOURS:
+metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME;
+queryStmt=GET_CLUSTER_AGGREGATE_TIME_SQL;
+break;
 default :
 metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_TABLE_NAME;
 queryStmt=GET_CLUSTER_AGGREGATE_SQL;
 }
 }
+queryStmt=String.format(queryStmt,getNaiveTimeRangeHint(condition.getStartTime(),NATIVE_TIME_RANGE_DELTA),metricsAggregateTable);
 StringBuilder sb=new StringBuilder(queryStmt);
 sb.append(" WHERE ");
 sb.append(condition.getConditionClause());
@@ -35,7 +45,7 @@ sb.append(" ORDER BY METRIC_NAME, SERVER_TIME");
 if (condition.getLimit() != null) {
 sb.append(" LIMIT ").append(condition.getLimit());
 }
-String query=String.format(sb.toString(),PhoenixTransactSQL.getNaiveTimeRangeHint(condition.getStartTime(),NATIVE_TIME_RANGE_DELTA),metricsAggregateTable);
+String query=sb.toString();
 if (LOG.isDebugEnabled()) {
 LOG.debug("SQL => " + query + ", condition => "+ condition);
 }
