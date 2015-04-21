@@ -13,11 +13,30 @@ def execute_command(self, command):
     else:
         in_progress_status.update({'tmpout': ((((self.tmpdir + os.sep) + 'auto_output-') + str(taskId)) + '.txt'), 'tmperr': ((((self.tmpdir + os.sep) + 'auto_errors-') + str(taskId)) + '.txt'), 'structuredOut': ((((self.tmpdir + os.sep) + 'auto_structured-out-') + str(taskId)) + '.json'), 'status': self.IN_PROGRESS_STATUS, })
     self.commandStatuses.put_command_status(command, in_progress_status)
-    commandresult = self.customServiceOrchestrator.runCommand(command, in_progress_status['tmpout'], in_progress_status['tmperr'])
-    if isCommandBackground:
-        return
-    else:
-        status = (self.COMPLETED_STATUS if (commandresult['exitcode'] == 0) else self.FAILED_STATUS)
+    numAttempts = 0
+    maxAttempts = 1
+    retryAble = False
+    delay = 1
+    if ('commandParams' in command):
+        if ('command_retry_max_attempt_count' in command['commandParams']):
+            maxAttempts = int(command['commandParams']['command_retry_max_attempt_count'])
+        if ('command_retry_enabled' in command['commandParams']):
+            retryAble = (command['commandParams']['command_retry_enabled'] == 'true')
+    logger.debug('Command execution metadata - retry enabled = {retryAble}, max attempt count = {maxAttemptCount}'.format(retryAble=retryAble, maxAttemptCount=maxAttempts))
+    while (numAttempts < maxAttempts):
+        numAttempts += 1
+        commandresult = self.customServiceOrchestrator.runCommand(command, in_progress_status['tmpout'], in_progress_status['tmperr'], override_output_files=(numAttempts == 1), retry=(numAttempts > 1))
+        if isCommandBackground:
+            return
+        else:
+            status = (self.COMPLETED_STATUS if (commandresult['exitcode'] == 0) else self.FAILED_STATUS)
+        if ((status != self.COMPLETED_STATUS) and (retryAble == True) and (maxAttempts > numAttempts)):
+            delay = self.get_retry_delay(delay)
+            logger.info('Retrying command id {cid} after a wait of {delay}'.format(cid=taskId, delay=delay))
+            time.sleep(delay)
+            continue
+        else:
+            break
     roleResult = self.commandStatuses.generate_report_template(command)
     roleResult.update({'stdout': commandresult['stdout'], 'stderr': commandresult['stderr'], 'exitCode': commandresult['exitcode'], 'status': status, })
     if (roleResult['stdout'] == ''):
