@@ -1,0 +1,25 @@
+{
+  TimelineMetricAggregator agg=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorDaily(hdb,new Configuration());
+  long startTime=System.currentTimeMillis();
+  long ctime=startTime;
+  long hour=3600 * 1000;
+  Map<TimelineClusterMetric,MetricHostAggregate> records=new HashMap<TimelineClusterMetric,MetricHostAggregate>();
+  records.put(createEmptyTimelineClusterMetric(ctime),MetricTestHelper.createMetricHostAggregate(4.0,0.0,2,4.0));
+  records.put(createEmptyTimelineClusterMetric(ctime+=hour),MetricTestHelper.createMetricHostAggregate(4.0,0.0,2,4.0));
+  records.put(createEmptyTimelineClusterMetric(ctime+=hour),MetricTestHelper.createMetricHostAggregate(4.0,0.0,2,4.0));
+  records.put(createEmptyTimelineClusterMetric(ctime+=hour),MetricTestHelper.createMetricHostAggregate(4.0,0.0,2,4.0));
+  hdb.saveClusterTimeAggregateRecords(records,METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME);
+  agg.doWork(startTime,ctime + hour + 1000);
+  ResultSet rs=executeQuery("SELECT * FROM METRIC_AGGREGATE_DAILY");
+  int count=0;
+  while (rs.next()) {
+    assertEquals("METRIC_NAME","disk_used",rs.getString("METRIC_NAME"));
+    assertEquals("APP_ID","test_app",rs.getString("APP_ID"));
+    assertEquals("METRIC_SUM",16.0,rs.getDouble("METRIC_SUM"));
+    assertEquals("METRIC_COUNT",8,rs.getLong("METRIC_COUNT"));
+    assertEquals("METRIC_MAX",4.0,rs.getDouble("METRIC_MAX"));
+    assertEquals("METRIC_MIN",0.0,rs.getDouble("METRIC_MIN"));
+    count++;
+  }
+  assertEquals("Day aggregated row expected ",1,count);
+}
