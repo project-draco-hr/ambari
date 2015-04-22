@@ -9,17 +9,26 @@
     throw new AmbariException(String.format("%s is required",UPGRADE_VERSION));
   }
   Cluster cluster=getManagementController().getClusters().getCluster(clusterName);
-  StackId stack=cluster.getDesiredStackVersion();
+  StackId stack=cluster.getCurrentStackVersion();
   String repoVersion=version;
   if (direction.isDowngrade() && null != versionForUpgradePack) {
     repoVersion=versionForUpgradePack;
   }
   RepositoryVersionEntity versionEntity=s_repoVersionDAO.findMaxByVersion(repoVersion);
   if (null == versionEntity) {
-    throw new AmbariException(String.format("Version %s for stack %s was not found",repoVersion,stack.getStackVersion()));
+    throw new AmbariException(String.format("Repository version %s was not found",repoVersion));
   }
-  Map<String,UpgradePack> packs=s_metaProvider.get().getUpgradePacks(versionEntity.getStackName(),versionEntity.getStackVersion());
+  Map<String,UpgradePack> packs=s_metaProvider.get().getUpgradePacks(stack.getStackName(),stack.getStackVersion());
   UpgradePack up=packs.get(versionEntity.getUpgradePackage());
+  if (null == up) {
+    String repoStackId=versionEntity.getStackId().getStackId();
+    for (    UpgradePack upgradePack : packs.values()) {
+      if (null != upgradePack.getTargetStack() && upgradePack.getTargetStack().equals(repoStackId)) {
+        up=upgradePack;
+        break;
+      }
+    }
+  }
   if (null == up) {
     throw new AmbariException(String.format("Unable to perform %s.  Could not locate upgrade pack %s for version %s",direction.getText(false),versionEntity.getUpgradePackage(),repoVersion));
   }
