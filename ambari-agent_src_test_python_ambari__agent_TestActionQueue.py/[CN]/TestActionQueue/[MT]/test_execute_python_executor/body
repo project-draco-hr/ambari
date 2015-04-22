@@ -1,22 +1,25 @@
 @not_for_platform(PLATFORM_WINDOWS)
+@patch.object(CustomServiceOrchestrator, 'get_py_executor')
 @patch.object(CustomServiceOrchestrator, 'resolve_script_path')
 @patch.object(StackVersionsFileHandler, 'read_stack_version')
-def test_execute_python_executor(self, read_stack_version_mock, resolve_script_path_mock):
+def test_execute_python_executor(self, read_stack_version_mock, resolve_script_path_mock, get_py_executor_mock):
     dummy_controller = MagicMock()
-    cfg = AmbariConfig().getConfig()
+    cfg = AmbariConfig()
     cfg.set('agent', 'tolerate_download_failures', 'true')
     cfg.set('agent', 'prefix', '.')
     cfg.set('agent', 'cache_dir', 'background_tasks')
     actionQueue = ActionQueue(cfg, dummy_controller)
-    patch_output_file(actionQueue.customServiceOrchestrator.python_executor)
+    pyex = PythonExecutor(actionQueue.customServiceOrchestrator.tmp_dir, actionQueue.customServiceOrchestrator.config)
+    patch_output_file(pyex)
+    get_py_executor_mock.return_value = pyex
     actionQueue.customServiceOrchestrator.dump_command_to_json = MagicMock()
     result = {}
     lock = threading.RLock()
     complete_done = threading.Condition(lock)
 
-    def command_complete_w(process_condenced_result, handle):
+    def command_complete_w(process_condensed_result, handle):
         with lock:
-            result['command_complete'] = {'condenced_result': copy.copy(process_condenced_result), 'handle': copy.copy(handle), 'command_status': actionQueue.commandStatuses.get_command_status(handle.command['taskId']), }
+            result['command_complete'] = {'condensed_result': copy.copy(process_condensed_result), 'handle': copy.copy(handle), 'command_status': actionQueue.commandStatuses.get_command_status(handle.command['taskId']), }
             complete_done.notifyAll()
     actionQueue.on_background_command_complete_callback = wraped(actionQueue.on_background_command_complete_callback, None, command_complete_w)
     actionQueue.put([self.background_command])

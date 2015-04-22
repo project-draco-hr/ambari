@@ -1,7 +1,8 @@
+@patch.object(CustomServiceOrchestrator, 'get_py_executor')
 @patch.object(CustomServiceOrchestrator, 'dump_command_to_json')
 @patch.object(FileCache, '__init__')
 @patch.object(FileCache, 'get_custom_actions_base_dir')
-def test_runCommand_background_action(self, get_custom_actions_base_dir_mock, FileCache_mock, dump_command_to_json_mock):
+def test_runCommand_background_action(self, get_custom_actions_base_dir_mock, FileCache_mock, dump_command_to_json_mock, get_py_executor_mock):
     FileCache_mock.return_value = None
     get_custom_actions_base_dir_mock.return_value = 'some path'
     (_, script) = tempfile.mkstemp()
@@ -9,8 +10,10 @@ def test_runCommand_background_action(self, get_custom_actions_base_dir_mock, Fi
     dummy_controller = MagicMock()
     orchestrator = CustomServiceOrchestrator(self.config, dummy_controller)
     import TestActionQueue
-    TestActionQueue.patch_output_file(orchestrator.python_executor)
-    orchestrator.python_executor.condenseOutput = MagicMock()
+    pyex = PythonExecutor(orchestrator.tmp_dir, orchestrator.config)
+    TestActionQueue.patch_output_file(pyex)
+    pyex.condenseOutput = MagicMock()
+    get_py_executor_mock.return_value = pyex
     orchestrator.dump_command_to_json = MagicMock()
     ret = orchestrator.runCommand(command, 'out.txt', 'err.txt')
     self.assertEqual(ret['exitcode'], 777)
