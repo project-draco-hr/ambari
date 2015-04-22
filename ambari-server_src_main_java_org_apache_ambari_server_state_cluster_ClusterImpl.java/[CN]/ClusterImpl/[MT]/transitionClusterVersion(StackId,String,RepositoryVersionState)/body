@@ -6,14 +6,16 @@
     if (existingClusterVersion == null) {
       throw new AmbariException("Existing cluster version not found for cluster=" + getClusterName() + ", stack="+ stackId+ ", version="+ version);
     }
-    if (existingClusterVersion.getState() != state) {
+    if (existingClusterVersion.getState() == state) {
+      return;
+    }
 switch (existingClusterVersion.getState()) {
 case CURRENT:
-        break;
+      break;
 case INSTALLING:
-      allowedStates.add(RepositoryVersionState.INSTALLED);
-    allowedStates.add(RepositoryVersionState.INSTALL_FAILED);
-  allowedStates.add(RepositoryVersionState.OUT_OF_SYNC);
+    allowedStates.add(RepositoryVersionState.INSTALLED);
+  allowedStates.add(RepositoryVersionState.INSTALL_FAILED);
+allowedStates.add(RepositoryVersionState.OUT_OF_SYNC);
 break;
 case INSTALL_FAILED:
 allowedStates.add(RepositoryVersionState.INSTALLING);
@@ -53,12 +55,12 @@ clusterVersionDAO.merge(currentVersion);
 existingClusterVersion.setState(state);
 existingClusterVersion.setEndTime(System.currentTimeMillis());
 clusterVersionDAO.merge(existingClusterVersion);
-if (RepositoryVersionState.CURRENT == state) {
-for (HostEntity he : clusterEntity.getHostEntities()) {
-if (hostHasReportables(existingClusterVersion.getRepositoryVersion(),he)) {
+if (state == RepositoryVersionState.CURRENT) {
+for (HostEntity hostEntity : clusterEntity.getHostEntities()) {
+if (hostHasReportables(existingClusterVersion.getRepositoryVersion(),hostEntity)) {
 continue;
 }
-Collection<HostVersionEntity> versions=hostVersionDAO.findByHost(he.getHostName());
+Collection<HostVersionEntity> versions=hostVersionDAO.findByHost(hostEntity.getHostName());
 HostVersionEntity target=null;
 if (null != versions) {
 for (HostVersionEntity entity : versions) {
@@ -74,15 +76,21 @@ hostVersionDAO.merge(entity);
 }
 }
 if (null == target) {
-HostVersionEntity hve=new HostVersionEntity(he,existingClusterVersion.getRepositoryVersion(),state);
+HostVersionEntity hve=new HostVersionEntity(hostEntity,existingClusterVersion.getRepositoryVersion(),state);
 hostVersionDAO.create(hve);
 }
 }
+StackEntity desiredStackEntity=clusterEntity.getDesiredStack();
+StackId desiredStackId=new StackId(desiredStackEntity);
+if (!desiredStackId.equals(stackId)) {
+String message=MessageFormat.format("The desired stack ID {0} must match {1} when transitioning the cluster''s state to {2}",desiredStackId,stackId,RepositoryVersionState.CURRENT);
+throw new AmbariException(message);
 }
+setCurrentStackVersion(stackId);
 }
 }
  catch (RollbackException e) {
-String message="Unable to transition stack " + stackId + " at version "+ version+ " for cluster "+ getClusterName()+ " to state "+ state;
+String message=MessageFormat.format("Unable to transition stack {0} at version {1} for cluster {2} to state {3}",stackId,version,getClusterName(),state);
 LOG.warn(message);
 throw new AmbariException(message,e);
 }

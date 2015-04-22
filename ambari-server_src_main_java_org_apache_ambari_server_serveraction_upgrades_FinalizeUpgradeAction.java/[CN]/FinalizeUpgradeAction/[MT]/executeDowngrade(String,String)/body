@@ -3,7 +3,8 @@
   StringBuilder err=new StringBuilder();
   try {
     Cluster cluster=clusters.getCluster(clusterName);
-    StackId stackId=cluster.getDesiredStackVersion();
+    StackId desiredClusterStackId=cluster.getDesiredStackVersion();
+    StackId currentClusterStackId=cluster.getCurrentStackVersion();
     out.append(String.format("Searching for current version for %s\n",clusterName));
     ClusterVersionEntity clusterVersion=clusterVersionDAO.findByClusterAndStateCurrent(clusterName);
     if (null == clusterVersion) {
@@ -35,7 +36,7 @@ default :
 out.append(String.format("Found %d other version(s) not matching downgrade: %s\n",badVersions.size(),StringUtils.join(badVersions,", ")));
 Set<String> badHosts=new HashSet<String>();
 for (String badVersion : badVersions) {
-  List<HostVersionEntity> hostVersions=hostVersionDAO.findByClusterStackAndVersion(clusterName,stackId,badVersion);
+  List<HostVersionEntity> hostVersions=hostVersionDAO.findByClusterStackAndVersion(clusterName,desiredClusterStackId,badVersion);
   for (  HostVersionEntity hostVersion : hostVersions) {
     badHosts.add(hostVersion.getHostName());
     hostVersion.setState(RepositoryVersionState.INSTALLED);
@@ -50,6 +51,7 @@ for (String badHost : badHosts) {
     hostComponentStateDAO.merge(hostComponentState);
   }
 }
+cluster.setDesiredStackVersion(currentClusterStackId);
 return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",out.toString(),err.toString());
 }
  catch (Exception e) {

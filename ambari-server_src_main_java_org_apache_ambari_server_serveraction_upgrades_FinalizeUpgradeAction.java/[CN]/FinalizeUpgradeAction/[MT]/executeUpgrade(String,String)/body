@@ -1,30 +1,28 @@
 {
-  Set<RepositoryVersionState> allowedStates=new HashSet<RepositoryVersionState>();
-  allowedStates.add(RepositoryVersionState.UPGRADED);
   StringBuilder outSB=new StringBuilder();
   StringBuilder errSB=new StringBuilder();
   try {
     outSB.append(MessageFormat.format("Begin finalizing the upgrade of cluster {0} to version {1}\n",clusterName,version));
     Cluster cluster=clusters.getCluster(clusterName);
-    StackId stackId=cluster.getCurrentStackVersion();
-    ClusterVersionEntity upgradingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,stackId,version);
+    StackId clusterDesiredStackId=cluster.getDesiredStackVersion();
+    ClusterVersionEntity upgradingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,clusterDesiredStackId,version);
     if (upgradingClusterVersion == null) {
-      throw new AmbariException(String.format("Cluster stack version %s not found",version));
+      throw new AmbariException(MessageFormat.format("Cluster stack version {0} not found",version));
     }
-    List<HostVersionEntity> hostVersions=hostVersionDAO.findByClusterStackAndVersion(clusterName,stackId,version);
+    List<HostVersionEntity> hostVersions=hostVersionDAO.findByClusterStackAndVersion(clusterName,clusterDesiredStackId,version);
     Set<HostVersionEntity> hostVersionsAllowed=new HashSet<HostVersionEntity>();
     Set<String> hostsWithoutCorrectVersionState=new HashSet<String>();
     Set<String> hostsToUpdate=new HashSet<String>();
     boolean atLeastOneHostInInstalledState=false;
     for (    HostVersionEntity hostVersion : hostVersions) {
       boolean isStateCorrect=false;
-      if (allowedStates.contains(hostVersion.getState())) {
+      if (RepositoryVersionState.UPGRADED == hostVersion.getState()) {
         isStateCorrect=true;
       }
  else {
         if (hostVersion.getState() == RepositoryVersionState.INSTALLED) {
           HostEntity host=hostVersion.getHostEntity();
-          ServiceComponentHostSummary hostSummary=new ServiceComponentHostSummary(ambariMetaInfo,host,stackId);
+          ServiceComponentHostSummary hostSummary=new ServiceComponentHostSummary(ambariMetaInfo,host,clusterDesiredStackId);
           if (hostSummary.haveAllComponentsFinishedAdvertisingVersion()) {
             isStateCorrect=true;
             atLeastOneHostInInstalledState=true;
@@ -44,12 +42,12 @@
       outSB.append(message);
       throw new AmbariException(message);
     }
-    checkHostComponentVesions(cluster,version,stackId);
+    checkHostComponentVersions(cluster,version,clusterDesiredStackId);
     if (atLeastOneHostInInstalledState) {
-      cluster.transitionClusterVersion(stackId,version,RepositoryVersionState.UPGRADED);
-      upgradingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,stackId,version);
+      cluster.transitionClusterVersion(clusterDesiredStackId,version,RepositoryVersionState.UPGRADED);
+      upgradingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,clusterDesiredStackId,version);
     }
-    if (!allowedStates.contains(upgradingClusterVersion.getState())) {
+    if (RepositoryVersionState.UPGRADED != upgradingClusterVersion.getState()) {
       throw new AmbariException(String.format("The cluster stack version state %s is not allowed to transition directly into %s",upgradingClusterVersion.getState(),RepositoryVersionState.CURRENT.toString()));
     }
     outSB.append(String.format("Will finalize the upgraded state of host components in %d host(s).\n",hostVersionsAllowed.size()));
@@ -63,7 +61,7 @@
     outSB.append(String.format("Will finalize the version for %d host(s).\n",hostVersionsAllowed.size()));
     cluster.mapHostVersions(hostsToUpdate,upgradingClusterVersion,RepositoryVersionState.CURRENT);
     outSB.append(String.format("Will finalize the version for cluster %s.\n",clusterName));
-    cluster.transitionClusterVersion(stackId,version,RepositoryVersionState.CURRENT);
+    cluster.transitionClusterVersion(clusterDesiredStackId,version,RepositoryVersionState.CURRENT);
     outSB.append("Upgrade was successful!\n");
     return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",outSB.toString(),errSB.toString());
   }
