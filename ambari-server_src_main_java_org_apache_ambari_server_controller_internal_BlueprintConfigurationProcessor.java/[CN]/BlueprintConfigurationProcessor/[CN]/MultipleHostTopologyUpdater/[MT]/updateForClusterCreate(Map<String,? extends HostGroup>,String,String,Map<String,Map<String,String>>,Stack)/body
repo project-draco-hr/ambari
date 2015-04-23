@@ -1,12 +1,24 @@
 {
+  StringBuilder sb=new StringBuilder();
   if (!origValue.contains("%HOSTGROUP") && (!origValue.contains("localhost"))) {
     return origValue;
   }
+  String prefix=null;
   Collection<String> hostStrings=getHostStrings(hostGroups,origValue);
   if (hostStrings.isEmpty()) {
     String port=null;
-    if (origValue.contains(":")) {
-      port=origValue.substring(origValue.indexOf(":") + 1);
+    for (    String urlScheme : setOfKnownURLSchemes) {
+      if (origValue.startsWith(urlScheme)) {
+        prefix=urlScheme;
+      }
+    }
+    if (prefix != null) {
+      String valueWithoutPrefix=origValue.substring(prefix.length());
+      port=calculatePort(valueWithoutPrefix);
+      sb.append(prefix);
+    }
+ else {
+      port=calculatePort(origValue);
     }
     Collection<HostGroup> matchingGroups=getHostGroupsForComponent(component,hostGroups.values());
     for (    HostGroup group : matchingGroups) {
@@ -18,13 +30,13 @@
       }
     }
   }
-  StringBuilder sb=new StringBuilder();
   String suffix=null;
   Matcher matcher=HOSTGROUP_PORT_REGEX.matcher(origValue);
   if (matcher.find()) {
     int indexOfStart=matcher.start();
     if ((indexOfStart > 0) && (!origValue.substring(0,indexOfStart).equals("['"))) {
-      sb.append(origValue.substring(0,indexOfStart));
+      prefix=origValue.substring(0,indexOfStart);
+      sb.append(prefix);
     }
     int indexOfEnd=-1;
     while (matcher.find()) {
@@ -38,6 +50,9 @@
   for (  String host : hostStrings) {
     if (!firstHost) {
       sb.append(separator);
+      if (usePrefixForEachHost && (prefix != null)) {
+        sb.append(prefix);
+      }
     }
  else {
       firstHost=false;

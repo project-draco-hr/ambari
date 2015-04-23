@@ -1,0 +1,37 @@
+{
+  final String expectedHostGroupNameOne="host_group_1";
+  final String expectedHostGroupNameTwo="host_group_2";
+  final String expectedHostNameOne="c6401.ambari.apache.org";
+  final String expectedHostNameTwo="c6402.ambari.apache.org";
+  final String inputMetaStoreURIs="thrift://" + createExportedAddress("9083",expectedHostGroupNameOne) + ","+ "thrift://"+ createExportedAddress("9083",expectedHostGroupNameTwo);
+  final String expectedMetaStoreURIs="thrift://c6401.ambari.apache.org:9083,thrift://c6402.ambari.apache.org:9083";
+  EasyMockSupport mockSupport=new EasyMockSupport();
+  Stack mockStack=mockSupport.createMock(Stack.class);
+  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
+  HostGroup mockHostGroupTwo=mockSupport.createMock(HostGroup.class);
+  expect(mockHostGroupOne.getHostInfo()).andReturn(Collections.singleton(expectedHostNameOne)).atLeastOnce();
+  expect(mockHostGroupTwo.getHostInfo()).andReturn(Collections.singleton(expectedHostNameTwo)).atLeastOnce();
+  Set<String> setOfComponents=new HashSet<String>();
+  setOfComponents.add("HIVE_SERVER");
+  setOfComponents.add("HIVE_METASTORE");
+  expect(mockHostGroupOne.getComponents()).andReturn(setOfComponents).atLeastOnce();
+  expect(mockHostGroupTwo.getComponents()).andReturn(setOfComponents).atLeastOnce();
+  expect(mockStack.getCardinality("HIVE_SERVER")).andReturn(new Cardinality("1+")).atLeastOnce();
+  mockSupport.replayAll();
+  Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
+  Map<String,String> hiveEnvProperties=new HashMap<String,String>();
+  Map<String,String> hiveSiteProperties=new HashMap<String,String>();
+  configProperties.put("hive-env",hiveEnvProperties);
+  configProperties.put("hive-site",hiveSiteProperties);
+  hiveEnvProperties.put("hive_hostname",expectedHostNameOne);
+  hiveSiteProperties.put("hive.server2.support.dynamic.service.discovery","true");
+  hiveSiteProperties.put("hive.metastore.uris",inputMetaStoreURIs);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
+  Map<String,HostGroup> mapOfHostGroups=new HashMap<String,HostGroup>();
+  mapOfHostGroups.put(expectedHostGroupNameOne,mockHostGroupOne);
+  mapOfHostGroups.put(expectedHostGroupNameTwo,mockHostGroupTwo);
+  configProcessor.doUpdateForClusterCreate(mapOfHostGroups,mockStack);
+  assertEquals("Unexpected config update for hive_hostname",expectedHostNameOne,hiveEnvProperties.get("hive_hostname"));
+  assertEquals("Unexpected config update for hive.metastore.uris",expectedMetaStoreURIs,hiveSiteProperties.get("hive.metastore.uris"));
+  mockSupport.verifyAll();
+}
