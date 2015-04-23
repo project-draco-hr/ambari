@@ -5,6 +5,8 @@
   Cluster cluster=createNiceMock(Cluster.class);
   Host h1=createNiceMock(Host.class);
   Host h2=createNiceMock(Host.class);
+  HostEntity hostEntity1=createMock(HostEntity.class);
+  HostEntity hostEntity2=createMock(HostEntity.class);
   ConfigGroupFactory configGroupFactory=createNiceMock(ConfigGroupFactory.class);
   ConfigGroup configGroup=createNiceMock(ConfigGroup.class);
   expect(managementController.getClusters()).andReturn(clusters);
@@ -13,14 +15,18 @@
   expect(clusters.getHost("h2")).andReturn(h2);
   expect(managementController.getConfigGroupFactory()).andReturn(configGroupFactory);
   expect(managementController.getAuthName()).andReturn("admin").anyTimes();
+  expect(hostDAO.findByName("h1")).andReturn(hostEntity1).atLeastOnce();
+  expect(hostDAO.findByName("h2")).andReturn(hostEntity2).atLeastOnce();
+  expect(hostEntity1.getHostId()).andReturn(1L).atLeastOnce();
+  expect(hostEntity2.getHostId()).andReturn(2L).atLeastOnce();
   Capture<Cluster> clusterCapture=new Capture<Cluster>();
   Capture<String> captureName=new Capture<String>();
   Capture<String> captureDesc=new Capture<String>();
   Capture<String> captureTag=new Capture<String>();
   Capture<Map<String,Config>> captureConfigs=new Capture<Map<String,Config>>();
-  Capture<Map<String,Host>> captureHosts=new Capture<Map<String,Host>>();
+  Capture<Map<Long,Host>> captureHosts=new Capture<Map<Long,Host>>();
   expect(configGroupFactory.createNew(capture(clusterCapture),capture(captureName),capture(captureTag),capture(captureDesc),capture(captureConfigs),capture(captureHosts))).andReturn(configGroup);
-  replay(managementController,clusters,cluster,configGroupFactory,configGroup,response);
+  replay(managementController,clusters,cluster,configGroupFactory,configGroup,response,hostDAO,hostEntity1,hostEntity2);
   ResourceProvider provider=getConfigGroupResourceProvider(managementController);
   Set<Map<String,Object>> propertySet=new LinkedHashSet<Map<String,Object>>();
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
@@ -47,8 +53,8 @@
   propertySet.add(properties);
   Request request=PropertyHelper.getCreateRequest(propertySet,null);
   provider.createResources(request);
-  verify(managementController,clusters,cluster,configGroupFactory,configGroup,response);
+  verify(managementController,clusters,cluster,configGroupFactory,configGroup,response,hostDAO,hostEntity1,hostEntity2);
   assertEquals("version100",captureConfigs.getValue().get("core-site").getTag());
-  assertTrue(captureHosts.getValue().containsKey("h1"));
-  assertTrue(captureHosts.getValue().containsKey("h2"));
+  assertTrue(captureHosts.getValue().containsKey(1L));
+  assertTrue(captureHosts.getValue().containsKey(2L));
 }

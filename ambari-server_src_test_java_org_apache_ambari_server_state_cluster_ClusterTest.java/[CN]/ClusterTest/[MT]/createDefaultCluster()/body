@@ -1,28 +1,48 @@
 {
-  StackId stackId=new StackId("HDP-0.1");
-  clusters.addCluster("c1",stackId);
-  c1=clusters.getCluster("c1");
-  Assert.assertEquals("c1",c1.getClusterName());
-  Assert.assertEquals(1,c1.getClusterId());
-  clusters.addHost("h1");
-  clusters.addHost("h2");
-  Host host1=clusters.getHost("h1");
-  host1.setIPv4("ipv4");
-  host1.setIPv6("ipv6");
-  Host host2=clusters.getHost("h2");
-  host2.setIPv4("ipv4");
-  host2.setIPv6("ipv6");
+  StackId stackId=new StackId("HDP","0.1");
+  StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
+  org.junit.Assert.assertNotNull(stackEntity);
+  String clusterName="c1";
+  ResourceTypeEntity resourceTypeEntity=resourceTypeDAO.findById(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE);
+  if (resourceTypeEntity == null) {
+    resourceTypeEntity=new ResourceTypeEntity();
+    resourceTypeEntity.setId(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE);
+    resourceTypeEntity.setName(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE_NAME);
+    resourceTypeEntity=resourceTypeDAO.merge(resourceTypeEntity);
+  }
+  ResourceEntity resourceEntity=new ResourceEntity();
+  resourceEntity.setResourceType(resourceTypeEntity);
+  ClusterEntity clusterEntity=new ClusterEntity();
+  clusterEntity.setClusterName(clusterName);
+  clusterEntity.setResource(resourceEntity);
+  clusterEntity.setDesiredStack(stackEntity);
+  clusterDAO.create(clusterEntity);
   Map<String,String> hostAttributes=new HashMap<String,String>();
   hostAttributes.put("os_family","redhat");
   hostAttributes.put("os_release_version","5.9");
-  host1.setHostAttributes(hostAttributes);
-  host2.setHostAttributes(hostAttributes);
-  host1.persist();
-  host2.persist();
+  List<HostEntity> hostEntities=new ArrayList<HostEntity>();
+  Set<String> hostNames=new HashSet<String>(){
+{
+      add("h1");
+      add("h2");
+    }
+  }
+;
+  for (  String hostName : hostNames) {
+    HostEntity hostEntity=new HostEntity();
+    hostEntity.setHostName(hostName);
+    hostEntity.setIpv4("ipv4");
+    hostEntity.setIpv6("ipv6");
+    hostEntity.setHostAttributes(gson.toJson(hostAttributes));
+    hostEntity.setClusterEntities(Arrays.asList(clusterEntity));
+    hostEntities.add(hostEntity);
+    hostDAO.create(hostEntity);
+  }
+  clusterEntity.setHostEntities(hostEntities);
+  clusterDAO.merge(clusterEntity);
+  c1=clusters.getCluster(clusterName);
   helper.getOrCreateRepositoryVersion(stackId,stackId.getStackVersion());
   c1.createClusterVersion(stackId,stackId.getStackVersion(),"admin",RepositoryVersionState.UPGRADING);
   c1.transitionClusterVersion(stackId,stackId.getStackVersion(),RepositoryVersionState.CURRENT);
-  clusters.mapHostToCluster("h1","c1");
-  clusters.mapHostToCluster("h2","c1");
   ClusterVersionDAOMock.failOnCurrentVersionState=false;
 }

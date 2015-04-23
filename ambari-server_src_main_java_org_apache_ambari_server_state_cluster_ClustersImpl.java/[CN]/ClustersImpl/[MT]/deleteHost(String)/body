@@ -5,15 +5,19 @@
   }
   w.lock();
   try {
-    deleteConfigGroupHostMapping(hostname);
+    HostEntity entity=hostDAO.findByName(hostname);
+    if (entity == null) {
+      return;
+    }
+    deleteConfigGroupHostMapping(entity.getHostId());
     Collection<HostVersionEntity> hostVersions=hosts.get(hostname).getAllHostVersions();
     for (    HostVersionEntity hostVersion : hostVersions) {
       hostVersionDAO.remove(hostVersion);
     }
-    HostEntity entity=hostDAO.findByName(hostname);
     hostDAO.refresh(entity);
     hostDAO.remove(entity);
     hosts.remove(hostname);
+    hostsById.remove(entity.getHostId());
     kerberosPrincipalHostDAO.removeByHost(hostname);
     HostRemovedEvent event=new HostRemovedEvent(hostname);
     eventPublisher.publish(event);
