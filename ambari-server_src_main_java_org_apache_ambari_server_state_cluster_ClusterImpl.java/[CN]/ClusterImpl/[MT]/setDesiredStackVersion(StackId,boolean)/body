@@ -1,0 +1,27 @@
+{
+  clusterGlobalLock.writeLock().lock();
+  try {
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Changing DesiredStackVersion of Cluster" + ", clusterName=" + getClusterName() + ", clusterId="+ getClusterId()+ ", currentDesiredStackVersion="+ desiredStackVersion+ ", newDesiredStackVersion="+ stackId);
+    }
+    desiredStackVersion=stackId;
+    StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
+    clusterEntity.setDesiredStack(stackEntity);
+    clusterDAO.merge(clusterEntity);
+    if (cascade) {
+      for (      Service service : getServices().values()) {
+        service.setDesiredStackVersion(stackId);
+        for (        ServiceComponent sc : service.getServiceComponents().values()) {
+          sc.setDesiredStackVersion(stackId);
+          for (          ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+            sch.setDesiredStackVersion(stackId);
+          }
+        }
+      }
+    }
+    loadServiceConfigTypes();
+  }
+  finally {
+    clusterGlobalLock.writeLock().unlock();
+  }
+}
