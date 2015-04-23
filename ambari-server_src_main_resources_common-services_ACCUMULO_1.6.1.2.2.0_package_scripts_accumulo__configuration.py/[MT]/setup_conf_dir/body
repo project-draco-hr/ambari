@@ -23,10 +23,21 @@ def setup_conf_dir(name=None):
         Directory(params.log_dir, owner=params.accumulo_user, group=params.user_group, recursive=True)
         File(format('{dest_conf_dir}/accumulo-env.sh'), mode=420, group=params.user_group, owner=params.accumulo_user, content=InlineTemplate(params.server_env_sh_template))
     configs = {}
+    if ('client' in params.config['configurations']):
+        configs.update(params.config['configurations']['client'])
     configs['instance.name'] = params.instance_name
     configs['instance.zookeeper.host'] = params.config['configurations']['accumulo-site']['instance.zookeeper.host']
-    if ('instance.rpc.sasl.enabled' in params.config['configurations']['accumulo-site']):
-        configs['instance.rpc.sasl.enabled'] = params.config['configurations']['accumulo-site']['instance.rpc.sasl.enabled']
+    copy_site_property(configs, 'instance.rpc.sasl.enabled')
+    copy_site_property(configs, 'rpc.sasl.qop')
+    copy_site_property(configs, 'rpc.useJsse')
+    copy_site_property(configs, 'instance.rpc.ssl.clientAuth')
+    copy_site_property(configs, 'instance.rpc.ssl.enabled')
+    copy_site_property(configs, 'instance.zookeeper.timeout')
+    copy_site_property(configs, 'trace.span.receivers')
+    copy_site_property(configs, 'trace.zookeeper.path')
+    for (key, value) in params.config['configurations']['accumulo-site'].iteritems():
+        if key.startswith('trace.span.receiver.'):
+            configs[key] = value
     PropertiesFile(format('{dest_conf_dir}/client.conf'), properties=configs, owner=params.accumulo_user, group=params.user_group)
     if (params.log4j_props != None):
         File(format('{params.conf_dir}/log4j.properties'), mode=420, group=params.user_group, owner=params.accumulo_user, content=params.log4j_props)
