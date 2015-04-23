@@ -1,5 +1,9 @@
 {
   String hostString=createHostString(sshHostInfo.getHosts());
+  ScheduledExecutorService scheduler=Executors.newScheduledThreadPool(1);
+  BSStatusCollector statusCollector=new BSStatusCollector();
+  ScheduledFuture<?> handle=scheduler.scheduleWithFixedDelay(statusCollector,0,10,TimeUnit.SECONDS);
+  LOG.info("Kicking off the scheduler for polling on logs in " + this.requestIdDir);
   String user=sshHostInfo.getUser();
   String userRunAs=sshHostInfo.getUserRunAs();
   if (user == null || user.isEmpty()) {
@@ -70,10 +74,6 @@
       if (stdOutWriter != null)       stdOutWriter.close();
       if (stdErrWriter != null)       stdErrWriter.close();
     }
-    ScheduledExecutorService scheduler=Executors.newScheduledThreadPool(1);
-    BSStatusCollector statusCollector=new BSStatusCollector();
-    ScheduledFuture<?> handle=scheduler.scheduleWithFixedDelay(statusCollector,0,10,TimeUnit.SECONDS);
-    LOG.info("Kicking off the scheduler for polling on logs in " + this.requestIdDir);
     try {
       String logInfoMessage="Bootstrap output, log=" + bootStrapErrorFilePath + " "+ bootStrapOutputFilePath+ " at "+ this.ambariHostname;
       LOG.info(logInfoMessage);
@@ -87,32 +87,11 @@
  catch (      IOException io) {
         LOG.info("Error in reading files ",io);
       }
-      PrintWriter setupAgentDoneWriter=null;
-      PrintWriter setupAgentLogWriter=null;
-      try {
-        if (exitCode != 0) {
-          for (          String host : hostString.split(",")) {
-            setupAgentDoneWriter=new PrintWriter(new File(requestIdDir,host + BSHostStatusCollector.doneFileFilter));
-            setupAgentLogWriter=new PrintWriter(new File(requestIdDir,host + BSHostStatusCollector.logFileFilter));
-            setupAgentLogWriter.print(logInfoMessage + "\n Error while bootstrapping:\n" + errMesg);
-            setupAgentDoneWriter.print(exitCode);
-            setupAgentDoneWriter.close();
-            setupAgentLogWriter.close();
-          }
-        }
-      }
-  finally {
-        if (setupAgentDoneWriter != null) {
-          setupAgentDoneWriter.close();
-        }
-        if (setupAgentLogWriter != null) {
-          setupAgentLogWriter.close();
-        }
-      }
       scriptlog=outMesg + "\n\n" + errMesg;
       LOG.info("Script log Mesg " + scriptlog);
       if (exitCode != 0) {
         stat=BSStat.ERROR;
+        interuptSetupAgent(99,scriptlog);
       }
  else {
         stat=BSStat.SUCCESS;
@@ -173,6 +152,7 @@
  catch (  IOException io) {
     LOG.info("Error executing bootstrap " + io.getMessage());
     stat=BSStat.ERROR;
+    interuptSetupAgent(99,io.getMessage());
   }
  finally {
     BootStrapStatus tmpStatus=bsImpl.getStatus(requestId);
