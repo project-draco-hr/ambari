@@ -1,0 +1,19 @@
+def setup_symlink(kafka_managed_dir, kafka_ambari_managed_dir):
+    import params
+    backup_folder_path = None
+    backup_folder_suffix = '_tmp'
+    if (kafka_ambari_managed_dir != kafka_managed_dir):
+        if (os.path.exists(kafka_managed_dir) and (not os.path.islink(kafka_managed_dir))):
+            backup_folder_path = backup_dir_contents(kafka_managed_dir, backup_folder_suffix)
+            Directory(kafka_managed_dir, action='delete', recursive=True)
+        elif (os.path.islink(kafka_managed_dir) and (os.path.realpath(kafka_managed_dir) != kafka_ambari_managed_dir)):
+            Link(kafka_managed_dir, action='delete')
+        if (not os.path.islink(kafka_managed_dir)):
+            Link(kafka_managed_dir, to=kafka_ambari_managed_dir)
+    elif os.path.islink(kafka_managed_dir):
+        Link(kafka_managed_dir, action='delete')
+        Directory(kafka_managed_dir, mode=493, cd_access='a', owner=params.kafka_user, group=params.user_group, recursive=True)
+    if backup_folder_path:
+        for file in os.listdir(backup_folder_path):
+            File(os.path.join(kafka_managed_dir, file), owner=params.kafka_user, content=StaticFile(os.path.join(backup_folder_path, file)))
+        Directory(backup_folder_path, action='delete', recursive=True)
