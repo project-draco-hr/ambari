@@ -18,6 +18,11 @@
     }
     LOG.debug("Received command report: " + report);
     HostRoleCommand hostRoleCommand=hostRoleCommandIterator.next();
+    HostEntity hostEntity=hostDAO.findByName(hostname);
+    if (hostEntity == null) {
+      LOG.error("Received a command report and was unable to retrieve HostEntity for hostname = " + hostname);
+      continue;
+    }
     if (RoleCommand.valueOf(report.getRoleCommand()) == RoleCommand.ACTIONEXECUTE && HostRoleStatus.valueOf(report.getStatus()).isCompletedState()) {
       ActionFinalReportReceivedEvent event=new ActionFinalReportReceivedEvent(clusterId,hostname,report,report.getRole());
       ambariEventPublisher.publish(event);
@@ -44,12 +49,12 @@
           if (keytabs != null) {
             for (            Map.Entry<String,String> entry : keytabs.entrySet()) {
               String principal=entry.getKey();
-              if (!kerberosPrincipalHostDAO.exists(principal,hostname)) {
+              if (!kerberosPrincipalHostDAO.exists(principal,hostEntity.getHostId())) {
                 if (adding) {
-                  kerberosPrincipalHostDAO.create(principal,hostname);
+                  kerberosPrincipalHostDAO.create(principal,hostEntity.getHostId());
                 }
  else                 if ("_REMOVED_".equalsIgnoreCase(entry.getValue())) {
-                  kerberosPrincipalHostDAO.remove(principal,hostname);
+                  kerberosPrincipalHostDAO.remove(principal,hostEntity.getHostId());
                 }
               }
             }
