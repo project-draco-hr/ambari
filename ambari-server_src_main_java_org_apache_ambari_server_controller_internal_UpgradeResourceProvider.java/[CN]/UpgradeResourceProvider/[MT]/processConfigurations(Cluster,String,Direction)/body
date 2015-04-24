@@ -1,0 +1,59 @@
+{
+  RepositoryVersionEntity targetRve=s_repoVersionDAO.findMaxByVersion(version);
+  if (null == targetRve) {
+    LOG.info("Could not find version entity for {}; not setting new configs",version);
+    return;
+  }
+  StackEntity targetStack=targetRve.getStack();
+  StackId currentStackId=cluster.getCurrentStackVersion();
+  StackId desiredStackId=cluster.getDesiredStackVersion();
+  StackId targetStackId=new StackId(targetStack);
+switch (direction) {
+case UPGRADE:
+    if (currentStackId.equals(targetStackId)) {
+      return;
+    }
+  break;
+case DOWNGRADE:
+if (desiredStackId.equals(targetStackId)) {
+  return;
+}
+break;
+}
+Map<String,Map<String,String>> clusterConfigs=null;
+ConfigHelper configHelper=getManagementController().getConfigHelper();
+if (direction == Direction.UPGRADE) {
+clusterConfigs=new HashMap<String,Map<String,String>>();
+Set<org.apache.ambari.server.state.PropertyInfo> pi=s_metaProvider.get().getStackProperties(targetStack.getStackName(),targetStack.getStackVersion());
+for (PropertyInfo stackProperty : pi) {
+String type=ConfigHelper.fileNameToConfigType(stackProperty.getFilename());
+if (!clusterConfigs.containsKey(type)) {
+clusterConfigs.put(type,new HashMap<String,String>());
+}
+clusterConfigs.get(type).put(stackProperty.getName(),stackProperty.getValue());
+}
+for (String serviceName : cluster.getServices().keySet()) {
+pi=s_metaProvider.get().getServiceProperties(targetStack.getStackName(),targetStack.getStackVersion(),serviceName);
+for (PropertyInfo stackProperty : pi) {
+String type=ConfigHelper.fileNameToConfigType(stackProperty.getFilename());
+if (!clusterConfigs.containsKey(type)) {
+  clusterConfigs.put(type,new HashMap<String,String>());
+}
+clusterConfigs.get(type).put(stackProperty.getName(),stackProperty.getValue());
+}
+}
+for (Map.Entry<String,Map<String,String>> entry : clusterConfigs.entrySet()) {
+Config config=cluster.getDesiredConfigByType(entry.getKey());
+if (null != config) {
+entry.getValue().putAll(config.getProperties());
+}
+}
+}
+ else {
+cluster.applyLatestConfigurations(cluster.getCurrentStackVersion());
+}
+cluster.setDesiredStackVersion(new StackId(targetStack.getStackName(),targetStack.getStackVersion()),true);
+if (null != clusterConfigs) {
+configHelper.createConfigTypes(cluster,getManagementController(),clusterConfigs,getManagementController().getAuthName(),"Configuration created for Upgrade");
+}
+}

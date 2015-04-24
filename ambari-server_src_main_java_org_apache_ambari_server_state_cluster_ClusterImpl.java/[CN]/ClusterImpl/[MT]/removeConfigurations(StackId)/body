@@ -1,0 +1,42 @@
+{
+  clusterGlobalLock.writeLock().lock();
+  try {
+    long clusterId=clusterEntity.getClusterId();
+    List<ClusterConfigEntity> removedClusterConfigs=new ArrayList<ClusterConfigEntity>(50);
+    Collection<ClusterConfigEntity> clusterConfigEntities=clusterEntity.getClusterConfigEntities();
+    List<ClusterConfigEntity> clusterConfigs=clusterDAO.getAllConfigurations(clusterId,stackId);
+    for (    ClusterConfigEntity clusterConfig : clusterConfigs) {
+      clusterDAO.removeConfig(clusterConfig);
+      clusterConfigEntities.remove(clusterConfig);
+      removedClusterConfigs.add(clusterConfig);
+    }
+    clusterEntity=clusterDAO.merge(clusterEntity);
+    List<ServiceConfigEntity> serviceConfigs=serviceConfigDAO.getAllServiceConfigs(clusterId,stackId);
+    Collection<ServiceConfigEntity> serviceConfigEntities=clusterEntity.getServiceConfigEntities();
+    for (    ServiceConfigEntity serviceConfig : serviceConfigs) {
+      serviceConfigDAO.remove(serviceConfig);
+      serviceConfigEntities.remove(serviceConfig);
+    }
+    clusterEntity=clusterDAO.merge(clusterEntity);
+    Collection<ClusterConfigMappingEntity> configMappingEntities=clusterEntity.getConfigMappingEntities();
+    for (    ClusterConfigEntity removedClusterConfig : removedClusterConfigs) {
+      String removedClusterConfigType=removedClusterConfig.getType();
+      String removedClusterConfigTag=removedClusterConfig.getTag();
+      Iterator<ClusterConfigMappingEntity> clusterConfigMappingIterator=configMappingEntities.iterator();
+      while (clusterConfigMappingIterator.hasNext()) {
+        ClusterConfigMappingEntity clusterConfigMapping=clusterConfigMappingIterator.next();
+        String mappingType=clusterConfigMapping.getType();
+        String mappingTag=clusterConfigMapping.getTag();
+        if (removedClusterConfigTag.equals(mappingTag) && removedClusterConfigType.equals(mappingType)) {
+          clusterConfigMappingIterator.remove();
+          clusterDAO.removeConfigMapping(clusterConfigMapping);
+        }
+      }
+    }
+    clusterEntity=clusterDAO.merge(clusterEntity);
+    cacheConfigurations();
+  }
+  finally {
+    clusterGlobalLock.writeLock().unlock();
+  }
+}
