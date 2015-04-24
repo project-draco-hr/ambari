@@ -19,9 +19,22 @@
   Map<String,DesiredConfig> desiredConfigs=cluster.getDesiredConfigs();
   DesiredConfig desiredConfig=desiredConfigs.get(configType);
   Config config=cluster.getConfig(configType,desiredConfig.getTag());
+  StackId currentStack=cluster.getCurrentStackVersion();
+  StackId targetStack=cluster.getDesiredStackVersion();
+  StackId configStack=config.getStackId();
+  String oldValue=config.getProperties().get(key);
+  if (null != oldValue && value.equals(oldValue)) {
+    if (currentStack.equals(targetStack)) {
+      return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",MessageFormat.format("{0}/{1} for cluster {2} would not change, skipping setting",configType,key,clusterName),"");
+    }
+  }
   Map<String,String> propertiesToChange=new HashMap<String,String>();
   propertiesToChange.put(key,value);
   config.updateProperties(propertiesToChange);
+  if (!targetStack.equals(currentStack) && targetStack.equals(configStack)) {
+    config.persist(false);
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",MessageFormat.format("Updated ''{0}'' with ''{1}={2}''",configType,key,value),"");
+  }
   String serviceVersionNote="Stack Upgrade";
   String auditName=getExecutionCommand().getRoleParams().get(ServerAction.ACTION_USER_NAME);
   if (auditName == null) {
