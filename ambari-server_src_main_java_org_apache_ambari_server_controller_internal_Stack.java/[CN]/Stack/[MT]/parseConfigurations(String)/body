@@ -1,8 +1,10 @@
 {
   Map<String,Map<String,ConfigProperty>> mapServiceConfig=new HashMap<String,Map<String,ConfigProperty>>();
+  Map<String,Map<String,ConfigProperty>> mapRequiredServiceConfig=new HashMap<String,Map<String,ConfigProperty>>();
   serviceConfigurations.put(service,mapServiceConfig);
-  Set<StackConfigurationResponse> serviceConfigs=ambariManagementController.getStackConfigurations(Collections.singleton(new StackConfigurationRequest(name,version,service,null)));
-  Set<StackConfigurationResponse> stackLevelConfigs=ambariManagementController.getStackLevelConfigurations(Collections.singleton(new StackLevelConfigurationRequest(name,version,null)));
+  requiredServiceConfigurations.put(service,mapRequiredServiceConfig);
+  Set<StackConfigurationResponse> serviceConfigs=controller.getStackConfigurations(Collections.singleton(new StackConfigurationRequest(name,version,service,null)));
+  Set<StackConfigurationResponse> stackLevelConfigs=controller.getStackLevelConfigurations(Collections.singleton(new StackLevelConfigurationRequest(name,version,null)));
   serviceConfigs.addAll(stackLevelConfigs);
   for (  StackConfigurationResponse config : serviceConfigs) {
     String type=config.getType();
@@ -14,6 +16,15 @@
       mapTypeConfig=new HashMap<String,ConfigProperty>();
       mapServiceConfig.put(type,mapTypeConfig);
     }
-    mapTypeConfig.put(config.getPropertyName(),new ConfigProperty(config.getPropertyValue(),config.getPropertyAttributes()));
+    ConfigProperty property=new ConfigProperty(config);
+    mapTypeConfig.put(config.getPropertyName(),property);
+    if (config.isRequired()) {
+      Map<String,ConfigProperty> requiredTypeConfig=mapRequiredServiceConfig.get(type);
+      if (requiredTypeConfig == null) {
+        requiredTypeConfig=new HashMap<String,ConfigProperty>();
+        mapRequiredServiceConfig.put(type,requiredTypeConfig);
+      }
+      requiredTypeConfig.put(config.getPropertyName(),property);
+    }
   }
 }

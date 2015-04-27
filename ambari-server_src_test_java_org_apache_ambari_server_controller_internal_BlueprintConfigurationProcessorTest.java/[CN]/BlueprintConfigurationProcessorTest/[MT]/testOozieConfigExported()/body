@@ -4,14 +4,6 @@
   final String expectedExternalHost="c6408.ambari.apache.org";
   final String expectedHostGroupName="host_group_1";
   final String expectedHostGroupNameTwo="host_group_2";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  HostGroup mockHostGroupTwo=mockSupport.createMock(HostGroup.class);
-  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName,"serverTwo")).atLeastOnce();
-  expect(mockHostGroupTwo.getHostInfo()).andReturn(Arrays.asList(expectedHostNameTwo,"serverTwo")).atLeastOnce();
-  expect(mockHostGroupOne.getName()).andReturn(expectedHostGroupName).atLeastOnce();
-  expect(mockHostGroupTwo.getName()).andReturn(expectedHostGroupNameTwo).atLeastOnce();
-  mockSupport.replayAll();
   Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
   Map<String,String> oozieSiteProperties=new HashMap<String,String>();
   Map<String,String> oozieEnvProperties=new HashMap<String,String>();
@@ -27,8 +19,25 @@
   oozieEnvProperties.put("oozie_hostname",expectedHostName);
   oozieEnvProperties.put("oozie_existing_mysql_host",expectedExternalHost);
   coreSiteProperties.put("hadoop.proxyuser.oozie.hosts",expectedHostName + "," + expectedHostNameTwo);
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  configProcessor.doUpdateForBlueprintExport(Arrays.asList(mockHostGroupOne,mockHostGroupTwo));
+  Configuration clusterConfig=new Configuration(configProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> groupComponents=new HashSet<String>();
+  groupComponents.add("OOZIE_SERVER");
+  Collection<String> hosts=new ArrayList<String>();
+  hosts.add(expectedHostName);
+  hosts.add("serverTwo");
+  TestHostGroup group=new TestHostGroup(expectedHostGroupName,groupComponents,hosts);
+  Collection<String> groupComponents2=new HashSet<String>();
+  groupComponents2.add("OOZIE_SERVER");
+  Collection<String> hosts2=new ArrayList<String>();
+  hosts2.add(expectedHostNameTwo);
+  hosts2.add("serverFour");
+  TestHostGroup group2=new TestHostGroup(expectedHostGroupNameTwo,groupComponents2,hosts2);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group);
+  hostGroups.add(group2);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForBlueprintExport();
   assertEquals("oozie property not exported correctly",createExportedHostName(expectedHostGroupName),oozieSiteProperties.get("oozie.base.url"));
   assertEquals("oozie property not exported correctly",createExportedHostName(expectedHostGroupName),oozieSiteProperties.get("oozie.authentication.kerberos.principal"));
   assertEquals("oozie property not exported correctly",createExportedHostName(expectedHostGroupName),oozieSiteProperties.get("oozie.service.HadoopAccessorService.kerberos.principal"));
@@ -36,5 +45,4 @@
   assertEquals("oozie property not exported correctly",createExportedHostName(expectedHostGroupName) + "," + createExportedHostName(expectedHostGroupNameTwo),coreSiteProperties.get("hadoop.proxyuser.oozie.hosts"));
   assertFalse("oozie_existing_mysql_host should not have been present in the exported configuration",oozieEnvProperties.containsKey("oozie_existing_mysql_host"));
   assertFalse("oozie.service.JPAService.jdbc.url should not have been present in the exported configuration",oozieSiteProperties.containsKey("oozie.service.JPAService.jdbc.url"));
-  mockSupport.verifyAll();
 }

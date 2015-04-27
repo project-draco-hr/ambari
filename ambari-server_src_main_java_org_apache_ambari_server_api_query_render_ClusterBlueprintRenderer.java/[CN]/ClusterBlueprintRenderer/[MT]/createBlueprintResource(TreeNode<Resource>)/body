@@ -1,13 +1,22 @@
 {
-  Resource clusterResource=clusterNode.getObject();
   Resource blueprintResource=new ResourceImpl(Resource.Type.Cluster);
-  String[] stackTokens=((String)clusterResource.getPropertyValue(PropertyHelper.getPropertyId("Clusters","version"))).split("-");
-  blueprintResource.setProperty("Blueprints/stack_name",stackTokens[0]);
-  blueprintResource.setProperty("Blueprints/stack_version",stackTokens[1]);
-  Collection<HostGroupImpl> hostGroups=processHostGroups(clusterNode.getChild("hosts"));
-  List<Map<String,Object>> groupList=formatGroupsAsList(hostGroups);
+  ClusterTopology topology;
+  try {
+    topology=createClusterTopology(clusterNode);
+  }
+ catch (  InvalidTopologyTemplateException e) {
+    throw new RuntimeException("Unable to process blueprint export request: " + e,e);
+  }
+catch (  InvalidTopologyException e) {
+    throw new RuntimeException("Unable to process blueprint export request: " + e,e);
+  }
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForBlueprintExport();
+  Stack stack=topology.getBlueprint().getStack();
+  blueprintResource.setProperty("Blueprints/stack_name",stack.getName());
+  blueprintResource.setProperty("Blueprints/stack_version",stack.getVersion());
+  List<Map<String,Object>> groupList=formatGroupsAsList(topology);
   blueprintResource.setProperty("host_groups",groupList);
-  determinePropertiesToStrip(clusterNode.getChild("services"),stackTokens[0],stackTokens[1]);
-  blueprintResource.setProperty("configurations",processConfigurations(clusterNode,hostGroups));
+  blueprintResource.setProperty("configurations",processConfigurations(topology));
   return blueprintResource;
 }

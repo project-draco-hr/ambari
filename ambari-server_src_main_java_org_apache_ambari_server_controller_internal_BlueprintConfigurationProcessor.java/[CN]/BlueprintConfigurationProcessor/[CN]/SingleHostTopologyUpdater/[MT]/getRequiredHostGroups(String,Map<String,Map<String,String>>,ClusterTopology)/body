@@ -1,0 +1,27 @@
+{
+  Matcher m=HOSTGROUP_REGEX.matcher(origValue);
+  if (m.find()) {
+    String hostGroupName=m.group(1);
+    return Collections.singleton(hostGroupName);
+  }
+ else {
+    Collection<String> matchingGroups=topology.getHostGroupsForComponent(component);
+    if (matchingGroups.size() == 1) {
+      return Collections.singleton(matchingGroups.iterator().next());
+    }
+ else {
+      if (topology.isNameNodeHAEnabled() && isComponentNameNode() && (matchingGroups.size() == 2)) {
+        if (properties.containsKey("core-site") && properties.get("core-site").get("fs.defaultFS").equals(origValue)) {
+          return Collections.emptySet();
+        }
+        if (properties.containsKey("hbase-site") && properties.get("hbase-site").get("hbase.rootdir").equals(origValue)) {
+          return Collections.emptySet();
+        }
+      }
+      if (topology.isNameNodeHAEnabled() && isComponentSecondaryNameNode() && (matchingGroups.isEmpty())) {
+        return Collections.emptySet();
+      }
+      throw new IllegalArgumentException("Unable to determine required host groups for component. " + "Component '" + component + "' is not mapped to any host group or is mapped to multiple groups.");
+    }
+  }
+}

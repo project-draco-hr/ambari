@@ -1,17 +1,20 @@
 {
   final String expectedHostGroupName="host_group_1";
   final String expectedPropertyValue="hive.metastore.local=false,hive.metastore.uris=thrift://headnode0.ivantestcluster2-ssh.d1.internal.cloudapp.net:9083,hive.user.install.directory=/user";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  mockSupport.replayAll();
-  Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
   Map<String,String> webHCatSiteProperties=new HashMap<String,String>();
-  configProperties.put("webhcat-site",webHCatSiteProperties);
+  properties.put("webhcat-site",webHCatSiteProperties);
   webHCatSiteProperties.put("templeton.hive.properties",expectedPropertyValue);
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  Map<String,HostGroup> mapOfHostGroups=new HashMap<String,HostGroup>();
-  mapOfHostGroups.put(expectedHostGroupName,mockHostGroupOne);
-  configProcessor.doUpdateForClusterCreate(mapOfHostGroups,null);
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> hgComponents=new HashSet<String>();
+  hgComponents.add("NAMENODE");
+  List<String> hosts=new ArrayList<String>();
+  hosts.add("some-hose");
+  TestHostGroup group1=new TestHostGroup(expectedHostGroupName,hgComponents,hosts);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
   assertEquals("Unexpected config update for templeton.hive.properties",expectedPropertyValue,webHCatSiteProperties.get("templeton.hive.properties"));
-  mockSupport.verifyAll();
 }

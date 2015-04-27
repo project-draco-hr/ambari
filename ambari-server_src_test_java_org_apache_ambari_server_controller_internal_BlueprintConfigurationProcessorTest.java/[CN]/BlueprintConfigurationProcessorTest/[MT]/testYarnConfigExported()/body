@@ -2,11 +2,6 @@
   final String expectedHostName="c6401.apache.ambari.org";
   final String expectedPortNum="808080";
   final String expectedHostGroupName="host_group_1";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName,"serverTwo")).atLeastOnce();
-  expect(mockHostGroupOne.getName()).andReturn(expectedHostGroupName).atLeastOnce();
-  mockSupport.replayAll();
   Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
   Map<String,String> yarnSiteProperties=new HashMap<String,String>();
   configProperties.put("yarn-site",yarnSiteProperties);
@@ -20,8 +15,18 @@
   yarnSiteProperties.put("yarn.timeline-service.address",expectedHostName + ":" + expectedPortNum);
   yarnSiteProperties.put("yarn.timeline-service.webapp.address",expectedHostName + ":" + expectedPortNum);
   yarnSiteProperties.put("yarn.timeline-service.webapp.https.address",expectedHostName + ":" + expectedPortNum);
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  configProcessor.doUpdateForBlueprintExport(Arrays.asList(mockHostGroupOne));
+  Configuration clusterConfig=new Configuration(configProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> groupComponents=new HashSet<String>();
+  groupComponents.add("RESOURCEMANAGER");
+  Collection<String> hosts=new ArrayList<String>();
+  hosts.add(expectedHostName);
+  hosts.add("serverTwo");
+  TestHostGroup group=new TestHostGroup(expectedHostGroupName,groupComponents,hosts);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForBlueprintExport();
   assertEquals("Yarn Log Server URL was incorrectly exported","http://" + "%HOSTGROUP::" + expectedHostGroupName + "%"+ ":19888/jobhistory/logs",yarnSiteProperties.get("yarn.log.server.url"));
   assertEquals("Yarn ResourceManager hostname was incorrectly exported",createExportedHostName(expectedHostGroupName),yarnSiteProperties.get("yarn.resourcemanager.hostname"));
   assertEquals("Yarn ResourceManager tracker address was incorrectly exported",createExportedAddress(expectedPortNum,expectedHostGroupName),yarnSiteProperties.get("yarn.resourcemanager.resource-tracker.address"));
@@ -32,5 +37,4 @@
   assertEquals("Yarn ResourceManager timeline-service address was incorrectly exported",createExportedAddress(expectedPortNum,expectedHostGroupName),yarnSiteProperties.get("yarn.timeline-service.address"));
   assertEquals("Yarn ResourceManager timeline webapp address was incorrectly exported",createExportedAddress(expectedPortNum,expectedHostGroupName),yarnSiteProperties.get("yarn.timeline-service.webapp.address"));
   assertEquals("Yarn ResourceManager timeline webapp HTTPS address was incorrectly exported",createExportedAddress(expectedPortNum,expectedHostGroupName),yarnSiteProperties.get("yarn.timeline-service.webapp.https.address"));
-  mockSupport.verifyAll();
 }

@@ -6,15 +6,11 @@
   final String expectedNodeOne="nn1";
   final String expectedNodeTwo="nn2";
   final String expectedHostGroupName="host_group_1";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName,expectedHostNameTwo)).atLeastOnce();
-  mockSupport.replayAll();
-  Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
   Map<String,String> hdfsSiteProperties=new HashMap<String,String>();
   Map<String,String> hadoopEnvProperties=new HashMap<String,String>();
-  configProperties.put("hdfs-site",hdfsSiteProperties);
-  configProperties.put("hadoop-env",hadoopEnvProperties);
+  properties.put("hdfs-site",hdfsSiteProperties);
+  properties.put("hadoop-env",hadoopEnvProperties);
   hdfsSiteProperties.put("dfs.nameservices",expectedNameService);
   hdfsSiteProperties.put("dfs.ha.namenodes.mynameservice",expectedNodeOne + ", " + expectedNodeTwo);
   hdfsSiteProperties.put("dfs.namenode.https-address." + expectedNameService + "."+ expectedNodeOne,createExportedAddress(expectedPortNum,expectedHostGroupName));
@@ -25,17 +21,27 @@
   hdfsSiteProperties.put("dfs.namenode.rpc-address." + expectedNameService + "."+ expectedNodeTwo,createExportedAddress(expectedPortNum,expectedHostGroupName));
   hadoopEnvProperties.put("dfs_ha_initial_namenode_active",expectedHostName);
   hadoopEnvProperties.put("dfs_ha_initial_namenode_standby",expectedHostNameTwo);
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  Map<String,HostGroup> mapOfHostGroups=new HashMap<String,HostGroup>();
-  mapOfHostGroups.put(expectedHostGroupName,mockHostGroupOne);
-  configProcessor.doUpdateForClusterCreate(mapOfHostGroups,null);
-  assertEquals("HTTPS address HA property not properly exported",expectedHostName + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.https-address." + expectedNameService + "."+ expectedNodeOne));
-  assertEquals("HTTPS address HA property not properly exported",expectedHostName + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.https-address." + expectedNameService + "."+ expectedNodeTwo));
-  assertEquals("HTTPS address HA property not properly exported",expectedHostName + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.http-address." + expectedNameService + "."+ expectedNodeOne));
-  assertEquals("HTTPS address HA property not properly exported",expectedHostName + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.http-address." + expectedNameService + "."+ expectedNodeTwo));
-  assertEquals("HTTPS address HA property not properly exported",expectedHostName + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.rpc-address." + expectedNameService + "."+ expectedNodeOne));
-  assertEquals("HTTPS address HA property not properly exported",expectedHostName + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.rpc-address." + expectedNameService + "."+ expectedNodeTwo));
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> hgComponents=new HashSet<String>();
+  hgComponents.add("NAMENODE");
+  Collection<String> hosts=new ArrayList<String>();
+  hosts.add(expectedHostName);
+  hosts.add(expectedHostNameTwo);
+  TestHostGroup group=new TestHostGroup(expectedHostGroupName,hgComponents,hosts);
+  Collection<TestHostGroup> hostGroups=new ArrayList<TestHostGroup>();
+  hostGroups.add(group);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
+  String expectedPropertyValue=hdfsSiteProperties.get("dfs.namenode.https-address." + expectedNameService + "."+ expectedNodeOne);
+  if (!expectedPropertyValue.equals(expectedHostName + ":" + expectedPortNum) && !expectedPropertyValue.equals(expectedHostNameTwo + ":" + expectedPortNum)) {
+    fail("HTTPS address HA property not properly exported");
+  }
+  assertEquals("HTTPS address HA property not properly exported",expectedPropertyValue,hdfsSiteProperties.get("dfs.namenode.https-address." + expectedNameService + "."+ expectedNodeTwo));
+  assertEquals("HTTPS address HA property not properly exported",expectedPropertyValue,hdfsSiteProperties.get("dfs.namenode.http-address." + expectedNameService + "."+ expectedNodeOne));
+  assertEquals("HTTPS address HA property not properly exported",expectedPropertyValue,hdfsSiteProperties.get("dfs.namenode.http-address." + expectedNameService + "."+ expectedNodeTwo));
+  assertEquals("HTTPS address HA property not properly exported",expectedPropertyValue,hdfsSiteProperties.get("dfs.namenode.rpc-address." + expectedNameService + "."+ expectedNodeOne));
+  assertEquals("HTTPS address HA property not properly exported",expectedPropertyValue,hdfsSiteProperties.get("dfs.namenode.rpc-address." + expectedNameService + "."+ expectedNodeTwo));
   assertEquals("Active Namenode hostname was not set correctly",expectedHostName,hadoopEnvProperties.get("dfs_ha_initial_namenode_active"));
   assertEquals("Standby Namenode hostname was not set correctly",expectedHostNameTwo,hadoopEnvProperties.get("dfs_ha_initial_namenode_standby"));
-  mockSupport.verifyAll();
 }

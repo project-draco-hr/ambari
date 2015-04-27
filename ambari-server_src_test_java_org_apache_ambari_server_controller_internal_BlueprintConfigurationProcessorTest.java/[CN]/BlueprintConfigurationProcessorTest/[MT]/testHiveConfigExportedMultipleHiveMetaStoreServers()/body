@@ -4,14 +4,6 @@
   final String expectedPortNum="808080";
   final String expectedHostGroupName="host_group_1";
   final String expectedHostGroupNameTwo="host_group_2";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  HostGroup mockHostGroupTwo=mockSupport.createMock(HostGroup.class);
-  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName,"serverTwo")).atLeastOnce();
-  expect(mockHostGroupTwo.getHostInfo()).andReturn(Arrays.asList(expectedHostNameTwo,"serverTwo")).atLeastOnce();
-  expect(mockHostGroupOne.getName()).andReturn(expectedHostGroupName).atLeastOnce();
-  expect(mockHostGroupTwo.getName()).andReturn(expectedHostGroupNameTwo).atLeastOnce();
-  mockSupport.replayAll();
   Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
   Map<String,String> hiveSiteProperties=new HashMap<String,String>();
   Map<String,String> hiveEnvProperties=new HashMap<String,String>();
@@ -31,8 +23,25 @@
   coreSiteProperties.put("hadoop.proxyuser.hive.hosts",expectedHostName + "," + expectedHostNameTwo);
   coreSiteProperties.put("hadoop.proxyuser.HTTP.hosts",expectedHostName + "," + expectedHostNameTwo);
   coreSiteProperties.put("hadoop.proxyuser.hcat.hosts",expectedHostName + "," + expectedHostNameTwo);
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  configProcessor.doUpdateForBlueprintExport(Arrays.asList(mockHostGroupOne,mockHostGroupTwo));
+  Configuration clusterConfig=new Configuration(configProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> groupComponents=new HashSet<String>();
+  groupComponents.add("NAMENODE");
+  Collection<String> hosts=new ArrayList<String>();
+  hosts.add(expectedHostName);
+  hosts.add("serverTwo");
+  TestHostGroup group=new TestHostGroup(expectedHostGroupName,groupComponents,hosts);
+  Collection<String> groupComponents2=new HashSet<String>();
+  groupComponents2.add("DATANODE");
+  Collection<String> hosts2=new ArrayList<String>();
+  hosts2.add(expectedHostNameTwo);
+  hosts2.add("serverThree");
+  TestHostGroup group2=new TestHostGroup(expectedHostGroupNameTwo,groupComponents2,hosts2);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group);
+  hostGroups.add(group2);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForBlueprintExport();
   System.out.println("RWN: exported value of hive.metastore.uris = " + hiveSiteProperties.get("hive.metastore.uris"));
   assertEquals("hive property not properly exported","thrift://" + createExportedAddress(expectedPortNum,expectedHostGroupName) + ","+ "thrift://"+ createExportedAddress(expectedPortNum,expectedHostGroupNameTwo),hiveSiteProperties.get("hive.metastore.uris"));
   assertEquals("hive property not properly exported",createExportedAddress(expectedPortNum,expectedHostGroupName),hiveSiteProperties.get("javax.jdo.option.ConnectionURL"));
@@ -44,5 +53,4 @@
   assertEquals("hive property not properly exported",createExportedHostName(expectedHostGroupName) + "," + createExportedHostName(expectedHostGroupNameTwo),coreSiteProperties.get("hadoop.proxyuser.hcat.hosts"));
   assertEquals("hive zookeeper quorum property not properly exported",createExportedAddress(expectedPortNum,expectedHostGroupName) + "," + createExportedAddress(expectedPortNum,expectedHostGroupNameTwo),hiveSiteProperties.get("hive.zookeeper.quorum"));
   assertEquals("hive zookeeper connectString property not properly exported",createExportedAddress(expectedPortNum,expectedHostGroupName) + "," + createExportedAddress(expectedPortNum,expectedHostGroupNameTwo),hiveSiteProperties.get("hive.cluster.delegation.token.store.zookeeper.connectString"));
-  mockSupport.verifyAll();
 }

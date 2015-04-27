@@ -1,0 +1,44 @@
+{
+  if (associatedWithCluster) {
+    return;
+  }
+  boolean matchedToRequest=false;
+  String hostName=host.getHostName();
+synchronized (reservedHosts) {
+    if (reservedHosts.containsKey(hostName)) {
+      LogicalRequest request=reservedHosts.remove(hostName);
+      HostOfferResponse response=request.offer(host);
+      if (response.getAnswer() != HostOfferResponse.Answer.ACCEPTED) {
+        throw new RuntimeException("LogicalRequest declined host offer of explicitly requested host: " + hostName);
+      }
+      processAcceptedHostOffer(getClusterTopology(request.getClusterName()),response,host);
+      matchedToRequest=true;
+    }
+  }
+  if (!matchedToRequest) {
+synchronized (outstandingRequests) {
+      Iterator<LogicalRequest> outstandingRequestIterator=outstandingRequests.iterator();
+      while (!matchedToRequest && outstandingRequestIterator.hasNext()) {
+        LogicalRequest request=outstandingRequestIterator.next();
+        HostOfferResponse hostOfferResponse=request.offer(host);
+switch (hostOfferResponse.getAnswer()) {
+case ACCEPTED:
+          matchedToRequest=true;
+        processAcceptedHostOffer(getClusterTopology(request.getClusterName()),hostOfferResponse,host);
+      break;
+case DECLINED_DONE:
+    outstandingRequestIterator.remove();
+  break;
+case DECLINED_PREDICATE:
+break;
+}
+}
+}
+}
+if (!matchedToRequest) {
+synchronized (availableHosts) {
+System.out.printf("TopologyManager: Queueing available host %s\n",hostName);
+availableHosts.add(host);
+}
+}
+}

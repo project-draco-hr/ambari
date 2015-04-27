@@ -1,0 +1,33 @@
+{
+  final Map<String,String> userProps=new HashMap<String,String>();
+  Collection<String> services=clusterTopology.getBlueprint().getServices();
+  if (services.contains("OOZIE")) {
+    userProps.put("oozie_user","oozie-env");
+  }
+  if (services.contains("HIVE")) {
+    userProps.put("hive_user","hive-env");
+    userProps.put("hcat_user","hive-env");
+  }
+  if (services.contains("HBASE")) {
+    userProps.put("hbase_user","hbase-env");
+  }
+  if (services.contains("FALCON")) {
+    userProps.put("falcon_user","falcon-env");
+  }
+  String proxyUserHosts="hadoop.proxyuser.%s.hosts";
+  String proxyUserGroups="hadoop.proxyuser.%s.groups";
+  for (  String property : userProps.keySet()) {
+    String configType=userProps.get(property);
+    Map<String,String> configs=mapClusterConfigurations.get(configType);
+    if (configs != null) {
+      String user=configs.get(property);
+      if (user != null && !user.isEmpty()) {
+        ensureProperty(mapClusterConfigurations,"core-site",String.format(proxyUserHosts,user),"*");
+        ensureProperty(mapClusterConfigurations,"core-site",String.format(proxyUserGroups,user),"users");
+      }
+    }
+ else {
+      LOG.debug("setMissingConfigurations: no user configuration found for type = " + configType + ".  This may be caused by an error in the blueprint configuration.");
+    }
+  }
+}

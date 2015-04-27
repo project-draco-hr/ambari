@@ -2,11 +2,6 @@
   final String expectedHostName="c6401.apache.ambari.org";
   final String expectedPortNum="808080";
   final String expectedHostGroupName="host_group_1";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName,"serverTwo")).atLeastOnce();
-  expect(mockHostGroupOne.getName()).andReturn(expectedHostGroupName).atLeastOnce();
-  mockSupport.replayAll();
   Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
   Map<String,String> hdfsSiteProperties=new HashMap<String,String>();
   Map<String,String> coreSiteProperties=new HashMap<String,String>();
@@ -27,8 +22,19 @@
   coreSiteProperties.put("fs.defaultFS","hdfs://" + expectedHostName + ":"+ expectedPortNum);
   hbaseSiteProperties.put("hbase.rootdir","hdfs://" + expectedHostName + ":"+ expectedPortNum+ "/apps/hbase/data");
   accumuloSiteProperties.put("instance.volumes","hdfs://" + expectedHostName + ":"+ expectedPortNum+ "/apps/accumulo/data");
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  configProcessor.doUpdateForBlueprintExport(Arrays.asList(mockHostGroupOne));
+  Configuration clusterConfig=new Configuration(configProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> groupComponents=new HashSet<String>();
+  groupComponents.add("NAMENODE");
+  groupComponents.add("SECONDARY_NAMENODE");
+  Collection<String> hosts=new ArrayList<String>();
+  hosts.add(expectedHostName);
+  hosts.add("serverTwo");
+  TestHostGroup group=new TestHostGroup(expectedHostGroupName,groupComponents,hosts);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForBlueprintExport();
   assertEquals("hdfs config property not exported properly",createExportedAddress(expectedPortNum,expectedHostGroupName),hdfsSiteProperties.get("dfs.http.address"));
   assertEquals("hdfs config property not exported properly",createExportedAddress(expectedPortNum,expectedHostGroupName),hdfsSiteProperties.get("dfs.https.address"));
   assertEquals("hdfs config property not exported properly",createExportedAddress(expectedPortNum,expectedHostGroupName),hdfsSiteProperties.get("dfs.namenode.http-address"));
@@ -40,5 +46,4 @@
   assertEquals("hdfs config in core-site not exported properly","hdfs://" + createExportedAddress(expectedPortNum,expectedHostGroupName),coreSiteProperties.get("fs.defaultFS"));
   assertEquals("hdfs config in hbase-site not exported properly","hdfs://" + createExportedAddress(expectedPortNum,expectedHostGroupName) + "/apps/hbase/data",hbaseSiteProperties.get("hbase.rootdir"));
   assertEquals("hdfs config in accumulo-site not exported properly","hdfs://" + createExportedAddress(expectedPortNum,expectedHostGroupName) + "/apps/accumulo/data",accumuloSiteProperties.get("instance.volumes"));
-  mockSupport.verifyAll();
 }

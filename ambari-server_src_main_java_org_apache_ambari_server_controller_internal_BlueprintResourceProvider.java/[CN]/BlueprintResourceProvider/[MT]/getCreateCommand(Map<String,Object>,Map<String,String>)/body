@@ -1,23 +1,36 @@
 {
   return new Command<Void>(){
     @Override public Void invoke() throws AmbariException {
-      BlueprintEntity blueprint=toBlueprintEntity(properties);
-      if (blueprintDAO.findByName(blueprint.getBlueprintName()) != null) {
-        throw new DuplicateResourceException("Attempted to create a Blueprint which already exists, blueprint_name=" + blueprint.getBlueprintName());
+      Blueprint blueprint;
+      try {
+        blueprint=blueprintFactory.createBlueprint(properties);
       }
-      Map<String,Map<String,Collection<String>>> missingProperties=blueprint.validateConfigurations(stackInfo,false);
-      if (!missingProperties.isEmpty()) {
-        throw new IllegalArgumentException("Required configurations are missing from the specified host groups: " + missingProperties);
+ catch (      NoSuchStackException e) {
+        throw new IllegalArgumentException("Specified stack doesn't exist: " + e,e);
+      }
+      if (blueprintDAO.findByName(blueprint.getName()) != null) {
+        throw new DuplicateResourceException("Attempted to create a Blueprint which already exists, blueprint_name=" + blueprint.getName());
+      }
+      try {
+        blueprint.validateRequiredProperties();
+      }
+ catch (      InvalidTopologyException e) {
+        throw new IllegalArgumentException("Blueprint configuration validation failed: " + e.getMessage(),e);
       }
       String validateTopology=requestInfoProps.get("validate_topology");
       if (validateTopology == null || !validateTopology.equalsIgnoreCase("false")) {
-        validateTopology(blueprint);
+        try {
+          blueprint.validateTopology();
+        }
+ catch (        InvalidTopologyException e) {
+          throw new IllegalArgumentException(e.getMessage());
+        }
       }
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Creating Blueprint, name=" + blueprint.getBlueprintName());
+        LOG.debug("Creating Blueprint, name=" + blueprint.getName());
       }
       try {
-        blueprintDAO.create(blueprint);
+        blueprintDAO.create(blueprint.toEntity());
       }
  catch (      Exception e) {
         throw new RuntimeException(e);

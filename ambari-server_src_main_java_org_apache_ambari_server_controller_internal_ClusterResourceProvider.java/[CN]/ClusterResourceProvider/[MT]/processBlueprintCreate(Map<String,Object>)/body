@@ -1,29 +1,20 @@
 {
-  String blueprintName=(String)properties.get(BLUEPRINT_PROPERTY_ID);
-  LOG.info("Creating Cluster '" + properties.get(CLUSTER_NAME_PROPERTY_ID) + "' based on blueprint '"+ blueprintName+ "'.");
-  BlueprintEntity blueprint=getExistingBlueprint(blueprintName);
-  Stack stack=parseStack(blueprint);
-  Map<String,HostGroupImpl> blueprintHostGroups=parseBlueprintHostGroups(blueprint,stack);
-  applyRequestInfoToHostGroups(properties,blueprintHostGroups);
-  Collection<Map<String,String>> configOverrides=(Collection<Map<String,String>>)properties.get("configurations");
-  String message=null;
-  for (  BlueprintConfigEntity blueprintConfig : blueprint.getConfigurations()) {
-    if (blueprintConfig.getType().equals("global")) {
-      message="WARNING: Global configurations are deprecated, please use *-env";
-      break;
-    }
+  LOG.info("Creating Cluster '" + properties.get(CLUSTER_NAME_PROPERTY_ID) + "' based on blueprint '"+ String.valueOf(properties.get(BLUEPRINT_PROPERTY_ID))+ "'.");
+  TopologyRequest createClusterRequest;
+  try {
+    createClusterRequest=topologyRequestFactory.createProvisionClusterRequest(properties);
   }
-  processConfigurations(processBlueprintConfigurations(blueprint,configOverrides),processBlueprintAttributes(blueprint),stack,blueprintHostGroups);
-  validatePasswordProperties(blueprint,blueprintHostGroups,(String)properties.get("default_password"));
-  String clusterName=(String)properties.get(CLUSTER_NAME_PROPERTY_ID);
-  createClusterResource(buildClusterResourceProperties(stack,clusterName));
-  setConfigurationsOnCluster(clusterName,stack,blueprintHostGroups);
-  Set<String> services=getServicesToDeploy(stack,blueprintHostGroups);
-  createServiceAndComponentResources(blueprintHostGroups,clusterName,services);
-  createHostAndComponentResources(blueprintHostGroups,clusterName);
-  registerConfigGroups(clusterName,blueprintHostGroups,stack);
-  persistInstallStateForUI(clusterName);
-  RequestStatusResponse request=((ServiceResourceProvider)getResourceProvider(Resource.Type.Service)).installAndStart(clusterName);
-  request.setMessage(message);
-  return request;
+ catch (  InvalidTopologyTemplateException e) {
+    throw new IllegalArgumentException("Invalid Cluster Creation Template: " + e,e);
+  }
+  try {
+    return topologyManager.provisionCluster(createClusterRequest);
+  }
+ catch (  InvalidTopologyException e) {
+    throw new IllegalArgumentException("Topology validation failed: " + e,e);
+  }
+catch (  AmbariException e) {
+    e.printStackTrace();
+    throw new SystemException("Unknown exception when asking TopologyManager to provision cluster",e);
+  }
 }

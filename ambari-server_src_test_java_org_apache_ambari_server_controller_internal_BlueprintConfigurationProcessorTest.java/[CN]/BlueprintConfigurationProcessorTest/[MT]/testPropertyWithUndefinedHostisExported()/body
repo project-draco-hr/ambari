@@ -1,21 +1,25 @@
 {
   final String expectedHostName="c6401.apache.ambari.org";
   final String expectedHostGroupName="host_group_1";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName,"serverTwo")).atLeastOnce();
-  expect(mockHostGroupOne.getName()).andReturn(expectedHostGroupName).atLeastOnce();
-  mockSupport.replayAll();
   Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
   Map<String,String> properties=new HashMap<String,String>();
   configProperties.put("storm-site",properties);
   properties.put("storm.zookeeper.servers",expectedHostName);
   properties.put("nimbus.childopts","undefined");
   properties.put("worker.childopts","some other info, undefined, more info");
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  configProcessor.doUpdateForBlueprintExport(Arrays.asList(mockHostGroupOne));
+  Configuration clusterConfig=new Configuration(configProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> groupComponents=new HashSet<String>();
+  groupComponents.add("ZOOKEEPER_SERVER");
+  Collection<String> hosts=new ArrayList<String>();
+  hosts.add(expectedHostName);
+  hosts.add("serverTwo");
+  TestHostGroup group=new TestHostGroup(expectedHostGroupName,groupComponents,hosts);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForBlueprintExport();
   assertEquals("Property was incorrectly exported","%HOSTGROUP::" + expectedHostGroupName + "%",properties.get("storm.zookeeper.servers"));
   assertEquals("Property with undefined host was incorrectly exported","undefined",properties.get("nimbus.childopts"));
   assertEquals("Property with undefined host was incorrectly exported","some other info, undefined, more info",properties.get("worker.childopts"));
-  mockSupport.verifyAll();
 }

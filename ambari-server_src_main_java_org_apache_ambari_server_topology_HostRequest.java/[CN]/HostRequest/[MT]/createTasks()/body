@@ -1,0 +1,35 @@
+{
+  HostGroup hostGroup=getHostGroup();
+  for (  String component : hostGroup.getComponents()) {
+    if (component == null || component.equals("AMBARI_SERVER")) {
+      System.out.printf("Skipping component %s when creating request\n",component);
+      continue;
+    }
+    String hostName=getHostName() != null ? getHostName() : "PENDING HOST ASSIGNMENT : HOSTGROUP=" + getHostgroupName();
+    HostRoleCommand installTask=hostRoleCommandFactory.create(hostName,Role.valueOf(component),null,RoleCommand.INSTALL);
+    installTask.setStatus(HostRoleStatus.PENDING);
+    installTask.setTaskId(topologyContext.getNextTaskId());
+    installTask.setRequestId(getRequestId());
+    installTask.setStageId(stageId);
+    installTask.setRequestId(getRequestId());
+    logicalTasks.add(installTask);
+    registerLogicalInstallTaskId(component,installTask.getTaskId());
+    Stack stack=hostGroup.getStack();
+    try {
+      if (!metaInfoManager.getComponent(stack.getName(),stack.getVersion(),stack.getServiceForComponent(component),component).isClient()) {
+        HostRoleCommand startTask=hostRoleCommandFactory.create(hostName,Role.valueOf(component),null,RoleCommand.START);
+        startTask.setStatus(HostRoleStatus.PENDING);
+        startTask.setRequestId(getRequestId());
+        startTask.setTaskId(topologyContext.getNextTaskId());
+        startTask.setRequestId(getRequestId());
+        startTask.setStageId(stageId);
+        logicalTasks.add(startTask);
+        registerLogicalStartTaskId(component,startTask.getTaskId());
+      }
+    }
+ catch (    AmbariException e) {
+      e.printStackTrace();
+      throw new RuntimeException(e);
+    }
+  }
+}

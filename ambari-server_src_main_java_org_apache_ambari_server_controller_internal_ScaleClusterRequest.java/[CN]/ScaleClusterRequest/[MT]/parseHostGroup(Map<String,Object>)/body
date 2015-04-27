@@ -1,0 +1,34 @@
+{
+  String hgName=String.valueOf(properties.get(HostResourceProvider.HOSTGROUP_PROPERTY_ID));
+  HostGroupInfo hostGroupInfo=hostGroupInfoMap.get(hgName);
+  if (hostGroupInfo == null) {
+    String bpName=String.valueOf(properties.get(HostResourceProvider.BLUEPRINT_PROPERTY_ID));
+    Blueprint blueprint=parseBlueprint(bpName);
+    if (blueprint.getHostGroup(hgName) == null) {
+      throw new InvalidTopologyTemplateException("Invalid host group specified in request: " + hgName);
+    }
+    hostGroupInfo=new HostGroupInfo(hgName);
+    hostGroupInfoMap.put(hgName,hostGroupInfo);
+  }
+  if (properties.containsKey("host_count")) {
+    String predicate=String.valueOf(properties.get("host_predicate"));
+    if (predicate != null && !predicate.isEmpty()) {
+      try {
+        hostGroupInfo.setPredicate(predicateCompiler.compile(predicate));
+      }
+ catch (      InvalidQueryException e) {
+        throw new InvalidTopologyTemplateException(String.format("Unable to compile host predicate '%s': %s",predicate,e),e);
+      }
+    }
+    if (!hostGroupInfo.getHostNames().isEmpty()) {
+      throw new InvalidTopologyTemplateException("Can't specify both host_name and host_count for the same hostgroup: " + hgName);
+    }
+    hostGroupInfo.setRequestedCount(Integer.valueOf(String.valueOf(properties.get("host_count"))));
+  }
+ else {
+    if (hostGroupInfo.getRequestedHostCount() != hostGroupInfo.getHostNames().size()) {
+      throw new InvalidTopologyTemplateException("Can't specify both host_name and host_count for the same hostgroup: " + hgName);
+    }
+    hostGroupInfo.addHost(getHostNameFromProperties(properties));
+  }
+}

@@ -1,0 +1,37 @@
+{
+  Map<String,Collection<DependencyInfo>> missingDependencies=new HashMap<String,Collection<DependencyInfo>>();
+  Collection<String> blueprintServices=blueprint.getServices();
+  Collection<String> groupComponents=group.getComponents();
+  for (  String component : new HashSet<String>(groupComponents)) {
+    Collection<DependencyInfo> dependenciesForComponent=stack.getDependenciesForComponent(component);
+    for (    DependencyInfo dependency : dependenciesForComponent) {
+      String conditionalService=stack.getConditionalServiceForDependency(dependency);
+      if (conditionalService != null && !blueprintServices.contains(conditionalService)) {
+        continue;
+      }
+      String dependencyScope=dependency.getScope();
+      String componentName=dependency.getComponentName();
+      AutoDeployInfo autoDeployInfo=dependency.getAutoDeploy();
+      boolean resolved=false;
+      if (dependencyScope.equals("cluster")) {
+        Collection<String> missingDependencyInfo=verifyComponentCardinalityCount(componentName,new Cardinality("1+"),autoDeployInfo);
+        resolved=missingDependencyInfo.isEmpty();
+      }
+ else       if (dependencyScope.equals("host")) {
+        if (groupComponents.contains(component) || (autoDeployInfo != null && autoDeployInfo.isEnabled())) {
+          resolved=true;
+          group.addComponent(componentName);
+        }
+      }
+      if (!resolved) {
+        Collection<DependencyInfo> missingCompDependencies=missingDependencies.get(component);
+        if (missingCompDependencies == null) {
+          missingCompDependencies=new HashSet<DependencyInfo>();
+          missingDependencies.put(component,missingCompDependencies);
+        }
+        missingCompDependencies.add(dependency);
+      }
+    }
+  }
+  return missingDependencies;
+}

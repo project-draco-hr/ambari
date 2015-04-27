@@ -1,0 +1,43 @@
+{
+  Collection<Map<String,Object>> hostGroups=(Collection<Map<String,Object>>)properties.get("host_groups");
+  if (hostGroups == null || hostGroups.isEmpty()) {
+    throw new InvalidTopologyTemplateException("'host_groups' element must be included in cluster create body");
+  }
+  for (  Map<String,Object> hostGroupProperties : hostGroups) {
+    String name=String.valueOf(hostGroupProperties.get("name"));
+    if (name.equals("null") || name.isEmpty()) {
+      throw new InvalidTopologyTemplateException("All host groups must contain a 'name' element");
+    }
+    Collection hosts=(Collection)hostGroupProperties.get("hosts");
+    if (hosts == null || hosts.isEmpty()) {
+      throw new InvalidTopologyTemplateException("Host group '" + name + "' must contain a 'hosts' element");
+    }
+    HostGroupInfo hostGroupInfo=new HostGroupInfo(name);
+    hostGroupInfoMap.put(name,hostGroupInfo);
+    for (    Object oHost : hosts) {
+      Map<String,String> hostProperties=(Map<String,String>)oHost;
+      String fqdn=hostProperties.get("fqdn");
+      if (fqdn == null || fqdn.isEmpty()) {
+        String predicate=hostProperties.get("host_predicate");
+        if (predicate != null && !predicate.isEmpty()) {
+          try {
+            hostGroupInfo.setPredicate(predicateCompiler.compile(predicate));
+          }
+ catch (          InvalidQueryException e) {
+            throw new InvalidTopologyTemplateException(String.format("Unable to compile host predicate '%s': %s",predicate,e),e);
+          }
+        }
+        if (hostProperties.containsKey("host_count")) {
+          hostGroupInfo.setRequestedCount(Integer.valueOf(hostProperties.get("host_count")));
+        }
+ else {
+          throw new InvalidTopologyTemplateException("Host group '" + name + "' hosts element must include at least one fqdn"+ " or a host_count must be specified");
+        }
+      }
+ else {
+        hostGroupInfo.addHost(fqdn);
+      }
+    }
+    hostGroupInfo.setConfiguration(configurationFactory.getConfiguration((Collection<Map<String,String>>)hostGroupProperties.get("configurations")));
+  }
+}

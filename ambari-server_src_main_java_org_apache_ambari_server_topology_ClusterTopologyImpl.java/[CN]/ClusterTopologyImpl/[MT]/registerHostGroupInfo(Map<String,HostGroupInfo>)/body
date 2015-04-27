@@ -1,0 +1,30 @@
+{
+  checkForDuplicateHosts(groupInfoMap);
+  for (  HostGroupInfo hostGroupInfo : groupInfoMap.values()) {
+    String hostGroupName=hostGroupInfo.getHostGroupName();
+    HostGroup baseHostGroup=getBlueprint().getHostGroup(hostGroupName);
+    if (baseHostGroup == null) {
+      throw new IllegalArgumentException("Invalid host_group specified: " + hostGroupName + ".  All request host groups must have a corresponding host group in the specified blueprint");
+    }
+    HostGroupInfo existingHostGroupInfo=hostGroupInfoMap.get(hostGroupName);
+    if (existingHostGroupInfo == null) {
+      Configuration bpHostGroupConfig=baseHostGroup.getConfiguration();
+      Configuration parentConfiguration=new Configuration(bpHostGroupConfig.getProperties(),bpHostGroupConfig.getAttributes(),getConfiguration());
+      hostGroupInfo.getConfiguration().setParentConfiguration(parentConfiguration);
+      hostGroupInfoMap.put(hostGroupName,hostGroupInfo);
+    }
+ else {
+      if (!hostGroupInfo.getHostNames().isEmpty()) {
+        try {
+          addHostsToTopology(hostGroupInfo);
+        }
+ catch (        NoSuchHostGroupException e) {
+          throw new InvalidTopologyException("Attempted to add hosts to unknown host group: " + hostGroupName);
+        }
+      }
+ else {
+        existingHostGroupInfo.setRequestedCount(existingHostGroupInfo.getRequestedHostCount() + hostGroupInfo.getRequestedHostCount());
+      }
+    }
+  }
+}

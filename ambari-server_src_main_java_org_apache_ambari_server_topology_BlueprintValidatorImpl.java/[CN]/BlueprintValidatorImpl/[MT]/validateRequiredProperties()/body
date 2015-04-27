@@ -1,0 +1,54 @@
+{
+  Map<String,Map<String,Collection<String>>> missingProperties=new HashMap<String,Map<String,Collection<String>>>();
+  Map<String,Map<String,String>> clusterConfigurations=blueprint.getConfiguration().getProperties();
+  for (  HostGroup hostGroup : blueprint.getHostGroups().values()) {
+    Collection<String> processedServices=new HashSet<String>();
+    Map<String,Collection<String>> allRequiredProperties=new HashMap<String,Collection<String>>();
+    Map<String,Map<String,String>> operationalConfiguration=new HashMap<String,Map<String,String>>(clusterConfigurations);
+    operationalConfiguration.putAll(hostGroup.getConfiguration().getProperties());
+    for (    String component : hostGroup.getComponents()) {
+      if (component.equals("MYSQL_SERVER")) {
+        Map<String,String> hiveEnvConfig=clusterConfigurations.get("hive-env");
+        if (hiveEnvConfig != null && !hiveEnvConfig.isEmpty() && hiveEnvConfig.get("hive_database") != null && hiveEnvConfig.get("hive_database").startsWith("Existing")) {
+          throw new IllegalArgumentException("Incorrect configuration: MYSQL_SERVER component is available but hive" + " using existing db!");
+        }
+      }
+      if (!component.equals("AMBARI_SERVER")) {
+        String serviceName=stack.getServiceForComponent(component);
+        if (processedServices.add(serviceName)) {
+          Collection<Stack.ConfigProperty> requiredServiceConfigs=stack.getRequiredConfigurationProperties(serviceName);
+          for (          Stack.ConfigProperty requiredConfig : requiredServiceConfigs) {
+            String configCategory=requiredConfig.getType();
+            String propertyName=requiredConfig.getName();
+            if (!stack.isPasswordProperty(serviceName,configCategory,propertyName)) {
+              Collection<String> typeRequirements=allRequiredProperties.get(configCategory);
+              if (typeRequirements == null) {
+                typeRequirements=new HashSet<String>();
+                allRequiredProperties.put(configCategory,typeRequirements);
+              }
+              typeRequirements.add(propertyName);
+            }
+          }
+        }
+      }
+    }
+    for (    Map.Entry<String,Collection<String>> requiredTypeProperties : allRequiredProperties.entrySet()) {
+      String requiredCategory=requiredTypeProperties.getKey();
+      Collection<String> requiredProperties=requiredTypeProperties.getValue();
+      Collection<String> operationalTypeProps=operationalConfiguration.containsKey(requiredCategory) ? operationalConfiguration.get(requiredCategory).keySet() : Collections.<String>emptyList();
+      requiredProperties.removeAll(operationalTypeProps);
+      if (!requiredProperties.isEmpty()) {
+        String hostGroupName=hostGroup.getName();
+        Map<String,Collection<String>> hostGroupMissingProps=missingProperties.get(hostGroupName);
+        if (hostGroupMissingProps == null) {
+          hostGroupMissingProps=new HashMap<String,Collection<String>>();
+          missingProperties.put(hostGroupName,hostGroupMissingProps);
+        }
+        hostGroupMissingProps.put(requiredCategory,requiredProperties);
+      }
+    }
+  }
+  if (!missingProperties.isEmpty()) {
+    throw new InvalidTopologyException("Missing required properties.  Specify a value for these " + "properties in the blueprint configuration. " + missingProperties);
+  }
+}

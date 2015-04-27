@@ -1,0 +1,47 @@
+{
+  for (  BlueprintServiceConfigRequest blueprintConfigRequest : listOfBlueprintConfigRequests) {
+    ClusterRequest clusterRequest=null;
+    List<ConfigurationRequest> requestsPerService=new LinkedList<ConfigurationRequest>();
+    for (    BlueprintServiceConfigElement blueprintElement : blueprintConfigRequest.getConfigElements()) {
+      Map<String,Object> clusterProperties=new HashMap<String,Object>();
+      clusterProperties.put(ClusterResourceProvider.CLUSTER_NAME_PROPERTY_ID,clusterTopology.getClusterName());
+      clusterProperties.put(ClusterResourceProvider.CLUSTER_DESIRED_CONFIGS_PROPERTY_ID + "/type",blueprintElement.getTypeName());
+      clusterProperties.put(ClusterResourceProvider.CLUSTER_DESIRED_CONFIGS_PROPERTY_ID + "/tag",tag);
+      for (      Map.Entry<String,String> entry : blueprintElement.getConfiguration().entrySet()) {
+        clusterProperties.put(ClusterResourceProvider.CLUSTER_DESIRED_CONFIGS_PROPERTY_ID + "/properties/" + entry.getKey(),entry.getValue());
+      }
+      if (blueprintElement.getAttributes() != null) {
+        for (        Map.Entry<String,Map<String,String>> attribute : blueprintElement.getAttributes().entrySet()) {
+          String attributeName=attribute.getKey();
+          for (          Map.Entry<String,String> attributeOccurrence : attribute.getValue().entrySet()) {
+            clusterProperties.put(ClusterResourceProvider.CLUSTER_DESIRED_CONFIGS_PROPERTY_ID + "/properties_attributes/" + attributeName+ "/"+ attributeOccurrence.getKey(),attributeOccurrence.getValue());
+          }
+        }
+      }
+      if (clusterRequest == null) {
+        SecurityType securityType;
+        String requestedSecurityType=(String)clusterProperties.get(ClusterResourceProvider.CLUSTER_SECURITY_TYPE_PROPERTY_ID);
+        if (requestedSecurityType == null)         securityType=null;
+ else {
+          try {
+            securityType=SecurityType.valueOf(requestedSecurityType.toUpperCase());
+          }
+ catch (          IllegalArgumentException e) {
+            throw new IllegalArgumentException(String.format("Cannot set cluster security type to invalid value: %s",requestedSecurityType));
+          }
+        }
+        clusterRequest=new ClusterRequest((Long)clusterProperties.get(ClusterResourceProvider.CLUSTER_ID_PROPERTY_ID),(String)clusterProperties.get(ClusterResourceProvider.CLUSTER_NAME_PROPERTY_ID),(String)clusterProperties.get(ClusterResourceProvider.CLUSTER_PROVISIONING_STATE_PROPERTY_ID),securityType,(String)clusterProperties.get(ClusterResourceProvider.CLUSTER_VERSION_PROPERTY_ID),null);
+      }
+      List<ConfigurationRequest> listOfRequests=AbstractResourceProvider.getConfigurationRequests("Clusters",clusterProperties);
+      requestsPerService.addAll(listOfRequests);
+    }
+    if (clusterRequest != null) {
+      clusterRequest.setDesiredConfig(requestsPerService);
+      LOG.info("Sending cluster config update request for service = " + blueprintConfigRequest.getServiceName());
+      controller.updateClusters(Collections.singleton(clusterRequest),null);
+    }
+ else {
+      LOG.error("ClusterRequest should not be null for service = " + blueprintConfigRequest.getServiceName());
+    }
+  }
+}

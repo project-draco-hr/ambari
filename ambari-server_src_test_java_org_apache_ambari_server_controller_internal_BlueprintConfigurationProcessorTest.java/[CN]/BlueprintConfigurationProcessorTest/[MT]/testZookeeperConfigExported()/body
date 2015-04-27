@@ -5,14 +5,6 @@
   final String expectedHostGroupNameTwo="host_group_2";
   final String expectedPortNumberOne="2112";
   final String expectedPortNumberTwo="1221";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  HostGroup mockHostGroupTwo=mockSupport.createMock(HostGroup.class);
-  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName,"serverTwo")).atLeastOnce();
-  expect(mockHostGroupTwo.getHostInfo()).andReturn(Arrays.asList(expectedHostNameTwo,"serverTwo")).atLeastOnce();
-  expect(mockHostGroupOne.getName()).andReturn(expectedHostGroupName).atLeastOnce();
-  expect(mockHostGroupTwo.getName()).andReturn(expectedHostGroupNameTwo).atLeastOnce();
-  mockSupport.replayAll();
   Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
   Map<String,String> coreSiteProperties=new HashMap<String,String>();
   Map<String,String> hbaseSiteProperties=new HashMap<String,String>();
@@ -35,8 +27,25 @@
   sliderClientProperties.put("slider.zookeeper.quorum",createHostAddress(expectedHostName,expectedPortNumberOne) + "," + createHostAddress(expectedHostNameTwo,expectedPortNumberTwo));
   kafkaBrokerProperties.put("zookeeper.connect",createHostAddress(expectedHostName,expectedPortNumberOne) + "," + createHostAddress(expectedHostNameTwo,expectedPortNumberTwo));
   accumuloSiteProperties.put("instance.zookeeper.host",createHostAddress(expectedHostName,expectedPortNumberOne) + "," + createHostAddress(expectedHostNameTwo,expectedPortNumberTwo));
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  configProcessor.doUpdateForBlueprintExport(Arrays.asList(mockHostGroupOne,mockHostGroupTwo));
+  Configuration clusterConfig=new Configuration(configProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> groupComponents=new HashSet<String>();
+  groupComponents.add("ZOOKEEPER_SERVER");
+  Collection<String> hosts=new ArrayList<String>();
+  hosts.add(expectedHostName);
+  hosts.add("serverTwo");
+  TestHostGroup group=new TestHostGroup(expectedHostGroupName,groupComponents,hosts);
+  Collection<String> groupComponents2=new HashSet<String>();
+  groupComponents2.add("ZOOKEEPER_SERVER");
+  Collection<String> hosts2=new ArrayList<String>();
+  hosts2.add(expectedHostNameTwo);
+  hosts2.add("serverFour");
+  TestHostGroup group2=new TestHostGroup(expectedHostGroupNameTwo,groupComponents2,hosts2);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group);
+  hostGroups.add(group2);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForBlueprintExport();
   assertEquals("zookeeper config not properly exported",createExportedHostName(expectedHostGroupName) + "," + createExportedHostName(expectedHostGroupNameTwo),coreSiteProperties.get("ha.zookeeper.quorum"));
   assertEquals("zookeeper config not properly exported",createExportedHostName(expectedHostGroupName) + "," + createExportedHostName(expectedHostGroupNameTwo),hbaseSiteProperties.get("hbase.zookeeper.quorum"));
   assertEquals("zookeeper config not properly exported",createExportedHostName(expectedHostGroupName) + "," + createExportedHostName(expectedHostGroupNameTwo),webHCatSiteProperties.get("templeton.zookeeper.hosts"));
@@ -44,5 +53,4 @@
   assertEquals("slider-client zookeeper config not properly exported",createExportedHostName(expectedHostGroupName,expectedPortNumberOne) + "," + createExportedHostName(expectedHostGroupNameTwo,expectedPortNumberTwo),sliderClientProperties.get("slider.zookeeper.quorum"));
   assertEquals("kafka zookeeper config not properly exported",createExportedHostName(expectedHostGroupName,expectedPortNumberOne) + "," + createExportedHostName(expectedHostGroupNameTwo,expectedPortNumberTwo),kafkaBrokerProperties.get("zookeeper.connect"));
   assertEquals("accumulo-site zookeeper config not properly exported",createExportedHostName(expectedHostGroupName,expectedPortNumberOne) + "," + createExportedHostName(expectedHostGroupNameTwo,expectedPortNumberTwo),accumuloSiteProperties.get("instance.zookeeper.host"));
-  mockSupport.verifyAll();
 }

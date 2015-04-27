@@ -1,0 +1,38 @@
+{
+  Map<String,Map<String,Collection<String>>> missingProperties=new HashMap<String,Map<String,Collection<String>>>();
+  for (  Map.Entry<String,HostGroupInfo> groupEntry : topology.getHostGroupInfo().entrySet()) {
+    String hostGroupName=groupEntry.getKey();
+    Map<String,Map<String,String>> groupProperties=groupEntry.getValue().getConfiguration().getFullProperties(3);
+    Collection<String> processedServices=new HashSet<String>();
+    Blueprint blueprint=topology.getBlueprint();
+    Stack stack=blueprint.getStack();
+    HostGroup hostGroup=blueprint.getHostGroup(hostGroupName);
+    for (    String component : hostGroup.getComponents()) {
+      if (component.equals("AMBARI_SERVER")) {
+        continue;
+      }
+      String serviceName=stack.getServiceForComponent(component);
+      if (processedServices.add(serviceName)) {
+        Collection<Stack.ConfigProperty> requiredProperties=stack.getRequiredConfigurationProperties(serviceName,"PASSWORD");
+        for (        Stack.ConfigProperty property : requiredProperties) {
+          String category=property.getType();
+          String name=property.getName();
+          if (!propertyExists(topology,groupProperties,category,name)) {
+            Map<String,Collection<String>> missingHostGroupPropsMap=missingProperties.get(hostGroupName);
+            if (missingHostGroupPropsMap == null) {
+              missingHostGroupPropsMap=new HashMap<String,Collection<String>>();
+              missingProperties.put(hostGroupName,missingHostGroupPropsMap);
+            }
+            Collection<String> missingHostGroupTypeProps=missingHostGroupPropsMap.get(category);
+            if (missingHostGroupTypeProps == null) {
+              missingHostGroupTypeProps=new HashSet<String>();
+              missingHostGroupPropsMap.put(category,missingHostGroupTypeProps);
+            }
+            missingHostGroupTypeProps.add(name);
+          }
+        }
+      }
+    }
+  }
+  return missingProperties;
+}

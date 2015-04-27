@@ -1,0 +1,30 @@
+{
+  try {
+    topology.addHostToTopology(response.getHostGroupName(),host.getHostName());
+  }
+ catch (  InvalidTopologyException e) {
+    throw new RuntimeException(e);
+  }
+catch (  NoSuchHostGroupException e) {
+    throw new RuntimeException(e);
+  }
+  List<TopologyTask> tasks=response.getTasks();
+synchronized (configurationFlagLock) {
+    if (configureComplete) {
+      for (      TopologyTask task : tasks) {
+        task.run();
+      }
+    }
+ else {
+      for (      TopologyTask task : tasks) {
+        TopologyTask.Type taskType=task.getType();
+        if (taskType == TopologyTask.Type.RESOURCE_CREATION || taskType == TopologyTask.Type.CONFIGURE) {
+          task.run();
+        }
+ else {
+          pendingTasks.get(taskType).add(task);
+        }
+      }
+    }
+  }
+}

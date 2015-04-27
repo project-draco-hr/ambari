@@ -1,0 +1,38 @@
+{
+  Configuration clusterConfig=clusterTopology.getConfiguration();
+  Map<String,Map<String,String>> clusterProps=clusterConfig.getFullProperties();
+  Map<String,HostGroupInfo> groupInfoMap=clusterTopology.getHostGroupInfo();
+  for (  Map<String,Map<String,PropertyUpdater>> updaterMap : createCollectionOfUpdaters()) {
+    for (    Map.Entry<String,Map<String,PropertyUpdater>> entry : updaterMap.entrySet()) {
+      String type=entry.getKey();
+      for (      Map.Entry<String,PropertyUpdater> updaterEntry : entry.getValue().entrySet()) {
+        String propertyName=updaterEntry.getKey();
+        PropertyUpdater updater=updaterEntry.getValue();
+        Map<String,String> typeMap=clusterProps.get(type);
+        if (typeMap != null && typeMap.containsKey(propertyName)) {
+          clusterConfig.setProperty(type,propertyName,updater.updateForClusterCreate(propertyName,typeMap.get(propertyName),clusterProps,clusterTopology));
+        }
+        for (        HostGroupInfo groupInfo : groupInfoMap.values()) {
+          Configuration hgConfig=groupInfo.getConfiguration();
+          Map<String,Map<String,String>> hgConfigProps=hgConfig.getProperties();
+          Map<String,String> hgTypeMap=hgConfigProps.get(type);
+          if (hgTypeMap != null && hgTypeMap.containsKey(propertyName)) {
+            hgConfig.setProperty(type,propertyName,updater.updateForClusterCreate(propertyName,hgTypeMap.get(propertyName),hgConfigProps,clusterTopology));
+          }
+        }
+      }
+    }
+  }
+  if (clusterTopology.isNameNodeHAEnabled()) {
+    if (!isNameNodeHAInitialActiveNodeSet(clusterProps) && !isNameNodeHAInitialStandbyNodeSet(clusterProps)) {
+      Collection<String> nnHosts=clusterTopology.getHostAssignmentsForComponent("NAMENODE");
+      if (nnHosts.size() != 2) {
+        throw new ConfigurationTopologyException("NAMENODE HA requires exactly 2 hosts running NAMENODE but there are: " + nnHosts.size() + " Hosts: "+ nnHosts);
+      }
+      Iterator<String> nnHostIterator=nnHosts.iterator();
+      clusterConfig.setProperty("hadoop-env","dfs_ha_initial_namenode_active",nnHostIterator.next());
+      clusterConfig.setProperty("hadoop-env","dfs_ha_initial_namenode_standby",nnHostIterator.next());
+    }
+  }
+  setMissingConfigurations(clusterProps);
+}

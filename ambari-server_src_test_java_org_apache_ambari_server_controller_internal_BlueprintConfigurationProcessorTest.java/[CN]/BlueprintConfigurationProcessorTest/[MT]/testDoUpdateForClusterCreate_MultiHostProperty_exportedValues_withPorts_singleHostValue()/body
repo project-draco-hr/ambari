@@ -3,14 +3,16 @@
   Map<String,String> yarnSiteConfig=new HashMap<String,String>();
   yarnSiteConfig.put("hadoop.registry.zk.quorum","%HOSTGROUP::host_group_1%:2181");
   properties.put("yarn-site",yarnSiteConfig);
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
   Collection<String> hgComponents=new HashSet<String>();
   hgComponents.add("NAMENODE");
   hgComponents.add("SECONDARY_NAMENODE");
   hgComponents.add("ZOOKEEPER_SERVER");
-  HostGroup group1=new TestHostGroup("host_group_1",Collections.singleton("testhost"),hgComponents);
-  Map<String,HostGroup> hostGroups=new HashMap<String,HostGroup>();
-  hostGroups.put(group1.getName(),group1);
-  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(properties);
-  Map<String,Map<String,String>> updatedProperties=updater.doUpdateForClusterCreate(hostGroups,null);
-  assertEquals("Multi-host property with single host value was not correctly updated for cluster create.","testhost:2181",updatedProperties.get("yarn-site").get("hadoop.registry.zk.quorum"));
+  TestHostGroup group1=new TestHostGroup("host_group_1",hgComponents,Collections.singleton("testhost"));
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
+  assertEquals("Multi-host property with single host value was not correctly updated for cluster create.","testhost:2181",topology.getConfiguration().getFullProperties().get("yarn-site").get("hadoop.registry.zk.quorum"));
 }

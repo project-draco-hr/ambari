@@ -1,20 +1,22 @@
 {
   final String expectedHostGroupName="host_group_1";
   final String expectedPropertyValue="hive.metastore.local=false,hive.metastore.uris=thrift://headnode0.ivantestcluster2-ssh.d1.internal.cloudapp.net:9083,hive.user.install.directory=/user";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  HostGroup mockHostGroupTwo=mockSupport.createMock(HostGroup.class);
-  Stack mockStack=mockSupport.createMock(Stack.class);
-  mockSupport.replayAll();
   Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
   Map<String,String> webHCatSiteProperties=new HashMap<String,String>();
   configProperties.put("webhcat-site",webHCatSiteProperties);
   webHCatSiteProperties.put("templeton.hive.properties",expectedPropertyValue);
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  Map<String,HostGroup> mapOfHostGroups=new HashMap<String,HostGroup>();
-  mapOfHostGroups.put(expectedHostGroupName,mockHostGroupOne);
-  mapOfHostGroups.put("host_group_2",mockHostGroupTwo);
-  configProcessor.doUpdateForClusterCreate(mapOfHostGroups,mockStack);
+  Configuration clusterConfig=new Configuration(configProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> hgComponents=new HashSet<String>();
+  hgComponents.add("NAMENODE");
+  TestHostGroup group1=new TestHostGroup(expectedHostGroupName,hgComponents,Collections.singleton("some-host"));
+  Collection<String> hgComponents2=new HashSet<String>();
+  hgComponents2.add("DATANODE");
+  TestHostGroup group2=new TestHostGroup("host_group_2",hgComponents2,Collections.singleton("some-host2"));
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  hostGroups.add(group2);
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
   assertEquals("Unexpected config update for templeton.hive.properties",expectedPropertyValue,webHCatSiteProperties.get("templeton.hive.properties"));
-  mockSupport.verifyAll();
 }

@@ -1,0 +1,23 @@
+{
+  Request request=createMock(Request.class);
+  Set<Map<String,Object>> setProperties=getBlueprintTestProperties();
+  expect(blueprintFactory.createBlueprint(setProperties.iterator().next())).andReturn(blueprint).once();
+  blueprint.validateRequiredProperties();
+  expect(blueprint.getName()).andReturn(BLUEPRINT_NAME).atLeastOnce();
+  blueprint.validateTopology();
+  expectLastCall().andThrow(new InvalidTopologyException("test"));
+  expect(request.getProperties()).andReturn(setProperties);
+  expect(request.getRequestInfoProperties()).andReturn(Collections.<String,String>emptyMap());
+  expect(dao.findByName(BLUEPRINT_NAME)).andReturn(null);
+  replay(dao,entity,metaInfo,blueprintFactory,blueprint,request);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(Resource.Type.Blueprint,PropertyHelper.getPropertyIds(Resource.Type.Blueprint),PropertyHelper.getKeyPropertyIds(Resource.Type.Blueprint),createMock(AmbariManagementController.class));
+  AbstractResourceProviderTest.TestObserver observer=new AbstractResourceProviderTest.TestObserver();
+  ((ObservableResourceProvider)provider).addObserver(observer);
+  try {
+    provider.createResources(request);
+    fail("Expected exception due to topology validation error");
+  }
+ catch (  IllegalArgumentException e) {
+  }
+  verify(dao,entity,blueprintFactory,metaInfo,request);
+}

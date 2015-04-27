@@ -1,37 +1,26 @@
 {
   final String expectedHostName="localhost";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  AmbariManagementController mockMgmtController=mockSupport.createMock(AmbariManagementController.class);
-  expect(mockMgmtController.getStackServices(isA(Set.class))).andReturn(Collections.<StackServiceResponse>emptySet());
   Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
   Map<String,String> typeProps=new HashMap<String,String>();
   typeProps.put("yarn.timeline-service.address",expectedHostName);
   properties.put("yarn-site",typeProps);
-  Collection<String> hgComponents=new HashSet<String>();
-  hgComponents.add("NAMENODE");
-  hgComponents.add("SECONDARY_NAMENODE");
-  hgComponents.add("RESOURCEMANAGER");
-  HostGroup group1=new TestHostGroup("group1",Collections.singleton("testhost"),hgComponents);
-  Collection<String> hgComponents2=new HashSet<String>();
-  hgComponents2.add("DATANODE");
-  hgComponents2.add("HDFS_CLIENT");
-  HostGroup group2=new TestHostGroup("group2",Collections.singleton("testhost2"),hgComponents2);
-  Map<String,HostGroup> hostGroups=new HashMap<String,HostGroup>();
-  hostGroups.put(group1.getName(),group1);
-  hostGroups.put(group2.getName(),group2);
-  mockSupport.replayAll();
-  Stack testStackDefinition=new Stack("HDP","2.1",mockMgmtController){
-    @Override public Cardinality getCardinality(    String component){
-      if (component.equals("APP_TIMELINE_SERVER")) {
-        return new Cardinality("0-1");
-      }
-      return null;
-    }
-  }
-;
-  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(properties);
-  Map<String,Map<String,String>> updatedProperties=updater.doUpdateForClusterCreate(hostGroups,testStackDefinition);
-  String updatedVal=updatedProperties.get("yarn-site").get("yarn.timeline-service.address");
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> group1Components=new HashSet<String>();
+  group1Components.add("NAMENODE");
+  group1Components.add("SECONDARY_NAMENODE");
+  group1Components.add("RESOURCEMANAGER");
+  TestHostGroup group1=new TestHostGroup("group1",group1Components,Collections.singleton("testhost"));
+  Collection<String> group2Components=new HashSet<String>();
+  group2Components.add("DATANODE");
+  group2Components.add("HDFS_CLIENT");
+  TestHostGroup group2=new TestHostGroup("group2",group2Components,Collections.singleton("testhost2"));
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  hostGroups.add(group2);
+  expect(stack.getCardinality("APP_TIMELINE_SERVER")).andReturn(new Cardinality("0-1")).anyTimes();
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
+  String updatedVal=topology.getConfiguration().getFullProperties().get("yarn-site").get("yarn.timeline-service.address");
   assertEquals("Timeline Server config property should not have been updated",expectedHostName,updatedVal);
-  mockSupport.verifyAll();
 }

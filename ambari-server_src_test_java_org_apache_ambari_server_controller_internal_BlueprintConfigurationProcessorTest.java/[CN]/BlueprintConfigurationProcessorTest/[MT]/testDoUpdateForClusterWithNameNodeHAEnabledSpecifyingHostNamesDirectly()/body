@@ -6,17 +6,6 @@
   final String expectedNodeOne="nn1";
   final String expectedNodeTwo="nn2";
   final String expectedHostGroupName="host_group_1";
-  EasyMockSupport mockSupport=new EasyMockSupport();
-  HostGroup mockHostGroupOne=mockSupport.createMock(HostGroup.class);
-  HostGroup mockHostGroupTwo=mockSupport.createMock(HostGroup.class);
-  Stack mockStack=mockSupport.createMock(Stack.class);
-  expect(mockHostGroupOne.getHostInfo()).andReturn(Arrays.asList(expectedHostName)).atLeastOnce();
-  expect(mockHostGroupTwo.getHostInfo()).andReturn(Arrays.asList(expectedHostNameTwo)).atLeastOnce();
-  expect(mockHostGroupOne.getComponents()).andReturn(Collections.singleton("NAMENODE")).atLeastOnce();
-  expect(mockHostGroupTwo.getComponents()).andReturn(Collections.singleton("NAMENODE")).atLeastOnce();
-  expect(mockStack.getCardinality("NAMENODE")).andReturn(new Cardinality("1-2")).atLeastOnce();
-  expect(mockStack.getCardinality("SECONDARY_NAMENODE")).andReturn(new Cardinality("1")).atLeastOnce();
-  mockSupport.replayAll();
   Map<String,Map<String,String>> configProperties=new HashMap<String,Map<String,String>>();
   Map<String,String> hdfsSiteProperties=new HashMap<String,String>();
   Map<String,String> hbaseSiteProperties=new HashMap<String,String>();
@@ -41,21 +30,38 @@
   coreSiteProperties.put("fs.defaultFS","hdfs://" + expectedNameService);
   hbaseSiteProperties.put("hbase.rootdir","hdfs://" + expectedNameService + "/hbase/test/root/dir");
   accumuloSiteProperties.put("instance.volumes","hdfs://" + expectedNameService + "/accumulo/test/instance/volumes");
-  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(configProperties);
-  Map<String,HostGroup> mapOfHostGroups=new LinkedHashMap<String,HostGroup>();
-  mapOfHostGroups.put(expectedHostGroupName,mockHostGroupOne);
-  mapOfHostGroups.put("host-group-2",mockHostGroupTwo);
-  configProcessor.doUpdateForClusterCreate(mapOfHostGroups,mockStack);
+  Configuration clusterConfig=new Configuration(configProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> hgComponents=new HashSet<String>();
+  hgComponents.add("NAMENODE");
+  TestHostGroup group1=new TestHostGroup(expectedHostGroupName,hgComponents,Collections.singleton(expectedHostName));
+  Collection<String> hgComponents2=new HashSet<String>();
+  hgComponents2.add("NAMENODE");
+  TestHostGroup group2=new TestHostGroup("host-group-2",hgComponents2,Collections.singleton(expectedHostNameTwo));
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  hostGroups.add(group2);
+  expect(stack.getCardinality("NAMENODE")).andReturn(new Cardinality("1-2")).anyTimes();
+  expect(stack.getCardinality("SECONDARY_NAMENODE")).andReturn(new Cardinality("1")).anyTimes();
+  ClusterTopology topology=createClusterTopology("c1",bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
   assertEquals("HTTPS address HA property not properly exported",expectedHostName + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.https-address." + expectedNameService + "."+ expectedNodeOne));
   assertEquals("HTTPS address HA property not properly exported",expectedHostNameTwo + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.https-address." + expectedNameService + "."+ expectedNodeTwo));
   assertEquals("HTTPS address HA property not properly exported",expectedHostName + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.http-address." + expectedNameService + "."+ expectedNodeOne));
   assertEquals("HTTPS address HA property not properly exported",expectedHostNameTwo + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.http-address." + expectedNameService + "."+ expectedNodeTwo));
   assertEquals("HTTPS address HA property not properly exported",expectedHostName + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.rpc-address." + expectedNameService + "."+ expectedNodeOne));
   assertEquals("HTTPS address HA property not properly exported",expectedHostNameTwo + ":" + expectedPortNum,hdfsSiteProperties.get("dfs.namenode.rpc-address." + expectedNameService + "."+ expectedNodeTwo));
-  assertEquals("Active Namenode hostname was not set correctly",expectedHostName,hadoopEnvProperties.get("dfs_ha_initial_namenode_active"));
-  assertEquals("Standby Namenode hostname was not set correctly",expectedHostNameTwo,hadoopEnvProperties.get("dfs_ha_initial_namenode_standby"));
+  String activeHost=hadoopEnvProperties.get("dfs_ha_initial_namenode_active");
+  if (activeHost.equals(expectedHostName)) {
+    assertEquals("Standby Namenode hostname was not set correctly",expectedHostNameTwo,hadoopEnvProperties.get("dfs_ha_initial_namenode_standby"));
+  }
+ else   if (activeHost.equals(expectedHostNameTwo)) {
+    assertEquals("Standby Namenode hostname was not set correctly",expectedHostName,hadoopEnvProperties.get("dfs_ha_initial_namenode_standby"));
+  }
+ else {
+    fail("Active Namenode hostname was not set correctly: " + activeHost);
+  }
   assertEquals("fs.defaultFS should not be modified by cluster update when NameNode HA is enabled.","hdfs://" + expectedNameService,coreSiteProperties.get("fs.defaultFS"));
   assertEquals("hbase.rootdir should not be modified by cluster update when NameNode HA is enabled.","hdfs://" + expectedNameService + "/hbase/test/root/dir",hbaseSiteProperties.get("hbase.rootdir"));
   assertEquals("instance.volumes should not be modified by cluster update when NameNode HA is enabled.","hdfs://" + expectedNameService + "/accumulo/test/instance/volumes",accumuloSiteProperties.get("instance.volumes"));
-  mockSupport.verifyAll();
 }

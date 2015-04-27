@@ -1,0 +1,26 @@
+{
+  Map<String,Map<String,String>> configProperties=blueprint.getConfiguration().getProperties();
+  Collection<String> cardinalityFailures=new HashSet<String>();
+  if (ClusterTopologyImpl.isNameNodeHAEnabled(configProperties) && (component.equals("SECONDARY_NAMENODE"))) {
+    cardinality=new Cardinality("0");
+  }
+  int actualCount=blueprint.getHostGroupsForComponent(component).size();
+  if (!cardinality.isValidCount(actualCount)) {
+    boolean validated=!isDependencyManaged(stack,component,configProperties);
+    if (!validated && autoDeploy != null && autoDeploy.isEnabled() && cardinality.supportsAutoDeploy()) {
+      String coLocateName=autoDeploy.getCoLocate();
+      if (coLocateName != null && !coLocateName.isEmpty()) {
+        Collection<HostGroup> coLocateHostGroups=blueprint.getHostGroupsForComponent(coLocateName.split("/")[1]);
+        if (!coLocateHostGroups.isEmpty()) {
+          validated=true;
+          HostGroup group=coLocateHostGroups.iterator().next();
+          group.addComponent(component);
+        }
+      }
+    }
+    if (!validated) {
+      cardinalityFailures.add(component + "(actual=" + actualCount+ ", required="+ cardinality.getValue()+ ")");
+    }
+  }
+  return cardinalityFailures;
+}

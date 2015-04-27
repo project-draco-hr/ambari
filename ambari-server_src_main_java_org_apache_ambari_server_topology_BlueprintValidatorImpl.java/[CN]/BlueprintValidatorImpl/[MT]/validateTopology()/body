@@ -1,0 +1,27 @@
+{
+  Collection<HostGroup> hostGroups=blueprint.getHostGroups().values();
+  Map<String,Map<String,Collection<DependencyInfo>>> missingDependencies=new HashMap<String,Map<String,Collection<DependencyInfo>>>();
+  Collection<String> services=blueprint.getServices();
+  for (  HostGroup group : hostGroups) {
+    Map<String,Collection<DependencyInfo>> missingGroupDependencies=validateHostGroup(group);
+    if (!missingGroupDependencies.isEmpty()) {
+      missingDependencies.put(group.getName(),missingGroupDependencies);
+    }
+  }
+  Collection<String> cardinalityFailures=new HashSet<String>();
+  for (  String service : services) {
+    for (    String component : stack.getComponents(service)) {
+      Cardinality cardinality=stack.getCardinality(component);
+      AutoDeployInfo autoDeploy=stack.getAutoDeployInfo(component);
+      if (cardinality.isAll()) {
+        cardinalityFailures.addAll(verifyComponentInAllHostGroups(component,autoDeploy));
+      }
+ else {
+        cardinalityFailures.addAll(verifyComponentCardinalityCount(component,cardinality,autoDeploy));
+      }
+    }
+  }
+  if (!missingDependencies.isEmpty() || !cardinalityFailures.isEmpty()) {
+    generateInvalidTopologyException(missingDependencies,cardinalityFailures);
+  }
+}

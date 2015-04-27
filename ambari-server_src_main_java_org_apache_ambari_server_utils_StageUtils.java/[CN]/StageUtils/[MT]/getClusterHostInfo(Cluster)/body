@@ -1,0 +1,98 @@
+{
+  Set<String> hostsSet=new LinkedHashSet<String>();
+  List<Integer> portsList=new ArrayList<Integer>();
+  List<String> rackList=new ArrayList<String>();
+  List<String> ipV4List=new ArrayList<String>();
+  Collection<Host> allHosts=cluster.getHosts();
+  for (  Host host : allHosts) {
+    hostsSet.add(host.getHostName());
+    Integer currentPingPort=host.getCurrentPingPort();
+    portsList.add(currentPingPort == null ? DEFAULT_PING_PORT : currentPingPort);
+    String rackInfo=host.getRackInfo();
+    rackList.add(rackInfo == null ? DEFAULT_RACK : rackInfo);
+    String iPv4=host.getIPv4();
+    ipV4List.add(iPv4 == null ? DEFAULT_IPV4_ADDRESS : iPv4);
+  }
+  Map<String,Collection<String>> pendingHostComponents=topologyManager.getProjectedTopology();
+  for (  String hostname : pendingHostComponents.keySet()) {
+    if (!hostsSet.contains(hostname)) {
+      hostsSet.add(hostname);
+      portsList.add(DEFAULT_PING_PORT);
+    }
+  }
+  List<String> hostsList=new ArrayList<String>(hostsSet);
+  Map<String,SortedSet<Integer>> hostRolesInfo=new HashMap<String,SortedSet<Integer>>();
+  for (  Map.Entry<String,Service> serviceEntry : cluster.getServices().entrySet()) {
+    Service service=serviceEntry.getValue();
+    for (    Map.Entry<String,ServiceComponent> serviceComponentEntry : service.getServiceComponents().entrySet()) {
+      ServiceComponent serviceComponent=serviceComponentEntry.getValue();
+      String componentName=serviceComponent.getName();
+      String roleName=componentToClusterInfoKeyMap.get(componentName);
+      if (null == roleName && !serviceComponent.isClientComponent()) {
+        roleName=componentName.toLowerCase() + "_hosts";
+      }
+      String decomRoleName=decommissionedToClusterInfoKeyMap.get(componentName);
+      if (roleName == null && decomRoleName == null) {
+        continue;
+      }
+      for (      String hostName : serviceComponent.getServiceComponentHosts().keySet()) {
+        if (roleName != null) {
+          SortedSet<Integer> hostsForComponentsHost=hostRolesInfo.get(roleName);
+          if (hostsForComponentsHost == null) {
+            hostsForComponentsHost=new TreeSet<Integer>();
+            hostRolesInfo.put(roleName,hostsForComponentsHost);
+          }
+          int hostIndex=hostsList.indexOf(hostName);
+          hostsForComponentsHost.add(hostIndex);
+        }
+        if (decomRoleName != null) {
+          ServiceComponentHost scHost=serviceComponent.getServiceComponentHost(hostName);
+          if (scHost.getComponentAdminState() == HostComponentAdminState.DECOMMISSIONED) {
+            SortedSet<Integer> hostsForComponentsHost=hostRolesInfo.get(decomRoleName);
+            if (hostsForComponentsHost == null) {
+              hostsForComponentsHost=new TreeSet<Integer>();
+              hostRolesInfo.put(decomRoleName,hostsForComponentsHost);
+            }
+            int hostIndex=hostsList.indexOf(hostName);
+            hostsForComponentsHost.add(hostIndex);
+          }
+        }
+      }
+    }
+  }
+  for (  Map.Entry<String,Collection<String>> entry : pendingHostComponents.entrySet()) {
+    String hostname=entry.getKey();
+    Collection<String> hostComponents=entry.getValue();
+    for (    String hostComponent : hostComponents) {
+      String roleName=componentToClusterInfoKeyMap.get(hostComponent);
+      SortedSet<Integer> hostsForComponentsHost=hostRolesInfo.get(roleName);
+      if (hostsForComponentsHost == null) {
+        hostsForComponentsHost=new TreeSet<Integer>();
+        hostRolesInfo.put(roleName,hostsForComponentsHost);
+      }
+      int hostIndex=hostsList.indexOf(hostname);
+      if (hostIndex != -1) {
+        if (!hostsForComponentsHost.contains(hostIndex)) {
+          hostsForComponentsHost.add(hostIndex);
+        }
+      }
+ else {
+        throw new RuntimeException("Unable to get host index for host: " + hostname);
+      }
+    }
+  }
+  Map<String,Set<String>> clusterHostInfo=new HashMap<String,Set<String>>();
+  for (  Map.Entry<String,SortedSet<Integer>> entry : hostRolesInfo.entrySet()) {
+    TreeSet<Integer> sortedSet=new TreeSet<Integer>(entry.getValue());
+    Set<String> replacedRangesSet=replaceRanges(sortedSet);
+    clusterHostInfo.put(entry.getKey(),replacedRangesSet);
+  }
+  clusterHostInfo.put(HOSTS_LIST,hostsSet);
+  clusterHostInfo.put(PORTS,replaceMappedRanges(portsList));
+  clusterHostInfo.put(IPV4_ADDRESSES,replaceMappedRanges(ipV4List));
+  clusterHostInfo.put(RACKS,replaceMappedRanges(rackList));
+  TreeSet<String> serverHost=new TreeSet<String>();
+  serverHost.add(getHostName());
+  clusterHostInfo.put(AMBARI_SERVER_HOST,serverHost);
+  return clusterHostInfo;
+}

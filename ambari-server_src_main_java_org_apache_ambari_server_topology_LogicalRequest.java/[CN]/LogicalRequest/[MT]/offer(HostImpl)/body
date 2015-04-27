@@ -1,0 +1,29 @@
+{
+synchronized (requestsWithReservedHosts) {
+    HostRequest hostRequest=requestsWithReservedHosts.remove(host.getHostName());
+    if (hostRequest != null) {
+      HostOfferResponse response=hostRequest.offer(host);
+      if (response.getAnswer() != HostOfferResponse.Answer.ACCEPTED) {
+        throw new RuntimeException("LogicalRequest declined host offer of explicitly requested host: " + host.getHostName());
+      }
+      return response;
+    }
+  }
+  boolean predicateRejected=false;
+synchronized (outstandingHostRequests) {
+    Iterator<HostRequest> hostRequestIterator=outstandingHostRequests.iterator();
+    while (hostRequestIterator.hasNext()) {
+      HostOfferResponse response=hostRequestIterator.next().offer(host);
+switch (response.getAnswer()) {
+case ACCEPTED:
+        hostRequestIterator.remove();
+      return response;
+case DECLINED_DONE:
+    hostRequestIterator.remove();
+case DECLINED_PREDICATE:
+  predicateRejected=true;
+}
+}
+}
+return predicateRejected || !requestsWithReservedHosts.isEmpty() ? new HostOfferResponse(HostOfferResponse.Answer.DECLINED_PREDICATE) : new HostOfferResponse(HostOfferResponse.Answer.DECLINED_DONE);
+}
