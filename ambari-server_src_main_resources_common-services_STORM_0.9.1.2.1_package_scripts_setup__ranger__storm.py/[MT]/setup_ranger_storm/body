@@ -1,50 +1,6 @@
 def setup_ranger_storm():
     import params
     if (params.has_ranger_admin and params.security_enabled):
-        File(params.downloaded_custom_connector, content=DownloadSource(params.driver_curl_source))
-        if (not os.path.isfile(params.driver_curl_target)):
-            Execute(('cp', '--remove-destination', params.downloaded_custom_connector, params.driver_curl_target), path=['/bin', '/usr/bin/'], sudo=True)
-        try:
-            command = 'hdp-select status storm-nimbus'
-            (return_code, hdp_output) = shell.call(command)
-        except Exception as e:
-            Logger.error(str(e))
-            raise Fail('Unable to execute hdp-select command to retrieve the version.')
-        if (return_code != 0):
-            raise Fail('Unable to determine the current version because of a non-zero return code of {0}'.format(str(return_code)))
-        hdp_version = re.sub('storm-nimbus - ', '', hdp_output).strip()
-        match = re.match('[0-9]+.[0-9]+.[0-9]+.[0-9]+-[0-9]+', hdp_version)
-        if (match is None):
-            raise Fail('Failed to get extracted version')
-        file_path = (('/usr/hdp/' + hdp_version) + '/ranger-storm-plugin/install.properties')
-        if (not os.path.isfile(file_path)):
-            raise Fail('Ranger Storm plugin install.properties file does not exist at {0}'.format(file_path))
-        ranger_storm_dict = ranger_storm_properties()
-        storm_repo_data = storm_repo_properties()
-        write_properties_to_file(file_path, ranger_storm_dict)
-        if params.enable_ranger_storm:
-            cmd = format('cd /usr/hdp/{hdp_version}/ranger-storm-plugin/ && sh enable-storm-plugin.sh')
-            ranger_adm_obj = Rangeradmin(url=ranger_storm_dict['POLICY_MGR_URL'])
-            (response_code, response_recieved) = ranger_adm_obj.check_ranger_login_urllib2((ranger_storm_dict['POLICY_MGR_URL'] + '/login.jsp'), 'test:test')
-            if ((response_code is not None) and (response_code == 200)):
-                (ambari_ranger_admin, ambari_ranger_password) = ranger_adm_obj.create_ambari_admin_user(params.ambari_ranger_admin, params.ambari_ranger_password, params.admin_uname_password)
-                ambari_username_password_for_ranger = ((ambari_ranger_admin + ':') + ambari_ranger_password)
-                if ((ambari_ranger_admin != '') and (ambari_ranger_password != '')):
-                    repo = ranger_adm_obj.get_repository_by_name_urllib2(ranger_storm_dict['REPOSITORY_NAME'], 'storm', 'true', ambari_username_password_for_ranger)
-                    if (repo and (repo['name'] == ranger_storm_dict['REPOSITORY_NAME'])):
-                        Logger.info('STORM Repository exist')
-                    else:
-                        response = ranger_adm_obj.create_repository_urllib2(storm_repo_data, ambari_username_password_for_ranger, params.policy_user)
-                        if (response is not None):
-                            Logger.info('STORM Repository created in Ranger Admin')
-                        else:
-                            Logger.info('STORM Repository creation failed in Ranger Admin')
-                else:
-                    Logger.info('Ambari admin username and password are blank ')
-            else:
-                Logger.info('Ranger service is not started on given host')
-        else:
-            cmd = format('cd /usr/hdp/{hdp_version}/ranger-storm-plugin/ && sh disable-storm-plugin.sh')
-        Execute(cmd, environment={'JAVA_HOME': params.java64_home, }, logoutput=True)
+        setup_ranger_plugin('storm-nimbus', 'storm', params.downloaded_custom_connector, params.driver_curl_source, params.driver_curl_target, params.java64_home, params.repo_name, params.storm_ranger_plugin_repo, params.ranger_env, params.ranger_plugin_properties, params.policy_user, params.policymgr_mgr_url, params.enable_ranger_storm)
     else:
-        Logger.info('Ranger admin not installed or security is not enabled')
+        Logger.info('Ranger admin not installed')
