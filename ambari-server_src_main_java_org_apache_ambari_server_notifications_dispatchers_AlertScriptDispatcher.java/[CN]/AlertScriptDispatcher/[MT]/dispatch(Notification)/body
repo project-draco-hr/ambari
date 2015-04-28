@@ -1,0 +1,24 @@
+{
+  String scriptKey=getScriptConfigurationKey(notification);
+  String script=m_configuration.getProperty(scriptKey);
+  if (null == script) {
+    LOG.warn("Unable to dispatch notification because the {} configuration property was not found",scriptKey);
+    if (null != notification.Callback) {
+      notification.Callback.onFailure(notification.CallbackIds);
+    }
+    return;
+  }
+  if (notification.getType() != Notification.Type.ALERT) {
+    LOG.warn("The {} dispatcher is not able to dispatch notifications of type {}",getType(),notification.getType());
+    if (null != notification.Callback) {
+      notification.Callback.onFailure(notification.CallbackIds);
+    }
+    return;
+  }
+  long timeout=getScriptConfigurationTimeout();
+  TimeUnit timeUnit=TimeUnit.MILLISECONDS;
+  AlertNotification alertNotification=(AlertNotification)notification;
+  ProcessBuilder processBuilder=getProcessBuilder(script,alertNotification);
+  AlertScriptRunnable runnable=new AlertScriptRunnable(alertNotification,script,processBuilder,timeout,timeUnit);
+  m_executor.execute(runnable);
+}

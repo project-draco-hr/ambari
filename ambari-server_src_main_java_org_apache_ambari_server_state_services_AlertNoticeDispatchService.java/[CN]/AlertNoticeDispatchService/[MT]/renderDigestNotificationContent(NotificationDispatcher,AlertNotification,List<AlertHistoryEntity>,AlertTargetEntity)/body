@@ -1,0 +1,34 @@
+{
+  String targetType=target.getNotificationType();
+  AmbariInfo ambari=new AmbariInfo(m_metaInfo.get());
+  AlertSummaryInfo summary=new AlertSummaryInfo(histories);
+  DispatchInfo dispatch=new DispatchInfo(target);
+  final Writer subjectWriter=new StringWriter();
+  final Writer bodyWriter=new StringWriter();
+  final AlertTemplate template=m_alertTemplates.getTemplate(targetType);
+  if (dispatcher.isNotificationContentGenerationRequired()) {
+    if (null != template) {
+      VelocityContext velocityContext=new VelocityContext();
+      velocityContext.put(VELOCITY_AMBARI_KEY,ambari);
+      velocityContext.put(VELOCITY_SUMMARY_KEY,summary);
+      velocityContext.put(VELOCITY_DISPATCH_KEY,dispatch);
+      String subjectTemplate=template.getSubject();
+      String bodyTemplate=template.getBody();
+      Velocity.evaluate(velocityContext,subjectWriter,VELOCITY_LOG_TAG,subjectTemplate);
+      Velocity.evaluate(velocityContext,bodyWriter,VELOCITY_LOG_TAG,bodyTemplate);
+    }
+ else {
+      for (      AlertHistoryEntity alert : histories) {
+        subjectWriter.write("Apache Ambari Alert Summary");
+        bodyWriter.write(alert.getAlertState().name());
+        bodyWriter.write(" ");
+        bodyWriter.write(alert.getAlertDefinition().getLabel());
+        bodyWriter.write(" ");
+        bodyWriter.write(alert.getAlertText());
+        bodyWriter.write("\n");
+      }
+    }
+  }
+  notification.Subject=subjectWriter.toString();
+  notification.Body=bodyWriter.toString();
+}
