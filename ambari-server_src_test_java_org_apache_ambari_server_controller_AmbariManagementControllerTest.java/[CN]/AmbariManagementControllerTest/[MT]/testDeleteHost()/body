@@ -13,12 +13,10 @@
   createServiceComponent(clusterName,serviceName,componentName3,State.INIT);
   String host1="h1";
   String host2="h2";
-  clusters.addHost(host2);
-  setOsFamily(clusters.getHost("h2"),"redhat","6.3");
-  clusters.getHost("h2").persist();
+  addHostToCluster(host1,clusterName);
+  addHostToCluster(host2,clusterName);
   String host3="h3";
-  addHost(host1,clusterName);
-  createServiceComponentHost(clusterName,null,componentName1,host1,null);
+  createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
   createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
   createServiceComponentHost(clusterName,serviceName,componentName3,host1,null);
   installService(clusterName,serviceName,false,false);
@@ -39,7 +37,7 @@
   requests.add(new HostRequest(host1,clusterName,null));
   try {
     HostResourceProviderTest.deleteHosts(controller,requests);
-    fail("Expect failure deleting hosts when components exist.");
+    fail("Expect failure deleting hosts when components exist and have not been deleted.");
   }
  catch (  Exception e) {
   }
@@ -57,29 +55,32 @@
   requests.add(new HostRequest(host1,null,null));
   try {
     HostResourceProviderTest.deleteHosts(controller,requests);
-    fail("Expect failure when removing from host when it is part of a cluster.");
   }
  catch (  Exception e) {
+    fail("Did not expect an error deleting the host from the cluster. Error: " + e.getMessage());
   }
-  requests.clear();
-  requests.add(new HostRequest(host1,clusterName,null));
-  HostResourceProviderTest.deleteHosts(controller,requests);
   Assert.assertFalse(clusters.getHostsForCluster(clusterName).containsKey(host1));
   Assert.assertFalse(clusters.getClustersForHost(host1).contains(cluster));
   requests.clear();
-  requests.add(new HostRequest(host1,null,null));
-  HostResourceProviderTest.deleteHosts(controller,requests);
+  requests.add(new HostRequest(host2,clusterName,null));
   try {
-    clusters.getHost(host1);
-    Assert.fail("Expected a HostNotFoundException.");
+    HostResourceProviderTest.deleteHosts(controller,requests);
+  }
+ catch (  Exception e) {
+    fail("Did not expect an error deleting the host from the cluster. Error: " + e.getMessage());
+  }
+  Assert.assertFalse(clusters.getHostsForCluster(clusterName).containsKey(host2));
+  Assert.assertFalse(clusters.getClustersForHost(host2).contains(cluster));
+  requests.clear();
+  requests.add(new HostRequest(host1,null,null));
+  try {
+    HostResourceProviderTest.deleteHosts(controller,requests);
+    Assert.fail("Expected a HostNotFoundException trying to remove a host that was already deleted.");
   }
  catch (  HostNotFoundException e) {
   }
-  requests.clear();
-  requests.add(new HostRequest(host2,null,null));
-  HostResourceProviderTest.deleteHosts(controller,requests);
   try {
-    clusters.getHost(host2);
+    clusters.getHost(host1);
     Assert.fail("Expected a HostNotFoundException.");
   }
  catch (  HostNotFoundException e) {

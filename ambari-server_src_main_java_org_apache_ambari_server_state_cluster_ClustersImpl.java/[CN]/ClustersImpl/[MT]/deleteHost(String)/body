@@ -1,7 +1,7 @@
 {
   checkLoaded();
   if (!hosts.containsKey(hostname)) {
-    return;
+    throw new HostNotFoundException("Could not find host " + hostname);
   }
   w.lock();
   try {
@@ -9,16 +9,19 @@
     if (entity == null) {
       return;
     }
-    deleteConfigGroupHostMapping(entity.getHostId());
-    Collection<HostVersionEntity> hostVersions=hosts.get(hostname).getAllHostVersions();
-    for (    HostVersionEntity hostVersion : hostVersions) {
-      hostVersionDAO.remove(hostVersion);
-    }
+    Set<Cluster> clusters=hostClusterMap.get(hostname);
+    this.unmapHostFromClusters(hostname,clusters);
     hostDAO.refresh(entity);
-    hostDAO.remove(entity);
+    hostVersionDAO.removeByHostName(hostname);
+    entity.setHostRoleCommandEntities(null);
+    hostRoleCommandDAO.removeByHostId(entity.getHostId());
+    entity.setHostStateEntity(null);
+    hostStateDAO.removeByHostId(entity.getHostId());
+    hostConfigMappingDAO.removeByHostId(entity.getHostId());
+    serviceConfigDAO.removeHostFromServiceConfigs(entity.getHostId());
     hosts.remove(hostname);
     hostsById.remove(entity.getHostId());
-    kerberosPrincipalHostDAO.removeByHost(entity.getHostId());
+    hostDAO.remove(entity);
     HostRemovedEvent event=new HostRemovedEvent(hostname);
     eventPublisher.publish(event);
   }

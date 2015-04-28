@@ -1,37 +1,25 @@
 {
   if (!cacheLoaded) {
-    gl.writeLock().lock();
-    try {
-      gl.writeLock().lock();
-      try {
-        if (hostConfigMappingByHost == null) {
-          hostConfigMappingByHost=new WeakHashMap<Long,Set<HostConfigMapping>>();
-          TypedQuery<HostConfigMappingEntity> query=entityManagerProvider.get().createQuery("SELECT entity FROM HostConfigMappingEntity entity",HostConfigMappingEntity.class);
-          List<HostConfigMappingEntity> hostConfigMappingEntities=daoUtils.selectList(query);
-          for (          HostConfigMappingEntity hostConfigMappingEntity : hostConfigMappingEntities) {
-            Long hostId=hostConfigMappingEntity.getHostId();
-            if (hostId == null) {
-              continue;
-            }
-            Set<HostConfigMapping> setByHost;
-            if (hostConfigMappingByHost.containsKey(hostId)) {
-              setByHost=hostConfigMappingByHost.get(hostId);
-            }
- else {
-              setByHost=new HashSet<HostConfigMapping>();
-              hostConfigMappingByHost.put(hostId,setByHost);
-            }
-            HostConfigMapping hostConfigMapping=buildHostConfigMapping(hostConfigMappingEntity);
-            setByHost.add(hostConfigMapping);
-          }
+    if (hostConfigMappingByHost == null) {
+      hostConfigMappingByHost=new ConcurrentHashMap<Long,Set<HostConfigMapping>>();
+      TypedQuery<HostConfigMappingEntity> query=entityManagerProvider.get().createNamedQuery("HostConfigMappingEntity.findAll",HostConfigMappingEntity.class);
+      List<HostConfigMappingEntity> hostConfigMappingEntities=daoUtils.selectList(query);
+      for (      HostConfigMappingEntity hostConfigMappingEntity : hostConfigMappingEntities) {
+        Long hostId=hostConfigMappingEntity.getHostId();
+        if (hostId == null) {
+          continue;
         }
+        Set<HostConfigMapping> setByHost;
+        if (hostConfigMappingByHost.containsKey(hostId)) {
+          setByHost=hostConfigMappingByHost.get(hostId);
+        }
+ else {
+          setByHost=new HashSet<HostConfigMapping>();
+          hostConfigMappingByHost.put(hostId,setByHost);
+        }
+        HostConfigMapping hostConfigMapping=buildHostConfigMapping(hostConfigMappingEntity);
+        setByHost.add(hostConfigMapping);
       }
-  finally {
-        gl.writeLock().unlock();
-      }
-    }
-  finally {
-      gl.writeLock().unlock();
     }
     cacheLoaded=true;
   }
