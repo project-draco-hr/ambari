@@ -1,0 +1,31 @@
+def recommendYARNConfigurations(self, configurations, clusterData, services, hosts):
+    super(HDPWIN22StackAdvisor, self).recommendYARNConfigurations(configurations, clusterData, services, hosts)
+    putYarnProperty = self.putProperty(configurations, 'yarn-site', services)
+    putYarnProperty('yarn.nodemanager.resource.cpu-vcores', clusterData['cpu'])
+    putYarnProperty('yarn.scheduler.minimum-allocation-vcores', 1)
+    putYarnProperty('yarn.scheduler.maximum-allocation-vcores', configurations['yarn-site']['properties']['yarn.nodemanager.resource.cpu-vcores'])
+    putYarnPropertyAttribute = self.putPropertyAttribute(configurations, 'yarn-site')
+    nodeManagerHost = self.getHostWithComponent('YARN', 'NODEMANAGER', services, hosts)
+    if (nodeManagerHost is not None):
+        putYarnProperty('yarn.nodemanager.resource.cpu-vcores', (nodeManagerHost['Hosts']['cpu_count'] * 2))
+        putYarnPropertyAttribute('yarn.nodemanager.resource.memory-mb', 'maximum', int((nodeManagerHost['Hosts']['total_mem'] / 1024)))
+        putYarnPropertyAttribute('yarn.nodemanager.resource.cpu-vcores', 'maximum', (nodeManagerHost['Hosts']['cpu_count'] * 4))
+        putYarnPropertyAttribute('yarn.scheduler.minimum-allocation-vcores', 'maximum', configurations['yarn-site']['properties']['yarn.nodemanager.resource.cpu-vcores'])
+        putYarnPropertyAttribute('yarn.scheduler.maximum-allocation-vcores', 'maximum', configurations['yarn-site']['properties']['yarn.nodemanager.resource.cpu-vcores'])
+        putYarnPropertyAttribute('yarn.scheduler.minimum-allocation-mb', 'maximum', configurations['yarn-site']['properties']['yarn.nodemanager.resource.memory-mb'])
+        putYarnPropertyAttribute('yarn.scheduler.maximum-allocation-mb', 'maximum', configurations['yarn-site']['properties']['yarn.nodemanager.resource.memory-mb'])
+        if (('yarn-env' in services['configurations']) and ('yarn_cgroups_enabled' in services['configurations']['yarn-env']['properties'])):
+            yarn_cgroups_enabled = (services['configurations']['yarn-env']['properties']['yarn_cgroups_enabled'].lower() == 'true')
+            if yarn_cgroups_enabled:
+                putYarnProperty('yarn.nodemanager.container-executor.class', 'org.apache.hadoop.yarn.server.nodemanager.LinuxContainerExecutor')
+                putYarnProperty('yarn.nodemanager.container-executor.group', 'hadoop')
+                putYarnProperty('yarn.nodemanager.container-executor.resources-handler.class', 'org.apache.hadoop.yarn.server.nodemanager.util.CgroupsLCEResourcesHandler')
+                putYarnProperty('yarn.nodemanager.container-executor.cgroups.hierarchy', ' /yarn')
+                putYarnProperty('yarn.nodemanager.container-executor.cgroups.mount', 'true')
+                putYarnProperty('yarn.nodemanager.linux-container-executor.cgroups.mount-path', '/cgroup')
+            else:
+                putYarnProperty('yarn.nodemanager.container-executor.class', 'org.apache.hadoop.yarn.server.nodemanager.DefaultContainerExecutor')
+                putYarnPropertyAttribute('yarn.nodemanager.container-executor.resources-handler.class', 'delete', 'true')
+                putYarnPropertyAttribute('yarn.nodemanager.container-executor.cgroups.hierarchy', 'delete', 'true')
+                putYarnPropertyAttribute('yarn.nodemanager.container-executor.cgroups.mount', 'delete', 'true')
+                putYarnPropertyAttribute('yarn.nodemanager.linux-container-executor.cgroups.mount-path', 'delete', 'true')

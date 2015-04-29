@@ -1,0 +1,62 @@
+def validateHDFSConfigurations(self, properties, recommendedDefaults, configurations, services, hosts):
+    hdfs_site = properties
+    core_site = getSiteProperties(configurations, 'core-site')
+    dfs_encrypt_data_transfer = 'dfs.encrypt.data.transfer'
+    try:
+        wire_encryption_enabled = (hdfs_site[dfs_encrypt_data_transfer] == 'true')
+    except KeyError:
+        wire_encryption_enabled = False
+    HTTP_ONLY = 'HTTP_ONLY'
+    HTTPS_ONLY = 'HTTPS_ONLY'
+    HTTP_AND_HTTPS = 'HTTP_AND_HTTPS'
+    VALID_HTTP_POLICY_VALUES = [HTTP_ONLY, HTTPS_ONLY, HTTP_AND_HTTPS]
+    VALID_TRANSFER_PROTECTION_VALUES = ['authentication', 'integrity', 'privacy']
+    validationItems = []
+    if ((not wire_encryption_enabled) and (core_site['hadoop.security.authentication'] == 'kerberos') and (core_site['hadoop.security.authorization'] == 'true')):
+        dfs_http_policy = 'dfs.http.policy'
+        dfs_datanode_address = 'dfs.datanode.address'
+        datanode_http_address = 'dfs.datanode.http.address'
+        datanode_https_address = 'dfs.datanode.https.address'
+        data_transfer_protection = 'dfs.data.transfer.protection'
+        try:
+            privileged_dfs_dn_port = (False, True)[(getPort(hdfs_site[dfs_datanode_address]) is not None)]
+        except KeyError:
+            privileged_dfs_dn_port = False
+        try:
+            privileged_dfs_http_port = (False, True)[(getPort(hdfs_site[datanode_http_address]) is not None)]
+        except KeyError:
+            privileged_dfs_http_port = False
+        try:
+            privileged_dfs_https_port = (False, True)[(getPort(hdfs_site[datanode_https_address]) is not None)]
+        except KeyError:
+            privileged_dfs_https_port = False
+        try:
+            dfs_http_policy_value = hdfs_site[dfs_http_policy]
+        except KeyError:
+            dfs_http_policy_value = HTTP_ONLY
+        try:
+            data_transfer_protection_value = hdfs_site[data_transfer_protection]
+        except KeyError:
+            data_transfer_protection_value = None
+        if (dfs_http_policy_value not in VALID_HTTP_POLICY_VALUES):
+            validationItems.append({'config-name': dfs_http_policy, 'item': self.getWarnItem('Invalid property value: {0}. Valid values are {1}'.format(dfs_http_policy_value, VALID_HTTP_POLICY_VALUES)), })
+        address_properties_with_warnings = []
+        if (dfs_http_policy_value == HTTPS_ONLY):
+            if ((not privileged_dfs_dn_port) and (privileged_dfs_https_port or (datanode_https_address not in hdfs_site))):
+                important_properties = [dfs_datanode_address, datanode_https_address]
+                message = "You set up datanode to use some non-secure ports. If you want to run Datanode under non-root user in a secure cluster, you should set all these properties {2} to use non-secure ports (if property {3} does not exist, just add it). You may also set up property {4} ('{5}' is a good default value). Also, set up WebHDFS with SSL as described in manual in order to be able to use HTTPS.".format(dfs_http_policy, dfs_http_policy_value, important_properties, datanode_https_address, data_transfer_protection, VALID_TRANSFER_PROTECTION_VALUES[0])
+                address_properties_with_warnings.extend(important_properties)
+        else:
+            any_nonprivileged_ports_are_in_use = ((not privileged_dfs_dn_port) or (not privileged_dfs_http_port))
+            if any_nonprivileged_ports_are_in_use:
+                important_properties = [dfs_datanode_address, datanode_http_address]
+                message = 'You have set up datanode to use some non-secure ports, but {0} is set to {1}. In a secure cluster, Datanode forbids using non-secure ports if {0} is not set to {3}. Please make sure that properties {2} use secure ports.'.format(dfs_http_policy, dfs_http_policy_value, important_properties, HTTPS_ONLY)
+                address_properties_with_warnings.extend(important_properties)
+        for prop in address_properties_with_warnings:
+            validationItems.append({'config-name': prop, 'item': self.getWarnItem(message), })
+        if (data_transfer_protection_value is not None):
+            if (dfs_http_policy_value in [HTTP_ONLY, HTTP_AND_HTTPS]):
+                validationItems.append({'config-name': data_transfer_protection, 'item': self.getWarnItem('{0} property can not be used when {1} is set to any value other then {2}. Tip: When {1} property is not defined, it defaults to {3}'.format(data_transfer_protection, dfs_http_policy, HTTPS_ONLY, HTTP_ONLY)), })
+            elif (not (data_transfer_protection_value in VALID_TRANSFER_PROTECTION_VALUES)):
+                validationItems.append({'config-name': data_transfer_protection, 'item': self.getWarnItem('Invalid property value: {0}. Valid values are {1}.'.format(data_transfer_protection_value, VALID_TRANSFER_PROTECTION_VALUES)), })
+    return self.toConfigurationValidationProblems(validationItems, 'hdfs-site')
