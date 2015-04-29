@@ -1,0 +1,64 @@
+{
+  if ((clusterName == null) || clusterName.isEmpty()) {
+    throw new IllegalArgumentException("Invalid argument, cluster name is required");
+  }
+  Cluster cluster=clusters.getCluster(clusterName);
+  if (cluster == null) {
+    throw new AmbariException(String.format("The cluster object for the cluster name %s is not available",clusterName));
+  }
+  Map<String,Collection<KerberosIdentityDescriptor>> activeIdentities=new HashMap<String,Collection<KerberosIdentityDescriptor>>();
+  if (isClusterKerberosEnabled(cluster)) {
+    Collection<String> hosts;
+    if (hostName == null) {
+      Map<String,Host> hostMap=clusters.getHostsForCluster(clusterName);
+      if (hostMap == null) {
+        hosts=null;
+      }
+ else {
+        hosts=hostMap.keySet();
+      }
+    }
+ else {
+      hosts=Collections.singleton(hostName);
+    }
+    if ((hosts != null) && !hosts.isEmpty()) {
+      KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
+      if (kerberosDescriptor != null) {
+        Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
+        for (        String hostname : hosts) {
+          Map<String,KerberosIdentityDescriptor> hostActiveIdentities=new HashMap<String,KerberosIdentityDescriptor>();
+          List<KerberosIdentityDescriptor> identities=getActiveIdentities(cluster,hostname,serviceName,componentName,kerberosDescriptor);
+          if (!identities.isEmpty()) {
+            Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,hostname,kerberosDescriptorProperties);
+            for (            KerberosIdentityDescriptor identity : identities) {
+              KerberosPrincipalDescriptor principalDescriptor=identity.getPrincipalDescriptor();
+              String principal=null;
+              if (principalDescriptor != null) {
+                principal=KerberosDescriptor.replaceVariables(principalDescriptor.getValue(),configurations);
+              }
+              if (principal != null) {
+                if (replaceHostNames) {
+                  principal=principal.replace("_HOST",hostname);
+                }
+                if (!hostActiveIdentities.containsKey(principal)) {
+                  KerberosPrincipalDescriptor resolvedPrincipalDescriptor=new KerberosPrincipalDescriptor(principal,principalDescriptor.getType(),KerberosDescriptor.replaceVariables(principalDescriptor.getConfiguration(),configurations),KerberosDescriptor.replaceVariables(principalDescriptor.getLocalUsername(),configurations));
+                  KerberosKeytabDescriptor resolvedKeytabDescriptor;
+                  KerberosKeytabDescriptor keytabDescriptor=identity.getKeytabDescriptor();
+                  if (keytabDescriptor == null) {
+                    resolvedKeytabDescriptor=null;
+                  }
+ else {
+                    resolvedKeytabDescriptor=new KerberosKeytabDescriptor(KerberosDescriptor.replaceVariables(keytabDescriptor.getFile(),configurations),KerberosDescriptor.replaceVariables(keytabDescriptor.getOwnerName(),configurations),KerberosDescriptor.replaceVariables(keytabDescriptor.getOwnerAccess(),configurations),KerberosDescriptor.replaceVariables(keytabDescriptor.getGroupName(),configurations),KerberosDescriptor.replaceVariables(keytabDescriptor.getGroupAccess(),configurations),KerberosDescriptor.replaceVariables(keytabDescriptor.getConfiguration(),configurations),keytabDescriptor.isCachable());
+                  }
+                  hostActiveIdentities.put(principal,new KerberosIdentityDescriptor(identity.getName(),resolvedPrincipalDescriptor,resolvedKeytabDescriptor));
+                }
+              }
+            }
+          }
+          activeIdentities.put(hostname,hostActiveIdentities.values());
+        }
+      }
+    }
+  }
+  return activeIdentities;
+}

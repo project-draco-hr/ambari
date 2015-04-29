@@ -1,0 +1,72 @@
+{
+  Set<Resource> resources=new HashSet<Resource>();
+  for (  Map<String,Object> propertyMap : propertyMaps) {
+    String clusterName=(String)propertyMap.get(KERBEROS_IDENTITY_CLUSTER_NAME_PROPERTY_ID);
+    String hostName=(String)propertyMap.get(KERBEROS_IDENTITY_HOST_NAME_PROPERTY_ID);
+    Map<String,Collection<KerberosIdentityDescriptor>> hostDescriptors=kerberosHelper.getActiveIdentities(clusterName,hostName,null,null,true);
+    if (hostDescriptors != null) {
+      for (      Map.Entry<String,Collection<KerberosIdentityDescriptor>> entry : hostDescriptors.entrySet()) {
+        Collection<KerberosIdentityDescriptor> descriptors=entry.getValue();
+        if (descriptors != null) {
+          String currentHostName=entry.getKey();
+          HostEntity host=hostDAO.findByName(currentHostName);
+          Long hostId=(host == null) ? null : host.getHostId();
+          for (          KerberosIdentityDescriptor descriptor : descriptors) {
+            KerberosPrincipalDescriptor principalDescriptor=descriptor.getPrincipalDescriptor();
+            if (principalDescriptor != null) {
+              String principal=principalDescriptor.getValue();
+              if ((principal != null) && !principal.isEmpty()) {
+                Resource resource=new ResourceImpl(Resource.Type.HostKerberosIdentity);
+                setResourceProperty(resource,KERBEROS_IDENTITY_CLUSTER_NAME_PROPERTY_ID,clusterName,requestPropertyIds);
+                setResourceProperty(resource,KERBEROS_IDENTITY_HOST_NAME_PROPERTY_ID,currentHostName,requestPropertyIds);
+                setResourceProperty(resource,KERBEROS_IDENTITY_PRINCIPAL_NAME_PROPERTY_ID,principal,requestPropertyIds);
+                setResourceProperty(resource,KERBEROS_IDENTITY_PRINCIPAL_TYPE_PROPERTY_ID,principalDescriptor.getType(),requestPropertyIds);
+                setResourceProperty(resource,KERBEROS_IDENTITY_PRINCIPAL_LOCAL_USERNAME_PROPERTY_ID,principalDescriptor.getLocalUsername(),requestPropertyIds);
+                String installedStatus;
+                if ((hostId != null) && kerberosPrincipalDAO.exists(principal)) {
+                  if (kerberosPrincipalHostDAO.exists(principal,hostId)) {
+                    installedStatus="true";
+                  }
+ else {
+                    installedStatus="false";
+                  }
+                }
+ else {
+                  installedStatus="unknown";
+                }
+                setResourceProperty(resource,KERBEROS_IDENTITY_KEYTAB_FILE_INSTALLED_PROPERTY_ID,installedStatus,requestPropertyIds);
+                KerberosKeytabDescriptor keytabDescriptor=descriptor.getKeytabDescriptor();
+                if (keytabDescriptor != null) {
+                  String ownerAccess=keytabDescriptor.getOwnerAccess();
+                  String groupAccess=keytabDescriptor.getGroupAccess();
+                  int mode=0;
+                  if ("rw".equals(ownerAccess)) {
+                    mode+=600;
+                  }
+ else                   if ("r".equals(ownerAccess)) {
+                    mode+=400;
+                  }
+                  if ("rw".equals(groupAccess)) {
+                    mode+=60;
+                  }
+ else                   if ("r".equals(groupAccess)) {
+                    mode+=40;
+                  }
+                  setResourceProperty(resource,KERBEROS_IDENTITY_KEYTAB_FILE_PATH_PROPERTY_ID,keytabDescriptor.getFile(),requestPropertyIds);
+                  setResourceProperty(resource,KERBEROS_IDENTITY_KEYTAB_FILE_OWNER_PROPERTY_ID,keytabDescriptor.getOwnerName(),requestPropertyIds);
+                  setResourceProperty(resource,KERBEROS_IDENTITY_KEYTAB_FILE_OWNER_ACCESS_PROPERTY_ID,ownerAccess,requestPropertyIds);
+                  setResourceProperty(resource,KERBEROS_IDENTITY_KEYTAB_FILE_GROUP_PROPERTY_ID,keytabDescriptor.getGroupName(),requestPropertyIds);
+                  setResourceProperty(resource,KERBEROS_IDENTITY_KEYTAB_FILE_GROUP_ACCESS_PROPERTY_ID,groupAccess,requestPropertyIds);
+                  setResourceProperty(resource,KERBEROS_IDENTITY_KEYTAB_FILE_MODE_PROPERTY_ID,new DecimalFormat("000").format(mode),requestPropertyIds);
+                }
+                setResourceProperty(resource,KERBEROS_IDENTITY_DESCRIPTION_PROPERTY_ID,descriptor.getName(),requestPropertyIds);
+                resources.add(resource);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return resources;
+}
