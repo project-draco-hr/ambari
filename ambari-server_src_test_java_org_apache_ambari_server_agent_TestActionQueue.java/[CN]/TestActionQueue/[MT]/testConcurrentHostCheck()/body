@@ -1,0 +1,58 @@
+{
+  ActionQueue aq=new ActionQueue();
+  String[] hosts=new String[]{"h0","h1","h2","h3","h4"};
+  ActionQueueOperation[] hostCheckers=new ActionQueueOperation[threadCount];
+  ActionQueueOperation[] hostUpdaters=new ActionQueueOperation[threadCount];
+  List<Thread> producers=new ArrayList<Thread>();
+  List<Thread> consumers=new ArrayList<Thread>();
+  for (int i=0; i < threadCount; i++) {
+    hostCheckers[i]=new ActionQueueOperation(aq,hosts,ActionQueueOperation.OpType.CHECKPENDING);
+    Thread t=new Thread(hostCheckers[i]);
+    consumers.add(t);
+    t.start();
+  }
+  for (int i=0; i < threadCount; i++) {
+    hostUpdaters[i]=new ActionQueueOperation(aq,hosts,ActionQueueOperation.OpType.UPDATEHOSTLIST);
+    Thread t=new Thread(hostUpdaters[i]);
+    producers.add(t);
+    t.start();
+  }
+  Thread.sleep(100);
+  for (int i=0; i < threadCount; i++) {
+    hostUpdaters[i].stop();
+  }
+  for (  Thread producer : producers) {
+    producer.join();
+  }
+  for (int i=0; i < threadCount; i++) {
+    hostCheckers[i].stop();
+  }
+  for (  Thread consumer : consumers) {
+    consumer.join();
+  }
+  int totalChecks=0;
+  int totalUpdates=0;
+  for (int i=0; i < threadCount; i++) {
+    totalChecks+=hostUpdaters[i].getOpCounts()[0];
+    for (int h=0; h < hosts.length; h++) {
+      totalUpdates+=hostCheckers[i].getOpCounts()[h];
+    }
+  }
+  LOG.info("Report: totalChecks: " + totalChecks + ", totalUpdates: "+ totalUpdates);
+  HashSet<String> hostsWithPendingtasks=new HashSet<String>();
+  aq.updateListOfHostsWithPendingTask(hostsWithPendingtasks);
+  hostsWithPendingtasks.add("h1");
+  aq.updateListOfHostsWithPendingTask(hostsWithPendingtasks);
+  assertTrue(aq.hasPendingTask("h1"));
+  assertFalse(aq.hasPendingTask("h2"));
+  hostsWithPendingtasks.add("h1");
+  hostsWithPendingtasks.add("h2");
+  aq.updateListOfHostsWithPendingTask(hostsWithPendingtasks);
+  assertTrue(aq.hasPendingTask("h1"));
+  assertTrue(aq.hasPendingTask("h2"));
+  hostsWithPendingtasks.clear();
+  hostsWithPendingtasks.add("h2");
+  aq.updateListOfHostsWithPendingTask(hostsWithPendingtasks);
+  assertFalse(aq.hasPendingTask("h1"));
+  assertTrue(aq.hasPendingTask("h2"));
+}
