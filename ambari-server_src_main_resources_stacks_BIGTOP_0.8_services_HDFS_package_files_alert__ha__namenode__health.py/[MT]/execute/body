@@ -1,18 +1,21 @@
-def execute(parameters=None, host_name=None):
-    '\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  parameters (dictionary): a mapping of parameter key to value\n  host_name (string): the name of this host where the alert is running\n  '
-    if (parameters is None):
-        return (RESULT_STATE_UNKNOWN, ['There were no parameters supplied to the script.'])
-    if (not (NAMESERVICE_KEY in parameters)):
+def execute(configurations={}, parameters={}, host_name=None):
+    '\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  configurations (dictionary): a mapping of configuration key to value\n  parameters (dictionary): a mapping of script parameter key to value\n  host_name (string): the name of this host where the alert is running\n  '
+    if (configurations is None):
+        return (RESULT_STATE_UNKNOWN, ['There were no configurations supplied to the script.'])
+    if (not (NAMESERVICE_KEY in configurations)):
         return (RESULT_STATE_SKIPPED, ['NameNode HA is not enabled'])
-    if (not (HDFS_SITE_KEY in parameters)):
+    if (not (HDFS_SITE_KEY in configurations)):
         return (RESULT_STATE_UNKNOWN, ['{0} is a required parameter for the script'.format(HDFS_SITE_KEY)])
+    connection_timeout = CONNECTION_TIMEOUT_DEFAULT
+    if (CONNECTION_TIMEOUT_KEY in parameters):
+        connection_timeout = float(parameters[CONNECTION_TIMEOUT_KEY])
     is_ssl_enabled = False
-    if (DFS_POLICY_KEY in parameters):
-        dfs_policy = parameters[DFS_POLICY_KEY]
+    if (DFS_POLICY_KEY in configurations):
+        dfs_policy = configurations[DFS_POLICY_KEY]
         if (dfs_policy == 'HTTPS_ONLY'):
             is_ssl_enabled = True
-    name_service = parameters[NAMESERVICE_KEY]
-    hdfs_site = parameters[HDFS_SITE_KEY]
+    name_service = configurations[NAMESERVICE_KEY]
+    hdfs_site = configurations[HDFS_SITE_KEY]
     nn_unique_ids_key = ('dfs.ha.namenodes.' + name_service)
     if (not (nn_unique_ids_key in hdfs_site)):
         return (RESULT_STATE_UNKNOWN, ['Unable to find unique namenode alias key {0}'.format(nn_unique_ids_key)])
@@ -31,7 +34,7 @@ def execute(parameters=None, host_name=None):
             value = str(hdfs_site[key])
             try:
                 jmx_uri = jmx_uri_fragment.format(value)
-                state = get_value_from_jmx(jmx_uri, 'State')
+                state = get_value_from_jmx(jmx_uri, 'State', connection_timeout)
                 if (state == HDFS_NN_STATE_ACTIVE):
                     active_namenodes.append(value)
                 elif (state == HDFS_NN_STATE_STANDBY):
