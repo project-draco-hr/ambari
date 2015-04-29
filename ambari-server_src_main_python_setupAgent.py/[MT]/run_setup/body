@@ -1,15 +1,26 @@
-@OsFamilyFuncImpl(OSConst.WINSRV_FAMILY)
 def run_setup(argv=None):
-    '\n  if the Agent is not downloaded or the download was interrupted\n    download the Agent msi package\n  install the Agent from the msi package\n  customize the Agent configuration\n  register the Ambari Agent Windows service\n  if JDK is not installed on the local machine\n    download and install JDK\n  set the machine-wide JAVA_HOME environment variable\n  if the Agent service is running from a previous session\n    stop the Agent service\n  create/switch the Agent dir symbolic link to the new version\n  start the Agent service\n  '
     retcode = parseArguments(argv)
     if (retcode['exitstatus'] != 0):
         return retcode
-    (agent_url, server_hostname, projectVersion) = retcode['parsed_args']
-    availableProjectVersion = getOptimalVersion(projectVersion)
-    retcode = installAgent(agent_url, os.getcwd(), availableProjectVersion, retcode)
-    if (not (retcode['exitstatus'] == 0)):
-        return retcode
-    retcode = configureAgent(server_hostname, retcode)
+    (expected_hostname, passPhrase, hostname, user_run_as, projectVersion, server_port) = retcode['parsed_args']
+    retcode = checkServerReachability(hostname, server_port)
     if (retcode['exitstatus'] != 0):
         return retcode
-    return runAgentService(retcode)
+    if ((projectVersion == 'null') or (projectVersion == '{ambariVersion}') or (projectVersion == '')):
+        retcode = getOptimalVersion('')
+    else:
+        retcode = getOptimalVersion(projectVersion)
+    if ((retcode['exitstatus'] == 0) and (retcode['log'] != None) and (retcode['log'] != '') and (retcode['log'][0].strip() != '')):
+        availableProjectVersion = retcode['log'].strip()
+        if (not isAgentPackageAlreadyInstalled(availableProjectVersion)):
+            retcode = installAgent(availableProjectVersion)
+            if (not (retcode['exitstatus'] == 0)):
+                return retcode
+    elif ((retcode['exitstatus'] == 1) and (retcode['log'][0].strip() != '')):
+        return {'exitstatus': 1, 'log': ((('Desired version (' + projectVersion) + ') of ambari-agent package is not available. Repository has following versions of ambari-agent:') + retcode['log'][0].strip()), }
+    else:
+        return retcode
+    retcode = configureAgent(hostname, user_run_as)
+    if (retcode['exitstatus'] != 0):
+        return retcode
+    return runAgent(passPhrase, expected_hostname, user_run_as, verbose)

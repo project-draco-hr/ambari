@@ -1,29 +1,11 @@
-@OsFamilyFuncImpl(OSConst.WINSRV_FAMILY)
-def installAgent(url, downloadDir, projectVersion, ret=None):
-    ' Download the agent msi and install it\n  :param url:\n  :param projectVersion:\n  :return: {"exitstatus": exit code, "log": log records string}\n  '
-    ret = _ret_init(ret)
-    installationDrive = os.path.splitdrive(__file__.replace('/', os.sep))[0]
-    agentInstallDir = os.path.join(installationDrive, os.sep, 'ambari', ('ambari-agent-' + projectVersion))
-    agentInstallMarkerFile = os.path.join(agentInstallDir, INSTALL_MARKER_OK)
-    if (not os.path.exists(agentInstallMarkerFile)):
-        destMsiFilePath = os.path.join(downloadDir, 'ambari-agent-{0}.msi'.format(projectVersion))
-        ret = _download_file(url, destMsiFilePath, ret=ret)
-        if (ret['exitstatus'] != 0):
-            return ret
-        installLogPath = os.path.join(downloadDir, 'ambari-agent-{0}.install.log'.format(projectVersion))
-        installCmd = ['cmd', '/c', 'start', '/wait', 'msiexec', '/i', destMsiFilePath, ('AGENT_INSTALL_DIRECTORY=' + agentInstallDir), '/qn', '/Lv', installLogPath]
-        ret = execOsCommand(installCmd, tries=3, try_sleep=10, ret=ret)
-        if (ret['exitstatus'] != 0):
-            return ret
-        try:
-            if (os.readlink(AMBARI_AGENT_INSTALL_SYMLINK) != agentInstallDir):
-                ret = _create_agent_symlink(AMBARI_AGENT_INSTALL_SYMLINK, agentInstallDir, ret)
-        except OSError:
-            ret = _create_agent_symlink(AMBARI_AGENT_INSTALL_SYMLINK, agentInstallDir, ret)
-        if (ret['exitstatus'] != 0):
-            return ret
-        try:
-            open(agentInstallMarkerFile, 'w+').close()
-        except IOError:
-            pass
-    return ret
+def installAgent(projectVersion, ret=None):
+    ' Run install and make sure the agent install alright '
+    if OSCheck.is_suse_family():
+        Command = ['zypper', '--no-gpg-checks', 'install', '-y', ('ambari-agent-' + projectVersion)]
+    elif OSCheck.is_ubuntu_family():
+        Command = ['apt-get', 'install', '-y', '--allow-unauthenticated', (('ambari-agent=' + projectVersion) + '*')]
+    elif OSCheck.is_windows_family():
+        Command = ['cmd', '/c', 'choco', 'install', '-y', 'ambari-agent', ('--version=' + projectVersion)]
+    else:
+        Command = ['yum', '-y', 'install', '--nogpgcheck', ('ambari-agent-' + projectVersion)]
+    return execOsCommand(Command, tries=3, try_sleep=10, ret=ret)

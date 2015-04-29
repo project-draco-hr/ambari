@@ -1,21 +1,5 @@
-def runAgent(passPhrase, expected_hostname, user_run_as, verbose):
-    os.environ[AMBARI_PASSPHRASE_VAR] = passPhrase
-    vo = ''
-    if verbose:
-        vo = ' -v'
-    cmd = ['su', user_run_as, '-l', '-c', ('/usr/sbin/ambari-agent restart --expected-hostname=%1s %2s' % (expected_hostname, vo))]
-    log = ''
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-    p.communicate()
-    agent_retcode = p.returncode
-    for i in range(3):
-        time.sleep(1)
-        ret = execOsCommand(['tail', '-20', '/var/log/ambari-agent/ambari-agent.log'])
-        if (0 == ret['exitstatus']):
-            try:
-                log = ret['log']
-            except Exception:
-                log = 'Log not found'
-            print log
-            break
-    return {'exitstatus': agent_retcode, 'log': log, }
+@OsFamilyFuncImpl(OSConst.WINSRV_FAMILY)
+def runAgent(passPhrase, expected_hostname, user_run_as, verbose, ret=None):
+    ret = _ret_init(ret)
+    agentRestartCmd = ['cmd', '/c', 'ambari-agent.cmd', 'restart']
+    return execOsCommand(agentRestartCmd, tries=3, try_sleep=10, cwd=AMBARI_AGENT_INSTALL_SYMLINK, ret=ret)
