@@ -1,0 +1,36 @@
+{
+  String hostsNotInClusterQuery=MessageFormat.format("SELECT * FROM {0} WHERE {1} NOT IN (SELECT {1} FROM {2})",HOSTS_TABLE,HOST_ID_COL,CLUSTER_HOST_MAPPING_TABLE);
+  ResultSet hostsNotInCluster=null;
+  try {
+    hostsNotInCluster=dbAccessor.executeSelect(hostsNotInClusterQuery);
+    if (hostsNotInCluster != null) {
+      while (hostsNotInCluster.next()) {
+        long hostToDeleteId=hostsNotInCluster.getLong(HOST_ID_COL);
+        String hostToDeleteName=hostsNotInCluster.getString(HOST_NAME_COL);
+        String duplicateHostsQuery="SELECT count(*) FROM hosts WHERE lower(host_name) = '" + hostToDeleteName + "' AND host_id != "+ hostToDeleteId;
+        long count=0;
+        ResultSet duplicateHosts=null;
+        try {
+          duplicateHosts=dbAccessor.executeSelect(duplicateHostsQuery);
+          if (duplicateHosts != null && duplicateHosts.next()) {
+            count=duplicateHosts.getLong(1);
+          }
+        }
+  finally {
+          if (null != duplicateHosts) {
+            duplicateHosts.close();
+          }
+        }
+        if (count > 0) {
+          dbAccessor.executeQuery(MessageFormat.format("DELETE from {0} WHERE {1} = {2}",HOST_STATE_TABLE,HOST_ID_COL,hostToDeleteId));
+          dbAccessor.executeQuery(MessageFormat.format("DELETE from {0} WHERE {1} = {2}",HOSTS_TABLE,HOST_ID_COL,hostToDeleteId));
+        }
+      }
+    }
+  }
+  finally {
+    if (null != hostsNotInCluster) {
+      hostsNotInCluster.close();
+    }
+  }
+}
