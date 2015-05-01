@@ -4,13 +4,14 @@ def oozie_server_specific():
     oozie_server_directories = [format('{oozie_home}/{oozie_tmp_dir}'), params.oozie_pid_dir, params.oozie_log_dir, params.oozie_tmp_dir, params.oozie_data_dir, params.oozie_lib_dir, params.oozie_webapps_dir, params.oozie_webapps_conf_dir, params.oozie_server_dir]
     Directory(oozie_server_directories, owner=params.oozie_user, group=params.user_group, mode=493, recursive=True, cd_access='a')
     Directory(params.oozie_libext_dir, recursive=True)
-    configure_cmds = []
-    configure_cmds.append(('tar', '-xvf', format('{oozie_home}/oozie-sharelib.tar.gz'), '-C', params.oozie_home))
-    configure_cmds.append(('cp', params.ext_js_path, params.oozie_libext_dir))
-    configure_cmds.append(('chown', format('{oozie_user}:{user_group}'), format('{oozie_libext_dir}/{ext_js_file}')))
-    configure_cmds.append(('chown', '-RL', format('{oozie_user}:{user_group}'), params.oozie_webapps_conf_dir))
     no_op_test = format('ls {pid_file} >/dev/null 2>&1 && ps -p `cat {pid_file}` >/dev/null 2>&1')
-    Execute(configure_cmds, not_if=no_op_test, sudo=True)
+    if (not params.host_sys_prepped):
+        configure_cmds = []
+        configure_cmds.append(('tar', '-xvf', format('{oozie_home}/oozie-sharelib.tar.gz'), '-C', params.oozie_home))
+        configure_cmds.append(('cp', params.ext_js_path, params.oozie_libext_dir))
+        configure_cmds.append(('chown', format('{oozie_user}:{user_group}'), format('{oozie_libext_dir}/{ext_js_file}')))
+        configure_cmds.append(('chown', '-RL', format('{oozie_user}:{user_group}'), params.oozie_webapps_conf_dir))
+        Execute(configure_cmds, not_if=no_op_test, sudo=True)
     if ((params.jdbc_driver_name == 'com.mysql.jdbc.Driver') or (params.jdbc_driver_name == 'com.microsoft.sqlserver.jdbc.SQLServerDriver') or (params.jdbc_driver_name == 'oracle.jdbc.driver.OracleDriver')):
         File(params.downloaded_custom_connector, content=DownloadSource(params.driver_curl_source))
         Execute(('cp', '--remove-destination', params.downloaded_custom_connector, params.target), path=['/bin', '/usr/bin/'], sudo=True)
