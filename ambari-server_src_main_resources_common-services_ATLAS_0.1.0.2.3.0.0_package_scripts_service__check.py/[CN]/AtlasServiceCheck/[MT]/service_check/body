@@ -1,0 +1,20 @@
+def service_check(self, env):
+    import params
+    env.set_params(params)
+    for i in xrange(0, self.ATLAS_CONNECT_TRIES):
+        try:
+            conn = httplib.HTTPConnection(params.metadata_host, int(params.metadata_port))
+            conn.request('GET', format('http://{params.metadata_host}:{params.metadata_port}/'))
+        except (httplib.HTTPException, socket.error) as ex:
+            if (i < (self.ATLAS_CONNECT_TRIES - 1)):
+                time.sleep(self.ATLAS_CONNECT_TIMEOUT)
+                Logger.info(('Connection failed. Next retry in %s seconds.' % self.ATLAS_CONNECT_TIMEOUT))
+                continue
+            else:
+                raise Fail('Service check has failed.')
+    resp = conn.getresponse()
+    if (resp.status == 200):
+        Logger.info('Atlas server up and running')
+    else:
+        Logger.debug('Atlas server not running')
+        raise ComponentIsNotRunning()
