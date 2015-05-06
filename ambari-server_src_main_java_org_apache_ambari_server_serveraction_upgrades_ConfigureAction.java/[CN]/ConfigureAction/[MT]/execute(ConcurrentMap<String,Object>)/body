@@ -4,15 +4,22 @@
     return createCommandReport(0,HostRoleStatus.FAILED,"{}","","Unable to change configuration values without command parameters");
   }
   String clusterName=commandParameters.get("clusterName");
+  String configType=commandParameters.get(ConfigureTask.PARAMETER_CONFIG_TYPE);
   String key=commandParameters.get(ConfigureTask.PARAMETER_KEY);
   String value=commandParameters.get(ConfigureTask.PARAMETER_VALUE);
-  String configType=commandParameters.get(ConfigureTask.PARAMETER_CONFIG_TYPE);
-  if (null == configType && null == key) {
+  List<ConfigureTask.Transfer> transfers=Collections.emptyList();
+  String transferJson=commandParameters.get(ConfigureTask.PARAMETER_TRANSFERS);
+  if (null != transferJson) {
+    transfers=m_gson.fromJson(transferJson,new TypeToken<List<ConfigureTask.Transfer>>(){
+    }
+.getType());
+  }
+  if (null == configType && null == key && transfers.isEmpty()) {
     return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","","Skipping configuration task");
   }
-  if (null == clusterName || null == configType || null == key) {
-    String message="cluster={0}, type={1}, key={2}";
-    message=MessageFormat.format(message,clusterName,configType,key);
+  if (null == clusterName || null == configType || (null == key && transfers.isEmpty())) {
+    String message="cluster={0}, type={1}, key={2}, transfers={3}";
+    message=MessageFormat.format(message,clusterName,configType,key,transfers);
     return createCommandReport(0,HostRoleStatus.FAILED,"{}","",message);
   }
   Cluster cluster=m_clusters.getCluster(clusterName);
@@ -22,26 +29,75 @@
   StackId currentStack=cluster.getCurrentStackVersion();
   StackId targetStack=cluster.getDesiredStackVersion();
   StackId configStack=config.getStackId();
-  String oldValue=config.getProperties().get(key);
-  if (null != oldValue && value.equals(oldValue)) {
-    if (currentStack.equals(targetStack)) {
-      return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",MessageFormat.format("{0}/{1} for cluster {2} would not change, skipping setting",configType,key,clusterName),"");
-    }
+  Map<String,String> base=config.getProperties();
+  Map<String,String> newValues=new HashMap<String,String>(base);
+  boolean changedValues=false;
+  for (  ConfigureTask.Transfer transfer : transfers) {
+switch (transfer.operation) {
+case COPY:
+      if (null == transfer.fromType && base.containsKey(transfer.fromKey)) {
+        newValues.put(transfer.toKey,base.get(transfer.fromKey));
+        changedValues=true;
+      }
+ else {
+        Config other=cluster.getDesiredConfigByType(transfer.fromType);
+        if (null != other) {
+          Map<String,String> otherValues=other.getProperties();
+          if (otherValues.containsKey(transfer.fromKey)) {
+            newValues.put(transfer.toKey,otherValues.get(transfer.fromKey));
+            changedValues=true;
+          }
+        }
+      }
+    break;
+case MOVE:
+  if (newValues.containsKey(transfer.fromKey)) {
+    newValues.put(transfer.toKey,newValues.remove(transfer.fromKey));
+    changedValues=true;
   }
-  Map<String,String> propertiesToChange=new HashMap<String,String>();
-  propertiesToChange.put(key,value);
-  config.updateProperties(propertiesToChange);
-  if (!targetStack.equals(currentStack) && targetStack.equals(configStack)) {
-    config.persist(false);
-    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",MessageFormat.format("Updated ''{0}'' with ''{1}={2}''",configType,key,value),"");
+break;
+case DELETE:
+if ("*".equals(transfer.deleteKey)) {
+newValues.clear();
+for (String keeper : transfer.keepKeys) {
+  newValues.put(keeper,base.get(keeper));
+}
+if (transfer.preserveEdits) {
+  List<String> edited=findChangedValues(clusterName,config);
+  for (  String changed : edited) {
+    newValues.put(changed,base.get(changed));
   }
-  String serviceVersionNote="Stack Upgrade";
-  String auditName=getExecutionCommand().getRoleParams().get(ServerAction.ACTION_USER_NAME);
-  if (auditName == null) {
-    auditName=configuration.getAnonymousAuditName();
-  }
-  m_configHelper.createConfigType(cluster,m_controller,configType,config.getProperties(),auditName,serviceVersionNote);
-  String message="Updated ''{0}'' with ''{1}={2}''";
-  message=MessageFormat.format(message,configType,key,value);
-  return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",message,"");
+}
+changedValues=true;
+}
+ else {
+newValues.remove(transfer.deleteKey);
+changedValues=true;
+}
+break;
+}
+}
+if (null != key) {
+String oldValue=base.get(key);
+if (null != oldValue && value.equals(oldValue)) {
+if (currentStack.equals(targetStack) && !changedValues) {
+return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",MessageFormat.format("{0}/{1} for cluster {2} would not change, skipping setting",configType,key,clusterName),"");
+}
+}
+}
+newValues.put(key,value);
+if (!targetStack.equals(currentStack) && targetStack.equals(configStack)) {
+config.setProperties(newValues);
+config.persist(false);
+return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",MessageFormat.format("Updated ''{0}'' with ''{1}={2}''",configType,key,value),"");
+}
+String serviceVersionNote="Stack Upgrade";
+String auditName=getExecutionCommand().getRoleParams().get(ServerAction.ACTION_USER_NAME);
+if (auditName == null) {
+auditName=m_configuration.getAnonymousAuditName();
+}
+m_configHelper.createConfigType(cluster,m_controller,configType,newValues,auditName,serviceVersionNote);
+String message="Updated ''{0}'' with ''{1}={2}''";
+message=MessageFormat.format(message,configType,key,value);
+return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",message,"");
 }
