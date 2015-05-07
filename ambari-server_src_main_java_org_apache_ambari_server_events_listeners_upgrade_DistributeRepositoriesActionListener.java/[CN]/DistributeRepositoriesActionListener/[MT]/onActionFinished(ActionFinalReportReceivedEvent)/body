@@ -2,64 +2,70 @@
   if (!event.getRole().equals(INSTALL_PACKAGES)) {
     return;
   }
-  if (LOG.isDebugEnabled()) {
-    LOG.debug(event.toString());
-  }
-  RepositoryVersionState newHostState=RepositoryVersionState.INSTALL_FAILED;
-  Long clusterId=event.getClusterId();
-  if (clusterId == null) {
-    LOG.error("Distribute Repositories expected a cluster Id for host " + event.getHostname());
-    return;
-  }
-  String repositoryVersion=null;
-  if (event.getCommandReport() == null) {
-    LOG.error("Command report is null, marking action as INSTALL_FAILED");
-  }
+  try {
+    unitOfWork.begin();
+    if (LOG.isDebugEnabled()) {
+      LOG.debug(event.toString());
+    }
+    RepositoryVersionState newHostState=RepositoryVersionState.INSTALL_FAILED;
+    Long clusterId=event.getClusterId();
+    if (clusterId == null) {
+      LOG.error("Distribute Repositories expected a cluster Id for host " + event.getHostname());
+      return;
+    }
+    String repositoryVersion=null;
+    if (event.getCommandReport() == null) {
+      LOG.error("Command report is null, marking action as INSTALL_FAILED");
+    }
  else {
-    try {
-      DistributeRepositoriesStructuredOutput structuredOutput=StageUtils.getGson().fromJson(event.getCommandReport().getStructuredOut(),DistributeRepositoriesStructuredOutput.class);
-      repositoryVersion=structuredOutput.getInstalledRepositoryVersion();
-      if (event.getCommandReport().getStatus().equals(HostRoleStatus.COMPLETED.toString())) {
-        newHostState=RepositoryVersionState.INSTALLED;
-        if (null != structuredOutput.getActualVersion() && null != structuredOutput.getInstalledRepositoryVersion() && null != structuredOutput.getStackId() && !structuredOutput.getActualVersion().equals(structuredOutput.getInstalledRepositoryVersion())) {
-          StackId stackId=new StackId(structuredOutput.getStackId());
-          RepositoryVersionEntity version=repoVersionDAO.findByStackAndVersion(stackId,structuredOutput.getInstalledRepositoryVersion());
-          if (null != version) {
-            LOG.info("Repository version {} was found, but {} is the actual value",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion());
-            version.setVersion(structuredOutput.getActualVersion());
-            repoVersionDAO.merge(version);
-            repositoryVersion=structuredOutput.getActualVersion();
-          }
- else {
-            stackId=new StackId(structuredOutput.getStackId());
-            version=repoVersionDAO.findByStackAndVersion(stackId,structuredOutput.getActualVersion());
-            LOG.debug("Repository version {} was not found, check for {}.  Found={}",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion(),Boolean.valueOf(null != version));
+      try {
+        DistributeRepositoriesStructuredOutput structuredOutput=StageUtils.getGson().fromJson(event.getCommandReport().getStructuredOut(),DistributeRepositoriesStructuredOutput.class);
+        repositoryVersion=structuredOutput.getInstalledRepositoryVersion();
+        if (event.getCommandReport().getStatus().equals(HostRoleStatus.COMPLETED.toString())) {
+          newHostState=RepositoryVersionState.INSTALLED;
+          if (null != structuredOutput.getActualVersion() && null != structuredOutput.getInstalledRepositoryVersion() && null != structuredOutput.getStackId() && !structuredOutput.getActualVersion().equals(structuredOutput.getInstalledRepositoryVersion())) {
+            StackId stackId=new StackId(structuredOutput.getStackId());
+            RepositoryVersionEntity version=repoVersionDAO.findByStackAndVersion(stackId,structuredOutput.getInstalledRepositoryVersion());
             if (null != version) {
+              LOG.info("Repository version {} was found, but {} is the actual value",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion());
+              version.setVersion(structuredOutput.getActualVersion());
+              repoVersionDAO.merge(version);
               repositoryVersion=structuredOutput.getActualVersion();
+            }
+ else {
+              stackId=new StackId(structuredOutput.getStackId());
+              version=repoVersionDAO.findByStackAndVersion(stackId,structuredOutput.getActualVersion());
+              LOG.debug("Repository version {} was not found, check for {}.  Found={}",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion(),Boolean.valueOf(null != version));
+              if (null != version) {
+                repositoryVersion=structuredOutput.getActualVersion();
+              }
             }
           }
         }
       }
+ catch (      JsonSyntaxException e) {
+        LOG.error("Can not parse structured output %s",e);
+      }
     }
- catch (    JsonSyntaxException e) {
-      LOG.error("Can not parse structured output %s",e);
+    List<HostVersionEntity> hostVersions=hostVersionDAO.get().findByHost(event.getHostname());
+    for (    HostVersionEntity hostVersion : hostVersions) {
+      if (repositoryVersion != null && !hostVersion.getRepositoryVersion().getVersion().equals(repositoryVersion)) {
+        continue;
+      }
+      if (hostVersion.getState() == RepositoryVersionState.INSTALLING) {
+        hostVersion.setState(newHostState);
+        hostVersionDAO.get().merge(hostVersion);
+        try {
+          Cluster cluster=clusters.get().getClusterById(clusterId);
+          cluster.recalculateClusterVersionState(hostVersion.getRepositoryVersion().getStackId(),hostVersion.getRepositoryVersion().getVersion());
+        }
+ catch (        AmbariException e) {
+          LOG.error("Cannot get cluster with Id " + clusterId.toString(),e);
+        }
+      }
     }
   }
-  List<HostVersionEntity> hostVersions=hostVersionDAO.get().findByHost(event.getHostname());
-  for (  HostVersionEntity hostVersion : hostVersions) {
-    if (repositoryVersion != null && !hostVersion.getRepositoryVersion().getVersion().equals(repositoryVersion)) {
-      continue;
-    }
-    if (hostVersion.getState() == RepositoryVersionState.INSTALLING) {
-      hostVersion.setState(newHostState);
-      hostVersionDAO.get().merge(hostVersion);
-      try {
-        Cluster cluster=clusters.get().getClusterById(clusterId);
-        cluster.recalculateClusterVersionState(hostVersion.getRepositoryVersion().getStackId(),hostVersion.getRepositoryVersion().getVersion());
-      }
- catch (      AmbariException e) {
-        LOG.error("Cannot get cluster with Id " + clusterId.toString(),e);
-      }
-    }
+  finally {
+    unitOfWork.end();
   }
 }
