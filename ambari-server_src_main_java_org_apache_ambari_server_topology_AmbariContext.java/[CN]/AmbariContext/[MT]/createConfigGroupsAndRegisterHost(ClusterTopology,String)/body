@@ -1,0 +1,36 @@
+{
+  Map<String,Map<String,Config>> groupConfigs=new HashMap<String,Map<String,Config>>();
+  Stack stack=topology.getBlueprint().getHostGroup(groupName).getStack();
+  Configuration topologyHostGroupConfig=topology.getHostGroupInfo().get(groupName).getConfiguration();
+  convertGlobalProperties(topology,topologyHostGroupConfig.getProperties());
+  for (  Map.Entry<String,Map<String,String>> entry : topologyHostGroupConfig.getProperties().entrySet()) {
+    String type=entry.getKey();
+    String service=stack.getServiceForConfigType(type);
+    Config config=new ConfigImpl(type);
+    config.setTag(groupName);
+    config.setProperties(entry.getValue());
+    Map<String,Config> serviceConfigs=groupConfigs.get(service);
+    if (serviceConfigs == null) {
+      serviceConfigs=new HashMap<String,Config>();
+      groupConfigs.put(service,serviceConfigs);
+    }
+    serviceConfigs.put(type,config);
+  }
+  String bpName=topology.getBlueprint().getName();
+  for (  Map.Entry<String,Map<String,Config>> entry : groupConfigs.entrySet()) {
+    String service=entry.getKey();
+    Map<String,Config> serviceConfigs=entry.getValue();
+    String absoluteGroupName=getConfigurationGroupName(bpName,groupName);
+    Collection<String> groupHosts;
+    groupHosts=topology.getHostGroupInfo().get(groupName).getHostNames();
+    ConfigGroupRequest request=new ConfigGroupRequest(null,topology.getClusterName(),absoluteGroupName,service,"Host Group Configuration",new HashSet<String>(groupHosts),serviceConfigs);
+    ConfigGroupResourceProvider configGroupProvider=(ConfigGroupResourceProvider)ClusterControllerHelper.getClusterController().ensureResourceProvider(Resource.Type.ConfigGroup);
+    try {
+      configGroupProvider.createResources(Collections.singleton(request));
+    }
+ catch (    Exception e) {
+      e.printStackTrace();
+      throw new RuntimeException("Failed to create new configuration group: " + e,e);
+    }
+  }
+}

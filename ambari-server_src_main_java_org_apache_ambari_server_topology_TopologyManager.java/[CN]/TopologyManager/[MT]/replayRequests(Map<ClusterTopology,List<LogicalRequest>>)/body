@@ -1,0 +1,35 @@
+{
+  boolean configChecked=false;
+  for (  Map.Entry<ClusterTopology,List<LogicalRequest>> requestEntry : persistedRequests.entrySet()) {
+    ClusterTopology topology=requestEntry.getKey();
+    clusterTopologyMap.put(topology.getClusterName(),topology);
+    for (    LogicalRequest logicalRequest : requestEntry.getValue()) {
+      allRequests.put(logicalRequest.getRequestId(),logicalRequest);
+      if (!logicalRequest.hasCompleted()) {
+        outstandingRequests.add(logicalRequest);
+        for (        String reservedHost : logicalRequest.getReservedHosts()) {
+          reservedHosts.put(reservedHost,logicalRequest);
+        }
+        for (        HostRequest hostRequest : logicalRequest.getCompletedHostRequests()) {
+          try {
+            String hostName=hostRequest.getHostName();
+            topology.addHostToTopology(hostRequest.getHostgroupName(),hostName);
+            hostsToIgnore.add(hostName);
+          }
+ catch (          InvalidTopologyException e) {
+            LOG.warn("Attempted to add host to multiple host groups while replaying requests: " + e,e);
+          }
+catch (          NoSuchHostGroupException e) {
+            LOG.warn("Failed to add host to topology while replaying requests: " + e,e);
+          }
+        }
+      }
+    }
+    if (!configChecked) {
+      configChecked=true;
+      if (!ambariContext.doesConfigurationWithTagExist(topology.getClusterName(),TOPOLOGY_RESOLVED_TAG)) {
+        addClusterConfigRequest(new ClusterConfigurationRequest(ambariContext,topology,false));
+      }
+    }
+  }
+}

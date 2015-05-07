@@ -1,0 +1,37 @@
+{
+  Map<ClusterTopology,List<LogicalRequest>> allRequests=new HashMap<ClusterTopology,List<LogicalRequest>>();
+  Collection<TopologyRequestEntity> entities=topologyRequestDAO.findAll();
+  Map<String,ClusterTopology> topologyRequests=new HashMap<String,ClusterTopology>();
+  for (  TopologyRequestEntity entity : entities) {
+    TopologyRequest replayedRequest=new ReplayedTopologyRequest(entity);
+    ClusterTopology clusterTopology=topologyRequests.get(replayedRequest.getClusterName());
+    if (clusterTopology == null) {
+      try {
+        clusterTopology=new ClusterTopologyImpl(ambariContext,replayedRequest);
+        topologyRequests.put(replayedRequest.getClusterName(),clusterTopology);
+        allRequests.put(clusterTopology,new ArrayList<LogicalRequest>());
+      }
+ catch (      InvalidTopologyException e) {
+        throw new RuntimeException("Failed to construct cluster topology while replaying request: " + e,e);
+      }
+    }
+ else {
+      for (      Map.Entry<String,HostGroupInfo> groupInfoEntry : replayedRequest.getHostGroupInfo().entrySet()) {
+        String name=groupInfoEntry.getKey();
+        if (!clusterTopology.getHostGroupInfo().containsKey(name)) {
+          clusterTopology.getHostGroupInfo().put(name,groupInfoEntry.getValue());
+        }
+      }
+    }
+    TopologyLogicalRequestEntity logicalRequestEntity=entity.getTopologyLogicalRequestEntity();
+    Long logicalId=logicalRequestEntity.getId();
+    try {
+      ambariContext.getNextRequestId();
+      allRequests.get(clusterTopology).add(logicalRequestFactory.createRequest(logicalId,replayedRequest,clusterTopology,logicalRequestEntity));
+    }
+ catch (    AmbariException e) {
+      throw new RuntimeException("Failed to construct logical request during replay: " + e,e);
+    }
+  }
+  return allRequests;
+}

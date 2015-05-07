@@ -1,0 +1,36 @@
+{
+  Host host;
+  try {
+    host=getController().getClusters().getHost(hostName);
+  }
+ catch (  AmbariException e) {
+    throw new RuntimeException(String.format("Unable to obtain host instance '%s' when persisting host resources",hostName));
+  }
+  Map<String,Object> properties=new HashMap<String,Object>();
+  properties.put(HostResourceProvider.HOST_CLUSTER_NAME_PROPERTY_ID,clusterName);
+  properties.put(HostResourceProvider.HOST_NAME_PROPERTY_ID,hostName);
+  properties.put(HostResourceProvider.HOST_RACK_INFO_PROPERTY_ID,host.getRackInfo());
+  try {
+    getHostResourceProvider().createHosts(new RequestImpl(null,Collections.singleton(properties),null,null));
+  }
+ catch (  AmbariException e) {
+    e.printStackTrace();
+    throw new RuntimeException(String.format("Unable to create host resource for host '%s': %s",hostName,e.toString()),e);
+  }
+  Set<ServiceComponentHostRequest> requests=new HashSet<ServiceComponentHostRequest>();
+  for (  Map.Entry<String,Collection<String>> entry : components.entrySet()) {
+    String service=entry.getKey();
+    for (    String component : entry.getValue()) {
+      if (!component.equals("AMBARI_SERVER")) {
+        requests.add(new ServiceComponentHostRequest(clusterName,service,component,hostName,null));
+      }
+    }
+  }
+  try {
+    getController().createHostComponents(requests);
+  }
+ catch (  AmbariException e) {
+    e.printStackTrace();
+    throw new RuntimeException(String.format("Unable to create host component resource for host '%s': %s",hostName,e.toString()),e);
+  }
+}

@@ -1,30 +1,17 @@
 {
+  String hostName=host.getHostName();
   try {
-    topology.addHostToTopology(response.getHostGroupName(),host.getHostName());
+    topology.addHostToTopology(response.getHostGroupName(),hostName);
   }
  catch (  InvalidTopologyException e) {
-    throw new RuntimeException(e);
+    throw new RuntimeException("An internal error occurred while performing request host registration: " + e,e);
   }
 catch (  NoSuchHostGroupException e) {
-    throw new RuntimeException(e);
+    throw new RuntimeException("An internal error occurred while performing request host registration: " + e,e);
   }
-  List<TopologyTask> tasks=response.getTasks();
-synchronized (configurationFlagLock) {
-    if (configureComplete) {
-      for (      TopologyTask task : tasks) {
-        task.run();
-      }
-    }
- else {
-      for (      TopologyTask task : tasks) {
-        TopologyTask.Type taskType=task.getType();
-        if (taskType == TopologyTask.Type.RESOURCE_CREATION || taskType == TopologyTask.Type.CONFIGURE) {
-          task.run();
-        }
- else {
-          pendingTasks.get(taskType).add(task);
-        }
-      }
-    }
+  persistedState.registerHostName(response.getHostRequestId(),hostName);
+  for (  TopologyTask task : response.getTasks()) {
+    task.init(topology,ambariContext);
+    executor.execute(task);
   }
 }

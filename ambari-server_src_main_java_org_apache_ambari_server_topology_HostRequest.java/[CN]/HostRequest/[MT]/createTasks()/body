@@ -1,4 +1,12 @@
 {
+  topologyTasks.add(new PersistHostResourcesTask());
+  topologyTasks.add(new RegisterWithConfigGroupTask());
+  InstallHostTask installTask=new InstallHostTask();
+  topologyTasks.add(installTask);
+  StartHostTask startTask=new StartHostTask();
+  topologyTasks.add(startTask);
+  logicalTaskMap.put(installTask,new HashMap<String,Long>());
+  logicalTaskMap.put(startTask,new HashMap<String,Long>());
   HostGroup hostGroup=getHostGroup();
   for (  String component : hostGroup.getComponents()) {
     if (component == null || component.equals("AMBARI_SERVER")) {
@@ -6,30 +14,15 @@
       continue;
     }
     String hostName=getHostName() != null ? getHostName() : "PENDING HOST ASSIGNMENT : HOSTGROUP=" + getHostgroupName();
-    HostRoleCommand installTask=hostRoleCommandFactory.create(hostName,Role.valueOf(component),null,RoleCommand.INSTALL);
-    installTask.setStatus(HostRoleStatus.PENDING);
-    installTask.setTaskId(topologyContext.getNextTaskId());
-    installTask.setRequestId(getRequestId());
-    installTask.setStageId(stageId);
-    installTask.setRequestId(getRequestId());
-    logicalTasks.add(installTask);
-    registerLogicalInstallTaskId(component,installTask.getTaskId());
+    AmbariContext context=topology.getAmbariContext();
+    HostRoleCommand logicalInstallTask=context.createAmbariTask(getRequestId(),id,component,hostName,AmbariContext.TaskType.INSTALL);
+    logicalTasks.put(logicalInstallTask.getTaskId(),logicalInstallTask);
+    logicalTaskMap.get(installTask).put(component,logicalInstallTask.getTaskId());
     Stack stack=hostGroup.getStack();
-    try {
-      if (!metaInfoManager.getComponent(stack.getName(),stack.getVersion(),stack.getServiceForComponent(component),component).isClient()) {
-        HostRoleCommand startTask=hostRoleCommandFactory.create(hostName,Role.valueOf(component),null,RoleCommand.START);
-        startTask.setStatus(HostRoleStatus.PENDING);
-        startTask.setRequestId(getRequestId());
-        startTask.setTaskId(topologyContext.getNextTaskId());
-        startTask.setRequestId(getRequestId());
-        startTask.setStageId(stageId);
-        logicalTasks.add(startTask);
-        registerLogicalStartTaskId(component,startTask.getTaskId());
-      }
-    }
- catch (    AmbariException e) {
-      e.printStackTrace();
-      throw new RuntimeException(e);
+    if (!stack.getComponentInfo(component).isClient()) {
+      HostRoleCommand logicalStartTask=context.createAmbariTask(getRequestId(),id,component,hostName,AmbariContext.TaskType.START);
+      logicalTasks.put(logicalStartTask.getTaskId(),logicalStartTask);
+      logicalTaskMap.get(startTask).put(component,logicalStartTask.getTaskId());
     }
   }
 }

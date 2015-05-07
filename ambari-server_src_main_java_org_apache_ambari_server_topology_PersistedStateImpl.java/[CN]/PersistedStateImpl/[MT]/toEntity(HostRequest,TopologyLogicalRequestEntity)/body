@@ -1,0 +1,34 @@
+{
+  TopologyHostRequestEntity entity=new TopologyHostRequestEntity();
+  entity.setHostName(request.getHostName());
+  entity.setId(request.getId());
+  entity.setStageId(request.getStageId());
+  entity.setTopologyLogicalRequestEntity(logicalRequestEntity);
+  entity.setTopologyHostGroupEntity(hostGroupDAO.findByRequestIdAndName(logicalRequestEntity.getTopologyRequestId(),request.getHostgroupName()));
+  Collection<TopologyHostTaskEntity> hostRequestTaskEntities=new ArrayList<TopologyHostTaskEntity>();
+  entity.setTopologyHostTaskEntities(hostRequestTaskEntities);
+  for (  TopologyTask task : request.getTopologyTasks()) {
+    if (task.getType() == TopologyTask.Type.INSTALL || task.getType() == TopologyTask.Type.START) {
+      TopologyHostTaskEntity topologyTaskEntity=new TopologyHostTaskEntity();
+      hostRequestTaskEntities.add(topologyTaskEntity);
+      topologyTaskEntity.setType(task.getType().name());
+      topologyTaskEntity.setTopologyHostRequestEntity(entity);
+      Collection<TopologyLogicalTaskEntity> logicalTaskEntities=new ArrayList<TopologyLogicalTaskEntity>();
+      topologyTaskEntity.setTopologyLogicalTaskEntities(logicalTaskEntities);
+      for (      Long logicalTaskId : request.getLogicalTasksForTopologyTask(task).values()) {
+        TopologyLogicalTaskEntity logicalTaskEntity=new TopologyLogicalTaskEntity();
+        logicalTaskEntities.add(logicalTaskEntity);
+        HostRoleCommand logicalTask=request.getLogicalTask(logicalTaskId);
+        logicalTaskEntity.setId(logicalTaskId);
+        logicalTaskEntity.setComponentName(logicalTask.getRole().name());
+        logicalTaskEntity.setTopologyHostTaskEntity(topologyTaskEntity);
+        Long physicalId=request.getPhysicalTaskId(logicalTaskId);
+        if (physicalId != null) {
+          logicalTaskEntity.setHostRoleCommandEntity(physicalTaskDAO.findByPK(physicalId));
+        }
+        logicalTaskEntity.setTopologyHostTaskEntity(topologyTaskEntity);
+      }
+    }
+  }
+  return entity;
+}

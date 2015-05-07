@@ -1,16 +1,13 @@
 {
-  ClusterTopology topology=new ClusterTopologyImpl(request);
+  ensureInitialized();
+  ClusterTopology topology=new ClusterTopologyImpl(ambariContext,request);
+  PersistedTopologyRequest persistedRequest=persistedState.persistTopologyRequest(request);
+  ambariContext.createAmbariResources(topology);
   String clusterName=topology.getClusterName();
   clusterTopologyMap.put(clusterName,topology);
-  createClusterResource(clusterName);
-  createServiceAndComponentResources(topology);
-  LogicalRequest logicalRequest=processRequest(request,topology);
-  try {
-    addClusterConfigRequest(new ClusterConfigurationRequest(topology));
-  }
- catch (  AmbariException e) {
-    throw e;
-  }
-  persistInstallStateForUI(clusterName);
+  LogicalRequest logicalRequest=processRequest(persistedRequest,topology);
+  addClusterConfigRequest(new ClusterConfigurationRequest(ambariContext,topology,true));
+  Stack stack=topology.getBlueprint().getStack();
+  ambariContext.persistInstallStateForUI(clusterName,stack.getName(),stack.getVersion());
   return getRequestStatus(logicalRequest.getRequestId());
 }

@@ -1,0 +1,30 @@
+{
+  topologyTasks.add(new PersistHostResourcesTask());
+  topologyTasks.add(new RegisterWithConfigGroupTask());
+  InstallHostTask installTask=new InstallHostTask();
+  topologyTasks.add(installTask);
+  StartHostTask startTask=new StartHostTask();
+  topologyTasks.add(startTask);
+  logicalTaskMap.put(installTask,new HashMap<String,Long>());
+  logicalTaskMap.put(startTask,new HashMap<String,Long>());
+  AmbariContext ambariContext=topology.getAmbariContext();
+  for (  TopologyHostTaskEntity topologyTaskEntity : entity.getTopologyHostTaskEntities()) {
+    TopologyTask.Type taskType=TopologyTask.Type.valueOf(topologyTaskEntity.getType());
+    for (    TopologyLogicalTaskEntity logicalTaskEntity : topologyTaskEntity.getTopologyLogicalTaskEntities()) {
+      Long logicalTaskId=logicalTaskEntity.getId();
+      String component=logicalTaskEntity.getComponentName();
+      AmbariContext.TaskType logicalTaskType=getLogicalTaskType(taskType);
+      HostRoleCommand task=ambariContext.createAmbariTask(logicalTaskId,getRequestId(),id,component,entity.getHostName(),logicalTaskType);
+      logicalTasks.put(logicalTaskId,task);
+      Long physicalTaskId=logicalTaskEntity.getPhysicalTaskId();
+      if (physicalTaskId != null) {
+        registerPhysicalTaskId(logicalTaskId,physicalTaskId);
+      }
+      for (      TopologyTask topologyTask : topologyTasks) {
+        if (taskType == topologyTask.getType()) {
+          logicalTaskMap.get(topologyTask).put(component,logicalTaskId);
+        }
+      }
+    }
+  }
+}
