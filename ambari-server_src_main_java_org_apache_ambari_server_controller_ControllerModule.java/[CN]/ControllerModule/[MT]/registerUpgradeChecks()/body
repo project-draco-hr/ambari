@@ -1,0 +1,28 @@
+{
+  ClassPathScanningCandidateComponentProvider scanner=new ClassPathScanningCandidateComponentProvider(false);
+  UpgradeCheckRegistry registry=new UpgradeCheckRegistry();
+  bind(UpgradeCheckRegistry.class).toInstance(registry);
+  AssignableTypeFilter filter=new AssignableTypeFilter(AbstractCheckDescriptor.class);
+  scanner.addIncludeFilter(filter);
+  Set<BeanDefinition> beanDefinitions=scanner.findCandidateComponents(AMBARI_PACKAGE);
+  if (null == beanDefinitions || beanDefinitions.size() == 0) {
+    LOG.error("No instances of {} found to register",AbstractCheckDescriptor.class);
+    return;
+  }
+  for (  BeanDefinition beanDefinition : beanDefinitions) {
+    String className=beanDefinition.getBeanClassName();
+    Class<?> clazz=ClassUtils.resolveClassName(className,ClassUtils.getDefaultClassLoader());
+    try {
+      AbstractCheckDescriptor upgradeCheck=(AbstractCheckDescriptor)clazz.newInstance();
+      bind((Class<AbstractCheckDescriptor>)clazz).toInstance(upgradeCheck);
+      registry.register(upgradeCheck);
+    }
+ catch (    Exception exception) {
+      LOG.error("Unable to bind and register upgrade check {}",clazz,exception);
+    }
+  }
+  List<AbstractCheckDescriptor> upgradeChecks=registry.getUpgradeChecks();
+  for (  AbstractCheckDescriptor upgradeCheck : upgradeChecks) {
+    LOG.error("Registered pre-upgrade check {}",upgradeCheck.getClass());
+  }
+}
