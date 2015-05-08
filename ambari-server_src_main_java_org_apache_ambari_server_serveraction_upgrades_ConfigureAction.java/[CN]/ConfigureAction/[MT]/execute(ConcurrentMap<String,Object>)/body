@@ -35,9 +35,15 @@
   for (  ConfigureTask.Transfer transfer : transfers) {
 switch (transfer.operation) {
 case COPY:
-      if (null == transfer.fromType && base.containsKey(transfer.fromKey)) {
-        newValues.put(transfer.toKey,base.get(transfer.fromKey));
-        changedValues=true;
+      if (null == transfer.fromType) {
+        if (base.containsKey(transfer.fromKey)) {
+          newValues.put(transfer.toKey,base.get(transfer.fromKey));
+          changedValues=true;
+        }
+ else         if (StringUtils.isNotBlank(transfer.defaultValue)) {
+          newValues.put(transfer.toKey,transfer.defaultValue);
+          changedValues=true;
+        }
       }
  else {
         Config other=cluster.getDesiredConfigByType(transfer.fromType);
@@ -47,12 +53,20 @@ case COPY:
             newValues.put(transfer.toKey,otherValues.get(transfer.fromKey));
             changedValues=true;
           }
+ else           if (StringUtils.isNotBlank(transfer.defaultValue)) {
+            newValues.put(transfer.toKey,transfer.defaultValue);
+            changedValues=true;
+          }
         }
       }
     break;
 case MOVE:
   if (newValues.containsKey(transfer.fromKey)) {
     newValues.put(transfer.toKey,newValues.remove(transfer.fromKey));
+    changedValues=true;
+  }
+ else   if (StringUtils.isNotBlank(transfer.defaultValue)) {
+    newValues.put(transfer.toKey,transfer.defaultValue);
     changedValues=true;
   }
 break;
@@ -89,7 +103,7 @@ newValues.put(key,value);
 if (!targetStack.equals(currentStack) && targetStack.equals(configStack)) {
 config.setProperties(newValues);
 config.persist(false);
-return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",MessageFormat.format("Updated ''{0}'' with ''{1}={2}''",configType,key,value),"");
+return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",MessageFormat.format("Updated configuration ''{0}''",configType),"");
 }
 String serviceVersionNote="Stack Upgrade";
 String auditName=getExecutionCommand().getRoleParams().get(ServerAction.ACTION_USER_NAME);
@@ -97,7 +111,7 @@ if (auditName == null) {
 auditName=m_configuration.getAnonymousAuditName();
 }
 m_configHelper.createConfigType(cluster,m_controller,configType,newValues,auditName,serviceVersionNote);
-String message="Updated ''{0}'' with ''{1}={2}''";
+String message="Updated configuration ''{0}'' with ''{1}={2}''";
 message=MessageFormat.format(message,configType,key,value);
 return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",message,"");
 }
