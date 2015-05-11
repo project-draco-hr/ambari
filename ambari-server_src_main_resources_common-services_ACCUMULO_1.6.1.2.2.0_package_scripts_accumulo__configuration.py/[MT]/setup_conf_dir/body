@@ -55,16 +55,16 @@ def setup_conf_dir(name=None):
     if params.has_metric_collector:
         accumulo_TemplateConfig('hadoop-metrics2-accumulo.properties', dest_conf_dir)
     if (name == 'master'):
-        params.HdfsResource(format('/user/{params.accumulo_user}'), type='directory', action='create_on_execute', owner=params.accumulo_user, mode=448)
-        params.HdfsResource(format('{params.parent_dir}'), type='directory', action='create_on_execute', owner=params.accumulo_user, mode=448)
-        params.HdfsResource(None, action='execute')
+        params.HdfsDirectory(format('/user/{params.accumulo_user}'), action='create_delayed', owner=params.accumulo_user, mode=448)
+        params.HdfsDirectory(format('{params.parent_dir}'), action='create_delayed', owner=params.accumulo_user, mode=448)
+        params.HdfsDirectory(None, action='create')
         if (params.security_enabled and params.has_secure_user_auth):
-            Execute(format('{params.kinit_cmd} {params.daemon_script} init --user {params.accumulo_principal_name} --instance-name {params.instance_name} --clear-instance-name >{params.log_dir}/accumulo-init.out 2>{params.log_dir}/accumulo-init.err'), not_if=as_user(format('{params.kinit_cmd} {params.hadoop_bin_dir}/hadoop --config {params.hadoop_conf_dir} fs -stat {params.instance_volumes}'), params.accumulo_user), logoutput=True, user=params.accumulo_user)
+            Execute(format('{params.kinit_cmd} {params.daemon_script} init --user {params.accumulo_principal_name} --instance-name {params.instance_name} --clear-instance-name >{params.log_dir}/accumulo-init.out 2>{params.log_dir}/accumulo-init.err'), not_if=as_user(format('{params.kinit_cmd} {params.hadoop_bin_dir}/hadoop --config {params.hadoop_conf_dir} fs -stat {params.instance_volumes}'), params.accumulo_user), user=params.accumulo_user)
         else:
             passfile = format('{params.exec_tmp_dir}/pass')
             try:
                 File(passfile, mode=384, group=params.user_group, owner=params.accumulo_user, content=InlineTemplate('{{root_password}}\n{{root_password}}\n'))
-                Execute(format('cat {passfile} | {params.daemon_script} init --instance-name {params.instance_name} --clear-instance-name >{params.log_dir}/accumulo-init.out 2>{params.log_dir}/accumulo-init.err'), not_if=as_user(format('{params.kinit_cmd} {params.hadoop_bin_dir}/hadoop --config {params.hadoop_conf_dir} fs -stat {params.instance_volumes}'), params.accumulo_user), logoutput=True, user=params.accumulo_user)
+                Execute(format('cat {passfile} | {params.daemon_script} init --instance-name {params.instance_name} --clear-instance-name >{params.log_dir}/accumulo-init.out 2>{params.log_dir}/accumulo-init.err'), not_if=as_user(format('{params.kinit_cmd} {params.hadoop_bin_dir}/hadoop --config {params.hadoop_conf_dir} fs -stat {params.instance_volumes}'), params.accumulo_user), user=params.accumulo_user)
             finally:
                 os.remove(passfile)
     if (name == 'tracer'):
