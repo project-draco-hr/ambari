@@ -1,0 +1,44 @@
+{
+  List<String> result=new ArrayList<String>();
+  Map<String,Map<String,ThreeWayValue>> conflicts=m_mergeHelper.getConflicts(clusterName,config.getStackId());
+  Map<String,ThreeWayValue> conflictMap=conflicts.get(config.getType());
+  if (null != conflictMap && !conflictMap.isEmpty()) {
+    for (    Map.Entry<String,ThreeWayValue> entry : conflictMap.entrySet()) {
+      ThreeWayValue twv=entry.getValue();
+      if (null == twv.oldStackValue) {
+        result.add(entry.getKey());
+      }
+ else       if (null != twv.savedValue && !twv.oldStackValue.equals(twv.savedValue)) {
+        result.add(entry.getKey());
+      }
+    }
+  }
+  String configType=config.getType();
+  Cluster cluster=m_clusters.getCluster(clusterName);
+  StackId oldStack=cluster.getCurrentStackVersion();
+  Set<String> stackPropertiesForType=new HashSet<String>(50);
+  for (  String serviceName : cluster.getServices().keySet()) {
+    Set<PropertyInfo> serviceProperties=m_ambariMetaInfo.get().getServiceProperties(oldStack.getStackName(),oldStack.getStackVersion(),serviceName);
+    for (    PropertyInfo property : serviceProperties) {
+      String type=ConfigHelper.fileNameToConfigType(property.getFilename());
+      if (type.equals(configType)) {
+        stackPropertiesForType.add(property.getName());
+      }
+    }
+  }
+  Set<PropertyInfo> stackProperties=m_ambariMetaInfo.get().getStackProperties(oldStack.getStackName(),oldStack.getStackVersion());
+  for (  PropertyInfo property : stackProperties) {
+    String type=ConfigHelper.fileNameToConfigType(property.getFilename());
+    if (type.equals(configType)) {
+      stackPropertiesForType.add(property.getName());
+    }
+  }
+  Map<String,String> base=config.getProperties();
+  Set<String> baseKeys=base.keySet();
+  for (  String baseKey : baseKeys) {
+    if (!stackPropertiesForType.contains(baseKey)) {
+      result.add(baseKey);
+    }
+  }
+  return result;
+}
