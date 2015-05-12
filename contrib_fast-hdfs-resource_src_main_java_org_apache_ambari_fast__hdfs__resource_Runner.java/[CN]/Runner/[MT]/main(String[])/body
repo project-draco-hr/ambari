@@ -1,0 +1,39 @@
+{
+  if (args.length != 1) {
+    System.err.println("Incorrect number of arguments. Please provide:\n" + "1) Path to json file\n" + "Exiting...");
+    System.exit(1);
+  }
+  final String jsonFilePath=args[0];
+  File file=new File(jsonFilePath);
+  if (!file.isFile()) {
+    System.err.println("File " + jsonFilePath + " doesn't exist.\nExiting...");
+    System.exit(1);
+  }
+  Gson gson=new Gson();
+  Resource[] resources=null;
+  FileSystem dfs=null;
+  try {
+    Configuration conf=new Configuration();
+    dfs=FileSystem.get(conf);
+    resources=(Resource[])gson.fromJson(new FileReader(jsonFilePath),Resource[].class);
+    System.out.println("Using filesystem uri: " + FileSystem.getDefaultUri(conf).toString());
+    dfs.initialize(FileSystem.getDefaultUri(conf),conf);
+    for (    Resource resource : resources) {
+      System.out.println("Creating: " + resource);
+      Resource.checkResourceParameters(resource,dfs);
+      Path pathHadoop=new Path(resource.getTarget());
+      if (resource.getAction().equals("create")) {
+        Resource.createResource(resource,dfs,pathHadoop);
+        Resource.setMode(resource,dfs,pathHadoop);
+        Resource.setOwner(resource,dfs,pathHadoop);
+      }
+ else       if (resource.getAction().equals("delete")) {
+        dfs.delete(pathHadoop,true);
+      }
+    }
+  }
+  finally {
+    dfs.close();
+  }
+  System.out.println("All resources created.");
+}

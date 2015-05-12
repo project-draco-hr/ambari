@@ -1,6 +1,7 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n\n'
 import status_params
 from setup_spark import *
+from resource_management import *
 import resource_management.libraries.functions
 from resource_management.libraries.functions import conf_select
 from resource_management.libraries.functions import format
@@ -8,7 +9,6 @@ from resource_management.libraries.functions.version import format_hdp_stack_ver
 from resource_management.libraries.functions.default import default
 from resource_management.libraries.functions import get_kinit_path
 from resource_management.libraries.script.script import Script
-from resource_management.libraries.resources.hdfs_directory import HdfsDirectory
 SERVER_ROLE_DIRECTORY_MAP = {'SPARK_JOBHISTORYSERVER': 'spark-historyserver', 'SPARK_CLIENT': 'spark-client', }
 component_directory = Script.get_component_from_role(SERVER_ROLE_DIRECTORY_MAP, 'SPARK_CLIENT')
 config = Script.get_config()
@@ -27,6 +27,8 @@ if Script.is_hdp_stack_greater_or_equal('2.2'):
     spark_log_dir = config['configurations']['spark-env']['spark_log_dir']
     spark_pid_dir = status_params.spark_pid_dir
     spark_home = format('/usr/hdp/current/{component_directory}')
+    tez_tar_source = config['configurations']['cluster-env']['tez_tar_source']
+    tez_tar_destination = ((config['configurations']['cluster-env']['tez_tar_destination_folder'] + '/') + os.path.basename(tez_tar_source))
 java_home = config['hostLevelParams']['java_home']
 hdfs_user = config['configurations']['hadoop-env']['hdfs_user']
 hdfs_principal_name = config['configurations']['hadoop-env']['hdfs_principal_name']
@@ -75,4 +77,4 @@ if security_enabled:
     if is_hive_installed:
         spark_hive_properties.update({'hive.metastore.sasl.enabled': str(config['configurations']['hive-site']['hive.metastore.sasl.enabled']).lower(), 'hive.metastore.kerberos.keytab.file': config['configurations']['hive-site']['hive.metastore.kerberos.keytab.file'], 'hive.server2.authentication.spnego.principal': config['configurations']['hive-site']['hive.server2.authentication.spnego.principal'], 'hive.server2.authentication.spnego.keytab': config['configurations']['hive-site']['hive.server2.authentication.spnego.keytab'], 'hive.metastore.kerberos.principal': config['configurations']['hive-site']['hive.metastore.kerberos.principal'], 'hive.server2.authentication.kerberos.principal': config['configurations']['hive-site']['hive.server2.authentication.kerberos.principal'], 'hive.server2.authentication.kerberos.keytab': config['configurations']['hive-site']['hive.server2.authentication.kerberos.keytab'], 'hive.security.authorization.enabled': spark_hive_sec_authorization_enabled, 'hive.server2.enable.doAs': str(config['configurations']['hive-site']['hive.server2.enable.doAs']).lower(), })
 import functools
-HdfsDirectory = functools.partial(HdfsDirectory, conf_dir=hadoop_conf_dir, hdfs_user=hdfs_user, security_enabled=security_enabled, keytab=hdfs_user_keytab, kinit_path_local=kinit_path_local, bin_dir=hadoop_bin_dir)
+HdfsResource = functools.partial(HdfsResource, user=hdfs_user, security_enabled=security_enabled, keytab=hdfs_user_keytab, kinit_path_local=kinit_path_local, hadoop_bin_dir=hadoop_bin_dir, hadoop_conf_dir=hadoop_conf_dir)
