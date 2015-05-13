@@ -22,6 +22,8 @@ def execute_command(self, command):
             maxAttempts = int(command['commandParams']['command_retry_max_attempt_count'])
         if ('command_retry_enabled' in command['commandParams']):
             retryAble = (command['commandParams']['command_retry_enabled'] == 'true')
+    if isAutoExecuteCommand:
+        retryAble = False
     logger.debug('Command execution metadata - retry enabled = {retryAble}, max attempt count = {maxAttemptCount}'.format(retryAble=retryAble, maxAttemptCount=maxAttempts))
     while (numAttempts < maxAttempts):
         numAttempts += 1
@@ -50,6 +52,15 @@ def execute_command(self, command):
     else:
         roleResult['structuredOut'] = ''
     if (status == self.COMPLETED_STATUS):
+        if (self.controller.recovery_manager.enabled() and command.has_key('roleCommand')):
+            if (command['roleCommand'] == self.ROLE_COMMAND_START):
+                self.controller.recovery_manager.update_current_status(command['role'], LiveStatus.LIVE_STATUS)
+            elif ((command['roleCommand'] == self.ROLE_COMMAND_STOP) or (command['roleCommand'] == self.ROLE_COMMAND_INSTALL)):
+                self.controller.recovery_manager.update_current_status(command['role'], LiveStatus.DEAD_STATUS)
+            elif (command['roleCommand'] == self.ROLE_COMMAND_CUSTOM_COMMAND):
+                if (command['hostLevelParams'].has_key('custom_command') and (command['hostLevelParams']['custom_command'] == self.CUSTOM_COMMAND_RESTART)):
+                    self.controller.recovery_manager.update_current_status(command['role'], LiveStatus.LIVE_STATUS)
+        pass
         configHandler = ActualConfigHandler(self.config, self.configTags)
         if (command.has_key('forceRefreshConfigTags') and (len(command['forceRefreshConfigTags']) > 0)):
             forceRefreshConfigTags = command['forceRefreshConfigTags']
