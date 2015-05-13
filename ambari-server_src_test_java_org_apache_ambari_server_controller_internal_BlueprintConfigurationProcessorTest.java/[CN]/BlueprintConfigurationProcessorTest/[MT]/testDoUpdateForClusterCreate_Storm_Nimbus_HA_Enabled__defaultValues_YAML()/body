@@ -1,0 +1,34 @@
+{
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> typeProps=new HashMap<String,String>();
+  typeProps.put("nimbus.seeds","localhost");
+  properties.put("storm-site",typeProps);
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> hgComponents=new HashSet<String>();
+  hgComponents.add("NIMBUS");
+  TestHostGroup group1=new TestHostGroup("group1",hgComponents,Collections.singleton("testhost"));
+  Collection<String> hgComponents2=new HashSet<String>();
+  hgComponents2.add("NIMBUS");
+  Set<String> hosts2=new HashSet<String>();
+  hosts2.add("testhost2");
+  TestHostGroup group2=new TestHostGroup("group2",hgComponents2,hosts2);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  hostGroups.add(group2);
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
+  String updatedVal=topology.getConfiguration().getFullProperties().get("storm-site").get("nimbus.seeds");
+  assertTrue("Updated YAML value should start with bracket",updatedVal.startsWith("["));
+  assertTrue("Updated YAML value should end with bracket",updatedVal.endsWith("]"));
+  updatedVal=updatedVal.replaceAll("[\\[\\]]","");
+  String[] hosts=updatedVal.split(",");
+  Collection<String> expectedHosts=new HashSet<String>();
+  expectedHosts.add("testhost");
+  expectedHosts.add("testhost2");
+  assertEquals("Incorrect number of hosts found in updated Nimbus config property",2,hosts.length);
+  for (  String host : hosts) {
+    assertTrue("Expected host name = " + host + " not found in updated Nimbus config property",expectedHosts.contains(host));
+    expectedHosts.remove(host);
+  }
+}
