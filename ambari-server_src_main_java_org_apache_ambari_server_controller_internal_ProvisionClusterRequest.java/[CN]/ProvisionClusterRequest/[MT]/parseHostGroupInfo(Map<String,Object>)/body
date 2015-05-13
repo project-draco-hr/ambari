@@ -13,13 +13,19 @@
       throw new InvalidTopologyTemplateException("Host group '" + name + "' must contain a 'hosts' element");
     }
     HostGroupInfo hostGroupInfo=new HostGroupInfo(name);
-    hostGroupInfoMap.put(name,hostGroupInfo);
+    getHostGroupInfo().put(name,hostGroupInfo);
     for (    Object oHost : hosts) {
       Map<String,String> hostProperties=(Map<String,String>)oHost;
-      String fqdn=hostProperties.get("fqdn");
-      if (fqdn == null || fqdn.isEmpty()) {
+      String hostName=hostProperties.get("fqdn");
+      boolean containsHostCount=hostProperties.containsKey("host_count");
+      boolean containsHostPredicate=hostProperties.containsKey("host_predicate");
+      if (hostName != null && (containsHostCount || containsHostPredicate)) {
+        throw new InvalidTopologyTemplateException("Can't specify host_count or host_predicate if host_name is specified in hostgroup: " + name);
+      }
+      if (hostName == null || hostName.isEmpty()) {
         String predicate=hostProperties.get("host_predicate");
         if (predicate != null && !predicate.isEmpty()) {
+          validateHostPredicateProperties(predicate);
           try {
             hostGroupInfo.setPredicate(predicate);
           }
@@ -27,7 +33,7 @@
             throw new InvalidTopologyTemplateException(String.format("Unable to compile host predicate '%s': %s",predicate,e),e);
           }
         }
-        if (hostProperties.containsKey("host_count")) {
+        if (containsHostCount) {
           hostGroupInfo.setRequestedCount(Integer.valueOf(hostProperties.get("host_count")));
         }
  else {
@@ -35,7 +41,7 @@
         }
       }
  else {
-        hostGroupInfo.addHost(fqdn);
+        hostGroupInfo.addHost(hostName);
       }
     }
     hostGroupInfo.setConfiguration(configurationFactory.getConfiguration((Collection<Map<String,String>>)hostGroupProperties.get("configurations")));
