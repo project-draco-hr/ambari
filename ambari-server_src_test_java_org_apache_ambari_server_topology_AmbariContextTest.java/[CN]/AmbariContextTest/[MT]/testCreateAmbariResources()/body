@@ -1,0 +1,67 @@
+{
+  Capture<ClusterRequest> clusterRequestCapture=new Capture<ClusterRequest>();
+  controller.createCluster(capture(clusterRequestCapture));
+  expectLastCall().once();
+  expect(controller.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getCluster(CLUSTER_NAME)).andReturn(cluster).anyTimes();
+  expect(cluster.getServices()).andReturn(clusterServices).anyTimes();
+  Capture<Set<ServiceRequest>> serviceRequestCapture=new Capture<Set<ServiceRequest>>();
+  Capture<Set<ServiceComponentRequest>> serviceComponentRequestCapture=new Capture<Set<ServiceComponentRequest>>();
+  serviceResourceProvider.createServices(capture(serviceRequestCapture));
+  expectLastCall().once();
+  componentResourceProvider.createComponents(capture(serviceComponentRequestCapture));
+  expectLastCall().once();
+  Capture<Request> serviceInstallRequestCapture=new Capture<Request>();
+  Capture<Request> serviceStartRequestCapture=new Capture<Request>();
+  Capture<Predicate> installPredicateCapture=new Capture<Predicate>();
+  Capture<Predicate> startPredicateCapture=new Capture<Predicate>();
+  expect(serviceResourceProvider.updateResources(capture(serviceInstallRequestCapture),capture(installPredicateCapture))).andReturn(null).once();
+  expect(serviceResourceProvider.updateResources(capture(serviceStartRequestCapture),capture(startPredicateCapture))).andReturn(null).once();
+  replayAll();
+  context.createAmbariResources(topology);
+  ClusterRequest clusterRequest=clusterRequestCapture.getValue();
+  assertEquals(CLUSTER_NAME,clusterRequest.getClusterName());
+  assertEquals(String.format("%s-%s",STACK_NAME,STACK_VERSION),clusterRequest.getStackVersion());
+  Collection<ServiceRequest> serviceRequests=serviceRequestCapture.getValue();
+  assertEquals(2,serviceRequests.size());
+  Collection<String> servicesFound=new HashSet<String>();
+  for (  ServiceRequest serviceRequest : serviceRequests) {
+    servicesFound.add(serviceRequest.getServiceName());
+    assertEquals(CLUSTER_NAME,serviceRequest.getClusterName());
+  }
+  assertTrue(servicesFound.size() == 2 && servicesFound.containsAll(Arrays.asList("service1","service2")));
+  Collection<ServiceComponentRequest> serviceComponentRequests=serviceComponentRequestCapture.getValue();
+  assertEquals(3,serviceComponentRequests.size());
+  Map<String,Collection<String>> foundServiceComponents=new HashMap<String,Collection<String>>();
+  for (  ServiceComponentRequest componentRequest : serviceComponentRequests) {
+    assertEquals(CLUSTER_NAME,componentRequest.getClusterName());
+    String serviceName=componentRequest.getServiceName();
+    Collection<String> serviceComponents=foundServiceComponents.get(serviceName);
+    if (serviceComponents == null) {
+      serviceComponents=new HashSet<String>();
+      foundServiceComponents.put(serviceName,serviceComponents);
+    }
+    serviceComponents.add(componentRequest.getComponentName());
+  }
+  assertEquals(2,foundServiceComponents.size());
+  Collection<String> service1Components=foundServiceComponents.get("service1");
+  assertEquals(2,service1Components.size());
+  assertTrue(service1Components.containsAll(Arrays.asList("s1Component1","s1Component2")));
+  Collection<String> service2Components=foundServiceComponents.get("service2");
+  assertEquals(1,service2Components.size());
+  assertTrue(service2Components.contains("s2Component1"));
+  Request installRequest=serviceInstallRequestCapture.getValue();
+  Set<Map<String,Object>> installPropertiesSet=installRequest.getProperties();
+  assertEquals(1,installPropertiesSet.size());
+  Map<String,Object> installProperties=installPropertiesSet.iterator().next();
+  assertEquals(CLUSTER_NAME,installProperties.get(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID));
+  assertEquals("INSTALLED",installProperties.get(ServiceResourceProvider.SERVICE_SERVICE_STATE_PROPERTY_ID));
+  assertEquals(new EqualsPredicate<String>(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID,CLUSTER_NAME),installPredicateCapture.getValue());
+  Request startRequest=serviceStartRequestCapture.getValue();
+  Set<Map<String,Object>> startPropertiesSet=startRequest.getProperties();
+  assertEquals(1,startPropertiesSet.size());
+  Map<String,Object> startProperties=startPropertiesSet.iterator().next();
+  assertEquals(CLUSTER_NAME,startProperties.get(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID));
+  assertEquals("STARTED",startProperties.get(ServiceResourceProvider.SERVICE_SERVICE_STATE_PROPERTY_ID));
+  assertEquals(new EqualsPredicate<String>(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID,CLUSTER_NAME),installPredicateCapture.getValue());
+}
