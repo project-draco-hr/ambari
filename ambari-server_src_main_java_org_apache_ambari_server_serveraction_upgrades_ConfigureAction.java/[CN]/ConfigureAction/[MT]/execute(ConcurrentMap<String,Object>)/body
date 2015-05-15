@@ -14,12 +14,19 @@
     }
 .getType());
   }
-  if (null == configType && null == key && transfers.isEmpty()) {
+  List<ConfigureTask.Replace> replacements=Collections.emptyList();
+  String replaceJson=commandParameters.get(ConfigureTask.PARAMETER_REPLACEMENTS);
+  if (null != replaceJson) {
+    replacements=m_gson.fromJson(replaceJson,new TypeToken<List<ConfigureTask.Replace>>(){
+    }
+.getType());
+  }
+  if (null == configType && null == key && transfers.isEmpty() && replacements.isEmpty()) {
     return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","","Skipping configuration task");
   }
-  if (null == clusterName || null == configType || (null == key && transfers.isEmpty())) {
-    String message="cluster={0}, type={1}, key={2}, transfers={3}";
-    message=MessageFormat.format(message,clusterName,configType,key,transfers);
+  if (null == clusterName || null == configType || (null == key && transfers.isEmpty() && replacements.isEmpty())) {
+    String message="cluster={0}, type={1}, key={2}, transfers={3}, replacements={4}";
+    message=MessageFormat.format(message,clusterName,configType,key,transfers,replacements);
     return createCommandReport(0,HostRoleStatus.FAILED,"{}","",message);
   }
   Cluster cluster=m_clusters.getCluster(clusterName);
@@ -120,6 +127,19 @@ return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",MessageFormat.format(
 }
 newValues.put(key,value);
 outputBuffer.append(MessageFormat.format("{0}/{1} changed to {2}\n",configType,key,value));
+}
+for (ConfigureTask.Replace replacement : replacements) {
+if (newValues.containsKey(replacement.key)) {
+String toReplace=newValues.get(replacement.key);
+if (!toReplace.contains(replacement.find)) {
+outputBuffer.append(MessageFormat.format("String {0} was not found in {1}/{2}\n",replacement.find,configType,replacement.key));
+}
+ else {
+String replaced=StringUtils.replace(toReplace,replacement.find,replacement.replaceWith);
+newValues.put(replacement.key,replaced);
+outputBuffer.append(MessageFormat.format("Replaced {0}/{1} containing \"{2}\" with \"{3}\"\n",configType,replacement.key,replacement.find,replacement.replaceWith));
+}
+}
 }
 if (!targetStack.equals(currentStack) && targetStack.equals(configStack)) {
 config.setProperties(newValues);
