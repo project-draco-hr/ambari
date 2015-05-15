@@ -1,0 +1,34 @@
+{
+  StringBuilder sb=new StringBuilder();
+  try {
+    InputStream in=null;
+    Cluster c=context.getCluster();
+    if (c != null) {
+      AmbariStreamProvider stream=context.getAmbariStreamProvider();
+      String clusterName=c.getName();
+      in=stream.readFrom("/api/v1/clusters/" + clusterName,"GET",null,null,true);
+    }
+ else {
+      URLStreamProvider stream=context.getURLStreamProvider();
+      String baseUrl=context.getProperties().get("ambari.server.url");
+      String username=context.getProperties().get("ambari.server.username");
+      String password=context.getProperties().get("ambari.server.password");
+      HashMap<String,String> hds=new HashMap<String,String>();
+      hds.put("X-Requested-By","auto-cluster-view");
+      String authString=username + ":" + password;
+      byte[] authEncBytes=Base64.encodeBase64(authString.getBytes());
+      String authStringEnc=new String(authEncBytes);
+      hds.put("Authorization","Basic " + authStringEnc);
+      in=stream.readFrom(baseUrl,"GET",null,hds);
+    }
+    BufferedReader r=new BufferedReader(new InputStreamReader(in));
+    String str=null;
+    while ((str=r.readLine()) != null) {
+      sb.append(str);
+    }
+  }
+ catch (  java.io.IOException ioe) {
+    ioe.printStackTrace();
+  }
+  return Response.ok(sb.toString()).build();
+}
