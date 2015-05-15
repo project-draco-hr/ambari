@@ -36,61 +36,70 @@
   for (  ConfigureTask.Transfer transfer : transfers) {
 switch (transfer.operation) {
 case COPY:
-      if (null == transfer.fromType) {
-        if (base.containsKey(transfer.fromKey)) {
-          newValues.put(transfer.toKey,base.get(transfer.fromKey));
-          changedValues=true;
-          outputBuffer.append(MessageFormat.format("Copied {0}/{1}\n",configType,transfer.toKey));
-        }
- else         if (StringUtils.isNotBlank(transfer.defaultValue)) {
-          newValues.put(transfer.toKey,transfer.defaultValue);
-          changedValues=true;
-          outputBuffer.append(MessageFormat.format("Created {0}/{1} with default value {2}\n",configType,transfer.toKey,transfer.defaultValue));
-        }
-      }
+      String valueToCopy=null;
+    if (null == transfer.fromType) {
+      valueToCopy=base.get(transfer.fromKey);
+    }
  else {
-        Config other=cluster.getDesiredConfigByType(transfer.fromType);
-        if (null != other) {
-          Map<String,String> otherValues=other.getProperties();
-          if (otherValues.containsKey(transfer.fromKey)) {
-            newValues.put(transfer.toKey,otherValues.get(transfer.fromKey));
-            changedValues=true;
-            outputBuffer.append(MessageFormat.format("Copied {0}/{1} to {2}\n",transfer.fromType,transfer.fromKey,configType));
-          }
- else           if (StringUtils.isNotBlank(transfer.defaultValue)) {
-            newValues.put(transfer.toKey,transfer.defaultValue);
-            changedValues=true;
-            outputBuffer.append(MessageFormat.format("Created {0}/{1} with default value {2}\n",configType,transfer.toKey,transfer.defaultValue));
-          }
+      Config other=cluster.getDesiredConfigByType(transfer.fromType);
+      if (null != other) {
+        Map<String,String> otherValues=other.getProperties();
+        if (otherValues.containsKey(transfer.fromKey)) {
+          valueToCopy=otherValues.get(transfer.fromKey);
         }
       }
+    }
+  if (StringUtils.isBlank(valueToCopy) && !StringUtils.isBlank(transfer.defaultValue)) {
+    valueToCopy=transfer.defaultValue;
+  }
+if (StringUtils.isNotBlank(valueToCopy)) {
+  if (transfer.coerceTo != null) {
+switch (transfer.coerceTo) {
+case YAML_ARRAY:
+{
+        String[] splitValues=StringUtils.split(valueToCopy,',');
+        List<String> quotedValues=new ArrayList<String>(splitValues.length);
+        for (        String splitValue : splitValues) {
+          quotedValues.add("'" + StringUtils.trim(splitValue) + "'");
+        }
+        valueToCopy="[" + StringUtils.join(quotedValues,',') + "]";
+        break;
+      }
+default :
     break;
+}
+}
+changedValues=true;
+newValues.put(transfer.toKey,valueToCopy);
+outputBuffer.append(MessageFormat.format("Created {0}/{1} = {2}\n",configType,transfer.toKey,valueToCopy));
+}
+break;
 case MOVE:
-  if (newValues.containsKey(transfer.fromKey)) {
-    newValues.put(transfer.toKey,newValues.remove(transfer.fromKey));
-    changedValues=true;
-    outputBuffer.append(MessageFormat.format("Renamed {0}/{1} to {2}/{3}\n",configType,transfer.fromKey,configType,transfer.toKey));
-  }
- else   if (StringUtils.isNotBlank(transfer.defaultValue)) {
-    newValues.put(transfer.toKey,transfer.defaultValue);
-    changedValues=true;
-    outputBuffer.append(MessageFormat.format("Created {0}/{1} with default value {2}\n",configType,transfer.toKey,transfer.defaultValue));
-  }
+if (newValues.containsKey(transfer.fromKey)) {
+newValues.put(transfer.toKey,newValues.remove(transfer.fromKey));
+changedValues=true;
+outputBuffer.append(MessageFormat.format("Renamed {0}/{1} to {2}/{3}\n",configType,transfer.fromKey,configType,transfer.toKey));
+}
+ else if (StringUtils.isNotBlank(transfer.defaultValue)) {
+newValues.put(transfer.toKey,transfer.defaultValue);
+changedValues=true;
+outputBuffer.append(MessageFormat.format("Created {0}/{1} with default value {2}\n",configType,transfer.toKey,transfer.defaultValue));
+}
 break;
 case DELETE:
 if ("*".equals(transfer.deleteKey)) {
 newValues.clear();
 outputBuffer.append(MessageFormat.format("Deleted all keys from {0}\n",configType));
 for (String keeper : transfer.keepKeys) {
-  newValues.put(keeper,base.get(keeper));
-  outputBuffer.append(MessageFormat.format("Preserved {0}/{1} after delete\n",configType,keeper));
+newValues.put(keeper,base.get(keeper));
+outputBuffer.append(MessageFormat.format("Preserved {0}/{1} after delete\n",configType,keeper));
 }
 if (transfer.preserveEdits) {
-  List<String> edited=findValuesToPreserve(clusterName,config);
-  for (  String changed : edited) {
-    newValues.put(changed,base.get(changed));
-    outputBuffer.append(MessageFormat.format("Preserved {0}/{1} after delete\n",configType,changed));
-  }
+List<String> edited=findValuesToPreserve(clusterName,config);
+for (String changed : edited) {
+newValues.put(changed,base.get(changed));
+outputBuffer.append(MessageFormat.format("Preserved {0}/{1} after delete\n",configType,changed));
+}
 }
 changedValues=true;
 }
