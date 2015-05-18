@@ -1,5 +1,5 @@
-def get_hadoop_conf_dir():
-    '\n  Gets the shared hadoop conf directory using:\n  1.  Start with /etc/hadoop/conf\n  2.  When the stack is greater than HDP-2.2, use /usr/hdp/current/hadoop-client/conf\n  3.  Only when doing a RU and HDP-2.3 or higher, use the value as computed\n      by conf-select.  This is in the form /usr/hdp/VERSION/hadoop/conf to make sure\n      the configs are written in the correct place\n  '
+def get_hadoop_conf_dir(force_latest_on_upgrade=False):
+    '\n  Gets the shared hadoop conf directory using:\n  1.  Start with /etc/hadoop/conf\n  2.  When the stack is greater than HDP-2.2, use /usr/hdp/current/hadoop-client/conf\n  3.  Only when doing a RU and HDP-2.3 or higher, use the value as computed\n      by conf-select.  This is in the form /usr/hdp/VERSION/hadoop/conf to make sure\n      the configs are written in the correct place. However, if the component itself has\n      not yet been upgraded, it should use the hadoop configs from the prior version.\n      This will perform an hdp-select status to determine which version to use.\n  :param force_latest_on_upgrade:  if True, then force the returned path to always\n  be that of the upgrade target version, even if hdp-select has not been called. This\n  is primarily used by hooks like before-ANY to ensure that hadoop environment\n  configurations are written to the correct location since they are written out\n  before the hdp-select/conf-select would have been called.\n  '
     hadoop_conf_dir = '/etc/hadoop/conf'
     if Script.is_hdp_stack_greater_or_equal('2.2'):
         hadoop_conf_dir = '/usr/hdp/current/hadoop-client/conf'
@@ -8,5 +8,9 @@ def get_hadoop_conf_dir():
             stack_name = stack_info[0]
             stack_version = stack_info[1]
             select(stack_name, 'hadoop', stack_version)
+            if (not force_latest_on_upgrade):
+                current_hdp_version = get_role_component_current_hdp_version()
+                if ((current_hdp_version is not None) and (stack_version != current_hdp_version)):
+                    stack_version = current_hdp_version
             hadoop_conf_dir = '/usr/hdp/{0}/hadoop/conf'.format(stack_version)
     return hadoop_conf_dir
