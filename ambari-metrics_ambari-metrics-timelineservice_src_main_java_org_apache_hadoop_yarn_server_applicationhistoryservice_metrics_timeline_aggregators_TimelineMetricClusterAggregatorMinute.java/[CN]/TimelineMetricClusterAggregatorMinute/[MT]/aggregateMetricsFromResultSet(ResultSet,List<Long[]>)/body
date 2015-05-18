@@ -1,26 +1,21 @@
 {
   Map<TimelineClusterMetric,MetricClusterAggregate> aggregateClusterMetrics=new HashMap<TimelineClusterMetric,MetricClusterAggregate>();
-  while (rs.next()) {
-    TimelineMetric metric=timelineMetricReadHelper.getTimelineMetricFromResultSet(rs);
-    Map<TimelineClusterMetric,Double> clusterMetrics=sliceFromTimelineMetric(metric,timeSlices);
-    if (clusterMetrics != null && !clusterMetrics.isEmpty()) {
-      for (      Map.Entry<TimelineClusterMetric,Double> clusterMetricEntry : clusterMetrics.entrySet()) {
-        TimelineClusterMetric clusterMetric=clusterMetricEntry.getKey();
-        Double avgValue=clusterMetricEntry.getValue();
-        MetricClusterAggregate aggregate=aggregateClusterMetrics.get(clusterMetric);
-        if (aggregate == null) {
-          aggregate=new MetricClusterAggregate(avgValue,1,null,avgValue,avgValue);
-          aggregateClusterMetrics.put(clusterMetric,aggregate);
-        }
+  TimelineMetric metric=null;
+  if (rs.next()) {
+    metric=timelineMetricReadHelper.getTimelineMetricFromResultSet(rs);
+    while (rs.next()) {
+      TimelineMetric nextMetric=timelineMetricReadHelper.getTimelineMetricFromResultSet(rs);
+      if (metric.equalsExceptTime(nextMetric)) {
+        metric.addMetricValues(nextMetric.getMetricValues());
+      }
  else {
-          aggregate.updateSum(avgValue);
-          aggregate.updateNumberOfHosts(1);
-          aggregate.updateMax(avgValue);
-          aggregate.updateMin(avgValue);
-        }
-        appAggregator.processTimelineClusterMetric(clusterMetric,metric.getHostName(),avgValue);
+        processAggregateClusterMetrics(aggregateClusterMetrics,metric,timeSlices);
+        metric=nextMetric;
       }
     }
+  }
+  if (metric != null) {
+    processAggregateClusterMetrics(aggregateClusterMetrics,metric,timeSlices);
   }
   aggregateClusterMetrics.putAll(appAggregator.getAggregateClusterMetrics());
   return aggregateClusterMetrics;

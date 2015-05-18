@@ -3,6 +3,11 @@
     return null;
   }
   Map<TimelineClusterMetric,Double> timelineClusterMetricMap=new HashMap<TimelineClusterMetric,Double>();
+  Long timeShift=timelineMetric.getTimestamp() - timelineMetric.getStartTime();
+  if (timeShift < 0) {
+    LOG.debug("Invalid time shift found, possible discrepancy in clocks. " + "timeShift = " + timeShift);
+    timeShift=0l;
+  }
   for (  Map.Entry<Long,Double> metric : timelineMetric.getMetricValues().entrySet()) {
     if (metric.getValue() == null) {
       continue;
@@ -10,13 +15,21 @@
     Long timestamp=getSliceTimeForMetric(timeSlices,Long.parseLong(metric.getKey().toString()));
     if (timestamp != -1) {
       TimelineClusterMetric clusterMetric=new TimelineClusterMetric(timelineMetric.getMetricName(),timelineMetric.getAppId(),timelineMetric.getInstanceId(),timestamp,timelineMetric.getType());
+      int count=1;
+      Double sum;
       if (!timelineClusterMetricMap.containsKey(clusterMetric)) {
-        timelineClusterMetricMap.put(clusterMetric,metric.getValue());
+        sum=metric.getValue();
       }
  else {
+        count++;
         Double oldValue=timelineClusterMetricMap.get(clusterMetric);
-        Double newValue=(oldValue + metric.getValue()) / 2;
-        timelineClusterMetricMap.put(clusterMetric,newValue);
+        sum=oldValue + metric.getValue();
+      }
+      timelineClusterMetricMap.put(clusterMetric,(sum / count));
+    }
+ else {
+      if (timelineMetric.getMetricName().equals("tserver.general.entries")) {
+        LOG.info("--- Fallen off: serverTs = " + timelineMetric.getTimestamp() + ", timeShift: "+ timeShift+ ", timestamp: "+ Long.parseLong(metric.getKey().toString())+ ", host = "+ timelineMetric.getHostName());
       }
     }
   }
