@@ -1,0 +1,38 @@
+{
+  if ((value != null) && (replacementsMap != null) && !replacementsMap.isEmpty()) {
+    int count=0;
+    boolean replacementPerformed;
+    do {
+      if (++count > 1000) {
+        throw new AmbariException(String.format("Circular reference found while replacing variables in %s",value));
+      }
+      Matcher matcher=PATTERN_VARIABLE.matcher(value);
+      StringBuffer sb=new StringBuffer();
+      replacementPerformed=false;
+      while (matcher.find()) {
+        String type=matcher.group(1);
+        String name=matcher.group(2);
+        Map<String,String> replacements;
+        if ((name != null) && !name.isEmpty()) {
+          if (type == null) {
+            replacements=replacementsMap.get("");
+          }
+ else {
+            replacements=replacementsMap.get(type);
+          }
+          if (replacements != null) {
+            String replacement=replacements.get(name);
+            if (replacement != null) {
+              matcher.appendReplacement(sb,replacement.replace("\\","\\\\").replace("$","\\$"));
+              replacementPerformed=true;
+            }
+          }
+        }
+      }
+      matcher.appendTail(sb);
+      value=sb.toString();
+    }
+ while (replacementPerformed);
+  }
+  return value;
+}
