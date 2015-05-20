@@ -4,19 +4,26 @@ def action_create(self):
         Logger.info(('Adding user %s' % self.resource))
     else:
         command = ['usermod']
+        for (option_name, attributes) in self.options.iteritems():
+            if ((getattr(self.resource, option_name) != None) and (getattr(self.resource, option_name) != attributes[0](self))):
+                if ((attributes[1] == '-G') and set(getattr(self.resource, option_name)).issubset(set(attributes[0](self)))):
+                    continue
+                break
+        else:
+            return
         Logger.info(('Modifying user %s' % self.resource.username))
-    options = dict(comment='-c', gid='-g', uid='-u', shell='-s', password='-p', home='-d')
     if (self.resource.system and (not self.user)):
         command.append('--system')
-    if self.resource.groups:
-        groups = self.resource.groups
-        if (self.user and self.user_groups):
-            groups += self.user_groups
-        command += ['-G', ','.join(groups)]
-    for (option_name, option_flag) in options.items():
-        option_value = getattr(self.resource, option_name)
-        if (option_flag and option_value):
-            command += [option_flag, str(option_value)]
+    for (option_name, attributes) in self.options.iteritems():
+        if (attributes[1] == '-G'):
+            groups = self.resource.groups
+            if (self.user and self.user_groups):
+                groups += self.user_groups
+            option_value = ','.join(groups)
+        else:
+            option_value = getattr(self.resource, option_name)
+        if (attributes[1] and option_value):
+            command += [attributes[1], str(option_value)]
     if (self.user and (len(command) == 1)):
         return
     command.append(self.resource.username)
