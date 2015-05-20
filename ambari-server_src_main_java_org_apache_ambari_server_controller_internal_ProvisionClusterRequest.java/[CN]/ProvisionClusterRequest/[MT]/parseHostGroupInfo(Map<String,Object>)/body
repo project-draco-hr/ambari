@@ -1,49 +1,9 @@
 {
-  Collection<Map<String,Object>> hostGroups=(Collection<Map<String,Object>>)properties.get("host_groups");
+  Collection<Map<String,Object>> hostGroups=(Collection<Map<String,Object>>)properties.get(HOSTGROUPS_PROPERTY);
   if (hostGroups == null || hostGroups.isEmpty()) {
     throw new InvalidTopologyTemplateException("'host_groups' element must be included in cluster create body");
   }
   for (  Map<String,Object> hostGroupProperties : hostGroups) {
-    String name=String.valueOf(hostGroupProperties.get("name"));
-    if (name.equals("null") || name.isEmpty()) {
-      throw new InvalidTopologyTemplateException("All host groups must contain a 'name' element");
-    }
-    Collection hosts=(Collection)hostGroupProperties.get("hosts");
-    if (hosts == null || hosts.isEmpty()) {
-      throw new InvalidTopologyTemplateException("Host group '" + name + "' must contain a 'hosts' element");
-    }
-    HostGroupInfo hostGroupInfo=new HostGroupInfo(name);
-    getHostGroupInfo().put(name,hostGroupInfo);
-    for (    Object oHost : hosts) {
-      Map<String,String> hostProperties=(Map<String,String>)oHost;
-      String hostName=hostProperties.get("fqdn");
-      boolean containsHostCount=hostProperties.containsKey("host_count");
-      boolean containsHostPredicate=hostProperties.containsKey("host_predicate");
-      if (hostName != null && (containsHostCount || containsHostPredicate)) {
-        throw new InvalidTopologyTemplateException("Can't specify host_count or host_predicate if host_name is specified in hostgroup: " + name);
-      }
-      if (hostName == null || hostName.isEmpty()) {
-        String predicate=hostProperties.get("host_predicate");
-        if (predicate != null && !predicate.isEmpty()) {
-          validateHostPredicateProperties(predicate);
-          try {
-            hostGroupInfo.setPredicate(predicate);
-          }
- catch (          InvalidQueryException e) {
-            throw new InvalidTopologyTemplateException(String.format("Unable to compile host predicate '%s': %s",predicate,e),e);
-          }
-        }
-        if (containsHostCount) {
-          hostGroupInfo.setRequestedCount(Integer.valueOf(hostProperties.get("host_count")));
-        }
- else {
-          throw new InvalidTopologyTemplateException("Host group '" + name + "' hosts element must include at least one fqdn"+ " or a host_count must be specified");
-        }
-      }
- else {
-        hostGroupInfo.addHost(hostName);
-      }
-    }
-    hostGroupInfo.setConfiguration(configurationFactory.getConfiguration((Collection<Map<String,String>>)hostGroupProperties.get("configurations")));
+    processHostGroup(hostGroupProperties);
   }
 }
