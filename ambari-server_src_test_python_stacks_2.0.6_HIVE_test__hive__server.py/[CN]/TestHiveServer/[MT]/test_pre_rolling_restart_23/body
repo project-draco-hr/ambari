@@ -1,15 +1,19 @@
 @patch('resource_management.core.shell.call')
 @patch.object(Script, 'is_hdp_stack_greater_or_equal', new=MagicMock(return_value=True))
-def test_pre_rolling_restart_23(self, call_mock):
+@patch('resource_management.libraries.functions.copy_tarball.copy_to_hdfs')
+def test_pre_rolling_restart_23(self, copy_to_hdfs_mock, call_mock):
     config_file = (self.get_src_folder() + '/test/python/stacks/2.0.6/configs/default.json')
     with open(config_file, 'r') as f:
         json_content = json.load(f)
     version = '2.3.0.0-1234'
     json_content['commandParams']['version'] = version
+    copy_to_hdfs_mock.return_value = True
     mocks_dict = {}
     self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/hive_server.py'), classname='HiveServer', command='pre_rolling_restart', config_dict=json_content, hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES, call_mocks=[(0, None), (0, None)], mocks_dict=mocks_dict)
     self.assertResourceCalled('Execute', ('hdp-select set hive-server2 %s' % version))
-    self.assertResourceCalled('HdfsResource', 'hdfs:///hdp/apps/2.0.0.0-1234/mapreduce//mapreduce.tar.gz', security_enabled=False, hadoop_conf_dir='/usr/hdp/current/hadoop-client/conf', keytab=UnknownConfigurationMock(), source='/usr/hdp/current/hadoop-client/mapreduce.tar.gz', kinit_path_local='/usr/bin/kinit', user='hdfs', action=['create_on_execute'], group='hadoop', hadoop_bin_dir='/usr/hdp/current/hadoop-client/bin', type='file', mode=292)
+    copy_to_hdfs_mock.assert_any_call('mapreduce', 'hadoop', 'hdfs')
+    copy_to_hdfs_mock.assert_any_call('tez', 'hadoop', 'hdfs')
+    self.assertEquals(2, copy_to_hdfs_mock.call_count)
     self.assertResourceCalled('HdfsResource', None, security_enabled=False, hadoop_bin_dir='/usr/hdp/current/hadoop-client/bin', keytab=UnknownConfigurationMock(), kinit_path_local='/usr/bin/kinit', user='hdfs', action=['execute'], hadoop_conf_dir='/usr/hdp/current/hadoop-client/conf')
     self.assertNoMoreResources()
     self.assertEquals(2, mocks_dict['call'].call_count)
