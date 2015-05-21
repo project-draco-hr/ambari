@@ -1,0 +1,27 @@
+def validateHiveServer2Configurations(self, properties, recommendedDefaults, configurations, services, hosts):
+    super(HDPWIN22StackAdvisor, self).validateHiveConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    hive_server2 = properties
+    validationItems = []
+    ranger_plugin_properties = getSiteProperties(configurations, 'ranger-hive-plugin-properties')
+    ranger_plugin_enabled = ranger_plugin_properties['ranger-hive-plugin-enabled']
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    if ('RANGER' in servicesList):
+        if (ranger_plugin_enabled.lower() == 'Yes'.lower()):
+            prop_name = 'hive.security.authorization.manager'
+            prop_val = 'com.xasecure.authorization.hive.authorizer.XaSecureHiveAuthorizerFactory'
+            if (hive_server2[prop_name] != prop_val):
+                validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger Hive Plugin is enabled. {0} needs to be set to {1}'.format(prop_name, prop_val)), })
+            prop_name = 'hive.security.authenticator.manager'
+            prop_val = 'org.apache.hadoop.hive.ql.security.SessionStateUserAuthenticator'
+            if (hive_server2[prop_name] != prop_val):
+                validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger Hive Plugin is enabled. {0} needs to be set to {1}'.format(prop_name, prop_val)), })
+        elif (ranger_plugin_enabled.lower() == 'No'.lower()):
+            prop_name = 'hive.security.authorization.manager'
+            prop_val = 'org.apache.hadoop.hive.ql.security.authorization.plugin.sqlstd.SQLStdHiveAuthorizerFactory'
+            if (hive_server2[prop_name] != prop_val):
+                validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger Hive Plugin is disabled. {0} needs to be set to {1}'.format(prop_name, prop_val)), })
+            prop_name = 'hive.security.authenticator.manager'
+            prop_val = 'org.apache.hadoop.hive.ql.security.SessionStateUserAuthenticator'
+            if (hive_server2[prop_name] != prop_val):
+                validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger Hive Plugin is disabled. {0} needs to be set to {1}'.format(prop_name, prop_val)), })
+    return self.toConfigurationValidationProblems(validationItems, 'hiveserver2-site')

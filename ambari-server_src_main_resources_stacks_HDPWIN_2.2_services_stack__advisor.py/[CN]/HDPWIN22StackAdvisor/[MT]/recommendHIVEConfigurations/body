@@ -3,6 +3,7 @@ def recommendHIVEConfigurations(self, configurations, clusterData, services, hos
     putHiveServerProperty = self.putProperty(configurations, 'hiveserver2-site', services)
     putHiveEnvProperty = self.putProperty(configurations, 'hive-env', services)
     putHiveSiteProperty = self.putProperty(configurations, 'hive-site', services)
+    putHiveSitePropertyAttribute = self.putPropertyAttribute(configurations, 'hive-site')
     servicesList = [service['StackServices']['service_name'] for service in services['services']]
     putHiveSiteProperty('datanucleus.autoCreateSchema', 'false')
     putHiveEnvProperty('hive_exec_orc_storage_strategy', 'SPEED')
@@ -14,8 +15,6 @@ def recommendHIVEConfigurations(self, configurations, clusterData, services, hos
     putHiveSiteProperty('hive.optimize.sort.dynamic.partition', 'false')
     putHiveSiteProperty('hive.vectorized.execution.enabled', 'true')
     putHiveSiteProperty('hive.vectorized.execution.reduce.enabled', 'false')
-    putHiveSiteProperty('hive.auto.convert.join.noconditionaltask.size', '2147483648')
-    putHiveSiteProperty('hive.exec.reducers.bytes.per.reducer', '67108864')
     putHiveEnvProperty('hive_txn_acid', 'off')
     if (str(configurations['hive-env']['properties']['hive_txn_acid']).lower() == 'on'):
         putHiveSiteProperty('hive.txn.manager', 'org.apache.hadoop.hive.ql.lockmgr.DbTxnManager')
@@ -62,22 +61,27 @@ def recommendHIVEConfigurations(self, configurations, clusterData, services, hos
     container_size = '512'
     if (not ('yarn-site' in configurations)):
         self.recommendYARNConfigurations(configurations, clusterData, services, hosts)
-    if (('yarn-site' in configurations) and ('yarn.scheduler.minimum-allocation-mb' in configurations['yarn-site']['properties'])):
-        container_size = configurations['yarn-site']['properties']['yarn.scheduler.minimum-allocation-mb']
+    yarnMaxAllocationSize = min((30 * int(configurations['yarn-site']['properties']['yarn.scheduler.minimum-allocation-mb'])), int(configurations['yarn-site']['properties']['yarn.scheduler.maximum-allocation-mb']))
+    container_size = (clusterData['mapMemory'] if (clusterData['mapMemory'] > 2048) else int(clusterData['reduceMemory']))
+    container_size = min((clusterData['containers'] * clusterData['ramPerContainer']), container_size, yarnMaxAllocationSize)
     putHiveSiteProperty('hive.tez.container.size', container_size)
     putHiveSiteProperty('hive.prewarm.enabled', 'false')
     putHiveSiteProperty('hive.prewarm.numcontainers', '3')
     putHiveSiteProperty('hive.tez.auto.reducer.parallelism', 'true')
     putHiveSiteProperty('hive.tez.dynamic.partition.pruning', 'true')
+    container_size = configurations['hive-site']['properties']['hive.tez.container.size']
+    container_size_bytes = ((int(container_size) * 1024) * 1024)
+    putHiveSiteProperty('hive.auto.convert.join.noconditionaltask.size', int((container_size_bytes / 3)))
+    putHiveSitePropertyAttribute('hive.auto.convert.join.noconditionaltask.size', 'maximum', container_size_bytes)
+    putHiveSiteProperty('hive.exec.reducers.bytes.per.reducer', '67108864')
     putHiveEnvProperty('cost_based_optimizer', 'On')
     if (str(configurations['hive-env']['properties']['cost_based_optimizer']).lower() == 'on'):
         putHiveSiteProperty('hive.cbo.enable', 'true')
-        putHiveSiteProperty('hive.stats.fetch.partition.stats', 'true')
-        putHiveSiteProperty('hive.stats.fetch.column.stats', 'true')
     else:
         putHiveSiteProperty('hive.cbo.enable', 'false')
-        putHiveSiteProperty('hive.stats.fetch.partition.stats', 'false')
-        putHiveSiteProperty('hive.stats.fetch.column.stats', 'false')
+    hive_cbo_enable = configurations['hive-site']['properties']['hive.cbo.enable']
+    putHiveSiteProperty('hive.stats.fetch.partition.stats', hive_cbo_enable)
+    putHiveSiteProperty('hive.stats.fetch.column.stats', hive_cbo_enable)
     putHiveSiteProperty('hive.compute.query.using.stats ', 'true')
     putHiveServerProperty('hive.server2.tez.initialize.default.sessions', 'false')
     putHiveServerProperty('hive.server2.tez.sessions.per.default.queue', '1')
@@ -97,10 +101,44 @@ def recommendHIVEConfigurations(self, configurations, clusterData, services, hos
         putHiveSiteProperty('hive.security.authorization.enabled', 'false')
     else:
         putHiveSiteProperty('hive.security.authorization.enabled', 'true')
-    if (str(configurations['hive-env']['properties']['hive_security_authorization']).lower() == 'sqlstdauth'):
+    try:
         auth_manager_value = str(configurations['hive-env']['properties']['hive.security.metastore.authorization.manager'])
-        sqlstdauth_class = 'org.apache.hadoop.hive.ql.security.authorization.MetaStoreAuthzAPIAuthorizerEmbedOnly'
+    except KeyError:
+        auth_manager_value = ''
+        pass
+    sqlstdauth_class = 'org.apache.hadoop.hive.ql.security.authorization.MetaStoreAuthzAPIAuthorizerEmbedOnly'
+    if (str(configurations['hive-env']['properties']['hive_security_authorization']).lower() == 'sqlstdauth'):
         if (sqlstdauth_class not in auth_manager_value):
             putHiveSiteProperty('hive.security.metastore.authorization.manager', ((auth_manager_value + ',') + sqlstdauth_class))
+    elif (auth_manager_value != ''):
+        auth_manager_values = auth_manager_value.split(',')
+        auth_manager_values = [x for x in auth_manager_values if (x != sqlstdauth_class)]
+        putHiveSiteProperty('hive.security.metastore.authorization.manager', ','.join(auth_manager_values))
+        pass
     putHiveServerProperty('hive.server2.enable.doAs', 'true')
     putHiveSiteProperty('hive.server2.use.SSL', 'false')
+    hive_server2_auth = None
+    if (('hive-site' in services['configurations']) and ('hive.server2.authentication' in services['configurations']['hive-site']['properties'])):
+        hive_server2_auth = str(services['configurations']['hive-site']['properties']['hive.server2.authentication']).lower()
+    elif ('hive.server2.authentication' in configurations['hive-site']['properties']):
+        hive_server2_auth = str(configurations['hive-site']['properties']['hive.server2.authentication']).lower()
+    if (hive_server2_auth == 'ldap'):
+        putHiveSiteProperty('hive.server2.authentication.ldap.url', '')
+        putHiveSiteProperty('hive.server2.authentication.ldap.baseDN', ' ')
+    else:
+        putHiveSitePropertyAttribute('hive.server2.authentication.ldap.url', 'delete', 'true')
+        putHiveSitePropertyAttribute('hive.server2.authentication.ldap.baseDN', 'delete', 'true')
+    if (hive_server2_auth == 'kerberos'):
+        putHiveSiteProperty('hive.server2.authentication.kerberos.keytab', '')
+        putHiveSiteProperty('hive.server2.authentication.kerberos.principal', '')
+    else:
+        putHiveSitePropertyAttribute('hive.server2.authentication.kerberos.keytab', 'delete', 'true')
+        putHiveSitePropertyAttribute('hive.server2.authentication.kerberos.principal', 'delete', 'true')
+    if (hive_server2_auth == 'pam'):
+        putHiveSiteProperty('hive.server2.authentication.pam.services', '')
+    else:
+        putHiveSitePropertyAttribute('hive.server2.authentication.pam.services', 'delete', 'true')
+    if (hive_server2_auth == 'custom'):
+        putHiveSiteProperty('hive.server2.custom.authentication.class', '')
+    else:
+        putHiveSitePropertyAttribute('hive.server2.custom.authentication.class', 'delete', 'true')

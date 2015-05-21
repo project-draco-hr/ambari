@@ -1,6 +1,10 @@
 def recommendHBASEConfigurations(self, configurations, clusterData, services, hosts):
     super(HDPWIN22StackAdvisor, self).recommendHbaseEnvConfigurations(configurations, clusterData, services, hosts)
     putHbaseEnvPropertyAttributes = self.putPropertyAttribute(configurations, 'hbase-env')
+    hmaster_host = self.getHostWithComponent('HBASE', 'HBASE_MASTER', services, hosts)
+    if (hmaster_host is not None):
+        host_ram = hmaster_host['Hosts']['total_mem']
+        putHbaseEnvPropertyAttributes('hbase_master_heapsize', 'maximum', max(1024, int((host_ram / 1024))))
     rs_hosts = self.getHostsWithComponent('HBASE', 'HBASE_REGIONSERVER', services, hosts)
     if ((rs_hosts is not None) and (len(rs_hosts) > 0)):
         min_ram = rs_hosts[0]['Hosts']['total_mem']
@@ -9,12 +13,24 @@ def recommendHBASEConfigurations(self, configurations, clusterData, services, ho
             min_ram = min(min_ram, host_ram)
         putHbaseEnvPropertyAttributes('hbase_regionserver_heapsize', 'maximum', max(1024, int(((min_ram * 0.8) / 1024))))
     putHbaseSiteProperty = self.putProperty(configurations, 'hbase-site', services)
-    putHbaseSiteProperty('hbase.regionserver.global.memstore.upperLimit', '0.4')
+    putHbaseSitePropertyAttributes = self.putPropertyAttribute(configurations, 'hbase-site')
+    putHbaseSiteProperty('hbase.regionserver.global.memstore.size', '0.4')
     if (('hbase-env' in services['configurations']) and ('phoenix_sql_enabled' in services['configurations']['hbase-env']['properties'])):
         if ('true' == services['configurations']['hbase-env']['properties']['phoenix_sql_enabled'].lower()):
+            putHbaseSiteProperty('hbase.region.server.rpc.scheduler.factory.class', 'org.apache.hadoop.hbase.ipc.PhoenixRpcSchedulerFactory')
+            putHbaseSiteProperty('hbase.rpc.controllerfactory.class', 'org.apache.hadoop.hbase.ipc.controller.ServerRpcControllerFactory')
             putHbaseSiteProperty('hbase.regionserver.wal.codec', 'org.apache.hadoop.hbase.regionserver.wal.IndexedWALEditCodec')
         else:
             putHbaseSiteProperty('hbase.regionserver.wal.codec', 'org.apache.hadoop.hbase.regionserver.wal.WALCellCodec')
+            putHbaseSitePropertyAttributes('hbase.region.server.rpc.scheduler.factory.class', 'delete', 'true')
+            putHbaseSitePropertyAttributes('hbase.rpc.controllerfactory.class', 'delete', 'true')
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    if (('ranger-hbase-plugin-properties' in services['configurations']) and ('ranger-hbase-plugin-enabled' in services['configurations']['ranger-hbase-plugin-properties']['properties'])):
+        rangerPluginEnabled = services['configurations']['ranger-hbase-plugin-properties']['properties']['ranger-hbase-plugin-enabled']
+        if (('RANGER' in servicesList) and (rangerPluginEnabled.lower() == 'Yes'.lower())):
+            putHbaseSiteProperty('hbase.security.authorization', 'true')
+            putHbaseSiteProperty('hbase.coprocessor.master.classes', 'com.xasecure.authorization.hbase.XaSecureAuthorizationCoprocessor')
+            putHbaseSiteProperty('hbase.coprocessor.region.classes', 'com.xasecure.authorization.hbase.XaSecureAuthorizationCoprocessor')
     threshold = 23
     mb = 1024
     if (int(clusterData['hbaseRam']) > threshold):
@@ -31,7 +47,7 @@ def recommendHBASEConfigurations(self, configurations, clusterData, services, ho
         hbase_bucketcache_percentage_in_combinedcache_str = '{0:.4f}'.format((math.ceil((hbase_bucketcache_percentage_in_combinedcache * 10000)) / 10000.0))
         putHbaseProperty = self.putProperty(configurations, 'hbase-site', services)
         putHbaseProperty('hfile.block.cache.size', hfile_block_cache_size)
-        putHbaseProperty('hbase.regionserver.global.memstore.upperLimit', hbase_regionserver_global_memstore_size)
+        putHbaseProperty('hbase.regionserver.global.memstore.size', hbase_regionserver_global_memstore_size)
         putHbaseProperty('hbase.bucketcache.ioengine', 'offheap')
         putHbaseProperty('hbase.bucketcache.size', hbase_bucketcache_size)
         putHbaseProperty('hbase.bucketcache.percentage.in.combinedcache', hbase_bucketcache_percentage_in_combinedcache_str)
@@ -45,3 +61,36 @@ def recommendHBASEConfigurations(self, configurations, clusterData, services, ho
         putHbaseProperty('hbase.bucketcache.percentage.in.combinedcache', '')
         putHbaseEnvProperty = self.putProperty(configurations, 'hbase-env', services)
         putHbaseEnvProperty('hbase_max_direct_memory_size', '')
+    hbase_security_authorization = None
+    if (('hbase-site' in configurations) and ('hbase.security.authorization' in configurations['hbase-site']['properties'])):
+        hbase_security_authorization = configurations['hbase-site']['properties']['hbase.security.authorization']
+    elif (('hbase-site' in services['configurations']) and ('hbase.security.authorization' in services['configurations']['hbase-site']['properties'])):
+        hbase_security_authorization = services['configurations']['hbase-site']['properties']['hbase.security.authorization']
+    if hbase_security_authorization:
+        if ('true' == hbase_security_authorization.lower()):
+            putHbaseProperty('hbase.coprocessor.master.classes', 'org.apache.hadoop.hbase.security.access.AccessController')
+            putHbaseProperty('hbase.coprocessor.region.classes', 'org.apache.hadoop.hbase.security.access.AccessController')
+            putHbaseProperty('hbase.coprocessor.regionserver.classes', 'org.apache.hadoop.hbase.security.access.AccessController')
+        else:
+            putHbaseProperty('hbase.coprocessor.master.classes', '')
+            putHbaseProperty('hbase.coprocessor.region.classes', '')
+            putHbaseSitePropertyAttributes('hbase.coprocessor.regionserver.classes', 'delete', 'true')
+    else:
+        putHbaseSitePropertyAttributes('hbase.coprocessor.regionserver.classes', 'delete', 'true')
+    if (('hbase-site' in services['configurations']) and ('hbase.security.authentication' in services['configurations']['hbase-site']['properties'])):
+        hbase_coprocessor_region_classes = None
+        if ('hbase.coprocessor.region.classes' in configurations['hbase-site']['properties']):
+            hbase_coprocessor_region_classes = configurations['hbase-site']['properties']['hbase.coprocessor.region.classes'].strip()
+        elif ('hbase.coprocessor.region.classes' in services['configurations']['hbase-site']['properties']):
+            hbase_coprocessor_region_classes = services['configurations']['hbase-site']['properties']['hbase.coprocessor.region.classes'].strip()
+        if hbase_coprocessor_region_classes:
+            coprocessorRegionClassList = hbase_coprocessor_region_classes.split(',')
+        else:
+            coprocessorRegionClassList = []
+        if ('kerberos' == services['configurations']['hbase-site']['properties']['hbase.security.authentication'].lower()):
+            if ('org.apache.hadoop.hbase.security.token.TokenProvider' not in coprocessorRegionClassList):
+                coprocessorRegionClassList.append('org.apache.hadoop.hbase.security.token.TokenProvider')
+                putHbaseProperty('hbase.coprocessor.region.classes', ','.join(coprocessorRegionClassList))
+        elif ('org.apache.hadoop.hbase.security.token.TokenProvider' in coprocessorRegionClassList):
+            coprocessorRegionClassList.remove('org.apache.hadoop.hbase.security.token.TokenProvider')
+            putHbaseProperty('hbase.coprocessor.region.classes', ','.join(coprocessorRegionClassList))

@@ -12,6 +12,18 @@ def validateHDFSConfigurations(self, properties, recommendedDefaults, configurat
     VALID_HTTP_POLICY_VALUES = [HTTP_ONLY, HTTPS_ONLY, HTTP_AND_HTTPS]
     VALID_TRANSFER_PROTECTION_VALUES = ['authentication', 'integrity', 'privacy']
     validationItems = []
+    address_properties = ['dfs.namenode.http-address', 'dfs.namenode.https-address']
+    for address_property in address_properties:
+        if (address_property in hdfs_site):
+            value = hdfs_site[address_property]
+            if (not is_valid_host_port_authority(value)):
+                validationItems.append({'config-name': address_property, 'item': self.getErrorItem(((address_property + ' does not contain a valid host:port authority: ') + value)), })
+    ranger_plugin_properties = getSiteProperties(configurations, 'ranger-hdfs-plugin-properties')
+    ranger_plugin_enabled = ranger_plugin_properties['ranger-hdfs-plugin-enabled']
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    if (('RANGER' in servicesList) and (ranger_plugin_enabled.lower() == 'Yes'.lower())):
+        if (hdfs_site['dfs.permissions.enabled'] != 'true'):
+            validationItems.append({'config-name': 'dfs.permissions.enabled', 'item': self.getWarnItem('dfs.permissions.enabled needs to be set to true if Ranger HDFS Plugin is enabled.'), })
     if ((not wire_encryption_enabled) and (core_site['hadoop.security.authentication'] == 'kerberos') and (core_site['hadoop.security.authorization'] == 'true')):
         dfs_http_policy = 'dfs.http.policy'
         dfs_datanode_address = 'dfs.datanode.address'
@@ -19,15 +31,15 @@ def validateHDFSConfigurations(self, properties, recommendedDefaults, configurat
         datanode_https_address = 'dfs.datanode.https.address'
         data_transfer_protection = 'dfs.data.transfer.protection'
         try:
-            privileged_dfs_dn_port = (False, True)[(getPort(hdfs_site[dfs_datanode_address]) is not None)]
+            privileged_dfs_dn_port = isSecurePort(getPort(hdfs_site[dfs_datanode_address]))
         except KeyError:
             privileged_dfs_dn_port = False
         try:
-            privileged_dfs_http_port = (False, True)[(getPort(hdfs_site[datanode_http_address]) is not None)]
+            privileged_dfs_http_port = isSecurePort(getPort(hdfs_site[datanode_http_address]))
         except KeyError:
             privileged_dfs_http_port = False
         try:
-            privileged_dfs_https_port = (False, True)[(getPort(hdfs_site[datanode_https_address]) is not None)]
+            privileged_dfs_https_port = isSecurePort(getPort(hdfs_site[datanode_https_address]))
         except KeyError:
             privileged_dfs_https_port = False
         try:

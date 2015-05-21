@@ -2,7 +2,7 @@ def validateHBASEConfigurations(self, properties, recommendedDefaults, configura
     super(HDPWIN22StackAdvisor, self).validateHbaseEnvConfigurations(properties, recommendedDefaults, configurations, services, hosts)
     hbase_site = properties
     validationItems = []
-    prop_name1 = 'hbase.regionserver.global.memstore.upperLimit'
+    prop_name1 = 'hbase.regionserver.global.memstore.size'
     prop_name2 = 'hfile.block.cache.size'
     props_max_sum = 0.8
     if (not is_number(hbase_site[prop_name1])):
@@ -11,4 +11,44 @@ def validateHBASEConfigurations(self, properties, recommendedDefaults, configura
         validationItems.append({'config-name': prop_name2, 'item': self.getWarnItem('{0} should be float value'.format(prop_name2)), })
     elif ((float(hbase_site[prop_name1]) + float(hbase_site[prop_name2])) > props_max_sum):
         validationItems.append({'config-name': prop_name1, 'item': self.getWarnItem('{0} and {1} sum should not exceed {2}'.format(prop_name1, prop_name2, props_max_sum)), })
+    ranger_plugin_properties = getSiteProperties(configurations, 'ranger-hbase-plugin-properties')
+    ranger_plugin_enabled = ranger_plugin_properties['ranger-hbase-plugin-enabled']
+    prop_name = 'hbase.security.authorization'
+    prop_val = 'true'
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    if (('RANGER' in servicesList) and (ranger_plugin_enabled.lower() == 'Yes'.lower())):
+        if (hbase_site[prop_name] != prop_val):
+            validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger HBase Plugin is enabled.{0} needs to be set to {1}'.format(prop_name, prop_val)), })
+        prop_name = 'hbase.coprocessor.master.classes'
+        prop_val = 'com.xasecure.authorization.hbase.XaSecureAuthorizationCoprocessor'
+        exclude_val = 'org.apache.hadoop.hbase.security.access.AccessController'
+        if ((prop_val in hbase_site[prop_name]) and (exclude_val not in hbase_site[prop_name])):
+            pass
+        else:
+            validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger HBase Plugin is enabled. {0} needs to contain {1} instead of {2}'.format(prop_name, prop_val, exclude_val)), })
+        prop_name = 'hbase.coprocessor.region.classes'
+        prop_val = 'com.xasecure.authorization.hbase.XaSecureAuthorizationCoprocessor'
+        if ((prop_val in hbase_site[prop_name]) and (exclude_val not in hbase_site[prop_name])):
+            pass
+        else:
+            validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger HBase Plugin is enabled. {0} needs to contain {1} instead of {2}'.format(prop_name, prop_val, exclude_val)), })
+    prop_name = 'hbase.bucketcache.ioengine'
+    prop_val = 'offheap'
+    if (not ((not hbase_site[prop_name]) or (hbase_site[prop_name] == prop_val))):
+        validationItems.append({'config-name': prop_name, 'item': self.getWarnItem("Recommended values of  {0} is empty or '{1}'".format(prop_name, prop_val)), })
+    prop_name1 = 'hbase.bucketcache.ioengine'
+    prop_name2 = 'hbase.bucketcache.size'
+    prop_name3 = 'hbase.bucketcache.percentage.in.combinedcache'
+    if (hbase_site[prop_name1] and (not hbase_site[prop_name2])):
+        validationItems.append({'config-name': prop_name2, 'item': self.getWarnItem('If bucketcache ioengine is enabled, {0} should be set'.format(prop_name2)), })
+    if (hbase_site[prop_name1] and (not hbase_site[prop_name3])):
+        validationItems.append({'config-name': prop_name3, 'item': self.getWarnItem('If bucketcache ioengine is enabled, {0} should be set'.format(prop_name3)), })
+    if ('hbase.security.authentication' in properties):
+        hbase_security_kerberos = (properties['hbase.security.authentication'].lower() == 'kerberos')
+        core_site_properties = getSiteProperties(configurations, 'core-site')
+        security_enabled = False
+        if core_site_properties:
+            security_enabled = ((core_site_properties['hadoop.security.authentication'] == 'kerberos') and (core_site_properties['hadoop.security.authorization'] == 'true'))
+        if ((not security_enabled) and hbase_security_kerberos):
+            validationItems.append({'config-name': 'hbase.security.authentication', 'item': self.getWarnItem("Cluster must be secured with Kerberos before hbase.security.authentication's value of kerberos will have effect"), })
     return self.toConfigurationValidationProblems(validationItems, 'hbase-site')
