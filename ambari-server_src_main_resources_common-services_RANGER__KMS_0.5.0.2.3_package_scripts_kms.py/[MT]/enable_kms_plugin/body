@@ -1,0 +1,31 @@
+def enable_kms_plugin():
+    import params
+    if params.has_ranger_admin:
+        ranger_adm_obj = Rangeradmin(url=params.policymgr_mgr_url)
+        (response_code, response_recieved) = ranger_adm_obj.check_ranger_login_urllib2((params.policymgr_mgr_url + '/login.jsp'), 'test:test')
+        if ((response_code is not None) and (response_code == 200)):
+            (ambari_ranger_admin, ambari_ranger_password) = ranger_adm_obj.create_ambari_admin_user(params.ambari_ranger_admin, params.ambari_ranger_password, params.admin_uname_password)
+            ambari_username_password_for_ranger = ((ambari_ranger_admin + ':') + ambari_ranger_password)
+        else:
+            raise Fail('Ranger service is not started on given host')
+        if ((ambari_ranger_admin != '') and (ambari_ranger_password != '')):
+            get_repo_flag = get_repo(params.policymgr_mgr_url, params.repo_name, ambari_username_password_for_ranger)
+            if (not get_repo_flag):
+                create_repo(params.policymgr_mgr_url, json.dumps(params.kms_ranger_plugin_repo), ambari_username_password_for_ranger)
+        else:
+            raise Fail('Ambari admin username and password not available')
+        current_datetime = datetime.now()
+        File(format('{kms_conf_dir}/ranger-security.xml'), owner=params.kms_user, group=params.kms_group, mode=420, content=InlineTemplate(format('<ranger>\n<enabled>{current_datetime}</enabled>\n</ranger>')))
+        Directory([os.path.join('/etc', 'ranger', params.repo_name), os.path.join('/etc', 'ranger', params.repo_name, 'policycache')], owner=params.kms_user, group=params.kms_group, mode=509, recursive=True)
+        File(os.path.join('/etc', 'ranger', params.repo_name, 'policycache', format('kms_{repo_name}.json')), owner=params.kms_user, group=params.kms_group, mode=420)
+        XmlConfig('ranger-kms-audit.xml', conf_dir=params.kms_conf_dir, configurations=params.config['configurations']['ranger-kms-audit'], configuration_attributes=params.config['configuration_attributes']['ranger-kms-audit'], owner=params.kms_user, group=params.kms_group, mode=484)
+        XmlConfig('ranger-kms-security.xml', conf_dir=params.kms_conf_dir, configurations=params.config['configurations']['ranger-kms-security'], configuration_attributes=params.config['configuration_attributes']['ranger-kms-security'], owner=params.kms_user, group=params.kms_group, mode=484)
+        XmlConfig('ranger-policymgr-ssl.xml', conf_dir=params.kms_conf_dir, configurations=params.config['configurations']['ranger-kms-policymgr-ssl'], configuration_attributes=params.config['configuration_attributes']['ranger-kms-policymgr-ssl'], owner=params.kms_user, group=params.kms_group, mode=484)
+        if params.xa_audit_db_is_enabled:
+            cred_setup = format('{cred_setup_prefix} -f {credential_file} -k "auditDBCred" -v "{xa_audit_db_password}" -c 1')
+            Execute(cred_setup, logoutput=True)
+        cred_setup = format('{cred_setup_prefix} -f {credential_file} -k "sslKeyStore" -v "{ssl_keystore_password}" -c 1')
+        Execute(cred_setup, logoutput=True)
+        cred_setup = format('{cred_setup_prefix} -f {credential_file} -k "sslTrustStore" -v "{ssl_truststore_password}" -c 1')
+        Execute(cred_setup, logoutput=True)
+        File(params.credential_file, owner=params.kms_user, group=params.kms_group)

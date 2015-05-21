@@ -1,0 +1,15 @@
+def setup_kms_db():
+    import params
+    if params.has_ranger_admin:
+        File(params.downloaded_custom_connector, content=DownloadSource(params.driver_curl_source))
+        Directory(params.java_share_dir, mode=493)
+        if (not os.path.isfile(params.driver_curl_target)):
+            Execute(('cp', '--remove-destination', params.downloaded_custom_connector, params.driver_curl_target), path=['/bin', '/usr/bin/'], sudo=True)
+        Directory(os.path.join(params.kms_home, 'ews', 'lib'), mode=493)
+        if (not os.path.isfile(os.path.join(params.kms_home, 'ews', 'webapp', 'lib', params.jdbc_jar_name))):
+            Execute(('cp', '--remove-destination', params.downloaded_custom_connector, os.path.join(params.kms_home, 'ews', 'webapp', 'lib')), path=['/bin', '/usr/bin/'], sudo=True)
+        ModifyPropertiesFile(format('/usr/hdp/current/ranger-kms/install.properties'), properties=params.config['configurations']['kms-properties'])
+        dba_setup = format('python {kms_home}/dba_script.py -q')
+        db_setup = format('python {kms_home}/db_setup.py')
+        Execute(dba_setup, environment={'RANGER_KMS_HOME': params.kms_home, 'JAVA_HOME': params.java_home, }, logoutput=True)
+        Execute(db_setup, environment={'RANGER_KMS_HOME': params.kms_home, 'JAVA_HOME': params.java_home, }, logoutput=True)
