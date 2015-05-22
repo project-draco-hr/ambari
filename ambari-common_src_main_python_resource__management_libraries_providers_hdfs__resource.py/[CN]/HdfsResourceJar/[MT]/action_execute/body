@@ -1,0 +1,21 @@
+def action_execute(self, main_resource):
+    env = Environment.get_instance()
+    main_resource.assert_parameter_is_set('user')
+    if ((not ('hdfs_files' in env.config)) or (not env.config['hdfs_files'])):
+        Logger.info("No resources to create. 'create_on_execute' or 'delete_on_execute' wasn't triggered before this 'execute' action.")
+        return
+    hadoop_bin_dir = main_resource.resource.hadoop_bin_dir
+    hadoop_conf_dir = main_resource.resource.hadoop_conf_dir
+    user = main_resource.resource.user
+    security_enabled = main_resource.resource.security_enabled
+    keytab_file = main_resource.resource.keytab
+    kinit_path = main_resource.resource.kinit_path_local
+    logoutput = main_resource.resource.logoutput
+    principal_name = main_resource.resource.principal_name
+    jar_path = JAR_PATH
+    json_path = JSON_PATH
+    if security_enabled:
+        self.kinit()
+    File(JSON_PATH, owner=user, content=json.dumps(env.config['hdfs_files']))
+    Execute(format('hadoop --config {hadoop_conf_dir} jar {jar_path} {json_path}'), user=user, path=[hadoop_bin_dir], logoutput=logoutput)
+    env.config['hdfs_files'] = []

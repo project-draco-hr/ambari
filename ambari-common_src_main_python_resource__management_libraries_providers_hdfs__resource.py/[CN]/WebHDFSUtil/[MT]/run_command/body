@@ -1,0 +1,27 @@
+def run_command(self, target, operation, method='POST', assertable_result=True, file_to_put=None, ignore_status_codes=[], **kwargs):
+    '\n    assertable_result - some POST requests return \'{"boolean":false}\' or \'{"boolean":true}\'\n    depending on if query was successful or not, we can assert this for them\n    '
+    target = self.parse_path(target)
+    url = format('{address}/webhdfs/v1{target}?op={operation}&user.name={run_user}', address=self.address, run_user=self.run_user)
+    for (k, v) in kwargs.iteritems():
+        url = format('{url}&{k}={v}')
+    if (file_to_put and (not os.path.exists(file_to_put))):
+        raise Fail(format('File {file_to_put} is not found.'))
+    cmd = ['curl', '-L', '-w', '%{http_code}', '-X', method]
+    if file_to_put:
+        cmd += ['-T', file_to_put]
+    if self.security_enabled:
+        self.kinit_function()
+        cmd += ['--negotiate', '-u', ':']
+    cmd.append(url)
+    (_, out) = shell.checked_call(cmd, user=self.run_user, logoutput=self.logoutput, quiet=False)
+    status_code = out[(-3):]
+    out = out[:(-3)]
+    try:
+        result_dict = json.loads(out)
+    except ValueError:
+        result_dict = out
+    if ((status_code not in (WebHDFSUtil.valid_status_codes + ignore_status_codes)) or (assertable_result and (not result_dict['boolean']))):
+        formatted_output = (json.dumps(result_dict, indent=2) if isinstance(result_dict, dict) else result_dict)
+        err_msg = ("Execution of '%s' returned status_code=%s. %s" % (shell.string_cmd_from_args_list(cmd), status_code, formatted_output))
+        raise Fail(err_msg)
+    return result_dict

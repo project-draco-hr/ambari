@@ -1,0 +1,19 @@
+def _create_file(self, target, source=None, mode=''):
+    '\n    PUT file command in slow, however _get_file_status is pretty fast,\n    so we should check if the file really should be put before doing it.\n    '
+    file_status = (self._get_file_status(target) if (target != self.main_resource.resource.target) else self.target_status)
+    mode = ('' if (not mode) else mode)
+    if file_status:
+        if source:
+            length = file_status['length']
+            local_file_size = os.stat(source).st_size
+            if (local_file_size == length):
+                Logger.info(format('DFS file {target} is identical to {source}, skipping the copying'))
+                return
+        else:
+            Logger.info(format('File {target} already exists in DFS, skipping the creation'))
+            return
+    Logger.info(format('Creating new file {target} in DFS'))
+    kwargs = ({'permission': mode, } if mode else {})
+    self.util.run_command(target, 'CREATE', method='PUT', overwrite=True, assertable_result=False, file_to_put=source, **kwargs)
+    if (mode and file_status):
+        file_status['permission'] = mode

@@ -1,0 +1,25 @@
+def get_namenode_states(hdfs_site):
+    "\n  return format [('nn1', 'hdfs://hostname1:port1'), ('nn2', 'hdfs://hostname2:port2')] , [....], [....]\n  "
+    active_namenodes = []
+    standby_namenodes = []
+    unknown_namenodes = []
+    name_service = hdfs_site['dfs.nameservices']
+    nn_unique_ids_key = ('dfs.ha.namenodes.' + name_service)
+    nn_unique_ids = hdfs_site[nn_unique_ids_key].split(',')
+    for nn_unique_id in nn_unique_ids:
+        is_https_enabled = (hdfs_site['dfs.https.enabled'] if (not is_empty(hdfs_site['dfs.https.enabled'])) else False)
+        if (not is_https_enabled):
+            key = NAMENODE_HTTP_FRAGMENT.format(name_service, nn_unique_id)
+        else:
+            key = ('https://' + NAMENODE_HTTPS_FRAGMENT.format(name_service, nn_unique_id))
+        if (key in hdfs_site):
+            value = str(hdfs_site[key])
+            jmx_uri = JMX_URI_FRAGMENT.format(value)
+            state = get_value_from_jmx(jmx_uri, 'State')
+            if (state == HDFS_NN_STATE_ACTIVE):
+                active_namenodes.append((nn_unique_id, value))
+            elif (state == HDFS_NN_STATE_STANDBY):
+                standby_namenodes.append((nn_unique_id, value))
+            else:
+                unknown_namenodes.append((nn_unique_id, value))
+    return (active_namenodes, standby_namenodes, unknown_namenodes)
