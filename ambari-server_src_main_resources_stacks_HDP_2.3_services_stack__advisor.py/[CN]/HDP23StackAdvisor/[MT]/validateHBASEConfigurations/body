@@ -1,0 +1,26 @@
+def validateHBASEConfigurations(self, properties, recommendedDefaults, configurations, services, hosts):
+    super(HDP23StackAdvisor, self).validateHBASEConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    hbase_site = properties
+    validationItems = []
+    ranger_plugin_properties = getSiteProperties(configurations, 'ranger-hbase-plugin-properties')
+    ranger_plugin_enabled = ranger_plugin_properties['ranger-hbase-plugin-enabled']
+    prop_name = 'hbase.security.authorization'
+    prop_val = 'true'
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    if (('RANGER' in servicesList) and (ranger_plugin_enabled.lower() == 'Yes'.lower())):
+        if (hbase_site[prop_name] != prop_val):
+            validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger HBase Plugin is enabled.{0} needs to be set to {1}'.format(prop_name, prop_val)), })
+        prop_name = 'hbase.coprocessor.master.classes'
+        prop_val = 'org.apache.ranger.authorization.hbase.RangerAuthorizationCoprocessor'
+        exclude_val = 'org.apache.hadoop.hbase.security.access.AccessController'
+        if ((prop_val in hbase_site[prop_name]) and (exclude_val not in hbase_site[prop_name])):
+            pass
+        else:
+            validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger HBase Plugin is enabled. {0} needs to contain {1} instead of {2}'.format(prop_name, prop_val, exclude_val)), })
+        prop_name = 'hbase.coprocessor.region.classes'
+        prop_val = 'org.apache.ranger.authorization.hbase.RangerAuthorizationCoprocessor'
+        if ((prop_val in hbase_site[prop_name]) and (exclude_val not in hbase_site[prop_name])):
+            pass
+        else:
+            validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('If Ranger HBase Plugin is enabled. {0} needs to contain {1} instead of {2}'.format(prop_name, prop_val, exclude_val)), })
+    return self.toConfigurationValidationProblems(validationItems, 'hbase-site')
