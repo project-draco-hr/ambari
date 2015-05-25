@@ -2,6 +2,26 @@ def pre_rolling_restart(self, env):
     import params
     env.set_params(params)
     if (params.version and (compare_versions(format_hdp_stack_version(params.version), '2.2.0.0') >= 0)):
-        upgrade.backup_data()
+        absolute_backup_dir = None
+        if (params.upgrade_direction and (params.upgrade_direction == Direction.UPGRADE)):
+            Logger.info(('Backing up directories. Initial conf folder: %s' % os.path.realpath(params.knox_conf_dir)))
+            absolute_backup_dir = upgrade.backup_data()
         conf_select.select(params.stack_name, 'knox', params.version)
         hdp_select.select('knox-server', params.version)
+        if ((absolute_backup_dir is not None) and params.upgrade_direction and (params.upgrade_direction == Direction.UPGRADE)):
+            conf_tar_source_path = os.path.join(absolute_backup_dir, upgrade.BACKUP_CONF_ARCHIVE)
+            if os.path.exists(conf_tar_source_path):
+                extract_dir = os.path.realpath(params.knox_conf_dir)
+                conf_tar_dest_path = os.path.join(extract_dir, upgrade.BACKUP_CONF_ARCHIVE)
+                Logger.info(('Copying %s into %s file.' % (upgrade.BACKUP_CONF_ARCHIVE, conf_tar_dest_path)))
+                Execute(('cp %s %s' % (conf_tar_source_path, conf_tar_dest_path)))
+                tarball = None
+                try:
+                    tarball = tarfile.open(conf_tar_source_path, 'r')
+                    Logger.info(('Extracting %s into %s directory.' % (upgrade.BACKUP_CONF_ARCHIVE, extract_dir)))
+                    tarball.extractall(extract_dir)
+                    Logger.info(('Deleting temporary tar at %s' % conf_tar_dest_path))
+                    Execute(('rm %s' % conf_tar_dest_path))
+                finally:
+                    if tarball:
+                        tarball.close()
