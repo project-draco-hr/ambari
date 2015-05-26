@@ -20,32 +20,42 @@ if (desiredStackId.equals(targetStackId)) {
 }
 break;
 }
-Map<String,Map<String,String>> clusterConfigs=null;
+Map<String,Map<String,String>> newConfigurationsByType=null;
 ConfigHelper configHelper=getManagementController().getConfigHelper();
 if (direction == Direction.UPGRADE) {
-clusterConfigs=new HashMap<String,Map<String,String>>();
-Set<org.apache.ambari.server.state.PropertyInfo> pi=s_metaProvider.get().getStackProperties(targetStack.getStackName(),targetStack.getStackVersion());
-for (PropertyInfo stackProperty : pi) {
-String type=ConfigHelper.fileNameToConfigType(stackProperty.getFilename());
-if (!clusterConfigs.containsKey(type)) {
-clusterConfigs.put(type,new HashMap<String,String>());
+Map<String,Map<String,String>> oldStackDefaultConfigurationsByType=configHelper.getDefaultProperties(currentStackId,cluster);
+newConfigurationsByType=configHelper.getDefaultProperties(targetStackId,cluster);
+Map<String,DesiredConfig> existingDesiredConfigurationsByType=cluster.getDesiredConfigs();
+for (Map.Entry<String,DesiredConfig> existingEntry : existingDesiredConfigurationsByType.entrySet()) {
+String configurationType=existingEntry.getKey();
+Config currentClusterConfig=cluster.getDesiredConfigByType(configurationType);
+if (null == currentClusterConfig) {
+continue;
 }
-clusterConfigs.get(type).put(stackProperty.getName(),stackProperty.getValue());
+Map<String,String> existingConfigurations=currentClusterConfig.getProperties();
+Map<String,String> newDefaultConfigurations=newConfigurationsByType.get(configurationType);
+if (null == newDefaultConfigurations) {
+newConfigurationsByType.put(configurationType,existingConfigurations);
+continue;
 }
-for (String serviceName : cluster.getServices().keySet()) {
-pi=s_metaProvider.get().getServiceProperties(targetStack.getStackName(),targetStack.getStackVersion(),serviceName);
-for (PropertyInfo stackProperty : pi) {
-String type=ConfigHelper.fileNameToConfigType(stackProperty.getFilename());
-if (!clusterConfigs.containsKey(type)) {
-  clusterConfigs.put(type,new HashMap<String,String>());
+for (Map.Entry<String,String> existingConfigurationEntry : existingConfigurations.entrySet()) {
+String existingConfigurationKey=existingConfigurationEntry.getKey();
+String existingConfigurationValue=existingConfigurationEntry.getValue();
+if (newDefaultConfigurations.containsKey(existingConfigurationKey)) {
+  String newDefaultConfigurationValue=newDefaultConfigurations.get(existingConfigurationKey);
+  if (!StringUtils.equals(existingConfigurationValue,newDefaultConfigurationValue)) {
+    Map<String,String> configurationTypeDefaultConfigurations=oldStackDefaultConfigurationsByType.get(configurationType);
+    if (null != configurationTypeDefaultConfigurations) {
+      String oldDefaultValue=configurationTypeDefaultConfigurations.get(existingConfigurationKey);
+      if (!StringUtils.equals(existingConfigurationValue,oldDefaultValue)) {
+        newDefaultConfigurations.put(existingConfigurationKey,existingConfigurationValue);
+      }
+    }
+  }
 }
-clusterConfigs.get(type).put(stackProperty.getName(),stackProperty.getValue());
+ else {
+  newDefaultConfigurations.put(existingConfigurationKey,existingConfigurationValue);
 }
-}
-for (Map.Entry<String,Map<String,String>> entry : clusterConfigs.entrySet()) {
-Config config=cluster.getDesiredConfigByType(entry.getKey());
-if (null != config) {
-entry.getValue().putAll(config.getProperties());
 }
 }
 }
@@ -53,7 +63,7 @@ entry.getValue().putAll(config.getProperties());
 cluster.applyLatestConfigurations(cluster.getCurrentStackVersion());
 }
 cluster.setDesiredStackVersion(new StackId(targetStack.getStackName(),targetStack.getStackVersion()),true);
-if (null != clusterConfigs) {
-configHelper.createConfigTypes(cluster,getManagementController(),clusterConfigs,getManagementController().getAuthName(),"Configuration created for Upgrade");
+if (null != newConfigurationsByType) {
+configHelper.createConfigTypes(cluster,getManagementController(),newConfigurationsByType,getManagementController().getAuthName(),"Configuration created for Upgrade");
 }
 }
