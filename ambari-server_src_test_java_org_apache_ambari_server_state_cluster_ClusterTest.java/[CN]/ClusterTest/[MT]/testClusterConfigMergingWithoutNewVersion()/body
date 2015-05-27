@@ -1,0 +1,38 @@
+{
+  createDefaultCluster();
+  Cluster cluster=clusters.getCluster("c1");
+  ClusterEntity clusterEntity=clusterDAO.findByName("c1");
+  assertEquals(0,clusterEntity.getClusterConfigEntities().size());
+  final Config originalConfig=configFactory.createNew(cluster,"foo-site",new HashMap<String,String>(){
+{
+      put("one","two");
+    }
+  }
+,new HashMap<String,Map<String,String>>());
+  originalConfig.setTag("version3");
+  originalConfig.persist();
+  cluster.addConfig(originalConfig);
+  ConfigGroup configGroup=configGroupFactory.createNew(cluster,"g1","t1","",new HashMap<String,Config>(){
+{
+      put("foo-site",originalConfig);
+    }
+  }
+,Collections.<Long,Host>emptyMap());
+  configGroup.persist();
+  cluster.addConfigGroup(configGroup);
+  clusterEntity=clusterDAO.findByName("c1");
+  assertEquals(1,clusterEntity.getClusterConfigEntities().size());
+  Map<String,Config> configsByType=cluster.getConfigsByType("foo-site");
+  Config config=configsByType.entrySet().iterator().next().getValue();
+  Map<String,String> properties=config.getProperties();
+  properties.put("three","four");
+  config.setProperties(properties);
+  config.persist(false);
+  clusterEntity=clusterDAO.findByName("c1");
+  assertEquals(1,clusterEntity.getClusterConfigEntities().size());
+  ClusterConfigEntity clusterConfigEntity=clusterEntity.getClusterConfigEntities().iterator().next();
+  assertTrue(clusterConfigEntity.getData().contains("one"));
+  assertTrue(clusterConfigEntity.getData().contains("two"));
+  assertTrue(clusterConfigEntity.getData().contains("three"));
+  assertTrue(clusterConfigEntity.getData().contains("four"));
+}
