@@ -1,11 +1,12 @@
 def _check_existence(self, name):
-    if ('.' in name):
-        name = os.path.splitext(name)[0]
-    (code, out) = shell.call((CHECK_CMD % name))
-    if bool(code):
-        return False
-    elif (('*' in name) or ('?' in name)):
-        (code1, out1) = shell.call((CHECK_AVAILABLE_PACKAGES_CMD % name))
-        return (not bool(code1))
-    else:
-        return True
+    "\n    For regexp names:\n    If only part of packages were installed during early canceling.\n    Let's say:\n    1. install hbase_2_3_*\n    2. Only hbase_2_3_1234 is installed, but is not hbase_2_3_1234_regionserver yet.\n    3. We cancel the yum\n    \n    In that case this is bug of packages we require.\n    And hbase_2_3_*_regionserver should be added to metainfo.xml.\n    \n    Checking existence should never fail in such a case for hbase_2_3_*, otherwise it\n    gonna break things like removing packages and some others.\n    \n    Note: this method SHOULD NOT use yum directly (yum.rpmdb doesn't use it). Because a lot of issues we have, when customer have\n    yum in inconsistant state (locked, used, having invalid repo). Once packages are installed\n    we should not rely on that.\n    "
+    import yum
+    yb = yum.YumBase()
+    name_regex = (re.escape(name).replace('\\?', '.').replace('\\*', '.*') + '$')
+    regex = re.compile(name_regex)
+    with suppress_stdout():
+        package_list = yb.rpmdb.simplePkgList()
+    for package in package_list:
+        if regex.match(package[0]):
+            return True
+    return False

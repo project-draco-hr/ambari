@@ -1,9 +1,11 @@
-@patch.object(shell, 'call')
 @patch.object(shell, 'checked_call')
 @patch.object(System, 'os_family', new='redhat')
-def test_action_install_rhel(self, shell_mock, call_mock):
-    call_mock.return_value = (1, None)
+def test_action_install_rhel(self, shell_mock):
+    sys.modules['yum'] = MagicMock()
+    sys.modules['yum'].YumBase.return_value = MagicMock()
+    sys.modules['yum'].YumBase.return_value.rpmdb = MagicMock()
+    sys.modules['yum'].YumBase.return_value.rpmdb.simplePkgList.return_value = [('some_packag',)]
     with Environment('/') as env:
         Package('some_package')
-    call_mock.assert_called_with('installed_pkgs=`rpm -qa \'some_package\'` ; [ ! -z "$installed_pkgs" ]')
+    self.assertTrue(sys.modules['yum'].YumBase.return_value.rpmdb.simplePkgList.called)
     shell_mock.assert_called_with(['/usr/bin/yum', '-d', '0', '-e', '0', '-y', 'install', 'some_package'], logoutput=False, sudo=True)
