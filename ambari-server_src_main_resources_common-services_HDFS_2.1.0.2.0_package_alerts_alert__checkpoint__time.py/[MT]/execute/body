@@ -19,6 +19,16 @@ def execute(configurations={}, parameters={}, host_name=None):
         checkpoint_tx = configurations[NN_CHECKPOINT_TX_KEY]
     if (NN_CHECKPOINT_PERIOD_KEY in configurations):
         checkpoint_period = configurations[NN_CHECKPOINT_PERIOD_KEY]
+    security_enabled = False
+    if (SECURITY_ENABLED_KEY in configurations):
+        security_enabled = (str(configurations[SECURITY_ENABLED_KEY]).upper() == 'TRUE')
+    kerberos_keytab = None
+    if (KERBEROS_KEYTAB in configurations):
+        kerberos_keytab = configurations[KERBEROS_KEYTAB]
+    kerberos_principal = None
+    if (KERBEROS_PRINCIPAL in configurations):
+        kerberos_principal = configurations[KERBEROS_PRINCIPAL]
+        kerberos_principal = kerberos_principal.replace('_HOST', host_name)
     connection_timeout = CONNECTION_TIMEOUT_DEFAULT
     if (CONNECTION_TIMEOUT_KEY in parameters):
         connection_timeout = float(parameters[CONNECTION_TIMEOUT_KEY])
@@ -39,8 +49,17 @@ def execute(configurations={}, parameters={}, host_name=None):
     label = None
     result_code = 'OK'
     try:
-        last_checkpoint_time = int(get_value_from_jmx(last_checkpoint_time_qry, 'LastCheckpointTime', connection_timeout))
-        journal_transaction_info = get_value_from_jmx(journal_transaction_info_qry, 'JournalTransactionInfo', connection_timeout)
+        if ((kerberos_principal is not None) and (kerberos_keytab is not None) and security_enabled):
+            env = Environment.get_instance()
+            (last_checkpoint_time_response, error_msg, time_millis) = curl_krb_request(env.tmp_dir, kerberos_keytab, kerberos_principal, last_checkpoint_time_qry, 'checkpoint_time_alert', None, False, 'NameNode Last Checkpoint')
+            last_checkpoint_time_response_json = json.loads(last_checkpoint_time_response)
+            last_checkpoint_time = int(last_checkpoint_time_response_json['beans'][0]['LastCheckpointTime'])
+            (journal_transaction_info_response, error_msg, time_millis) = curl_krb_request(env.tmp_dir, kerberos_keytab, kerberos_principal, journal_transaction_info_qry, 'checkpoint_time_alert', None, False, 'NameNode Last Checkpoint')
+            journal_transaction_info_response_json = json.loads(journal_transaction_info_response)
+            journal_transaction_info = journal_transaction_info_response_json['beans'][0]['JournalTransactionInfo']
+        else:
+            last_checkpoint_time = int(get_value_from_jmx(last_checkpoint_time_qry, 'LastCheckpointTime', connection_timeout))
+            journal_transaction_info = get_value_from_jmx(journal_transaction_info_qry, 'JournalTransactionInfo', connection_timeout)
         journal_transaction_info_dict = json.loads(journal_transaction_info)
         last_tx = int(journal_transaction_info_dict['LastAppliedOrWrittenTxId'])
         most_recent_tx = int(journal_transaction_info_dict['MostRecentCheckpointTxId'])
