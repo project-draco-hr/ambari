@@ -1,8 +1,15 @@
 {
-  String urlToRead="http://foo.com";
-  String requestMethod="GET";
-  ImpersonatorSetting impersonatorSetting=new ImpersonatorSettingImpl(this.viewContext);
-  when(this.viewContext.getImpersonatorSetting()).thenReturn(impersonatorSetting);
-  String actualResult=this.viewContext.getHttpImpersonator().requestURL(urlToRead,requestMethod,impersonatorSetting);
-  Assert.assertEquals(this.expectedResult,actualResult);
+  URLStreamProvider streamProvider=createNiceMock(URLStreamProvider.class);
+  HttpURLConnection urlConnection=createNiceMock(HttpURLConnection.class);
+  ViewContext viewContext=createNiceMock(ViewContext.class);
+  String responseBody="Response body...";
+  InputStream inputStream=new ByteArrayInputStream(responseBody.getBytes(Charset.forName("UTF-8")));
+  expect(streamProvider.processURL(eq("spec?doAs=joe"),eq("requestMethod"),eq((String)null),eq((Map<String,List<String>>)null))).andReturn(urlConnection);
+  expect(urlConnection.getInputStream()).andReturn(inputStream);
+  expect(viewContext.getUsername()).andReturn("joe").anyTimes();
+  replay(streamProvider,urlConnection,viewContext);
+  HttpImpersonatorImpl impersonator=new HttpImpersonatorImpl(viewContext,streamProvider);
+  ImpersonatorSetting setting=new ImpersonatorSettingImpl(viewContext);
+  Assert.assertEquals(responseBody,impersonator.requestURL("spec","requestMethod",setting));
+  verify(streamProvider,urlConnection,viewContext);
 }
