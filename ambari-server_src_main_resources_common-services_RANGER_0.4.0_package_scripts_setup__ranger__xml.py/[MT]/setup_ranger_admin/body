@@ -1,11 +1,26 @@
-def setup_ranger_admin():
+def setup_ranger_admin(rolling_upgrade=False):
     import params
+    ranger_home = params.ranger_home
+    ranger_conf = params.ranger_conf
+    if rolling_upgrade:
+        ranger_home = format('/usr/hdp/{version}/ranger-admin')
+        ranger_conf = format('/usr/hdp/{version}/ranger-admin/conf')
     File(format('/usr/lib/ambari-agent/{check_db_connection_jar_name}'), content=DownloadSource(format('{jdk_location}{check_db_connection_jar_name}')))
-    db_connection_check_command = format("{java_home}/bin/java -cp {check_db_connection_jar}:{driver_curl_target} org.apache.ambari.server.DBConnectionVerification '{ranger_jdbc_connection_url}' {ranger_db_user} {ranger_db_password!p} {ranger_jdbc_driver}")
+    cp = format('{check_db_connection_jar}')
+    cp = ((cp + os.pathsep) + format('{driver_curl_target}'))
+    cp = ((cp + os.pathsep) + format('{ranger_home}/ews/webapp/WEB-INF/lib/*'))
+    db_connection_check_command = format("{java_home}/bin/java -cp {cp} org.apache.ambari.server.DBConnectionVerification '{ranger_jdbc_connection_url}' {ranger_db_user} {ranger_db_password!p} {ranger_jdbc_driver}")
     Execute(db_connection_check_command, path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin', tries=5, try_sleep=10)
     Execute(('ln', '-sf', format('{ranger_home}/ews/webapp/WEB-INF/classes/conf'), format('{ranger_home}/conf')), not_if=format('ls {ranger_home}/conf'), only_if=format('ls {ranger_home}/ews/webapp/WEB-INF/classes/conf'), sudo=True)
+    if rolling_upgrade:
+        src_file = format('{ranger_home}/ews/webapp/WEB-INF/classes/conf.dist/ranger-admin-default-site.xml')
+        dst_file = format('{ranger_home}/conf/ranger-admin-default-site.xml')
+        Execute(('cp', '-f', src_file, dst_file), sudo=True)
+        src_file = format('{ranger_home}/ews/webapp/WEB-INF/classes/conf.dist/security-applicationContext.xml')
+        dst_file = format('{ranger_home}/conf/security-applicationContext.xml')
+        Execute(('cp', '-f', src_file, dst_file), sudo=True)
     Execute(('chown', '-R', format('{unix_user}:{unix_group}'), format('{ranger_home}/')), sudo=True)
     Execute(('ln', '-sf', format('{ranger_home}/ews/ranger-admin-services.sh'), '/usr/bin/ranger-admin'), not_if=format('ls /usr/bin/ranger-admin'), only_if=format('ls {ranger_home}/ews/ranger-admin-services.sh'), sudo=True)
-    XmlConfig('ranger-admin-site.xml', conf_dir=params.ranger_conf, configurations=params.config['configurations']['ranger-admin-site'], configuration_attributes=params.config['configuration_attributes']['ranger-admin-site'], owner=params.unix_user, group=params.unix_group, mode=420)
-    Directory(os.path.join(params.ranger_conf, 'ranger_jaas'), mode=448, owner=params.unix_user, group=params.unix_group)
-    do_keystore_setup()
+    XmlConfig('ranger-admin-site.xml', conf_dir=ranger_conf, configurations=params.config['configurations']['ranger-admin-site'], configuration_attributes=params.config['configuration_attributes']['ranger-admin-site'], owner=params.unix_user, group=params.unix_group, mode=420)
+    Directory(os.path.join(ranger_conf, 'ranger_jaas'), mode=448, owner=params.unix_user, group=params.unix_group)
+    do_keystore_setup(rolling_upgrade=rolling_upgrade)
