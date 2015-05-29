@@ -1,0 +1,41 @@
+{
+  Lock clusterWriteLock=cluster.getClusterGlobalLock().writeLock();
+  clusterWriteLock.lock();
+  try {
+    if (changedServices != null) {
+      for (      Entry<State,List<Service>> entry : changedServices.entrySet()) {
+        State newState=entry.getKey();
+        for (        Service s : entry.getValue()) {
+          if (s.isClientOnlyService() && newState == State.STARTED) {
+            continue;
+          }
+          s.setDesiredState(newState);
+        }
+      }
+    }
+    if (changedComps != null) {
+      for (      Entry<State,List<ServiceComponent>> entry : changedComps.entrySet()) {
+        State newState=entry.getKey();
+        for (        ServiceComponent sc : entry.getValue()) {
+          sc.setDesiredState(newState);
+        }
+      }
+    }
+    for (    Map<State,List<ServiceComponentHost>> stateScHostMap : changedScHosts.values()) {
+      for (      Entry<State,List<ServiceComponentHost>> entry : stateScHostMap.entrySet()) {
+        State newState=entry.getKey();
+        for (        ServiceComponentHost sch : entry.getValue()) {
+          sch.setDesiredState(newState);
+        }
+      }
+    }
+    if (ignoredScHosts != null) {
+      for (      ServiceComponentHost scHost : ignoredScHosts) {
+        scHost.setDesiredState(scHost.getState());
+      }
+    }
+  }
+  finally {
+    clusterWriteLock.unlock();
+  }
+}
