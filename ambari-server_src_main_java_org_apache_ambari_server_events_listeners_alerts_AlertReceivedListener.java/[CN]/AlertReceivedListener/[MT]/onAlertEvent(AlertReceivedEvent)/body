@@ -3,6 +3,9 @@
     LOG.debug(event.toString());
   }
   Alert alert=event.getAlert();
+  if (!isValid(alert)) {
+    return;
+  }
   long clusterId=event.getClusterId();
   AlertDefinitionEntity definition=m_definitionDao.findByName(clusterId,alert.getName());
   if (null == definition) {
@@ -13,10 +16,7 @@
     LOG.debug("Received an alert for {} which is disabled. No more alerts should be received for this definition.",alert.getName());
     return;
   }
-  if (!isValid(alert)) {
-    return;
-  }
-  AlertCurrentEntity current=null;
+  AlertCurrentEntity current;
   if (StringUtils.isBlank(alert.getHostName()) || definition.isHostIgnored()) {
     current=m_alertsDao.findCurrentByNameNoHost(clusterId,alert.getName());
   }
@@ -29,7 +29,7 @@
     current.setMaintenanceState(MaintenanceState.OFF);
     current.setAlertHistory(history);
     current.setLatestTimestamp(alert.getTimestamp());
-    current.setOriginalTimestamp(Long.valueOf(alert.getTimestamp()));
+    current.setOriginalTimestamp(alert.getTimestamp());
     m_alertsDao.create(current);
     InitialAlertEvent initialAlertEvent=new InitialAlertEvent(event.getClusterId(),event.getAlert(),current);
     m_alertEventPublisher.publish(initialAlertEvent);
@@ -37,7 +37,7 @@
  else   if (alert.getState() == current.getAlertHistory().getAlertState()) {
     current.setLatestTimestamp(alert.getTimestamp());
     current.setLatestText(alert.getText());
-    current=m_alertsDao.merge(current);
+    m_alertsDao.merge(current);
   }
  else {
     if (LOG.isDebugEnabled()) {
@@ -46,12 +46,10 @@
     AlertHistoryEntity oldHistory=current.getAlertHistory();
     AlertState oldState=oldHistory.getAlertState();
     AlertHistoryEntity history=createHistory(clusterId,oldHistory.getAlertDefinition(),alert);
-    m_alertsDao.create(history);
-    current.setAlertHistory(history);
-    current.setLatestTimestamp(Long.valueOf(alert.getTimestamp()));
-    current.setOriginalTimestamp(Long.valueOf(alert.getTimestamp()));
+    current.setLatestTimestamp(alert.getTimestamp());
+    current.setOriginalTimestamp(alert.getTimestamp());
     current.setLatestText(alert.getText());
-    current=m_alertsDao.merge(current);
+    current=m_alertsDao.mergeAlertCurrentWithAlertHistory(current,history);
     if (LOG.isDebugEnabled()) {
       LOG.debug("Alert State Merged: CurrentId {}, CurrentTimestamp {}, HistoryId {}, HistoryState {}",current.getAlertId(),current.getLatestTimestamp(),current.getAlertHistory().getAlertId(),current.getAlertHistory().getAlertState());
     }
