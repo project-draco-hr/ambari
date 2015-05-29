@@ -1,0 +1,59 @@
+def JSONObject((s, end), encoding, strict, scan_once, object_hook, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
+    pairs = {}
+    nextchar = s[end:(end + 1)]
+    if (nextchar != '"'):
+        if (nextchar in _ws):
+            end = _w(s, end).end()
+            nextchar = s[end:(end + 1)]
+        if (nextchar == '}'):
+            return (pairs, (end + 1))
+        elif (nextchar != '"'):
+            raise ValueError(errmsg('Expecting property name', s, end))
+    end += 1
+    while True:
+        (key, end) = scanstring(s, end, encoding, strict)
+        if (s[end:(end + 1)] != ':'):
+            end = _w(s, end).end()
+            if (s[end:(end + 1)] != ':'):
+                raise ValueError(errmsg('Expecting : delimiter', s, end))
+        end += 1
+        try:
+            if (s[end] in _ws):
+                end += 1
+                if (s[end] in _ws):
+                    end = _w(s, (end + 1)).end()
+        except IndexError:
+            pass
+        try:
+            (value, end) = scan_once(s, end)
+        except StopIteration:
+            raise ValueError(errmsg('Expecting object', s, end))
+        pairs[key] = value
+        try:
+            nextchar = s[end]
+            if (nextchar in _ws):
+                end = _w(s, (end + 1)).end()
+                nextchar = s[end]
+        except IndexError:
+            nextchar = ''
+        end += 1
+        if (nextchar == '}'):
+            break
+        elif (nextchar != ','):
+            raise ValueError(errmsg('Expecting , delimiter', s, (end - 1)))
+        try:
+            nextchar = s[end]
+            if (nextchar in _ws):
+                end += 1
+                nextchar = s[end]
+                if (nextchar in _ws):
+                    end = _w(s, (end + 1)).end()
+                    nextchar = s[end]
+        except IndexError:
+            nextchar = ''
+        end += 1
+        if (nextchar != '"'):
+            raise ValueError(errmsg('Expecting property name', s, (end - 1)))
+    if (object_hook is not None):
+        pairs = object_hook(pairs)
+    return (pairs, end)
