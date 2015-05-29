@@ -1,0 +1,29 @@
+{
+  Cluster cluster=getCluster();
+  if (cluster == null) {
+    throw new AmbariException("Missing cluster object");
+  }
+  KerberosDescriptor kerberosDescriptor=kerberosHelper.getKerberosDescriptor(cluster);
+  Collection<String> identityFilter=getIdentityFilter();
+  List<ServiceComponentHost> schToProcess=kerberosHelper.getServiceComponentHostsToProcess(cluster,kerberosDescriptor,getServiceComponentFilter(),identityFilter,new KerberosHelper.Command<Boolean,ServiceComponentHost>(){
+    @Override public Boolean invoke(    ServiceComponentHost sch) throws AmbariException {
+      return true;
+    }
+  }
+);
+  Map<String,String> commandParameters=getCommandParameters();
+  String dataDirectory=getCommandParameterValue(commandParameters,DATA_DIRECTORY);
+  Map<String,Map<String,String>> kerberosConfigurations=new HashMap<String,Map<String,String>>();
+  int schCount=schToProcess.size();
+  if (schCount == 0) {
+    actionLog.writeStdOut("There are no components to process");
+  }
+ else   if (schCount == 1) {
+    actionLog.writeStdOut(String.format("Processing %d component",schCount));
+  }
+ else {
+    actionLog.writeStdOut(String.format("Processing %d components",schCount));
+  }
+  processIdentities(cluster,kerberosDescriptor,schToProcess,identityFilter,dataDirectory,kerberosConfigurations);
+  return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
+}

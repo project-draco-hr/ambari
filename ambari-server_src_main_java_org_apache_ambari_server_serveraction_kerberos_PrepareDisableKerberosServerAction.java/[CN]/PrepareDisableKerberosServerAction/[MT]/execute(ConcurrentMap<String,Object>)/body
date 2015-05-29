@@ -1,0 +1,128 @@
+{
+  Cluster cluster=getCluster();
+  if (cluster == null) {
+    throw new AmbariException("Missing cluster object");
+  }
+  KerberosDescriptor kerberosDescriptor=kerberosHelper.getKerberosDescriptor(cluster);
+  Collection<String> identityFilter=getIdentityFilter();
+  List<ServiceComponentHost> schToProcess=kerberosHelper.getServiceComponentHostsToProcess(cluster,kerberosDescriptor,getServiceComponentFilter(),identityFilter,new KerberosHelper.Command<Boolean,ServiceComponentHost>(){
+    @Override public Boolean invoke(    ServiceComponentHost sch) throws AmbariException {
+      return (sch.getDesiredSecurityState() == SecurityState.UNSECURED) && (sch.getSecurityState() != SecurityState.UNSECURED);
+    }
+  }
+);
+  Map<String,Map<String,String>> kerberosConfigurations=new HashMap<String,Map<String,String>>();
+  Map<String,String> commandParameters=getCommandParameters();
+  String dataDirectory=getCommandParameterValue(commandParameters,DATA_DIRECTORY);
+  int schCount=schToProcess.size();
+  if (schCount == 0) {
+    actionLog.writeStdOut("There are no components to process");
+  }
+ else   if (schCount == 1) {
+    actionLog.writeStdOut(String.format("Processing %d component",schCount));
+  }
+ else {
+    actionLog.writeStdOut(String.format("Processing %d components",schCount));
+  }
+  processIdentities(cluster,kerberosDescriptor,schToProcess,identityFilter,dataDirectory,kerberosConfigurations);
+  actionLog.writeStdOut("Determining configuration changes");
+  Map<String,String> clusterEnvProperties=kerberosConfigurations.get(KerberosHelper.SECURITY_ENABLED_CONFIG_TYPE);
+  if (clusterEnvProperties == null) {
+    clusterEnvProperties=new HashMap<String,String>();
+    kerberosConfigurations.put(KerberosHelper.SECURITY_ENABLED_CONFIG_TYPE,clusterEnvProperties);
+  }
+  clusterEnvProperties.put(KerberosHelper.SECURITY_ENABLED_PROPERTY_NAME,"false");
+  if (!kerberosConfigurations.isEmpty()) {
+    if (dataDirectory == null) {
+      String message="The data directory has not been set.  Generated data can not be stored.";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
+    Map<String,Collection<String>> configurationsToRemove=new HashMap<String,Collection<String>>();
+    File configFile=new File(dataDirectory,KerberosConfigDataFileWriter.DATA_FILE_NAME);
+    KerberosConfigDataFileWriter kerberosConfDataFileWriter=null;
+    for (    Map.Entry<String,Map<String,String>> entry : kerberosConfigurations.entrySet()) {
+      configurationsToRemove.put(entry.getKey(),new HashSet<String>(entry.getValue().keySet()));
+    }
+    configurationsToRemove.remove("cluster-env");
+    if (!schToProcess.isEmpty()) {
+      Set<String> visitedServices=new HashSet<String>();
+      for (      ServiceComponentHost sch : schToProcess) {
+        String serviceName=sch.getServiceName();
+        if (!visitedServices.contains(serviceName)) {
+          StackId stackVersion=sch.getStackVersion();
+          visitedServices.add(serviceName);
+          if (stackVersion != null) {
+            Set<PropertyInfo> serviceProperties=configHelper.getServiceProperties(stackVersion,serviceName,true);
+            if (serviceProperties != null) {
+              for (              PropertyInfo propertyInfo : serviceProperties) {
+                String filename=propertyInfo.getFilename();
+                if (filename != null) {
+                  String type=ConfigHelper.fileNameToConfigType(filename);
+                  String propertyName=propertyInfo.getName();
+                  Map<String,String> kerberosConfiguration=kerberosConfigurations.get(type);
+                  if ((kerberosConfiguration != null) && (kerberosConfiguration.containsKey(propertyName))) {
+                    kerberosConfiguration.put(propertyName,propertyInfo.getValue());
+                  }
+                  Collection<String> propertiesToRemove=configurationsToRemove.get(type);
+                  if (propertiesToRemove != null) {
+                    propertiesToRemove.remove(propertyName);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    actionLog.writeStdOut(String.format("Writing configuration changes metadata file to %s",configFile.getAbsolutePath()));
+    try {
+      kerberosConfDataFileWriter=kerberosConfigDataFileWriterFactory.createKerberosConfigDataFileWriter(configFile);
+      for (      Map.Entry<String,Map<String,String>> entry : kerberosConfigurations.entrySet()) {
+        String type=entry.getKey();
+        Map<String,String> properties=entry.getValue();
+        Collection<String> propertiesToRemove=configurationsToRemove.get(type);
+        if (properties != null) {
+          for (          Map.Entry<String,String> configTypeEntry : properties.entrySet()) {
+            String propertyName=configTypeEntry.getKey();
+            if ((propertiesToRemove == null) || !propertiesToRemove.contains(propertyName)) {
+              String value=configTypeEntry.getValue();
+              String operation=(value == null) ? KerberosConfigDataFileWriter.OPERATION_TYPE_REMOVE : KerberosConfigDataFileWriter.OPERATION_TYPE_SET;
+              kerberosConfDataFileWriter.addRecord(type,propertyName,value,operation);
+            }
+          }
+        }
+      }
+      for (      Map.Entry<String,Collection<String>> entry : configurationsToRemove.entrySet()) {
+        String type=entry.getKey();
+        Collection<String> properties=entry.getValue();
+        if (properties != null) {
+          for (          String propertyName : properties) {
+            kerberosConfDataFileWriter.addRecord(type,propertyName,null,KerberosConfigDataFileWriter.OPERATION_TYPE_REMOVE);
+          }
+        }
+      }
+    }
+ catch (    IOException e) {
+      String message=String.format("Failed to write kerberos configurations file - %s",configFile.getAbsolutePath());
+      LOG.error(message,e);
+      actionLog.writeStdOut(message);
+      actionLog.writeStdErr(message + "\n" + e.getLocalizedMessage());
+      throw new AmbariException(message,e);
+    }
+ finally {
+      if (kerberosConfDataFileWriter != null) {
+        try {
+          kerberosConfDataFileWriter.close();
+        }
+ catch (        IOException e) {
+          String message="Failed to close the kerberos configurations file writer";
+          LOG.warn(message,e);
+          actionLog.writeStdOut(message);
+          actionLog.writeStdErr(message + "\n" + e.getLocalizedMessage());
+        }
+      }
+    }
+  }
+  return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
+}

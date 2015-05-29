@@ -1,0 +1,37 @@
+{
+  List<ServiceComponentHost> serviceComponentHostsToProcess=new ArrayList<ServiceComponentHost>();
+  Map<String,Service> services=cluster.getServices();
+  if ((services != null) && !services.isEmpty()) {
+    Collection<Host> hosts=cluster.getHosts();
+    if ((hosts != null) && !hosts.isEmpty()) {
+      for (      Host host : hosts) {
+        String hostname=host.getHostName();
+        List<ServiceComponentHost> serviceComponentHosts=cluster.getServiceComponentHosts(hostname);
+        if ((serviceComponentHosts != null) && !serviceComponentHosts.isEmpty()) {
+          for (          ServiceComponentHost sch : serviceComponentHosts) {
+            String serviceName=sch.getServiceName();
+            String componentName=sch.getServiceComponentName();
+            if ((serviceComponentFilter == null) || serviceComponentFilter.containsKey(serviceName)) {
+              Collection<String> componentFilter=(serviceComponentFilter == null) ? null : serviceComponentFilter.get(serviceName);
+              KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
+              if (serviceDescriptor != null) {
+                if (((componentFilter == null) || componentFilter.contains(componentName)) && shouldProcessCommand.invoke(sch)) {
+                  KerberosComponentDescriptor componentDescriptor=serviceDescriptor.getComponent(componentName);
+                  int identities=0;
+                  identities+=filteredIdentitiesCount(serviceDescriptor.getIdentities(false),identityFilter);
+                  if (componentDescriptor != null) {
+                    identities+=filteredIdentitiesCount(componentDescriptor.getIdentities(false),identityFilter);
+                  }
+                  if (identities > 0) {
+                    serviceComponentHostsToProcess.add(sch);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return serviceComponentHostsToProcess;
+}

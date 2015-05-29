@@ -1,0 +1,27 @@
+{
+  if (requestStageContainer == null) {
+    requestStageContainer=new RequestStageContainer(actionManager.getNextRequestId(),null,requestFactory,actionManager);
+  }
+  Map<String,String> commandParameters=new HashMap<String,String>();
+  commandParameters.put(KerberosServerAction.AUTHENTICATED_USER_NAME,ambariManagementController.getAuthName());
+  commandParameters.put(KerberosServerAction.DEFAULT_REALM,kerberosDetails.getDefaultRealm());
+  if (dataDirectory != null) {
+    commandParameters.put(KerberosServerAction.DATA_DIRECTORY,dataDirectory.getAbsolutePath());
+  }
+  if (serviceComponentFilter != null) {
+    commandParameters.put(KerberosServerAction.SERVICE_COMPONENT_FILTER,StageUtils.getGson().toJson(serviceComponentFilter));
+  }
+  if (identityFilter != null) {
+    commandParameters.put(KerberosServerAction.IDENTITY_FILTER,StageUtils.getGson().toJson(identityFilter));
+  }
+  addPrepareEnableKerberosOperationsStage(cluster,clusterHostInfoJson,hostParamsJson,event,commandParameters,roleCommandOrder,requestStageContainer);
+  if (kerberosDetails.manageIdentities()) {
+    commandParameters.put(KerberosServerAction.KDC_TYPE,kerberosDetails.getKdcType().name());
+    commandParameters.put(KerberosServerAction.ADMINISTRATOR_CREDENTIAL,getEncryptedAdministratorCredentials(cluster));
+    addCreatePrincipalsStage(cluster,clusterHostInfoJson,hostParamsJson,event,commandParameters,roleCommandOrder,requestStageContainer);
+    addCreateKeytabFilesStage(cluster,clusterHostInfoJson,hostParamsJson,event,commandParameters,roleCommandOrder,requestStageContainer);
+    addDistributeKeytabFilesStage(cluster,serviceComponentHosts,clusterHostInfoJson,hostParamsJson,commandParameters,roleCommandOrder,requestStageContainer,hostsWithValidKerberosClient);
+  }
+  addUpdateConfigurationsStage(cluster,clusterHostInfoJson,hostParamsJson,event,commandParameters,roleCommandOrder,requestStageContainer);
+  return requestStageContainer.getLastStageId();
+}

@@ -1,0 +1,18 @@
+{
+  Stage stage=createNewStage(requestStageContainer.getLastStageId(),cluster,requestStageContainer.getId(),"Delete Keytabs",clusterHostInfoJson,StageUtils.getGson().toJson(commandParameters),hostParamsJson);
+  Collection<ServiceComponentHost> filteredComponents=filterServiceComponentHostsForHosts(new ArrayList<ServiceComponentHost>(serviceComponentHosts),hostsWithValidKerberosClient);
+  if (!filteredComponents.isEmpty()) {
+    List<String> hostsToUpdate=createUniqueHostList(filteredComponents,Collections.singleton(HostState.HEALTHY));
+    if (!hostsToUpdate.isEmpty()) {
+      Map<String,String> requestParams=new HashMap<String,String>();
+      List<RequestResourceFilter> requestResourceFilters=new ArrayList<RequestResourceFilter>();
+      RequestResourceFilter reqResFilter=new RequestResourceFilter("KERBEROS","KERBEROS_CLIENT",hostsToUpdate);
+      requestResourceFilters.add(reqResFilter);
+      ActionExecutionContext actionExecContext=new ActionExecutionContext(cluster.getClusterName(),"REMOVE_KEYTAB",requestResourceFilters,requestParams);
+      customCommandExecutionHelper.addExecutionCommandsToStage(actionExecContext,stage,requestParams,false);
+    }
+  }
+  RoleGraph roleGraph=roleGraphFactory.createNew(roleCommandOrder);
+  roleGraph.build(stage);
+  requestStageContainer.addStages(roleGraph.getStages());
+}
