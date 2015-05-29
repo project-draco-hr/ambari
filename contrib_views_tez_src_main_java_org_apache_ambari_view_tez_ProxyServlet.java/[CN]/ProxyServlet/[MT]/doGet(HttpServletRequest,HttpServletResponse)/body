@@ -1,9 +1,47 @@
 {
   String urlToRead=URLDecoder.decode(request.getParameter("url"));
   response.setContentType(request.getContentType());
-  String result=this.impersonator.requestURL(urlToRead,"GET",this.impersonatorSetting);
-  Boolean notFound=result == "" || result.indexOf("\"exception\":\"NotFoundException\"") != -1;
-  response.setStatus(notFound ? HttpServletResponse.SC_NOT_FOUND : HttpServletResponse.SC_OK);
+  if (LOG.isDebugEnabled()) {
+    LOG.debug("Requesting data from ATS, url=" + urlToRead);
+  }
+  InputStream resultInputStream;
+  String result="";
+  int responseCode=Status.INTERNAL_SERVER_ERROR.getStatusCode();
+  HttpURLConnection connection;
+  try {
+    connection=urlConnectionProvider.getConnectionAsCurrent(urlToRead,HttpMethod.GET,nullData,emptyHeaders);
+    responseCode=connection.getResponseCode();
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Received response from ATS, url=" + urlToRead + ", responseCode="+ responseCode);
+    }
+    if (responseCode >= Response.Status.BAD_REQUEST.getStatusCode()) {
+      resultInputStream=connection.getErrorStream();
+    }
+ else {
+      resultInputStream=connection.getInputStream();
+    }
+    result=IOUtils.toString(resultInputStream);
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Received response from ATS, url=" + urlToRead + ", responseCode="+ responseCode+ ", responseBodyLen="+ result.length());
+    }
+  }
+ catch (  IOException e) {
+    if (LOG.isDebugEnabled()) {
+      LOG.warn("Failed to retrieve data from ATS, url=" + urlToRead,e);
+    }
+    responseCode=Status.INTERNAL_SERVER_ERROR.getStatusCode();
+    result=e.toString();
+  }
+catch (  Exception e) {
+    LOG.warn("Unknown Exception: Failed to retrieve data from ATS, url=" + urlToRead,e);
+    responseCode=Status.INTERNAL_SERVER_ERROR.getStatusCode();
+    result=e.toString();
+  }
+ finally {
+  }
+  response.setStatus(responseCode);
   PrintWriter writer=response.getWriter();
-  writer.print(result);
+  if (result != null) {
+    writer.print(result);
+  }
 }
