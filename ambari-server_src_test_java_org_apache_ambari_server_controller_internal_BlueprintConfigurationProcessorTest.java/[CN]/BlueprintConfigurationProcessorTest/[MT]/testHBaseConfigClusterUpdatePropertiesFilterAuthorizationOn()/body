@@ -1,0 +1,35 @@
+{
+  reset(stack);
+  final String expectedHostGroupName="host_group_1";
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> hbaseSiteProperties=new HashMap<String,String>();
+  properties.put("hbase-site",hbaseSiteProperties);
+  hbaseSiteProperties.put("hbase.security.authorization","true");
+  hbaseSiteProperties.put("hbase.coprocessor.regionserver.classes"," ");
+  Map<String,Stack.ConfigProperty> mapOfMetadata=new HashMap<String,Stack.ConfigProperty>();
+  Stack.ConfigProperty configProperty1=new Stack.ConfigProperty("hbase-site","hbase.coprocessor.regionserver.classes"," "){
+    @Override Set<PropertyDependencyInfo> getDependsOnProperties(){
+      PropertyDependencyInfo dependencyInfo=new PropertyDependencyInfo("hbase-site","hbase.security.authorization");
+      return Collections.singleton(dependencyInfo);
+    }
+  }
+;
+  mapOfMetadata.put("hbase.coprocessor.regionserver.classes",configProperty1);
+  expect(stack.getName()).andReturn("testStack").anyTimes();
+  expect(stack.getVersion()).andReturn("1").anyTimes();
+  expect(stack.isMasterComponent((String)anyObject())).andReturn(false).anyTimes();
+  expect(stack.getServiceForConfigType("hbase-site")).andReturn("HBASE").atLeastOnce();
+  expect(stack.getConfigurationPropertiesWithMetadata("HBASE","hbase-site")).andReturn(mapOfMetadata).atLeastOnce();
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> hgComponents=new HashSet<String>();
+  hgComponents.add("NAMENODE");
+  List<String> hosts=new ArrayList<String>();
+  hosts.add("some-hose");
+  TestHostGroup group1=new TestHostGroup(expectedHostGroupName,hgComponents,hosts);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
+  assertTrue("hbase.coprocessor.regionserver.classes should have been included in configuration",hbaseSiteProperties.containsKey("hbase.coprocessor.regionserver.classes"));
+}

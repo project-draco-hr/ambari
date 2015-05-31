@@ -1,0 +1,45 @@
+{
+  reset(stack);
+  final String expectedHostGroupName="host_group_1";
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> hiveSiteProperties=new HashMap<String,String>();
+  properties.put("hive-site",hiveSiteProperties);
+  hiveSiteProperties.put("hive.server2.authentication","KERBEROS");
+  hiveSiteProperties.put("hive.server2.authentication.kerberos.keytab"," ");
+  hiveSiteProperties.put("hive.server2.authentication.kerberos.principal"," ");
+  Map<String,Stack.ConfigProperty> mapOfMetadata=new HashMap<String,Stack.ConfigProperty>();
+  Stack.ConfigProperty configProperty1=new Stack.ConfigProperty("hive-site","hive.server2.authentication.kerberos.keytab"," "){
+    @Override Set<PropertyDependencyInfo> getDependsOnProperties(){
+      PropertyDependencyInfo dependencyInfo=new PropertyDependencyInfo("hive-site","hive.server2.authentication");
+      return Collections.singleton(dependencyInfo);
+    }
+  }
+;
+  Stack.ConfigProperty configProperty2=new Stack.ConfigProperty("hive-site","hive.server2.authentication.kerberos.principal"," "){
+    @Override Set<PropertyDependencyInfo> getDependsOnProperties(){
+      PropertyDependencyInfo dependencyInfo=new PropertyDependencyInfo("hive-site","hive.server2.authentication");
+      return Collections.singleton(dependencyInfo);
+    }
+  }
+;
+  mapOfMetadata.put("hive.server2.authentication.kerberos.keytab",configProperty1);
+  mapOfMetadata.put("hive.server2.authentication.kerberos.principal",configProperty2);
+  expect(stack.getName()).andReturn("testStack").anyTimes();
+  expect(stack.getVersion()).andReturn("1").anyTimes();
+  expect(stack.isMasterComponent((String)anyObject())).andReturn(false).anyTimes();
+  expect(stack.getServiceForConfigType("hive-site")).andReturn("HIVE").atLeastOnce();
+  expect(stack.getConfigurationPropertiesWithMetadata("HIVE","hive-site")).andReturn(mapOfMetadata).atLeastOnce();
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> hgComponents=new HashSet<String>();
+  hgComponents.add("NAMENODE");
+  List<String> hosts=new ArrayList<String>();
+  hosts.add("some-hose");
+  TestHostGroup group1=new TestHostGroup(expectedHostGroupName,hgComponents,hosts);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
+  assertTrue("hive.server2.authentication.kerberos.keytab should have been included in configuration",hiveSiteProperties.containsKey("hive.server2.authentication.kerberos.keytab"));
+  assertTrue("hive.server2.authentication.kerberos.principal should have been included in configuration",hiveSiteProperties.containsKey("hive.server2.authentication.kerberos.principal"));
+}
