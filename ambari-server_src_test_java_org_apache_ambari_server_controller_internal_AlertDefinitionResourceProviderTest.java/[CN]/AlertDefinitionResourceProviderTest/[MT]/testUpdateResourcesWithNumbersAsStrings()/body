@@ -1,0 +1,33 @@
+{
+  AmbariManagementController amc=createMock(AmbariManagementController.class);
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  expect(amc.getClusters()).andReturn(clusters).atLeastOnce();
+  expect(clusters.getCluster((String)anyObject())).andReturn(cluster).atLeastOnce();
+  expect(cluster.getClusterId()).andReturn(Long.valueOf(1)).atLeastOnce();
+  Capture<AlertDefinitionEntity> entityCapture=new Capture<AlertDefinitionEntity>();
+  dao.create(capture(entityCapture));
+  expectLastCall();
+  expect(definitionHash.invalidateHosts(EasyMock.anyObject(AlertDefinitionEntity.class))).andReturn(new HashSet<String>()).atLeastOnce();
+  replay(amc,clusters,cluster,dao,definitionHash);
+  MetricSource source=(MetricSource)getMockSource();
+  Map<String,Object> requestProps=new HashMap<String,Object>();
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_CLUSTER_NAME,"c1");
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_INTERVAL,"1");
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_NAME,"my_def");
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_SERVICE_NAME,"HDFS");
+  requestProps.put(AlertDefinitionResourceProvider.ALERT_DEF_SOURCE_TYPE,"METRIC");
+  requestProps.put("AlertDefinition/source/reporting/critical/text",source.getReporting().getCritical().getText());
+  requestProps.put("AlertDefinition/source/reporting/critical/value","1234.5");
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  AlertDefinitionResourceProvider provider=createProvider(amc);
+  provider.createResources(request);
+  Assert.assertTrue(entityCapture.hasCaptured());
+  AlertDefinitionEntity entity=entityCapture.getValue();
+  Assert.assertNotNull(entity);
+  String sourceJson=entity.getSource();
+  Gson gson=new Gson();
+  source=gson.fromJson(sourceJson,MetricSource.class);
+  assertEquals(new Double(1234.5d),source.getReporting().getCritical().getValue());
+  verify(amc,clusters,cluster,dao);
+}
