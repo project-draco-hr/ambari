@@ -1,11 +1,15 @@
 '\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n \n    http://www.apache.org/licenses/LICENSE-2.0\n \nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an "AS IS" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n \n'
+import os
+import sys
+os.environ['PATH'] += (os.pathsep + '/var/lib/ambari-agent')
+sys.path.append('/usr/lib/python2.6/site-packages')
 import glob
 from logging import thread
-import sys
-import os
 import re
+import hashlib
 import tempfile
 import time
+import functools
 from xml.dom import minidom
 from xml.dom.minidom import parseString
 from resource_management import *
@@ -16,51 +20,44 @@ from resource_management.core.logger import Logger
 from resource_management.core.resources.system import Execute
 from resource_management.libraries.functions.default import default
 from resource_management.libraries.functions.format import format
-from resource_management.libraries.resources.copy_from_local import CopyFromLocal
+from resource_management.libraries.resources.hdfs_resource import HdfsResource
 from resource_management.libraries.resources.execute_hadoop import ExecuteHadoop
 from resource_management import Script
-__all__ = ['copy_tarballs_to_hdfs']
 '\nThis file provides helper methods needed for the versioning of RPMs. Specifically, it does dynamic variable\ninterpretation to replace strings like {{ hdp_stack_version }}  where the value of the\nvariables cannot be determined ahead of time, but rather, depends on what files are found.\n \nIt assumes that {{ hdp_stack_version }} is constructed as ${major.minor.patch.rev}-${build_number}\nE.g., 998.2.2.1.0-998\nPlease note that "-${build_number}" is optional.\n'
 TAR_SOURCE_SUFFIX = '_tar_source'
 TAR_DESTINATION_FOLDER_SUFFIX = '_tar_destination_folder'
-params = params()
 hdfs_path_prefix = ''
 if (len(sys.argv) == 2):
     hdfs_path_prefix = sys.argv[1]
 hadoop_conf_dir = params.hadoop_conf_dir
-fsdefaultName = getPropertyValueFromConfigXMLFile('/etc/hadoop/conf/core-site.xml', 'fs.defaultFS')
-if (fsdefaultName is None):
-    fsdefaultName = 'fake'
-while (not fsdefaultName.startswith('wasb://')):
-    fsdefaultName = getPropertyValueFromConfigXMLFile('/etc/hadoop/conf/core-site.xml', 'fs.defaultFS')
-    if (fsdefaultName is None):
-        fsdefaultName = 'fake'
-    time.sleep(10)
-fs_root = fsdefaultName
 oozie_libext_dir = '/usr/hdp/current/oozie-server/libext'
 oozie_home = '/usr/hdp/current/oozie-server'
+oozie_setup_sh = '/usr/hdp/current/oozie-server/bin/oozie-setup.sh'
+oozie_tmp_dir = '/var/tmp/oozie'
 configure_cmds = []
 configure_cmds.append(('tar', '-xvf', (oozie_home + '/oozie-sharelib.tar.gz'), '-C', oozie_home))
 configure_cmds.append(('cp', '/usr/share/HDP-oozie/ext-2.2.zip', '/usr/hdp/current/oozie-server/libext'))
 configure_cmds.append(('chown', 'oozie:hadoop', (oozie_libext_dir + '/ext-2.2.zip')))
 no_op_test = 'ls /var/run/oozie/oozie.pid >/dev/null 2>&1 && ps -p `cat /var/run/oozie/oozie.pid` >/dev/null 2>&1'
 with Environment() as env:
-    Execute(configure_cmds, not_if=no_op_test, sudo=True)
+    env.set_params(params)
+    hashcode_file = format('{oozie_home}/.hashcode')
+    hashcode = hashlib.md5(format('{oozie_home}/oozie-sharelib.tar.gz')).hexdigest()
+    skip_recreate_sharelib = format("test -f {hashcode_file} && test -d {oozie_home}/share && [[ `cat {hashcode_file}` == '{hashcode}' ]]")
+    Execute(configure_cmds, not_if=format('{no_op_test} || {skip_recreate_sharelib}'), sudo=True)
+    Execute(format('cd {oozie_tmp_dir} && {oozie_setup_sh} prepare-war'), user=params.oozie_user, not_if=format('{no_op_test} || {skip_recreate_sharelib}'))
+    File(hashcode_file, content=hashcode, mode=420)
     oozie_shared_lib = format('/usr/hdp/current/oozie-server/share')
     oozie_user = 'oozie'
     oozie_hdfs_user_dir = format('{hdfs_path_prefix}/user/{oozie_user}')
     kinit_if_needed = ''
-    put_shared_lib_to_hdfs_cmd = format('hadoop --config {hadoop_conf_dir} dfs -copyFromLocal {oozie_shared_lib}/lib/** {oozie_hdfs_user_dir}/share/lib/lib_20150212065327')
-    oozie_cmd = format('{put_shared_lib_to_hdfs_cmd} ; hadoop --config {hadoop_conf_dir} dfs -chmod -R 755 {oozie_hdfs_user_dir}/share')
-    does_hdfs_file_exist_cmd = ('fs -ls %s' % format('{oozie_hdfs_user_dir}/share'))
-    try:
-        ExecuteHadoop(does_hdfs_file_exist_cmd, user=oozie_user, logoutput=True, conf_dir=params.hadoop_conf_dir, bin_dir=params.hadoop_bin_dir)
-    except Fail:
-        HdfsDirectory(format('{oozie_hdfs_user_dir}/share/lib/lib_20150212065327'), action='create', owner=oozie_user, mode=365, conf_dir=params.hadoop_conf_dir, hdfs_user=params.hdfs_user)
-        Execute(oozie_cmd, user=params.oozie_user, not_if=None, path=params.execute_path)
+    params.HdfsResource(format('{oozie_hdfs_user_dir}/share/'), action='delete_on_execute', type='directory')
+    params.HdfsResource(format('{oozie_hdfs_user_dir}/share'), action='create_on_execute', type='directory', mode=493, recursive_chmod=True, owner=oozie_user, source=oozie_shared_lib)
     copy_tarballs_to_hdfs('/usr/hdp/current/hadoop-client/mapreduce.tar.gz', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/mapreduce/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
     copy_tarballs_to_hdfs('/usr/hdp/current/tez-client/lib/tez.tar.gz', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/tez/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
     copy_tarballs_to_hdfs('/usr/hdp/current/hive-client/hive.tar.gz', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/hive/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
     copy_tarballs_to_hdfs('/usr/hdp/current/pig-client/pig.tar.gz', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/pig/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
     copy_tarballs_to_hdfs('/usr/hdp/current/hadoop-mapreduce-client/hadoop-streaming.jar', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/mapreduce/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
     copy_tarballs_to_hdfs('/usr/hdp/current/sqoop-client/sqoop.tar.gz', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/sqoop/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
+    File(format('{ambari_libs_dir}/fast-hdfs-resource.jar'), mode=420, content=StaticFile('/var/lib/ambari-agent/cache/stacks/HDP/2.0.6/hooks/before-START/files/fast-hdfs-resource.jar'))
+    params.HdfsResource(None, logoutput=True, action='execute')
