@@ -23,33 +23,33 @@
     if (clusterVersion.getState() != RepositoryVersionState.INSTALL_FAILED && clusterVersion.getState() != RepositoryVersionState.OUT_OF_SYNC && clusterVersion.getState() != RepositoryVersionState.INSTALLING && clusterVersion.getState() != RepositoryVersionState.INSTALLED && clusterVersion.getState() != RepositoryVersionState.UPGRADING && clusterVersion.getState() != RepositoryVersionState.UPGRADED) {
       return;
     }
-    Set<Host> hostsWithoutHostVersion=new HashSet<Host>();
+    Set<String> hostsWithoutHostVersion=new HashSet<String>();
     Map<RepositoryVersionState,Set<String>> stateToHosts=new HashMap<RepositoryVersionState,Set<String>>();
-    for (    Host host : hosts.values()) {
-      String hostName=host.getHostName();
-      HostVersionEntity hostVersion=hostVersionDAO.findByClusterStackVersionAndHost(getClusterName(),stackId,repositoryVersion,hostName);
-      if (hostVersion == null) {
-        hostsWithoutHostVersion.add(host);
-        continue;
-      }
-      RepositoryVersionState hostState=hostVersion.getState();
+    List<HostVersionEntity> hostVersionEntities=hostVersionDAO.findByClusterStackAndVersion(getClusterName(),stackId,repositoryVersion);
+    Set<String> hostsWithState=new HashSet<String>();
+    for (    HostVersionEntity hostVersionEntity : hostVersionEntities) {
+      String hostname=hostVersionEntity.getHostEntity().getHostName();
+      hostsWithState.add(hostname);
+      RepositoryVersionState hostState=hostVersionEntity.getState();
       if (stateToHosts.containsKey(hostState)) {
-        stateToHosts.get(hostState).add(hostName);
+        stateToHosts.get(hostState).add(hostname);
       }
  else {
         Set<String> hostsInState=new HashSet<String>();
-        hostsInState.add(hostName);
+        hostsInState.add(hostname);
         stateToHosts.put(hostState,hostsInState);
       }
     }
-    for (    Host host : hostsWithoutHostVersion) {
-      HostEntity hostEntity=hostDAO.findByName(host.getHostName());
+    hostsWithoutHostVersion.addAll(hosts.keySet());
+    hostsWithoutHostVersion.removeAll(hostsWithState);
+    for (    String hostname : hostsWithoutHostVersion) {
+      HostEntity hostEntity=hostDAO.findByName(hostname);
       final Collection<HostComponentStateEntity> allHostComponents=hostEntity.getHostComponentStateEntities();
       for (      HostComponentStateEntity hostComponentStateEntity : allHostComponents) {
         if (hostComponentStateEntity.getVersion().equalsIgnoreCase(State.UNKNOWN.toString())) {
           ComponentInfo compInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),hostComponentStateEntity.getServiceName(),hostComponentStateEntity.getComponentName());
           if (compInfo.isVersionAdvertised()) {
-            LOG.debug("Skipping transitioning the cluster version because host " + host.getHostName() + " does not have a version yet.");
+            LOG.debug("Skipping transitioning the cluster version because host " + hostname + " does not have a version yet.");
             return;
           }
         }
