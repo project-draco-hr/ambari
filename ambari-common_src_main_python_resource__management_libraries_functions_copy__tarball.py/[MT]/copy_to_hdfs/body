@@ -2,10 +2,10 @@ def copy_to_hdfs(name, user_group, owner, file_mode=292, custom_source_file=None
     '\n  :param name: Tarball name, e.g., tez, hive, pig, sqoop.\n  :param user_group: Group to own the directory.\n  :param owner: File owner\n  :param file_mode: File permission\n  :param custom_source_file: Override the source file path\n  :param custom_dest_file: Override the destination file path\n  :param force_execute: If true, will execute the HDFS commands immediately, otherwise, will defer to the calling function.\n  :return: Will return True if successful, otherwise, False.\n  '
     import params
     if ((params.stack_name is None) or (params.stack_name.upper() not in TARBALL_MAP)):
-        Logger.error(('Cannot copy %s tarball to HDFS because stack %s does not support this operation.' % (str(name), str(params.stack_name))))
+        Logger.error('Cannot copy {0} tarball to HDFS because stack {1} does not support this operation.'.format(str(name), str(params.stack_name)))
         return (-1)
     if ((name is None) or (name.lower() not in TARBALL_MAP[params.stack_name.upper()])):
-        Logger.warning(('Cannot copy tarball to HDFS because %s is not supported in stack for this operation.' % (str(name), str(params.stack_name))))
+        Logger.warning('Cannot copy tarball to HDFS because {0} is not supported in stack {1} for this operation.'.format(str(name), str(params.stack_name)))
         return (-1)
     (source_file, dest_file) = TARBALL_MAP[params.stack_name.upper()][name.lower()]
     if (custom_source_file is not None):
@@ -17,19 +17,24 @@ def copy_to_hdfs(name, user_group, owner, file_mode=292, custom_source_file=None
     current_version = default('/hostLevelParams/current_version', None)
     if is_rolling_upgrade:
         current_version = default('/commandParams/version', None)
+    elif (current_version is None):
+        hdp_version = _get_single_version_from_hdp_select()
+        if hdp_version:
+            Logger.info('Will use stack version {0}'.format(hdp_version))
+            current_version = hdp_version
     if (current_version is None):
         message_suffix = ((' during rolling %s' % str(upgrade_direction)) if is_rolling_upgrade else '')
-        Logger.warning(('Cannot copy %s tarball because unable to determine current version%s.' % (str(name), message_suffix)))
+        Logger.warning('Cannot copy {0} tarball because unable to determine current version{1}.'.format(str(name), message_suffix))
         return False
     source_file = source_file.replace(STACK_VERSION_PATTERN, current_version)
     dest_file = dest_file.replace(STACK_VERSION_PATTERN, current_version)
     if (not os.path.exists(source_file)):
-        Logger.warning(('WARNING. Cannot copy %s tarball because file does not exist: %s . It is possible that this component is not installed on this host.' % (str(name), str(source_file))))
+        Logger.warning('WARNING. Cannot copy {0} tarball because file does not exist: {1} . It is possible that this component is not installed on this host.'.format(str(name), str(source_file)))
         return False
     dest_dir = os.path.dirname(dest_file)
     params.HdfsResource(dest_dir, type='directory', action='create_on_execute', owner=owner, mode=365)
     params.HdfsResource(dest_file, type='file', action='create_on_execute', source=source_file, group=user_group, owner=owner, mode=292)
-    Logger.info(('Will attempt to copy %s tarball from %s to DFS at %s.' % (name, source_file, dest_file)))
+    Logger.info('Will attempt to copy {0} tarball from {1} to DFS at {2}.'.format(name, source_file, dest_file))
     if force_execute:
         params.HdfsResource(None, action='execute')
     return True
