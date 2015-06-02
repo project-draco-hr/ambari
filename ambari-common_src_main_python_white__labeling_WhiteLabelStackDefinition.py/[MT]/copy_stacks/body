@@ -1,0 +1,35 @@
+def copy_stacks(resources_folder, output_folder, config_data):
+    original_folder = os.path.join(resources_folder, 'stacks', config_data.baseStackName)
+    target_folder = os.path.join(output_folder, 'stacks', config_data.stackName)
+    stack_version_changes = {}
+    for stack in config_data.versions:
+        if (stack.version != stack.baseVersion):
+            stack_version_changes[stack.baseVersion] = stack.version
+    for stack in config_data.versions:
+        original_stack = os.path.join(original_folder, stack.baseVersion)
+        target_stack = os.path.join(target_folder, stack.version)
+        desired_services = [service.name for service in stack.services]
+        desired_services.append('stack_advisor.py')
+        base_stack_services = os.listdir(os.path.join(original_stack, 'services'))
+        ignored_services = [service for service in base_stack_services if (service not in desired_services)]
+
+        def post_copy(src, target):
+            if target.endswith('metainfo.xml'):
+                process_metainfo(target, config_data, stack_version_changes)
+                return
+            _upgrade_re = re.compile('upgrade-(.*)\\.xml')
+            result = re.search(_upgrade_re, target)
+            if result:
+                target_version = result.group(1)
+                process_upgrade_xml(target, target_version, config_data, stack_version_changes)
+                return
+            if target.endswith('stack_advisor.py'):
+                process_stack_advisor(target, config_data, stack_version_changes)
+                return
+            if target.endswith('repoinfo.xml'):
+                process_repoinfo_xml(target, config_data, stack_version_changes)
+                return
+            if target.endswith('.py'):
+                process_py_files(target, config_data, stack_version_changes)
+                return
+        copy_tree(original_stack, target_stack, ignored_services, post_copy=post_copy)

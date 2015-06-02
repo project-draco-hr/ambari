@@ -1,0 +1,41 @@
+def process_metainfo(file_path, config_data, stack_version_changes):
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+    if ((root.find('versions') is not None) or (root.find('services') is None)):
+        extends_tag = root.find('extends')
+        if (extends_tag is not None):
+            version = extends_tag.text
+            if (version in stack_version_changes):
+                extends_tag.text = stack_version_changes[version]
+                tree.write(file_path)
+        current_version = file_path.split(os.sep)[(-2)]
+        modify_active_tag = False
+        active_tag_value = None
+        for stack in config_data.versions:
+            if ((stack.version == current_version) and ('active' in stack)):
+                modify_active_tag = True
+                active_tag_value = stack.active
+                break
+        if modify_active_tag:
+            versions_tag = root.find('versions')
+            if (versions_tag is None):
+                versions_tag = ET.SubElement(root, 'versions')
+            active_tag = versions_tag.find('active')
+            if (active_tag is None):
+                active_tag = ET.SubElement(versions_tag, 'active')
+            active_tag.text = active_tag_value
+            tree.write(file_path)
+    else:
+        services_tag = root.find('services')
+        if (services_tag is not None):
+            for service_tag in services_tag.findall('service'):
+                name = service_tag.find('name').text
+                for stack in config_data.versions:
+                    for service in stack.services:
+                        if (service.name == name):
+                            if ('version' in service):
+                                service_version_tag = service_tag.find('version')
+                                if (service_version_tag is None):
+                                    service_version_tag = ET.SubElement(service_tag, 'version')
+                                service_version_tag.text = service.version
+                                tree.write(file_path)
