@@ -1,9 +1,17 @@
 def _get_configuration_value(self, key):
-    '\n    Gets the value of the specified configuration key from the cache. The key\n    should be of the form {{foo-bar/baz}}. If the key is not a lookup key\n    and is instead a constant, such as "foo" or "5", then the constant is\n    returned.\n    :return:\n    '
+    '\n    Gets the value of the specified configuration key from the cache. The key\n    should be of the form {{foo-bar/baz}}. If the key given is not a lookup key\n    and is instead a constant, such as "foo" or "5", then the constant is\n    returned.\n\n    If the key contains more than 1 parameter to lookup, then each match is\n    looked up and replaced.\n\n    If the value does not exist in the configs, then return None to indicate\n    that this key could not be found.\n\n    This should turn {{hdfs-site/value}}/whatever/{{hdfs-site/value2}}\n    into\n    value/whatever/value2\n\n    :return:  the resolved value or None if any of the placeholder parameters\n              does not exist in the configs\n    '
     if (key is None):
         return None
-    placeholder_keys = re.findall('{{([\\S]+)}}', key)
-    if (len(placeholder_keys) == 0):
+    placeholder_keys = re.findall('{{(\\S+?)}}', key)
+    if ((placeholder_keys is None) or (len(placeholder_keys) == 0)):
         return key
-    placeholder_key = placeholder_keys[0]
-    return self.cluster_configuration.get_configuration_value(self.cluster_name, placeholder_key)
+    resolved_key = key
+    for placeholder_key in placeholder_keys:
+        value = self.cluster_configuration.get_configuration_value(self.cluster_name, placeholder_key)
+        if (value is None):
+            return None
+        if isinstance(value, dict):
+            return value
+        replacement_match_regex = ('{{(%s)}}' % placeholder_key)
+        resolved_key = re.sub(replacement_match_regex, value, resolved_key)
+    return resolved_key
