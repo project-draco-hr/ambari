@@ -1,5 +1,15 @@
 {
-  TypedQuery<AlertCurrentEntity> query=entityManagerProvider.get().createNamedQuery("AlertCurrentEntity.removeByHost",AlertCurrentEntity.class);
+  TypedQuery<AlertCurrentEntity> query=m_entityManagerProvider.get().createNamedQuery("AlertCurrentEntity.removeByHost",AlertCurrentEntity.class);
   query.setParameter("hostName",hostName);
-  return query.executeUpdate();
+  int removedItems=query.executeUpdate();
+  try {
+    Map<String,Cluster> clusters=m_clusters.get().getClusters();
+    for (    Map.Entry<String,Cluster> entry : clusters.entrySet()) {
+      m_alertEventPublisher.publish(new AggregateAlertRecalculateEvent(entry.getValue().getClusterId()));
+    }
+  }
+ catch (  Exception ambariException) {
+    LOG.warn("Unable to recalcuate aggregate alerts after removing host {}",hostName);
+  }
+  return removedItems;
 }
