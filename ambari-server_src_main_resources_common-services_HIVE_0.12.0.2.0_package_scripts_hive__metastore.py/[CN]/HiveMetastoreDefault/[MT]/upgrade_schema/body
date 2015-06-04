@@ -1,11 +1,16 @@
 def upgrade_schema(self, env):
-    '\n    Executes the schema upgrade binary.  This is its own function because it could\n    be called as a standalone task from the upgrade pack, but is safe to run it for each\n    metastore instance.\n    '
+    "\n    Executes the schema upgrade binary.  This is its own function because it could\n    be called as a standalone task from the upgrade pack, but is safe to run it for each\n    metastore instance.\n\n    The metastore schema upgrade requires a database driver library for most\n    databases. During an upgrade, it's possible that the library is not present,\n    so this will also attempt to copy/download the appropriate driver.\n    "
     Logger.info('Upgrading Hive Metastore')
     import params
     env.set_params(params)
     if params.security_enabled:
         kinit_command = format('{kinit_path_local} -kt {smoke_user_keytab} {smokeuser_principal}; ')
         Execute(kinit_command, user=params.smokeuser)
+    if ((params.hive_jdbc_driver in params.hive_jdbc_drivers_list) and params.hive_use_existing_db):
+        target_directory = format('/usr/hdp/{version}/hive/lib')
+        if (not os.path.exists(params.target)):
+            jdbc_connector()
+        Execute(('cp', params.target, target_directory), path=['/bin', '/usr/bin/'], sudo=True)
     binary = format('/usr/hdp/{version}/hive/bin/schematool')
     schematool_hive_server_conf_dir = params.hive_server_conf_dir
     if (params.current_version is not None):
