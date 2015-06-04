@@ -2,6 +2,31 @@ def recommendHBASEConfigurations(self, configurations, clusterData, services, ho
     super(HDP23StackAdvisor, self).recommendHBASEConfigurations(configurations, clusterData, services, hosts)
     putHbaseSiteProperty = self.putProperty(configurations, 'hbase-site', services)
     putHbaseSitePropertyAttributes = self.putPropertyAttribute(configurations, 'hbase-site')
+    putHbaseEnvProperty = self.putProperty(configurations, 'hbase-env', services)
+    putHbaseEnvPropertyAttributes = self.putPropertyAttribute(configurations, 'hbase-env')
+    threshold = 23
+    if (int(clusterData['hbaseRam']) > threshold):
+        regionserver_total_ram = (int(clusterData['hbaseRam']) * 1024)
+        regionserver_heap_size = 20480
+        regionserver_max_direct_memory_size = (regionserver_total_ram - regionserver_heap_size)
+        hfile_block_cache_size = '0.4'
+        block_cache_heap = 8192
+        hbase_regionserver_global_memstore_size = '0.4'
+        reserved_offheap_memory = 2048
+        bucketcache_offheap_memory = (regionserver_max_direct_memory_size - reserved_offheap_memory)
+        hbase_bucketcache_size = bucketcache_offheap_memory
+        putHbaseSiteProperty('hfile.block.cache.size', hfile_block_cache_size)
+        putHbaseSiteProperty('hbase.regionserver.global.memstore.size', hbase_regionserver_global_memstore_size)
+        putHbaseSiteProperty('hbase.bucketcache.ioengine', 'offheap')
+        putHbaseSiteProperty('hbase.bucketcache.size', hbase_bucketcache_size)
+        putHbaseSitePropertyAttributes('hbase.bucketcache.percentage.in.combinedcache', 'delete', 'true')
+        putHbaseEnvProperty('hbase_max_direct_memory_size', regionserver_max_direct_memory_size)
+        putHbaseEnvProperty('hbase_regionserver_heapsize', regionserver_heap_size)
+    else:
+        putHbaseSitePropertyAttributes('hbase.bucketcache.ioengine', 'delete', 'true')
+        putHbaseSitePropertyAttributes('hbase.bucketcache.size', 'delete', 'true')
+        putHbaseSitePropertyAttributes('hbase.bucketcache.percentage.in.combinedcache', 'delete', 'true')
+        putHbaseEnvPropertyAttributes('hbase_max_direct_memory_size', 'delete', 'true')
     servicesList = [service['StackServices']['service_name'] for service in services['services']]
     if (('ranger-hbase-plugin-properties' in services['configurations']) and ('ranger-hbase-plugin-enabled' in services['configurations']['ranger-hbase-plugin-properties']['properties'])):
         rangerPluginEnabled = services['configurations']['ranger-hbase-plugin-properties']['properties']['ranger-hbase-plugin-enabled']
