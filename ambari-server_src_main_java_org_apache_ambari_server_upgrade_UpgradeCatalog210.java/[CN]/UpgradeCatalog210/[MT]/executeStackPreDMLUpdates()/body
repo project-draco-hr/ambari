@@ -24,32 +24,34 @@
     String hostComponentStateSQL=MessageFormat.format(UPDATE_TEMPLATE,"hostcomponentstate",CURRENT_STACK_ID_COLUMN_NAME,stackEntityId,CURRENT_STACK_VERSION_COLUMN_NAME,outdatedJson);
     String blueprintSQL=MessageFormat.format(UPDATE_BLUEPRINT_TEMPLATE,stackEntityId,stackEntity.getStackName(),stackEntity.getStackVersion());
     String repoVersionSQL=MessageFormat.format(UPDATE_TEMPLATE,REPO_VERSION_TABLE,STACK_ID_COLUMN_NAME,stackEntityId,"stack",outdatedRepoStack);
-    dbAccessor.executeQuery(clustersSQL);
-    dbAccessor.executeQuery(hostComponentDesiredStateSQL);
-    dbAccessor.executeQuery(serviceComponentDesiredStateSQL);
-    dbAccessor.executeQuery(serviceDesiredStateSQL);
-    dbAccessor.executeQuery(clusterStateSQL);
-    dbAccessor.executeQuery(hostComponentStateSQL);
-    dbAccessor.executeQuery(blueprintSQL);
-    dbAccessor.executeQuery(repoVersionSQL);
+    dbAccessor.executeQuery(clustersSQL,"clusters",DESIRED_STACK_VERSION_COLUMN_NAME);
+    dbAccessor.executeQuery(hostComponentDesiredStateSQL,"hostcomponentdesiredstate",DESIRED_STACK_VERSION_COLUMN_NAME);
+    dbAccessor.executeQuery(serviceComponentDesiredStateSQL,"servicecomponentdesiredstate",DESIRED_STACK_VERSION_COLUMN_NAME);
+    dbAccessor.executeQuery(serviceDesiredStateSQL,"servicedesiredstate",DESIRED_STACK_VERSION_COLUMN_NAME);
+    dbAccessor.executeQuery(clusterStateSQL,"clusterstate",CURRENT_STACK_VERSION_COLUMN_NAME);
+    dbAccessor.executeQuery(hostComponentStateSQL,"hostcomponentstate",CURRENT_STACK_VERSION_COLUMN_NAME);
+    dbAccessor.executeQuery(blueprintSQL,"blueprint","stack_name");
+    dbAccessor.executeQuery(repoVersionSQL,REPO_VERSION_TABLE,"stack");
   }
   String INSERT_STACK_ID_TEMPLATE="UPDATE {0} SET {1} = {2} WHERE cluster_id = {3}";
-  ResultSet resultSet=dbAccessor.executeSelect("SELECT * FROM clusters");
-  try {
-    while (resultSet.next()) {
-      long clusterId=resultSet.getLong("cluster_id");
-      String stackJson=resultSet.getString(DESIRED_STACK_VERSION_COLUMN_NAME);
-      StackId stackId=gson.fromJson(stackJson,StackId.class);
-      StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
-      String clusterConfigSQL=MessageFormat.format(INSERT_STACK_ID_TEMPLATE,"clusterconfig",STACK_ID_COLUMN_NAME,stackEntity.getStackId(),clusterId);
-      String serviceConfigSQL=MessageFormat.format(INSERT_STACK_ID_TEMPLATE,"serviceconfig",STACK_ID_COLUMN_NAME,stackEntity.getStackId(),clusterId);
-      dbAccessor.executeQuery(clusterConfigSQL);
-      dbAccessor.executeQuery(serviceConfigSQL);
+  if (dbAccessor.tableHasColumn(CLUSTERS_TABLE,DESIRED_STACK_VERSION_COLUMN_NAME)) {
+    ResultSet resultSet=dbAccessor.executeSelect("SELECT * FROM " + CLUSTERS_TABLE);
+    try {
+      while (resultSet.next()) {
+        long clusterId=resultSet.getLong("cluster_id");
+        String stackJson=resultSet.getString(DESIRED_STACK_VERSION_COLUMN_NAME);
+        StackId stackId=gson.fromJson(stackJson,StackId.class);
+        StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
+        String clusterConfigSQL=MessageFormat.format(INSERT_STACK_ID_TEMPLATE,"clusterconfig",STACK_ID_COLUMN_NAME,stackEntity.getStackId(),clusterId);
+        String serviceConfigSQL=MessageFormat.format(INSERT_STACK_ID_TEMPLATE,"serviceconfig",STACK_ID_COLUMN_NAME,stackEntity.getStackId(),clusterId);
+        dbAccessor.executeQuery(clusterConfigSQL);
+        dbAccessor.executeQuery(serviceConfigSQL);
+      }
     }
-  }
   finally {
-    if (null != resultSet) {
-      resultSet.close();
+      if (null != resultSet) {
+        resultSet.close();
+      }
     }
   }
 }
