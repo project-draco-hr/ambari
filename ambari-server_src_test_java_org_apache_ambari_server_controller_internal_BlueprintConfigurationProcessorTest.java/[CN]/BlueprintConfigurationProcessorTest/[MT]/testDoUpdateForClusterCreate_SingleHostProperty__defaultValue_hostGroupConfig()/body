@@ -1,0 +1,30 @@
+{
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> yarnSiteProps=new HashMap<String,String>();
+  yarnSiteProps.put("yarn.resourcemanager.hostname","localhost");
+  properties.put("yarn-site",yarnSiteProps);
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> group1Components=new HashSet<String>();
+  group1Components.add("NAMENODE");
+  group1Components.add("SECONDARY_NAMENODE");
+  group1Components.add("RESOURCEMANAGER");
+  TestHostGroup group1=new TestHostGroup("group1",group1Components,Collections.singleton("testhost"));
+  Collection<String> group2Components=new HashSet<String>();
+  group2Components.add("DATANODE");
+  group2Components.add("HDFS_CLIENT");
+  Map<String,Map<String,String>> group2Properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> group2YarnSiteProperties=new HashMap<String,String>();
+  group2YarnSiteProperties.put("yarn.resourcemanager.resource-tracker.address","localhost");
+  group2Properties.put("yarn-site",group2YarnSiteProperties);
+  Configuration group2BPConfig=new Configuration(Collections.<String,Map<String,String>>emptyMap(),Collections.<String,Map<String,Map<String,String>>>emptyMap(),clusterConfig);
+  Configuration group2Config=new Configuration(group2Properties,Collections.<String,Map<String,Map<String,String>>>emptyMap(),group2BPConfig);
+  TestHostGroup group2=new TestHostGroup("group2",group2Components,Collections.singleton("testhost2"),group2Config);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  hostGroups.add(group2);
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
+  assertEquals("testhost",clusterConfig.getPropertyValue("yarn-site","yarn.resourcemanager.hostname"));
+  assertEquals("testhost",group2Config.getProperties().get("yarn-site").get("yarn.resourcemanager.resource-tracker.address"));
+}

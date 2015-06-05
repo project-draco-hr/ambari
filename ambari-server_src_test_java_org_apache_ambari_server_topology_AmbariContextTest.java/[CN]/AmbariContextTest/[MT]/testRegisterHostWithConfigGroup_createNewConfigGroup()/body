@@ -1,0 +1,28 @@
+{
+  expect(cluster.getConfigGroups()).andReturn(Collections.<Long,ConfigGroup>emptyMap()).once();
+  expect(clusterController.ensureResourceProvider(Resource.Type.ConfigGroup)).andReturn(configGroupResourceProvider).once();
+  expect(configGroupResourceProvider.createResources(capture(configGroupRequestCapture))).andReturn(null).once();
+  configHelper.moveDeprecatedGlobals(stackId,group1Configuration.getFullProperties(1),CLUSTER_NAME);
+  replayAll();
+  context.registerHostWithConfigGroup(HOST1,topology,HOST_GROUP_1);
+  Set<ConfigGroupRequest> configGroupRequests=configGroupRequestCapture.getValue();
+  assertEquals(1,configGroupRequests.size());
+  ConfigGroupRequest configGroupRequest=configGroupRequests.iterator().next();
+  assertEquals(CLUSTER_NAME,configGroupRequest.getClusterName());
+  assertEquals("testBP:group1",configGroupRequest.getGroupName());
+  assertEquals("service1",configGroupRequest.getTag());
+  assertEquals("Host Group Configuration",configGroupRequest.getDescription());
+  Collection<String> requestHosts=configGroupRequest.getHosts();
+  requestHosts.retainAll(group1Hosts);
+  assertEquals(group1Hosts.size(),requestHosts.size());
+  Map<String,Config> requestConfig=configGroupRequest.getConfigs();
+  assertEquals(1,requestConfig.size());
+  Config type1Config=requestConfig.get("type1");
+  assertEquals("type1",type1Config.getType());
+  assertEquals("group1",type1Config.getTag());
+  Map<String,String> requestProps=type1Config.getProperties();
+  assertEquals(3,requestProps.size());
+  assertEquals("val1.2",requestProps.get("prop1"));
+  assertEquals("val2",requestProps.get("prop2"));
+  assertEquals("val3",requestProps.get("prop3"));
+}

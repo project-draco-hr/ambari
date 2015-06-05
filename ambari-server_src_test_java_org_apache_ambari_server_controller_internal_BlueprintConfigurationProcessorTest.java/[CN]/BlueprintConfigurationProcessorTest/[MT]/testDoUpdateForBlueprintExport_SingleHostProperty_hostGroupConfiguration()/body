@@ -1,0 +1,30 @@
+{
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> typeProps=new HashMap<String,String>();
+  typeProps.put("yarn.resourcemanager.hostname","testhost");
+  properties.put("yarn-site",typeProps);
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Collection<String> hgComponents=new HashSet<String>();
+  hgComponents.add("NAMENODE");
+  hgComponents.add("SECONDARY_NAMENODE");
+  hgComponents.add("RESOURCEMANAGER");
+  TestHostGroup group1=new TestHostGroup("group1",hgComponents,Collections.singleton("testhost"));
+  Collection<String> hgComponents2=new HashSet<String>();
+  hgComponents2.add("DATANODE");
+  hgComponents2.add("HDFS_CLIENT");
+  Map<String,Map<String,String>> group2Properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> group2YarnSiteProps=new HashMap<String,String>();
+  group2YarnSiteProps.put("yarn.resourcemanager.resource-tracker.address","testhost");
+  group2Properties.put("yarn-site",group2YarnSiteProps);
+  Configuration group2BPConfiguration=new Configuration(Collections.<String,Map<String,String>>emptyMap(),Collections.<String,Map<String,Map<String,String>>>emptyMap(),clusterConfig);
+  Configuration group2Configuration=new Configuration(group2Properties,Collections.<String,Map<String,Map<String,String>>>emptyMap(),group2BPConfiguration);
+  TestHostGroup group2=new TestHostGroup("group2",hgComponents2,Collections.singleton("testhost2"),group2Configuration);
+  Collection<TestHostGroup> hostGroups=new HashSet<TestHostGroup>();
+  hostGroups.add(group1);
+  hostGroups.add(group2);
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForBlueprintExport();
+  assertEquals("%HOSTGROUP::group1%",properties.get("yarn-site").get("yarn.resourcemanager.hostname"));
+  assertEquals("%HOSTGROUP::group1%",group2Configuration.getPropertyValue("yarn-site","yarn.resourcemanager.resource-tracker.address"));
+}
