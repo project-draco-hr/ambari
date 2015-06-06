@@ -1,0 +1,43 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final ConfigHelper mockConfigHelper=easyMockSupport.createMock(ConfigHelper.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Config mockHdfsSite=easyMockSupport.createNiceMock(Config.class);
+  final Config mockCoreSite=easyMockSupport.createStrictMock(Config.class);
+  final Map<String,String> propertiesExpectedHdfs=new HashMap<String,String>();
+  final Map<String,String> propertiesExpectedCoreSite=new HashMap<String,String>();
+  propertiesExpectedCoreSite.put("fs.defaultFS","hdfs://EXAMPLE.COM:8020");
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(ConfigHelper.class).toInstance(mockConfigHelper);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).once();
+  expect(mockClusterExpected.getDesiredConfigByType("hadoop-env")).andReturn(null).once();
+  expect(mockClusterExpected.getDesiredConfigByType("hdfs-site")).andReturn(mockHdfsSite).atLeastOnce();
+  expect(mockClusterExpected.getHosts("HDFS","NAMENODE")).andReturn(new HashSet<String>(){
+{
+      add("host1");
+    }
+  }
+).atLeastOnce();
+  expect(mockHdfsSite.getProperties()).andReturn(propertiesExpectedHdfs).anyTimes();
+  expect(mockClusterExpected.getDesiredConfigByType("core-site")).andReturn(mockCoreSite).anyTimes();
+  expect(mockCoreSite.getProperties()).andReturn(propertiesExpectedCoreSite).anyTimes();
+  easyMockSupport.replayAll();
+  mockInjector.getInstance(UpgradeCatalog210.class).updateHdfsConfigs();
+  easyMockSupport.verifyAll();
+}
