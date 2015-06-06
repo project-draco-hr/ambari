@@ -41,6 +41,7 @@ configure_cmds.append(('chown', 'oozie:hadoop', (oozie_libext_dir + '/ext-2.2.zi
 no_op_test = 'ls /var/run/oozie/oozie.pid >/dev/null 2>&1 && ps -p `cat /var/run/oozie/oozie.pid` >/dev/null 2>&1'
 with Environment() as env:
     env.set_params(params)
+    File('/etc/oozie/conf/oozie-env.sh', owner=params.oozie_user, content=params.oozie_env_sh_template)
     hashcode_file = format('{oozie_home}/.hashcode')
     hashcode = hashlib.md5(format('{oozie_home}/oozie-sharelib.tar.gz')).hexdigest()
     skip_recreate_sharelib = format("test -f {hashcode_file} && test -d {oozie_home}/share && [[ `cat {hashcode_file}` == '{hashcode}' ]]")
@@ -53,6 +54,7 @@ with Environment() as env:
     kinit_if_needed = ''
     params.HdfsResource(format('{oozie_hdfs_user_dir}/share/'), action='delete_on_execute', type='directory')
     params.HdfsResource(format('{oozie_hdfs_user_dir}/share'), action='create_on_execute', type='directory', mode=493, recursive_chmod=True, owner=oozie_user, source=oozie_shared_lib)
+    print 'Copying tarballs...'
     copy_tarballs_to_hdfs('/usr/hdp/current/hadoop-client/mapreduce.tar.gz', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/mapreduce/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
     copy_tarballs_to_hdfs('/usr/hdp/current/tez-client/lib/tez.tar.gz', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/tez/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
     copy_tarballs_to_hdfs('/usr/hdp/current/hive-client/hive.tar.gz', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/hive/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
@@ -61,3 +63,4 @@ with Environment() as env:
     copy_tarballs_to_hdfs('/usr/hdp/current/sqoop-client/sqoop.tar.gz', (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/sqoop/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
     File(format('{ambari_libs_dir}/fast-hdfs-resource.jar'), mode=420, content=StaticFile('/var/lib/ambari-agent/cache/stacks/HDP/2.0.6/hooks/before-START/files/fast-hdfs-resource.jar'))
     params.HdfsResource(None, logoutput=True, action='execute')
+    print 'Completed tarball copy. Ambari preupload script completed.'
