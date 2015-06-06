@@ -2,6 +2,7 @@
   AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
   AlertDefinitionDAO alertDefinitionDAO=injector.getInstance(AlertDefinitionDAO.class);
   Clusters clusters=ambariManagementController.getClusters();
+  AlertDefinitionFactory alertDefinitionFactory=injector.getInstance(AlertDefinitionFactory.class);
   List<String> metricAlerts=Arrays.asList("namenode_cpu","namenode_hdfs_blocks_health","namenode_hdfs_capacity_utilization","namenode_rpc_latency","namenode_directory_status","datanode_health_summary","datanode_storage");
   List<String> mapredAlerts=Arrays.asList("mapreduce_history_server_cpu","mapreduce_history_server_rpc_latency");
   List<String> rmAlerts=Arrays.asList("yarn_resourcemanager_cpu","yarn_resourcemanager_rpc_latency");
@@ -38,6 +39,15 @@
             rootJson.get("uri").getAsJsonObject().addProperty("kerberos_principal","{{yarn-site/yarn.resourcemanager.webapp.spnego-principal}}");
             updateAlertDefinitionEntitySource(alertName,rootJson.toString());
           }
+        }
+        AlertDefinitionEntity alertDefinitionEntity=alertDefinitionDAO.findByName(cluster.getClusterId(),"hdfs_zookeeper_failover_controller_process");
+        if (alertDefinitionEntity != null) {
+          AlertDefinition zkfcAlertDefinition=alertDefinitionFactory.coerce(alertDefinitionEntity);
+          PortSource portSource=(PortSource)zkfcAlertDefinition.getSource();
+          portSource.setPort(8019);
+          portSource.setUri("{{hdfs-site/dfs.ha.zkfc.port}}");
+          alertDefinitionEntity=alertDefinitionFactory.merge(zkfcAlertDefinition,alertDefinitionEntity);
+          alertDefinitionDAO.merge(alertDefinitionEntity);
         }
       }
     }
