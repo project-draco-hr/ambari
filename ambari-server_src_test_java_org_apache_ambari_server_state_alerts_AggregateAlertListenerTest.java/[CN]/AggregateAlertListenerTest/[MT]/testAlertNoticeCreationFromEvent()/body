@@ -1,0 +1,34 @@
+{
+  AlertCurrentEntity currentEntityMock=EasyMock.createNiceMock(AlertCurrentEntity.class);
+  AlertDefinition aggregateDefinition=new AlertDefinition();
+  aggregateDefinition.setName("mock-aggregate-alert");
+  AggregateSource aggregateSource=new AggregateSource();
+  aggregateSource.setAlertName("mock-aggregate-alert");
+  Reporting reporting=new Reporting();
+  ReportTemplate criticalTemplate=new ReportTemplate();
+  ReportTemplate okTemplate=new ReportTemplate();
+  criticalTemplate.setValue(.05);
+  criticalTemplate.setText("CRITICAL");
+  okTemplate.setText("OK");
+  reporting.setCritical(criticalTemplate);
+  reporting.setWarning(criticalTemplate);
+  reporting.setOk(okTemplate);
+  aggregateSource.setReporting(reporting);
+  aggregateDefinition.setSource(aggregateSource);
+  EasyMock.expect(m_aggregateMapping.getAggregateDefinition(EasyMock.anyLong(),EasyMock.eq("mock-alert"))).andReturn(aggregateDefinition).atLeastOnce();
+  AlertSummaryDTO summaryDTO=new AlertSummaryDTO(5,0,0,0,0);
+  EasyMock.expect(m_alertsDao.findAggregateCounts(EasyMock.anyLong(),EasyMock.eq("mock-aggregate-alert"))).andReturn(summaryDTO).atLeastOnce();
+  EasyMock.replay(m_alertsDao,m_aggregateMapping);
+  Assert.assertEquals(0,m_listener.getAlertEventReceivedCount(AlertReceivedEvent.class));
+  Alert alert=new Alert("mock-alert",null,null,null,null,null);
+  AlertAggregateListener aggregateListener=m_injector.getInstance(AlertAggregateListener.class);
+  AlertStateChangeEvent event=new AlertStateChangeEvent(0,alert,currentEntityMock,null);
+  aggregateListener.onAlertStateChangeEvent(event);
+  Assert.assertEquals(1,m_listener.getAlertEventReceivedCount(AlertReceivedEvent.class));
+  aggregateListener.onAlertStateChangeEvent(event);
+  Assert.assertEquals(1,m_listener.getAlertEventReceivedCount(AlertReceivedEvent.class));
+  summaryDTO.setOkCount(0);
+  summaryDTO.setCriticalCount(5);
+  aggregateListener.onAlertStateChangeEvent(event);
+  Assert.assertEquals(2,m_listener.getAlertEventReceivedCount(AlertReceivedEvent.class));
+}
