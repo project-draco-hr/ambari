@@ -42,20 +42,21 @@
         }
         AlertDefinitionEntity zkFailoverDefinitionEntity=alertDefinitionDAO.findByName(cluster.getClusterId(),"hdfs_zookeeper_failover_controller_process");
         if (zkFailoverDefinitionEntity != null) {
-          AlertDefinition zkfcAlertDefinition=alertDefinitionFactory.coerce(zkFailoverDefinitionEntity);
-          PortSource portSource=(PortSource)zkfcAlertDefinition.getSource();
-          portSource.setPort(8019);
-          portSource.setUri("{{hdfs-site/dfs.ha.zkfc.port}}");
-          zkFailoverDefinitionEntity=alertDefinitionFactory.merge(zkfcAlertDefinition,zkFailoverDefinitionEntity);
-          alertDefinitionDAO.merge(zkFailoverDefinitionEntity);
+          String source=zkFailoverDefinitionEntity.getSource();
+          JsonObject rootJson=new JsonParser().parse(source).getAsJsonObject();
+          rootJson.remove("uri");
+          rootJson.remove("default_port");
+          rootJson.addProperty("uri","{{hdfs-site/dfs.ha.zkfc.port}}");
+          rootJson.addProperty("default_port",new Integer(8019));
+          updateAlertDefinitionEntitySource("hdfs_zookeeper_failover_controller_process",rootJson.toString());
         }
-        AlertDefinitionEntity oozieWebDefinitionEntity=alertDefinitionDAO.findByName(cluster.getClusterId(),"oozie_server_webui");
-        if (oozieWebDefinitionEntity != null) {
-          AlertDefinition oozieAlertDefinition=alertDefinitionFactory.coerce(oozieWebDefinitionEntity);
-          WebSource webSource=(WebSource)oozieAlertDefinition.getSource();
-          webSource.getUri().setHttpUri("{{oozie-site/oozie.base.url}}/?user.name={{oozie-env/oozie_user}}");
-          oozieWebDefinitionEntity=alertDefinitionFactory.merge(oozieAlertDefinition,oozieWebDefinitionEntity);
-          alertDefinitionDAO.merge(oozieWebDefinitionEntity);
+        AlertDefinitionEntity oozieWebUIAlertDefinitionEntity=alertDefinitionDAO.findByName(cluster.getClusterId(),"oozie_server_webui");
+        if (oozieWebUIAlertDefinitionEntity != null) {
+          String source=oozieWebUIAlertDefinitionEntity.getSource();
+          JsonObject rootJson=new JsonParser().parse(source).getAsJsonObject();
+          rootJson.get("uri").getAsJsonObject().remove("http");
+          rootJson.get("uri").getAsJsonObject().addProperty("http","{{oozie-site/oozie.base.url}}/?user.name=oozie");
+          updateAlertDefinitionEntitySource("oozie_server_webui",rootJson.toString());
         }
       }
     }
