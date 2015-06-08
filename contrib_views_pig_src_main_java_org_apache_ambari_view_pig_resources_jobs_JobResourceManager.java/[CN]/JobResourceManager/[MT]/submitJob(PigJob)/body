@@ -15,15 +15,13 @@
       String sourceFileContent=job.getSourceFileContent();
       job.setSourceFileContent(null);
       save(job);
-      FSDataOutputStream stream=HdfsApi.getInstance(context).create(newSourceFilePath,true);
+      FSDataOutputStream stream=UserLocalObjects.getHdfsApi(context).create(newSourceFilePath,true);
       stream.writeBytes(sourceFileContent);
       stream.close();
     }
  else {
       if (job.getSourceFile() != null && !job.getSourceFile().isEmpty()) {
-        if (!HdfsApi.getInstance(context).copy(job.getSourceFile(),newSourceFilePath)) {
-          throw new ServiceFormattedException("Can't copy source file from " + job.getSourceFile() + " to "+ newPigScriptPath);
-        }
+        UserLocalObjects.getHdfsApi(context).copy(job.getSourceFile(),newSourceFilePath);
       }
     }
   }
@@ -32,6 +30,9 @@
   }
 catch (  InterruptedException e) {
     throw new ServiceFormattedException("Can't create/copy source file: " + e.toString(),e);
+  }
+catch (  HdfsApiException e) {
+    throw new ServiceFormattedException("Can't copy source file from " + job.getSourceFile() + " to "+ newPigScriptPath,e);
   }
   try {
     if (job.getForcedContent() != null && !job.getForcedContent().isEmpty()) {
@@ -39,17 +40,18 @@ catch (  InterruptedException e) {
       forcedContent=forcedContent.replace("${sourceFile}",context.getProperties().get("webhdfs.url") + newSourceFilePath);
       job.setForcedContent(null);
       save(job);
-      FSDataOutputStream stream=HdfsApi.getInstance(context).create(newPigScriptPath,true);
+      FSDataOutputStream stream=UserLocalObjects.getHdfsApi(context).create(newPigScriptPath,true);
       stream.writeBytes(forcedContent);
       stream.close();
     }
  else {
-      if (!HdfsApi.getInstance(context).copy(job.getPigScript(),newPigScriptPath)) {
-        throw new ServiceFormattedException("Can't copy pig script file from " + job.getPigScript() + " to "+ newPigScriptPath);
-      }
+      UserLocalObjects.getHdfsApi(context).copy(job.getPigScript(),newPigScriptPath);
     }
   }
- catch (  IOException e) {
+ catch (  HdfsApiException e) {
+    throw new ServiceFormattedException("Can't copy pig script file from " + job.getPigScript() + " to "+ newPigScriptPath,e);
+  }
+catch (  IOException e) {
     throw new ServiceFormattedException("Can't create/copy pig script file: " + e.toString(),e);
   }
 catch (  InterruptedException e) {
@@ -57,11 +59,12 @@ catch (  InterruptedException e) {
   }
   if (job.getPythonScript() != null && !job.getPythonScript().isEmpty()) {
     try {
-      if (!HdfsApi.getInstance(context).copy(job.getPythonScript(),newPythonScriptPath)) {
-        throw new ServiceFormattedException("Can't copy python udf script file from " + job.getPythonScript() + " to "+ newPythonScriptPath);
-      }
+      UserLocalObjects.getHdfsApi(context).copy(job.getPythonScript(),newPythonScriptPath);
     }
- catch (    IOException e) {
+ catch (    HdfsApiException e) {
+      throw new ServiceFormattedException("Can't copy python udf script file from " + job.getPythonScript() + " to "+ newPythonScriptPath);
+    }
+catch (    IOException e) {
       throw new ServiceFormattedException("Can't create/copy python udf file: " + e.toString(),e);
     }
 catch (    InterruptedException e) {
@@ -69,7 +72,7 @@ catch (    InterruptedException e) {
     }
   }
   try {
-    FSDataOutputStream stream=HdfsApi.getInstance(context).create(templetonParamsFilePath,true);
+    FSDataOutputStream stream=UserLocalObjects.getHdfsApi(context).create(templetonParamsFilePath,true);
     if (job.getTempletonArguments() != null) {
       stream.writeBytes(job.getTempletonArguments());
     }
@@ -84,9 +87,9 @@ catch (  InterruptedException e) {
   job.setPigScript(newPigScriptPath);
   job.setStatusDir(statusdir);
   job.setDateStarted(System.currentTimeMillis() / 1000L);
-  TempletonApi.JobData data=null;
+  TempletonApi.JobData data;
   try {
-    data=getTempletonApi().runPigQuery(new File(job.getPigScript()),statusdir,job.getTempletonArguments());
+    data=UserLocalObjects.getTempletonApi(context).runPigQuery(new File(job.getPigScript()),statusdir,job.getTempletonArguments());
   }
  catch (  IOException templetonBadResponse) {
     String msg=String.format("Templeton bad response: %s",templetonBadResponse.toString());
