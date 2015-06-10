@@ -1,0 +1,30 @@
+def _call_wrapper(command, **kwargs):
+    tries = kwargs['tries']
+    try_sleep = kwargs['try_sleep']
+    timeout = kwargs['timeout']
+    on_timeout = kwargs['on_timeout']
+    throw_on_failure = kwargs['throw_on_failure']
+    for i in range(0, tries):
+        is_last_try = (i == (tries - 1))
+        if (not is_last_try):
+            kwargs_copy = copy.copy(kwargs)
+            kwargs_copy['throw_on_failure'] = True
+        else:
+            kwargs_copy = kwargs
+        try:
+            try:
+                result = _call(command, **kwargs_copy)
+                break
+            except ExecuteTimeoutException as ex:
+                if on_timeout:
+                    Logger.info(("Executing '%s'. Reason: %s" % (on_timeout, str(ex))))
+                    checked_call(on_timeout)
+                else:
+                    raise
+        except Fail as ex:
+            if is_last_try:
+                raise
+            else:
+                Logger.info(('Retrying after %d seconds. Reason: %s' % (try_sleep, str(ex))))
+                time.sleep(try_sleep)
+    return result

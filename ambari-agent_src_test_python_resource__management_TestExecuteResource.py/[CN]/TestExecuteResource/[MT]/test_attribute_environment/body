@@ -1,11 +1,15 @@
+@patch.object(os, 'read')
+@patch.object(select, 'select')
 @patch.object(subprocess, 'Popen')
-def test_attribute_environment(self, popen_mock):
+def test_attribute_environment(self, popen_mock, select_mock, os_read_mock):
     expected_dict = {'JAVA_HOME': '/test/java/home', }
     subproc_mock = MagicMock()
+    subproc_mock.wait.return_value = MagicMock()
+    subproc_mock.stdout = MagicMock()
     subproc_mock.returncode = 0
-    subproc_mock.stdout.readline = MagicMock(side_effect=['OK'])
-    subproc_mock.communicate.side_effect = [['1']]
     popen_mock.return_value = subproc_mock
+    select_mock.return_value = ([subproc_mock.stdout], None, None)
+    os_read_mock.return_value = None
     with Environment('/') as env:
         Execute('echo "1"', environment=expected_dict)
     self.assertEqual(popen_mock.call_args_list[0][1]['env'], expected_dict)

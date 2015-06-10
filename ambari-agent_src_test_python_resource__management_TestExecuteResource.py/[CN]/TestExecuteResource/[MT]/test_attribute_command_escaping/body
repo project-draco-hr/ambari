@@ -1,5 +1,7 @@
+@patch.object(os, 'read')
+@patch.object(select, 'select')
 @patch.object(subprocess, 'Popen')
-def test_attribute_command_escaping(self, popen_mock):
+def test_attribute_command_escaping(self, popen_mock, select_mock, os_read_mock):
     expected_command0 = "arg1 arg2 'quoted arg'"
     expected_command1 = 'arg1 arg2 \'command "arg"\''
     expected_command2 = 'arg1 arg2 \'command \'"\'"\'arg\'"\'"\'\''
@@ -7,9 +9,12 @@ def test_attribute_command_escaping(self, popen_mock):
     expected_command4 = "arg1 arg2 '$ROOT'"
     expected_command5 = "arg1 arg2 '`ls /root`'"
     subproc_mock = MagicMock()
+    subproc_mock.wait.return_value = MagicMock()
+    subproc_mock.stdout = MagicMock()
     subproc_mock.returncode = 0
-    subproc_mock.stdout.readline = MagicMock(side_effect=['OK'])
     popen_mock.return_value = subproc_mock
+    select_mock.return_value = ([subproc_mock.stdout], None, None)
+    os_read_mock.return_value = None
     with Environment('/') as env:
         Execute(('arg1', 'arg2', 'quoted arg'))
         Execute(('arg1', 'arg2', 'command "arg"'))

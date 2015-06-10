@@ -1,5 +1,5 @@
-def _call(command, logoutput=None, throw_on_failure=True, cwd=None, env=None, preexec_fn=None, user=None, wait_for_finish=True, timeout=None, path=None, sudo=False, on_new_line=None):
-    "\n  Execute shell command\n  \n  @param command: list/tuple of arguments (recommended as more safe - don't need to escape) \n  or string of the command to execute\n  @param logoutput: boolean, whether command output should be logged of not\n  @param throw_on_failure: if true, when return code is not zero exception is thrown\n  "
+def _call(command, logoutput=None, throw_on_failure=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=None, env=None, preexec_fn=None, user=None, wait_for_finish=True, timeout=None, on_timeout=None, path=None, sudo=False, on_new_line=None, tries=1, try_sleep=0):
+    "\n  Execute shell command\n  \n  @param command: list/tuple of arguments (recommended as more safe - don't need to escape) \n  or string of the command to execute\n  @param logoutput: boolean, whether command output should be logged of not\n  @param throw_on_failure: if true, when return code is not zero exception is thrown\n  @param stdout,stderr: \n    subprocess.PIPE - enable output to variable\n    subprocess.STDOUT - redirect to stdout\n    None - disable output to variable, and output to Python out straightly (even if logoutput is False)\n    {int fd} - redirect to file with descriptor.\n    {string filename} - redirects to a file with name.\n  "
     command_alias = (string_cmd_from_args_list(command) if isinstance(command, (list, tuple)) else command)
     env = _add_current_path_to_env(env)
     if path:
@@ -14,49 +14,63 @@ def _call(command, logoutput=None, throw_on_failure=True, cwd=None, env=None, pr
     env_str = _get_environment_str(env)
     for (placeholder, replacement) in PLACEHOLDERS_TO_STR.iteritems():
         command = command.replace(placeholder, replacement.format(env_str=env_str))
-    import pty
-    (master_fd, slave_fd) = pty.openpty()
     subprocess_command = ['/bin/bash', '--login', '--noprofile', '-c', command]
-    proc = subprocess.Popen(subprocess_command, bufsize=1, stdout=slave_fd, stderr=subprocess.STDOUT, cwd=cwd, env=env, shell=False, close_fds=True, preexec_fn=preexec_fn)
-    if timeout:
-        timeout_event = threading.Event()
-        t = threading.Timer(timeout, _on_timeout, [proc, timeout_event])
-        t.start()
-    if (not wait_for_finish):
-        return proc
-    logoutput = (((logoutput == True) and Logger.logger.isEnabledFor(logging.INFO)) or ((logoutput == None) and Logger.logger.isEnabledFor(logging.DEBUG)))
-    out = ''
-    read_timeout = 0.001
+    files_to_close = []
+    if isinstance(stdout, basestring):
+        stdout = open(stdout, 'wb')
+        files_to_close.append(stdout)
+    if isinstance(stderr, basestring):
+        stderr = open(stderr, 'wb')
+        files_to_close.append(stderr)
     try:
-        while True:
-            (ready, _, _) = select.select([master_fd], [], [], read_timeout)
-            if ready:
-                line = os.read(master_fd, 512)
-                if (not line):
-                    continue
-                out += line
-                try:
+        proc = subprocess.Popen(subprocess_command, stdout=stdout, stderr=stderr, cwd=cwd, env=env, shell=False, close_fds=True, preexec_fn=preexec_fn)
+        if timeout:
+            timeout_event = threading.Event()
+            t = threading.Timer(timeout, _on_timeout, [proc, timeout_event])
+            t.start()
+        if (not wait_for_finish):
+            return proc
+        logoutput = (((logoutput == True) and Logger.logger.isEnabledFor(logging.INFO)) or ((logoutput == None) and Logger.logger.isEnabledFor(logging.DEBUG)))
+        read_set = []
+        if (stdout == subprocess.PIPE):
+            read_set.append(proc.stdout)
+        if (stderr == subprocess.PIPE):
+            read_set.append(proc.stderr)
+        fd_to_string = {proc.stdout: '', proc.stderr: '', }
+        while read_set:
+            (ready, _, _) = select.select(read_set, [], [])
+            for out_fd in read_set:
+                if (out_fd in ready):
+                    line = os.read(out_fd.fileno(), 1024)
+                    if (not line):
+                        read_set = copy.copy(read_set)
+                        read_set.remove(out_fd)
+                        continue
+                    fd_to_string[out_fd] += line
                     if on_new_line:
-                        on_new_line(line)
-                except Exception as err:
-                    err_msg = "Caused by on_new_line function failed with exception for input argument '{0}':\n{1}".format(line, traceback.format_exc())
-                    raise Fail(err_msg)
-                if logoutput:
-                    _print(line)
-            elif (proc.poll() is not None):
-                break
+                        try:
+                            on_new_line(line, (out_fd == proc.stderr))
+                        except Exception as err:
+                            err_msg = "Caused by on_new_line function failed with exception for input argument '{0}':\n{1}".format(line, traceback.format_exc())
+                            raise Fail(err_msg)
+                    if logoutput:
+                        _print(line)
+        proc.wait()
     finally:
-        os.close(slave_fd)
-        os.close(master_fd)
-    proc.wait()
-    out = out.strip('\n')
+        for fp in files_to_close:
+            fp.close()
+    out = fd_to_string[proc.stdout].strip('\n')
+    err = fd_to_string[proc.stderr].strip('\n')
     if timeout:
         if (not timeout_event.is_set()):
             t.cancel()
         else:
-            raise ExecuteTimeoutException()
+            err_msg = ("Execution of '%s' was killed due timeout after %d seconds" % (command, timeout))
+            raise ExecuteTimeoutException(err_msg)
     code = proc.returncode
     if (throw_on_failure and code):
         err_msg = Logger.filter_text(("Execution of '%s' returned %d. %s" % (command_alias, code, out)))
         raise Fail(err_msg)
+    if (stderr == subprocess.PIPE):
+        return (code, out, err)
     return (code, out)

@@ -6,6 +6,7 @@ def run_command(self, target, operation, method='POST', assertable_result=True, 
         url = format('{url}&{k}={v}')
     if (file_to_put and (not os.path.exists(file_to_put))):
         raise Fail(format('File {file_to_put} is not found.'))
+    err_file = os.path.join(Script.get_tmp_dir(), ERR_FILE)
     cmd = ['curl', '-L', '-w', '%{http_code}', '-X', method]
     if file_to_put:
         cmd += ['-T', file_to_put]
@@ -14,7 +15,7 @@ def run_command(self, target, operation, method='POST', assertable_result=True, 
     if self.is_https_enabled:
         cmd += ['-k']
     cmd.append(url)
-    (_, out) = shell.checked_call(cmd, user=self.run_user, logoutput=self.logoutput, quiet=False)
+    (_, out) = shell.checked_call(cmd, user=self.run_user, logoutput=self.logoutput, quiet=False, stderr=err_file)
     status_code = out[(-3):]
     out = out[:(-3)]
     try:
@@ -23,6 +24,7 @@ def run_command(self, target, operation, method='POST', assertable_result=True, 
         result_dict = out
     if ((status_code not in (WebHDFSUtil.valid_status_codes + ignore_status_codes)) or (assertable_result and result_dict and (not result_dict['boolean']))):
         formatted_output = (json.dumps(result_dict, indent=2) if isinstance(result_dict, dict) else result_dict)
+        formatted_output = (sudo.read_file(err_file) + formatted_output)
         err_msg = ("Execution of '%s' returned status_code=%s. %s" % (shell.string_cmd_from_args_list(cmd), status_code, formatted_output))
         raise Fail(err_msg)
     return result_dict

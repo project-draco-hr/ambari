@@ -1,12 +1,18 @@
+@patch.object(os, 'read')
+@patch.object(select, 'select')
 @patch('time.sleep')
 @patch.object(subprocess, 'Popen')
-def test_attribute_try_sleep_tries(self, popen_mock, time_mock):
+def test_attribute_try_sleep_tries(self, popen_mock, time_mock, select_mock, os_read_mock):
     expected_call = "call('Retrying after %d seconds. Reason: %s', 1, 'Fail')"
     subproc_mock_one = MagicMock()
     subproc_mock_one.returncode = 1
+    subproc_mock_one.stdout = MagicMock()
     subproc_mock_zero = MagicMock()
+    subproc_mock_zero.stdout = MagicMock()
     subproc_mock_zero.returncode = 0
     popen_mock.side_effect = [subproc_mock_one, subproc_mock_zero]
+    select_mock.side_effect = [([subproc_mock_one.stdout], None, None), ([subproc_mock_zero.stdout], None, None)]
+    os_read_mock.return_value = None
     with Environment('/') as env:
         Execute('echo "1"', tries=2, try_sleep=10)
     pass
