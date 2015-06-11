@@ -1,0 +1,60 @@
+{
+  while (true) {
+    try {
+      Thread.sleep(3000);
+    }
+ catch (    InterruptedException ex) {
+    }
+    long[] ids=mbean.findMonitorDeadlockedThreads();
+    StringBuilder errBuilder=new StringBuilder();
+    if (ids != null && ids.length > 0) {
+      errBuilder.append(getThreadsStacktraces(ids));
+      errorMessages.add(errBuilder.toString());
+      System.out.append(errBuilder.toString());
+      deadlocked=true;
+      break;
+    }
+ else {
+      boolean hasLive=false;
+      Set<Thread> activeThreads=new HashSet<Thread>();
+      for (      Thread monTh : monitoredThreads) {
+        ThreadGroup group=monTh.getThreadGroup();
+        Thread[] groupThreads=new Thread[group.activeCount()];
+        group.enumerate(groupThreads,true);
+        activeThreads.addAll(Arrays.asList(groupThreads));
+      }
+      activeThreads.remove(Thread.currentThread());
+      activeThreads.remove(parentThread);
+      Set<Long> idSet=new TreeSet<Long>();
+      for (      Thread activeThread : activeThreads) {
+        if (activeThread.isAlive()) {
+          hasLive=true;
+          idSet.add(activeThread.getId());
+        }
+      }
+      long[] tid=new long[idSet.size()];
+      if (!hasLive) {
+        deadlocked=false;
+        break;
+      }
+ else {
+        int cnt=0;
+        for (        Long id : idSet) {
+          tid[cnt]=id;
+          cnt++;
+        }
+        String currentStackTrace=getThreadsStacktraces(tid);
+        if (stacktrace.equals(currentStackTrace)) {
+          errBuilder.append(currentStackTrace);
+          errorMessages.add(currentStackTrace);
+          System.out.append(currentStackTrace);
+          deadlocked=true;
+          break;
+        }
+ else {
+          stacktrace=currentStackTrace;
+        }
+      }
+    }
+  }
+}
