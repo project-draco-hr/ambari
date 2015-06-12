@@ -6,8 +6,10 @@
   clusterGlobalLock.writeLock().lock();
   try {
     ClusterVersionEntity clusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(getClusterName(),stackId,repositoryVersion);
+    boolean performingInitialBootstrap=false;
     if (clusterVersion == null) {
       if (clusterVersionDAO.findByCluster(getClusterName()).isEmpty()) {
+        performingInitialBootstrap=true;
         createClusterVersionInternal(stackId,repositoryVersion,AuthorizationHelper.getAuthenticatedName(configuration.getAnonymousAuditName()),RepositoryVersionState.UPGRADING);
         clusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(getClusterName(),stackId,repositoryVersion);
         if (clusterVersion == null) {
@@ -44,6 +46,9 @@
     hostsWithoutHostVersion.removeAll(hostsWithState);
     for (    String hostname : hostsWithoutHostVersion) {
       HostEntity hostEntity=hostDAO.findByName(hostname);
+      if (performingInitialBootstrap && hostEntity.getHostStateEntity().getCurrentState() != HostState.HEALTHY) {
+        continue;
+      }
       final Collection<HostComponentStateEntity> allHostComponents=hostEntity.getHostComponentStateEntities();
       for (      HostComponentStateEntity hostComponentStateEntity : allHostComponents) {
         if (hostComponentStateEntity.getVersion().equalsIgnoreCase(State.UNKNOWN.toString())) {

@@ -1,0 +1,39 @@
+{
+  String clusterName="c1";
+  String v1="2.2.0-123";
+  StackId stackId=new StackId("HDP-2.2.0");
+  Map<String,String> hostAttributes=new HashMap<String,String>();
+  hostAttributes.put("os_family","redhat");
+  hostAttributes.put("os_release_version","5.9");
+  Cluster cluster=createClusterForRU(clusterName,stackId,hostAttributes);
+  Host deadHost=cluster.getHosts().iterator().next();
+  deadHost.setState(HostState.UNHEALTHY);
+  int versionedComponentCount=0;
+  List<HostComponentStateEntity> hostComponentStates=hostComponentStateDAO.findAll();
+  for (int i=0; i < hostComponentStates.size(); i++) {
+    HostComponentStateEntity hce=hostComponentStates.get(i);
+    ComponentInfo compInfo=metaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),hce.getServiceName(),hce.getComponentName());
+    if (hce.getHostName().equals(deadHost.getHostName())) {
+      continue;
+    }
+    if (compInfo.isVersionAdvertised()) {
+      hce.setVersion(v1);
+      hostComponentStateDAO.merge(hce);
+      versionedComponentCount++;
+    }
+    Service svc=cluster.getService(hce.getServiceName());
+    ServiceComponent svcComp=svc.getServiceComponent(hce.getComponentName());
+    ServiceComponentHost scHost=svcComp.getServiceComponentHost(hce.getHostName());
+    scHost.recalculateHostVersionState();
+    cluster.recalculateClusterVersionState(cluster.getDesiredStackVersion(),v1);
+    Collection<ClusterVersionEntity> clusterVersions=cluster.getAllClusterVersions();
+    if (versionedComponentCount > 0) {
+      RepositoryVersionEntity repositoryVersion=repositoryVersionDAO.findByStackAndVersion(stackId,v1);
+      Assert.assertNotNull(repositoryVersion);
+      Assert.assertTrue(clusterVersions != null && clusterVersions.size() == 1);
+      if (versionedComponentCount == 1 && i < (hostComponentStates.size() - 1)) {
+        Assert.assertEquals(clusterVersions.iterator().next().getState(),RepositoryVersionState.CURRENT);
+      }
+    }
+  }
+}

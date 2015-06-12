@@ -4,7 +4,11 @@
   HostVersionEntity hostVersionEntity=hostVersionDAO.findByClusterStackVersionAndHost(getClusterName(),repoVersionStackId,repositoryVersion.getVersion(),host.getHostName());
   hostTransitionStateWriteLock.lock();
   try {
+    boolean performingInitialBootstrap=false;
     if (hostVersionEntity == null) {
+      if (hostVersionDAO.findByClusterAndHost(getClusterName(),host.getHostName()).isEmpty()) {
+        performingInitialBootstrap=true;
+      }
       hostVersionEntity=new HostVersionEntity(host,repositoryVersion,RepositoryVersionState.UPGRADING);
       hostVersionDAO.create(hostVersionEntity);
     }
@@ -12,7 +16,7 @@
     boolean isCurrentPresent=(currentVersionEntity != null);
     final ServiceComponentHostSummary hostSummary=new ServiceComponentHostSummary(ambariMetaInfo,host,stack);
     if (!isCurrentPresent) {
-      if (hostSummary.isUpgradeFinished() && hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING)) {
+      if (hostSummary.isUpgradeFinished() && hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING) || performingInitialBootstrap) {
         hostVersionEntity.setState(RepositoryVersionState.CURRENT);
         hostVersionDAO.merge(hostVersionEntity);
       }
