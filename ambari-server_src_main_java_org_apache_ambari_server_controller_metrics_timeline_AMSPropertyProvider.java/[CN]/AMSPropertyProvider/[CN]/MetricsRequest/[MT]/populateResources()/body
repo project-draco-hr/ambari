@@ -3,39 +3,41 @@
     return Collections.emptySet();
   }
   for (  Map.Entry<String,Set<Resource>> resourceEntry : resources.entrySet()) {
-    String hostname=resourceEntry.getKey();
+    String componentName=resourceEntry.getKey();
     Set<Resource> resourceSet=resourceEntry.getValue();
-    for (    Resource resource : resourceSet) {
-      String clusterName=(String)resource.getPropertyValue(clusterNamePropertyId);
-      if (!hostProvider.isCollectorHostLive(clusterName,TIMELINE_METRICS)) {
-        LOG.info("METRICS_COLLECTOR host is not live. Skip populating " + "resources with metrics.");
-        return Collections.emptySet();
-      }
-      if (!hostProvider.isCollectorComponentLive(clusterName,TIMELINE_METRICS)) {
-        LOG.info("METRICS_COLLECTOR is not live. Skip populating resources" + " with metrics.");
-        return Collections.emptySet();
-      }
-      TimelineMetrics timelineMetrics;
-      if (hostComponentHostMetrics.isEmpty()) {
-        String spec=getSpec(hostname,resource);
-        timelineMetrics=getTimelineMetricsForSpec(spec);
-      }
+    TimelineMetrics timelineMetrics;
+    if (hostComponentHostMetrics.isEmpty()) {
+      String spec=getSpec(componentName);
+      timelineMetrics=getTimelineMetricsForSpec(spec);
+    }
  else {
-        Set<String> specs=getSpecsForHostComponentMetrics(hostname,resource);
-        timelineMetrics=new TimelineMetrics();
-        for (        String spec : specs) {
-          if (!StringUtils.isEmpty(spec)) {
-            TimelineMetrics metrics=getTimelineMetricsForSpec(spec);
-            if (metrics != null) {
-              timelineMetrics.getMetrics().addAll(metrics.getMetrics());
-            }
+      Set<String> specs=getSpecsForHostComponentMetrics(componentName);
+      timelineMetrics=new TimelineMetrics();
+      for (      String spec : specs) {
+        if (!StringUtils.isEmpty(spec)) {
+          TimelineMetrics metrics=getTimelineMetricsForSpec(spec);
+          if (metrics != null) {
+            timelineMetrics.getMetrics().addAll(metrics.getMetrics());
           }
         }
       }
-      Set<String> patterns=createPatterns(metrics.keySet());
-      if (timelineMetrics != null) {
-        for (        TimelineMetric metric : timelineMetrics.getMetrics()) {
-          if (metric.getMetricName() != null && metric.getMetricValues() != null && checkMetricName(patterns,metric.getMetricName())) {
+    }
+    Map<String,Set<TimelineMetric>> metricsMap=new HashMap<String,Set<TimelineMetric>>();
+    Set<String> patterns=createPatterns(metrics.keySet());
+    if (timelineMetrics != null) {
+      for (      TimelineMetric metric : timelineMetrics.getMetrics()) {
+        if (metric.getMetricName() != null && metric.getMetricValues() != null && checkMetricName(patterns,metric.getMetricName())) {
+          String hostname=metric.getHostName();
+          if (!metricsMap.containsKey(hostname)) {
+            metricsMap.put(hostname,new HashSet<TimelineMetric>());
+          }
+          metricsMap.get(hostname).add(metric);
+        }
+      }
+      for (      Resource resource : resourceSet) {
+        String hostname=getHostName(resource);
+        if (metricsMap.containsKey(hostname)) {
+          for (          TimelineMetric metric : metricsMap.get(hostname)) {
             metricsPaddingMethod.applyPaddingStrategy(metric,temporalInfo);
             populateResource(resource,metric);
           }

@@ -8,23 +8,27 @@
     stmtStr=condition.getStatement();
   }
  else {
-    stmtStr=String.format(GET_METRIC_SQL,"",METRICS_RECORD_TABLE_NAME);
-  }
-  StringBuilder sb=new StringBuilder(stmtStr);
-  sb.append(" WHERE ");
-  sb.append(condition.getConditionClause());
-  String orderByClause=condition.getOrderByClause(false);
-  if (orderByClause != null) {
-    sb.append(orderByClause);
-  }
+    if (condition.getHostnames().size() > 1 && condition.getMetricNames().size() > 1) {
+      stmtStr=String.format(GET_LATEST_METRIC_SQL,METRICS_RECORD_TABLE_NAME,METRICS_RECORD_TABLE_NAME,condition.getConditionClause());
+    }
  else {
-    sb.append(" ORDER BY METRIC_NAME DESC, HOSTNAME DESC, SERVER_TIME DESC ");
+      StringBuilder sb=new StringBuilder(String.format(GET_METRIC_SQL,"",METRICS_RECORD_TABLE_NAME));
+      sb.append(" WHERE ");
+      sb.append(condition.getConditionClause());
+      String orderByClause=condition.getOrderByClause(false);
+      if (orderByClause != null) {
+        sb.append(orderByClause);
+      }
+ else {
+        sb.append(" ORDER BY METRIC_NAME DESC, HOSTNAME DESC, SERVER_TIME DESC ");
+      }
+      stmtStr=sb.toString();
+    }
   }
-  sb.append(" LIMIT ").append(condition.getMetricNames().size());
   if (LOG.isDebugEnabled()) {
-    LOG.debug("SQL: " + sb.toString() + ", condition: "+ condition);
+    LOG.debug("SQL: " + stmtStr + ", condition: "+ condition);
   }
-  PreparedStatement stmt=connection.prepareStatement(sb.toString());
+  PreparedStatement stmt=connection.prepareStatement(stmtStr);
   int pos=1;
   if (condition.getMetricNames() != null) {
     for (; pos <= condition.getMetricNames().size(); pos++) {
@@ -34,11 +38,13 @@
       stmt.setString(pos,condition.getMetricNames().get(pos - 1));
     }
   }
-  if (condition.getHostname() != null) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Setting pos: " + pos + ", value: "+ condition.getHostname());
+  if (condition.getHostnames() != null) {
+    for (    String hostname : condition.getHostnames()) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Setting pos: " + pos + ", value: "+ hostname);
+      }
+      stmt.setString(pos++,hostname);
     }
-    stmt.setString(pos++,condition.getHostname());
   }
   if (condition.getAppId() != null) {
     if (LOG.isDebugEnabled()) {
@@ -50,7 +56,7 @@
     if (LOG.isDebugEnabled()) {
       LOG.debug("Setting pos: " + pos + ", value: "+ condition.getInstanceId());
     }
-    stmt.setString(pos++,condition.getInstanceId());
+    stmt.setString(pos,condition.getInstanceId());
   }
   if (condition.getFetchSize() != null) {
     stmt.setFetchSize(condition.getFetchSize());
