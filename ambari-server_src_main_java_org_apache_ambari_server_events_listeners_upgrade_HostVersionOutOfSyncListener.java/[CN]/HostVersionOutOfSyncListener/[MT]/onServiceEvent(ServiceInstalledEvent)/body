@@ -7,17 +7,32 @@
     Set<String> changedRepositoryVersions=new HashSet<String>();
     StackId currentStackId=cluster.getCurrentStackVersion();
     Map<String,ServiceComponent> serviceComponents=cluster.getService(event.getServiceName()).getServiceComponents();
-    Set<String> affectedHosts=new HashSet<String>();
+    Map<String,List<ServiceComponent>> affectedHosts=new HashMap<String,List<ServiceComponent>>();
     for (    ServiceComponent component : serviceComponents.values()) {
       for (      String hostname : component.getServiceComponentHosts().keySet()) {
-        affectedHosts.add(hostname);
+        if (!affectedHosts.containsKey(hostname)) {
+          affectedHosts.put(hostname,new ArrayList<ServiceComponent>());
+        }
+        affectedHosts.get(hostname).add(component);
       }
     }
-    for (    String hostName : affectedHosts) {
+    for (    String hostName : affectedHosts.keySet()) {
       List<HostVersionEntity> hostVersionEntities=hostVersionDAO.get().findByClusterAndHost(cluster.getClusterName(),hostName);
       for (      HostVersionEntity hostVersionEntity : hostVersionEntities) {
         StackEntity hostStackEntity=hostVersionEntity.getRepositoryVersion().getStack();
         StackId hostStackId=new StackId(hostStackEntity.getStackName(),hostStackEntity.getStackVersion());
+        boolean hasChangedComponentsWithVersions=false;
+        String serviceName=event.getServiceName();
+        for (        ServiceComponent comp : affectedHosts.get(hostName)) {
+          String componentName=comp.getName();
+          ComponentInfo component=ami.get().getComponent(hostStackId.getStackName(),hostStackId.getStackVersion(),serviceName,componentName);
+          if (component.isVersionAdvertised()) {
+            hasChangedComponentsWithVersions=true;
+          }
+        }
+        if (!hasChangedComponentsWithVersions) {
+          continue;
+        }
         if (currentStackId.equals(hostStackId) && hostVersionEntity.getState().equals(RepositoryVersionState.INSTALLED)) {
           hostVersionEntity.setState(RepositoryVersionState.OUT_OF_SYNC);
           hostVersionDAO.get().merge(hostVersionEntity);
