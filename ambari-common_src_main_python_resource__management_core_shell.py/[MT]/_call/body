@@ -25,9 +25,9 @@ def _call(command, logoutput=None, throw_on_failure=True, stdout=subprocess.PIPE
     try:
         proc = subprocess.Popen(subprocess_command, stdout=stdout, stderr=stderr, cwd=cwd, env=env, shell=False, close_fds=True, preexec_fn=preexec_fn)
         if timeout:
-            timeout_happened = False
-            start = time.time()
-            end = (start + timeout)
+            timeout_event = threading.Event()
+            t = threading.Timer(timeout, _on_timeout, [proc, timeout_event])
+            t.start()
         if (not wait_for_finish):
             return proc
         logoutput = (((logoutput == True) and Logger.logger.isEnabledFor(logging.INFO)) or ((logoutput == None) and Logger.logger.isEnabledFor(logging.DEBUG)))
@@ -39,17 +39,17 @@ def _call(command, logoutput=None, throw_on_failure=True, stdout=subprocess.PIPE
         fd_to_string = {proc.stdout: '', proc.stderr: '', }
         all_output = ''
         while read_set:
-            if (timeout and (time.time() > end)):
-                timeout_happened = True
-                proc.kill()
+            is_proccess_running = (proc.poll() == None)
+            (ready, _, _) = select.select(read_set, [], [], 1)
+            if ((not is_proccess_running) and (not ready)):
                 break
-            (ready, _, _) = select.select(read_set, [], [])
             for out_fd in read_set:
                 if (out_fd in ready):
                     line = os.read(out_fd.fileno(), 1024)
                     if (not line):
                         read_set = copy.copy(read_set)
                         read_set.remove(out_fd)
+                        out_fd.close()
                         continue
                     fd_to_string[out_fd] += line
                     all_output += line
@@ -61,12 +61,7 @@ def _call(command, logoutput=None, throw_on_failure=True, stdout=subprocess.PIPE
                             raise Fail(err_msg)
                     if logoutput:
                         _print(line)
-        while (proc.poll() == None):
-            if (timeout and (time.time() > end)):
-                timeout_happened = True
-                proc.kill()
-                break
-            time.sleep(1)
+        proc.wait()
     finally:
         for fp in files_to_close:
             fp.close()
@@ -74,7 +69,9 @@ def _call(command, logoutput=None, throw_on_failure=True, stdout=subprocess.PIPE
     err = fd_to_string[proc.stderr].strip('\n')
     all_output = all_output.strip('\n')
     if timeout:
-        if timeout_happened:
+        if (not timeout_event.is_set()):
+            t.cancel()
+        else:
             err_msg = ("Execution of '%s' was killed due timeout after %d seconds" % (command, timeout))
             raise ExecuteTimeoutException(err_msg)
     code = proc.returncode
