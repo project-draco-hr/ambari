@@ -2,20 +2,26 @@
   setViewStatus(viewDefinition,ViewEntity.ViewStatus.DEPLOYING,"Deploying " + extractedArchiveDirFile + ".");
   String extractedArchiveDirPath=extractedArchiveDirFile.getAbsolutePath();
   LOG.info("Reading view archive " + archiveFile + ".");
+  ClassLoader cl=null;
   try {
-    ClassLoader cl=extractor.extractViewArchive(viewDefinition,archiveFile,extractedArchiveDirFile);
+    cl=extractor.extractViewArchive(viewDefinition,archiveFile,extractedArchiveDirFile);
     ViewConfig viewConfig=archiveUtility.getViewConfigFromExtractedArchive(extractedArchiveDirPath,configuration.isViewValidationEnabled());
     if (viewConfig == null) {
       setViewStatus(viewDefinition,ViewEntity.ViewStatus.ERROR,"View configuration not found");
     }
-    viewDefinition.setConfiguration(viewConfig);
+ else {
+      viewDefinition.setConfiguration(viewConfig);
+    }
     if (checkViewVersions(viewDefinition,serverVersion)) {
       setupViewDefinition(viewDefinition,cl);
       Set<ViewInstanceEntity> instanceDefinitions=new HashSet<ViewInstanceEntity>();
-      for (      InstanceConfig instanceConfig : viewConfig.getInstances()) {
-        ViewInstanceEntity instanceEntity=createViewInstanceDefinition(viewConfig,viewDefinition,instanceConfig);
-        instanceEntity.setXmlDriven(true);
-        instanceDefinitions.add(instanceEntity);
+      List<InstanceConfig> instanceConfigs=viewConfig.getInstances();
+      if (instanceConfigs != null) {
+        for (        InstanceConfig instanceConfig : instanceConfigs) {
+          ViewInstanceEntity instanceEntity=createViewInstanceDefinition(viewConfig,viewDefinition,instanceConfig);
+          instanceEntity.setXmlDriven(true);
+          instanceDefinitions.add(instanceEntity);
+        }
       }
       persistView(viewDefinition,instanceDefinitions);
       setViewStatus(viewDefinition,ViewEntity.ViewStatus.DEPLOYED,"Deployed " + extractedArchiveDirPath + ".");
@@ -26,5 +32,14 @@
     String msg="Caught exception loading view " + viewDefinition.getName();
     setViewStatus(viewDefinition,ViewEntity.ViewStatus.ERROR,msg + " : " + e.getMessage());
     LOG.error(msg,e);
+  }
+ finally {
+    if (cl instanceof Closeable) {
+      try {
+        ((URLClassLoader)cl).close();
+      }
+ catch (      IOException ex) {
+      }
+    }
   }
 }
