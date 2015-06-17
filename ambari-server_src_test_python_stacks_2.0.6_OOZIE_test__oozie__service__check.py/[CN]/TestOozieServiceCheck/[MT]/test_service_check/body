@@ -1,0 +1,18 @@
+@patch('resource_management.core.shell.call')
+@patch('glob.glob')
+def test_service_check(self, glob_mock, call_mock):
+    glob_mock.return_value = ['examples-dir', 'b']
+    config_file = (self.get_src_folder() + '/test/python/stacks/2.0.6/configs/default.json')
+    with open(config_file, 'r') as f:
+        json_content = json.load(f)
+    version = '2.3.0.0-1234'
+    json_content['commandParams']['version'] = version
+    json_content['hostLevelParams']['stack_name'] = 'HDP'
+    json_content['hostLevelParams']['stack_version'] = '2.2'
+    mocks_dict = {}
+    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/service_check.py'), classname='OozieServiceCheck', command='service_check', config_dict=json_content, hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES, call_mocks=[(0, None), (0, None)], mocks_dict=mocks_dict)
+    self.maxDiff = None
+    self.assertResourceCalled('XmlConfig', 'yarn-site.xml', owner='hdfs', group='hadoop', mode=420, conf_dir='/usr/hdp/current/hadoop-client/conf', configurations=json_content['configurations']['yarn-site'])
+    self.assertResourceCalled('File', '/tmp/oozieSmoke2.sh', content=StaticFile('oozieSmoke2.sh'), mode=493)
+    self.assertResourceCalled('File', '/tmp/prepareOozieHdfsDirectories.sh', content=StaticFile('prepareOozieHdfsDirectories.sh'), mode=493)
+    self.assertResourceCalled('Execute', '/tmp/prepareOozieHdfsDirectories.sh /usr/hdp/current/oozie-client/conf examples-dir /usr/hdp/current/hadoop-client/conf ', tries=3, try_sleep=5, logoutput=True)
