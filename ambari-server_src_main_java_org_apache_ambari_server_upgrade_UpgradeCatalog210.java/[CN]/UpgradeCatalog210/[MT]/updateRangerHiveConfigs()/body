@@ -1,0 +1,26 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (clusterMap != null && !clusterMap.isEmpty()) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        Config RangerHiveConfig=cluster.getDesiredConfigByType("ranger-hive-plugin-properties");
+        if (RangerHiveConfig != null && RangerHiveConfig.getProperties().containsKey("ranger-hive-plugin-enabled") && cluster.getDesiredConfigByType("hive-env") != null) {
+          Map<String,String> newHiveEnvProperties=new HashMap<String,String>();
+          Set<String> removeRangerHiveProperties=new HashSet<String>();
+          removeRangerHiveProperties.add("ranger-hive-plugin-enabled");
+          if (RangerHiveConfig.getProperties().get("ranger-hive-plugin-enabled") != null && RangerHiveConfig.getProperties().get("ranger-hive-plugin-enabled").equalsIgnoreCase("yes")) {
+            newHiveEnvProperties.put("hive_security_authorization","Ranger");
+          }
+ else {
+            newHiveEnvProperties.put("hive_security_authorization","None");
+          }
+          boolean updateProperty=cluster.getDesiredConfigByType("hive-env").getProperties().containsKey("hive_security_authorization");
+          updateConfigurationPropertiesForCluster(cluster,"hive-env",newHiveEnvProperties,updateProperty,true);
+          updateConfigurationPropertiesForCluster(cluster,"ranger-hive-plugin-properties",new HashMap<String,String>(),removeRangerHiveProperties,false,true);
+        }
+      }
+    }
+  }
+}
