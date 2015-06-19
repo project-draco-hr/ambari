@@ -13,7 +13,7 @@
   }
   String repositoryVersion=null;
   if (event.getCommandReport() == null) {
-    LOG.error("Command report is null, marking action as INSTALL_FAILED");
+    LOG.error("Command report is null, will set all INSTALLING versions for host {} to INSTALL_FAILED.",event.getHostname());
   }
  else {
     try {
@@ -21,28 +21,28 @@
       repositoryVersion=structuredOutput.getInstalledRepositoryVersion();
       if (event.getCommandReport().getStatus().equals(HostRoleStatus.COMPLETED.toString())) {
         newHostState=RepositoryVersionState.INSTALLED;
-        if (null != structuredOutput.getActualVersion() && null != structuredOutput.getInstalledRepositoryVersion() && null != structuredOutput.getStackId() && !structuredOutput.getActualVersion().equals(structuredOutput.getInstalledRepositoryVersion())) {
-          StackId stackId=new StackId(structuredOutput.getStackId());
-          RepositoryVersionEntity version=repoVersionDAO.findByStackAndVersion(stackId,structuredOutput.getInstalledRepositoryVersion());
-          if (null != version) {
-            LOG.info("Repository version {} was found, but {} is the actual value",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion());
-            version.setVersion(structuredOutput.getActualVersion());
-            repoVersionDAO.merge(version);
-            repositoryVersion=structuredOutput.getActualVersion();
-          }
+      }
+      if (null != structuredOutput.getActualVersion() && !structuredOutput.getActualVersion().isEmpty() && null != structuredOutput.getInstalledRepositoryVersion() && !structuredOutput.getInstalledRepositoryVersion().isEmpty() && null != structuredOutput.getStackId() && !structuredOutput.getStackId().isEmpty() && !structuredOutput.getActualVersion().equals(structuredOutput.getInstalledRepositoryVersion())) {
+        StackId stackId=new StackId(structuredOutput.getStackId());
+        RepositoryVersionEntity version=repoVersionDAO.findByStackAndVersion(stackId,structuredOutput.getInstalledRepositoryVersion());
+        if (null != version) {
+          LOG.info("Repository version {} was found, but {} is the actual value",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion());
+          version.setVersion(structuredOutput.getActualVersion());
+          repoVersionDAO.merge(version);
+          repositoryVersion=structuredOutput.getActualVersion();
+        }
  else {
-            stackId=new StackId(structuredOutput.getStackId());
-            version=repoVersionDAO.findByStackAndVersion(stackId,structuredOutput.getActualVersion());
-            LOG.debug("Repository version {} was not found, check for {}.  Found={}",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion(),Boolean.valueOf(null != version));
-            if (null != version) {
-              repositoryVersion=structuredOutput.getActualVersion();
-            }
+          stackId=new StackId(structuredOutput.getStackId());
+          version=repoVersionDAO.findByStackAndVersion(stackId,structuredOutput.getActualVersion());
+          LOG.debug("Repository version {} was not found, check for {}.  Found={}",structuredOutput.getInstalledRepositoryVersion(),structuredOutput.getActualVersion(),Boolean.valueOf(null != version));
+          if (null != version) {
+            repositoryVersion=structuredOutput.getActualVersion();
           }
         }
       }
     }
  catch (    JsonSyntaxException e) {
-      LOG.error("Can not parse structured output %s",e);
+      LOG.error("Cannot parse structured output %s",e);
     }
   }
   List<HostVersionEntity> hostVersions=hostVersionDAO.get().findByHost(event.getHostname());
@@ -58,7 +58,7 @@
         cluster.recalculateClusterVersionState(hostVersion.getRepositoryVersion().getStackId(),hostVersion.getRepositoryVersion().getVersion());
       }
  catch (      AmbariException e) {
-        LOG.error("Cannot get cluster with Id " + clusterId.toString(),e);
+        LOG.error("Cannot get cluster with Id " + clusterId.toString() + " to recalculate its ClusterVersion.",e);
       }
     }
   }
