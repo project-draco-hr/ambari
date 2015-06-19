@@ -1,4 +1,10 @@
-def test_recommendTezConfigurations(self):
+@patch('os.path.exists')
+@patch('os.path.isdir')
+@patch('os.listdir')
+def test_recommendTezConfigurations(self, os_listdir_mock, os_isdir_mock, os_exists_mock):
+    os_exists_mock.return_value = True
+    os_isdir_mock.return_value = True
+    os_listdir_mock.return_value = ['TEZ{0.7.0.2.3.0.0-2155}']
     self.maxDiff = None
     configurations = {'yarn-site': {'properties': {'yarn.scheduler.minimum-allocation-mb': '256', 'yarn.scheduler.maximum-allocation-mb': '8192', }, }, 'capacity-scheduler': {'properties': {'yarn.scheduler.capacity.root.queues': 'queue1,queue2', }, }, }
     clusterData = {'cpu': 4, 'mapMemory': 3000, 'amMemory': 2000, 'reduceMemory': 2056, 'containers': 3, 'ramPerContainer': 256, }
@@ -7,16 +13,21 @@ def test_recommendTezConfigurations(self):
     hosts = {'items': [{'href': '/api/v1/hosts/c6401.ambari.apache.org', 'Hosts': {'cpu_count': 1, 'host_name': 'c6401.ambari.apache.org', 'os_arch': 'x86_64', 'os_type': 'centos6', 'ph_cpu_count': 1, 'public_host_name': 'c6401.ambari.apache.org', 'rack_info': '/default-rack', 'total_mem': 1922680, }, }, {'href': '/api/v1/hosts/c6402.ambari.apache.org', 'Hosts': {'cpu_count': 1, 'host_name': 'c6402.ambari.apache.org', 'os_arch': 'x86_64', 'os_type': 'centos6', 'ph_cpu_count': 1, 'public_host_name': 'c6402.ambari.apache.org', 'rack_info': '/default-rack', 'total_mem': 1922680, }, }, {'href': '/api/v1/hosts/c6403.ambari.apache.org', 'Hosts': {'cpu_count': 1, 'host_name': 'c6403.ambari.apache.org', 'os_arch': 'x86_64', 'os_type': 'centos6', 'ph_cpu_count': 1, 'public_host_name': 'c6403.ambari.apache.org', 'rack_info': '/default-rack', 'total_mem': 1922680, }, }], }
     self.stackAdvisor.recommendTezConfigurations(configurations, clusterData, services, hosts)
     self.assertEquals(configurations, expected)
+    server_host = socket.getfqdn()
+    tez_ui_url = (('http://' + server_host) + ':8080/#/main/views/TEZ/0.7.0.2.3.0.0-2155/TEZ_CLUSTER_INSTANCE')
     services['ambari-server-properties'] = {'java.home': '/usr/jdk64/jdk1.7.3_23', }
+    expected['tez-site']['properties']['tez.tez-ui.history-url.base'] = tez_ui_url
     self.stackAdvisor.recommendTezConfigurations(configurations, clusterData, services, hosts)
     self.assertEquals(configurations, expected)
     services['ambari-server-properties'] = {'java.home': '/usr/jdk64/jdk1.8_44', }
     expected['tez-site']['properties']['tez.am.launch.cmd-opts'] = '-XX:+PrintGCDetails -verbose:gc -XX:+PrintGCTimeStamps -XX:+UseNUMA -XX:+UseG1GC -XX:+ResizeTLAB'
     expected['tez-site']['properties']['tez.task.launch.cmd-opts'] = '-XX:+PrintGCDetails -verbose:gc -XX:+PrintGCTimeStamps -XX:+UseNUMA -XX:+UseG1GC -XX:+ResizeTLAB'
+    expected['tez-site']['properties']['tez.tez-ui.history-url.base'] = tez_ui_url
     self.stackAdvisor.recommendTezConfigurations(configurations, clusterData, services, hosts)
     self.assertEquals(configurations, expected)
     services['ambari-server-properties'] = {'java.home': '/usr/jdk64/jdk1.9.2_44', }
     expected['tez-site']['properties']['tez.am.launch.cmd-opts'] = '-XX:+PrintGCDetails -verbose:gc -XX:+PrintGCTimeStamps -XX:+UseNUMA -XX:+UseG1GC -XX:+ResizeTLAB'
     expected['tez-site']['properties']['tez.task.launch.cmd-opts'] = '-XX:+PrintGCDetails -verbose:gc -XX:+PrintGCTimeStamps -XX:+UseNUMA -XX:+UseG1GC -XX:+ResizeTLAB'
+    expected['tez-site']['properties']['tez.tez-ui.history-url.base'] = tez_ui_url
     self.stackAdvisor.recommendTezConfigurations(configurations, clusterData, services, hosts)
     self.assertEquals(configurations, expected)
