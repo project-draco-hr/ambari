@@ -1,6 +1,6 @@
 {
   validateConditionIsNotEmpty(condition);
-  if (condition.getMetricNames() == null || condition.getMetricNames().size() == 0) {
+  if (condition.getMetricNames() == null || condition.getMetricNames().isEmpty()) {
     throw new IllegalArgumentException("Point in time query without " + "metric names not supported ");
   }
   String stmtStr;
@@ -28,38 +28,47 @@
   if (LOG.isDebugEnabled()) {
     LOG.debug("SQL: " + stmtStr + ", condition: "+ condition);
   }
-  PreparedStatement stmt=connection.prepareStatement(stmtStr);
-  int pos=1;
-  if (condition.getMetricNames() != null) {
-    for (; pos <= condition.getMetricNames().size(); pos++) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Setting pos: " + pos + ", value = "+ condition.getMetricNames().get(pos - 1));
+  PreparedStatement stmt=null;
+  try {
+    stmt=connection.prepareStatement(stmtStr);
+    int pos=1;
+    if (condition.getMetricNames() != null) {
+      for (; pos <= condition.getMetricNames().size(); pos++) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Setting pos: " + pos + ", value = "+ condition.getMetricNames().get(pos - 1));
+        }
+        stmt.setString(pos,condition.getMetricNames().get(pos - 1));
       }
-      stmt.setString(pos,condition.getMetricNames().get(pos - 1));
     }
-  }
-  if (condition.getHostnames() != null) {
-    for (    String hostname : condition.getHostnames()) {
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Setting pos: " + pos + ", value: "+ hostname);
+    if (condition.getHostnames() != null) {
+      for (      String hostname : condition.getHostnames()) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Setting pos: " + pos + ", value: "+ hostname);
+        }
+        stmt.setString(pos++,hostname);
       }
-      stmt.setString(pos++,hostname);
+    }
+    if (condition.getAppId() != null) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Setting pos: " + pos + ", value: "+ condition.getAppId());
+      }
+      stmt.setString(pos++,condition.getAppId());
+    }
+    if (condition.getInstanceId() != null) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Setting pos: " + pos + ", value: "+ condition.getInstanceId());
+      }
+      stmt.setString(pos,condition.getInstanceId());
+    }
+    if (condition.getFetchSize() != null) {
+      stmt.setFetchSize(condition.getFetchSize());
     }
   }
-  if (condition.getAppId() != null) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Setting pos: " + pos + ", value: "+ condition.getAppId());
+ catch (  SQLException e) {
+    if (stmt != null) {
+      stmt.close();
     }
-    stmt.setString(pos++,condition.getAppId());
-  }
-  if (condition.getInstanceId() != null) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Setting pos: " + pos + ", value: "+ condition.getInstanceId());
-    }
-    stmt.setString(pos,condition.getInstanceId());
-  }
-  if (condition.getFetchSize() != null) {
-    stmt.setFetchSize(condition.getFetchSize());
+    throw e;
   }
   return stmt;
 }
