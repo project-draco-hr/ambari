@@ -1,0 +1,24 @@
+def setup_truststore(import_cert=False):
+    if (not get_silent()):
+        jdk_path = find_jdk()
+        if (jdk_path is None):
+            err = ('No JDK found, please run the "ambari-server setup" command to install a JDK automatically or install any JDK manually to ' + configDefaults.JDK_INSTALL_DIR)
+            raise FatalException(1, err)
+        properties = get_ambari_properties()
+        if get_YN_input('Do you want to configure a truststore [y/n] (y)? ', True):
+            truststore_type = get_truststore_type(properties)
+            truststore_path = get_truststore_path(properties)
+            truststore_password = get_truststore_password(properties)
+            if import_cert:
+                if get_YN_input('Do you want to import a certificate [y/n] (y)? ', True):
+                    alias = get_validated_string_input('Please enter an alias for the certificate: ', '', None, None, False, False)
+                    run_os_command(get_delete_cert_command(jdk_path, alias, truststore_path, truststore_password))
+                    import_cert_path = get_validated_filepath_input('Enter path to certificate: ', 'Certificate not found')
+                    run_component_https_cmd(get_import_cert_command(jdk_path, alias, truststore_type, import_cert_path, truststore_path, truststore_password))
+        else:
+            return
+        conf_file = find_properties_file()
+        f = open(conf_file, 'w')
+        properties.store(f, "Changed by 'ambari-server setup-security' command")
+    else:
+        print 'setup-security is not enabled in silent mode.'

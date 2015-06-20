@@ -1,4 +1,5 @@
 @patch('ambari_server.setupHttps.get_validated_filepath_input')
+@patch('ambari_server.setupHttps.get_validated_string_input')
 @patch('ambari_server.setupHttps.run_os_command')
 @patch('ambari_server.setupHttps.get_truststore_type')
 @patch('__builtin__.open')
@@ -10,7 +11,7 @@
 @patch('ambari_server.setupHttps.get_YN_input')
 @patch('ambari_server.setupHttps.get_ambari_properties')
 @patch('ambari_server.setupHttps.find_jdk')
-def test_setup_component_https(self, find_jdk_mock, get_ambari_properties_mock, get_YN_input_mock, get_truststore_path_mock, get_truststore_password_mock, get_delete_cert_command_mock, run_component_https_cmd_mock, find_properties_file_mock, open_mock, get_truststore_type_mock, run_os_command_mock, get_validated_filepath_input_mock):
+def test_setup_truststore(self, find_jdk_mock, get_ambari_properties_mock, get_YN_input_mock, get_truststore_path_mock, get_truststore_password_mock, get_delete_cert_command_mock, run_component_https_cmd_mock, find_properties_file_mock, open_mock, get_truststore_type_mock, run_os_command_mock, get_validated_string_input_mock, get_validated_filepath_input_mock):
     out = StringIO.StringIO()
     sys.stdout = out
     component = 'component'
@@ -18,40 +19,31 @@ def test_setup_component_https(self, find_jdk_mock, get_ambari_properties_mock, 
     property = 'use_ssl'
     alias = 'alias'
     set_silent(True)
-    setup_component_https(component, command, property, alias)
-    self.assertEqual('command is not enabled in silent mode.\n', out.getvalue())
+    setup_truststore()
+    self.assertEqual('setup-security is not enabled in silent mode.\n', out.getvalue())
     sys.stdout = sys.__stdout__
     set_silent(False)
     p = get_ambari_properties_mock.return_value
-    p.get_property.side_effect = ['true']
     get_YN_input_mock.side_effect = [False]
-    setup_component_https(component, command, property, alias)
-    self.assertTrue(p.get_property.called)
-    self.assertTrue(get_YN_input_mock.called)
-    p.get_property.reset_mock()
-    get_YN_input_mock.reset_mock()
-    p.get_property.side_effect = ['false']
-    get_YN_input_mock.side_effect = [False]
-    setup_component_https(component, command, property, alias)
-    self.assertTrue(p.get_property.called)
+    get_validated_string_input_mock.return_value = 'alias'
+    setup_truststore()
     self.assertTrue(get_YN_input_mock.called)
     p.get_property.reset_mock()
     get_YN_input_mock.reset_mock()
     find_jdk_mock.return_value = None
     try:
-        setup_component_https(component, command, property, alias)
+        setup_truststore()
         self.fail('Should throw exception')
     except FatalException as fe:
         self.assertTrue((('No JDK found, please run the "ambari-server setup" command to install a' + ' JDK automatically or install any JDK manually to ') in fe.reason))
         pass
     find_jdk_mock.return_value = '/jdk_path'
     p.get_property.side_effect = ['true']
-    get_YN_input_mock.side_effect = [True]
+    get_YN_input_mock.side_effect = [True, True]
     get_truststore_path_mock.return_value = '/truststore_path'
     get_truststore_password_mock.return_value = '/truststore_password'
     get_delete_cert_command_mock.return_value = 'rm -f'
-    setup_component_https(component, command, property, alias)
-    self.assertTrue(p.process_pair.called)
+    setup_truststore(True)
     self.assertTrue(get_truststore_path_mock.called)
     self.assertTrue(get_truststore_password_mock.called)
     self.assertTrue(get_delete_cert_command_mock.called)
@@ -67,9 +59,8 @@ def test_setup_component_https(self, find_jdk_mock, get_ambari_properties_mock, 
     open_mock.reset_mock()
     p.store.reset_mock()
     p.get_property.side_effect = ['false']
-    get_YN_input_mock.side_effect = [True]
-    setup_component_https(component, command, property, alias)
-    self.assertTrue(p.process_pair.called)
+    get_YN_input_mock.side_effect = [True, True]
+    setup_truststore(True)
     self.assertTrue(get_truststore_type_mock.called)
     self.assertTrue(get_truststore_path_mock.called)
     self.assertTrue(get_truststore_password_mock.called)
