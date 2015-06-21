@@ -8,7 +8,7 @@
     long[] ids=mbean.findMonitorDeadlockedThreads();
     StringBuilder errBuilder=new StringBuilder();
     if (ids != null && ids.length > 0) {
-      errBuilder.append(getThreadsStacktraces(ids));
+      errBuilder.append(getThreadsStacktraces(Arrays.asList(ArrayUtils.toObject(ids))));
       errorMessages.add(errBuilder.toString());
       System.out.append(errBuilder.toString());
       deadlocked=true;
@@ -16,44 +16,33 @@
     }
  else {
       boolean hasLive=false;
-      Set<Thread> activeThreads=new HashSet<Thread>();
+      boolean hasRunning=false;
       for (      Thread monTh : monitoredThreads) {
-        ThreadGroup group=monTh.getThreadGroup();
-        Thread[] groupThreads=new Thread[group.activeCount()];
-        group.enumerate(groupThreads,true);
-        activeThreads.addAll(Arrays.asList(groupThreads));
-      }
-      activeThreads.remove(Thread.currentThread());
-      activeThreads.remove(parentThread);
-      Set<Long> idSet=new TreeSet<Long>();
-      for (      Thread activeThread : activeThreads) {
-        if (activeThread.isAlive()) {
+        State state=monTh.getState();
+        if (state != State.TERMINATED && state != State.NEW) {
           hasLive=true;
-          idSet.add(activeThread.getId());
+        }
+        if (state == State.RUNNABLE || state == State.TIMED_WAITING) {
+          hasRunning=true;
+          break;
         }
       }
-      long[] tid=new long[idSet.size()];
       if (!hasLive) {
         deadlocked=false;
         break;
       }
- else {
-        int cnt=0;
-        for (        Long id : idSet) {
-          tid[cnt]=id;
-          cnt++;
+ else       if (!hasRunning) {
+        List<Long> tIds=new ArrayList<Long>();
+        for (        Thread monitoredThread : monitoredThreads) {
+          State state=monitoredThread.getState();
+          if (state == State.WAITING || state == State.BLOCKED) {
+            tIds.add(monitoredThread.getId());
+          }
         }
-        String currentStackTrace=getThreadsStacktraces(tid);
-        if (stacktrace.equals(currentStackTrace)) {
-          errBuilder.append(currentStackTrace);
-          errorMessages.add(currentStackTrace);
-          System.out.append(currentStackTrace);
-          deadlocked=true;
-          break;
-        }
- else {
-          stacktrace=currentStackTrace;
-        }
+        errBuilder.append(getThreadsStacktraces(tIds));
+        errorMessages.add(errBuilder.toString());
+        deadlocked=true;
+        break;
       }
     }
   }

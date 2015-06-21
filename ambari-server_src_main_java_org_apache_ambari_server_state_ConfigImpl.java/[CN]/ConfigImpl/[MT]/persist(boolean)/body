@@ -1,36 +1,48 @@
 {
-  ClusterEntity clusterEntity=clusterDAO.findById(cluster.getClusterId());
-  if (newConfig) {
-    ClusterConfigEntity entity=new ClusterConfigEntity();
-    entity.setClusterEntity(clusterEntity);
-    entity.setClusterId(cluster.getClusterId());
-    entity.setType(getType());
-    entity.setVersion(getVersion());
-    entity.setTag(getTag());
-    entity.setTimestamp(new Date().getTime());
-    entity.setStack(clusterEntity.getDesiredStack());
-    entity.setData(gson.toJson(getProperties()));
-    if (null != getPropertiesAttributes()) {
-      entity.setAttributes(gson.toJson(getPropertiesAttributes()));
-    }
-    clusterDAO.createConfig(entity);
-    clusterEntity.getClusterConfigEntities().add(entity);
-    clusterDAO.merge(clusterEntity,true);
-    cluster.refresh();
-  }
+  cluster.getClusterGlobalLock().writeLock().lock();
+  try {
+    readWriteLock.writeLock().lock();
+    try {
+      ClusterEntity clusterEntity=clusterDAO.findById(cluster.getClusterId());
+      if (newConfig) {
+        ClusterConfigEntity entity=new ClusterConfigEntity();
+        entity.setClusterEntity(clusterEntity);
+        entity.setClusterId(cluster.getClusterId());
+        entity.setType(getType());
+        entity.setVersion(getVersion());
+        entity.setTag(getTag());
+        entity.setTimestamp(new Date().getTime());
+        entity.setStack(clusterEntity.getDesiredStack());
+        entity.setData(gson.toJson(getProperties()));
+        if (null != getPropertiesAttributes()) {
+          entity.setAttributes(gson.toJson(getPropertiesAttributes()));
+        }
+        clusterDAO.createConfig(entity);
+        clusterEntity.getClusterConfigEntities().add(entity);
+        clusterDAO.merge(clusterEntity,true);
+        cluster.refresh();
+      }
  else {
-    ClusterConfigEntity entity=null;
-    for (    ClusterConfigEntity cfe : clusterEntity.getClusterConfigEntities()) {
-      if (getTag().equals(cfe.getTag()) && getType().equals(cfe.getType()) && getVersion().equals(cfe.getVersion())) {
-        entity=cfe;
-        break;
+        ClusterConfigEntity entity=null;
+        for (        ClusterConfigEntity cfe : clusterEntity.getClusterConfigEntities()) {
+          if (getTag().equals(cfe.getTag()) && getType().equals(cfe.getType()) && getVersion().equals(cfe.getVersion())) {
+            entity=cfe;
+            break;
+          }
+        }
+        if (null != entity) {
+          LOG.debug("Updating {} version {} with new configurations; a new version will not be created",getType(),getVersion());
+          entity.setData(gson.toJson(getProperties()));
+          clusterDAO.merge(clusterEntity,true);
+          cluster.refresh();
+        }
       }
     }
-    if (null != entity) {
-      LOG.debug("Updating {} version {} with new configurations; a new version will not be created",getType(),getVersion());
-      entity.setData(gson.toJson(getProperties()));
-      clusterDAO.merge(clusterEntity,true);
-      cluster.refresh();
+  finally {
+      readWriteLock.writeLock().unlock();
     }
+  }
+  finally {
+    cluster.getClusterGlobalLock().writeLock().unlock();
   }
 }
