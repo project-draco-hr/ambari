@@ -11,12 +11,14 @@ def _make_web_request(self, url):
                 kerberos_principal = kerberos_principal.replace('_HOST', self.host_name)
         if (self.uri_property_keys.kerberos_keytab is not None):
             kerberos_keytab = self._get_configuration_value(self.uri_property_keys.kerberos_keytab)
-        if ((kerberos_principal is not None) and (kerberos_keytab is not None)):
+        security_enabled = self._get_configuration_value('{{cluster-env/security_enabled}}')
+        if ((kerberos_principal is not None) and (kerberos_keytab is not None) and (security_enabled is not None) and (security_enabled.lower() == 'true')):
             tmp_dir = self.config.get('agent', 'tmp_dir')
             if (tmp_dir is None):
                 tmp_dir = gettempdir()
             kerberos_executable_search_paths = self._get_configuration_value('{{kerberos-env/executable_search_paths}}')
-            (response_code, error_msg, time_millis) = curl_krb_request(tmp_dir, kerberos_keytab, kerberos_principal, url, 'web_alert', kerberos_executable_search_paths, True, self.get_name())
+            smokeuser = self._get_configuration_value('{{cluster-env/smokeuser}}')
+            (response_code, error_msg, time_millis) = curl_krb_request(tmp_dir, kerberos_keytab, kerberos_principal, url, 'web_alert', kerberos_executable_search_paths, True, self.get_name(), smokeuser)
         else:
             (response_code, time_millis, error_msg) = self._make_web_request_urllib(url)
         return WebResponse(status_code=response_code, time_millis=time_millis, error_msg=error_msg)
