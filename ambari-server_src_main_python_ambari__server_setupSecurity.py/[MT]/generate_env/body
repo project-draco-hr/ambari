@@ -1,0 +1,37 @@
+@OsFamilyFuncImpl(OsFamilyImpl.DEFAULT)
+def generate_env(ambari_user, current_user):
+    properties = get_ambari_properties()
+    isSecure = get_is_secure(properties)
+    (isPersisted, masterKeyFile) = get_is_persisted(properties)
+    environ = os.environ.copy()
+    if (isSecure and (not masterKeyFile)):
+        prompt = False
+        masterKey = environ.get(SECURITY_KEY_ENV_VAR_NAME)
+        if ((masterKey is not None) and (masterKey != '')):
+            pass
+        else:
+            keyLocation = environ.get(SECURITY_MASTER_KEY_LOCATION)
+            if (keyLocation is not None):
+                try:
+                    with open(keyLocation, 'r'):
+                        pass
+                except IOError:
+                    print_warning_msg('Cannot read Master key from path specified in environemnt.')
+                    prompt = True
+            else:
+                prompt = True
+        if prompt:
+            import pwd
+            masterKey = get_original_master_key(properties)
+            tempDir = tempfile.gettempdir()
+            tempFilePath = ((tempDir + os.sep) + 'masterkey')
+            save_master_key(masterKey, tempFilePath, True)
+            if (ambari_user != current_user):
+                uid = pwd.getpwnam(ambari_user).pw_uid
+                gid = pwd.getpwnam(ambari_user).pw_gid
+                os.chown(tempFilePath, uid, gid)
+            else:
+                os.chmod(tempFilePath, (stat.S_IREAD | stat.S_IWRITE))
+            if (tempFilePath is not None):
+                environ[SECURITY_MASTER_KEY_LOCATION] = tempFilePath
+    return environ

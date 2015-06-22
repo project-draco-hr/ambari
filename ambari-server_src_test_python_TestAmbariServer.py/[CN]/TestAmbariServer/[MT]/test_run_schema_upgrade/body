@@ -1,16 +1,27 @@
+@patch('ambari_server.serverUpgrade.ensure_can_start_under_current_user')
+@patch('ambari_server.serverUpgrade.generate_env')
+@patch('ambari_server.serverUpgrade.read_ambari_user')
 @patch('ambari_server.serverConfiguration.get_conf_dir')
 @patch('ambari_server.serverConfiguration.get_ambari_classpath')
 @patch('ambari_server.serverUpgrade.run_os_command')
 @patch('ambari_server.serverUpgrade.get_java_exe_path')
-def test_run_schema_upgrade(self, java_exe_path_mock, run_os_command_mock, get_ambari_classpath_mock, get_conf_dir_mock):
+def test_run_schema_upgrade(self, java_exe_path_mock, run_os_command_mock, get_ambari_classpath_mock, get_conf_dir_mock, read_ambari_user_mock, generate_env_mock, ensure_can_start_under_current_user_mock):
     java_exe_path_mock.return_value = '/usr/lib/java/bin/java'
     run_os_command_mock.return_value = (0, None, None)
     get_ambari_classpath_mock.return_value = 'test:path12'
     get_conf_dir_mock.return_value = '/etc/conf'
+    command = '/usr/lib/java/bin/java -cp /etc/conf:test:path12 org.apache.ambari.server.upgrade.SchemaUpgradeHelper > /var/log/ambari-server/ambari-server.out 2>&1'
+    environ = {}
+    generate_env_mock.return_value = environ
+    ensure_can_start_under_current_user_mock.return_value = 'root'
+    read_ambari_user_mock.return_value = 'ambari'
     run_schema_upgrade()
     self.assertTrue(java_exe_path_mock.called)
+    self.assertTrue(ensure_can_start_under_current_user_mock.called)
+    self.assertTrue(generate_env_mock.called)
+    self.assertTrue(read_ambari_user_mock.called)
     self.assertTrue(get_ambari_classpath_mock.called)
     self.assertTrue(get_conf_dir_mock.called)
     self.assertTrue(run_os_command_mock.called)
-    run_os_command_mock.assert_called_with('/usr/lib/java/bin/java -cp /etc/conf:test:path12 org.apache.ambari.server.upgrade.SchemaUpgradeHelper > /var/log/ambari-server/ambari-server.out 2>&1')
+    run_os_command_mock.assert_called_with(command, env=environ)
     pass
