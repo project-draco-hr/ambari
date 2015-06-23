@@ -9,9 +9,6 @@ def delete_storm_zookeeper_data(self, env):
     if (storm_zookeeper_server_list is None):
         Logger.info("Unable to extract ZooKeeper hosts from '{0}', assuming localhost").format(params.storm_zookeeper_servers)
         storm_zookeeper_server_list = ['localhost']
-    if params.security_enabled:
-        kinit_command = format('{kinit_path_local} -kt {smoke_user_keytab} {smokeuser_principal}; ')
-        Execute(kinit_command, user=params.smokeuser)
     zookeeper_data_cleared = False
     for storm_zookeeper_server in storm_zookeeper_server_list:
         zk_command_location = '/usr/hdp/current/zookeeper-client/bin/zkCli.sh'
@@ -20,6 +17,8 @@ def delete_storm_zookeeper_data(self, env):
         command = '{0} -server {1}:{2} rmr /storm'.format(zk_command_location, storm_zookeeper_server, params.storm_zookeeper_port)
         try:
             env_map = {'JAVA_HOME': params.java64_home, }
+            if params.security_enabled:
+                env_map['JVMFLAGS'] = '-Djava.security.auth.login.config={0}'.format(params.storm_jaas_file)
             Execute(command, user=params.storm_user, environment=env_map, logoutput=True, tries=1)
             zookeeper_data_cleared = True
             break
