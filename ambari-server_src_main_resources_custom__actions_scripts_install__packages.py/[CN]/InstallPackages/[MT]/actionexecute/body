@@ -1,70 +1,59 @@
 def actionexecute(self, env):
     num_errors = 0
-    package_install_result = False
     config = Script.get_config()
+    signal.signal(signal.SIGTERM, self.abort_handler)
+    signal.signal(signal.SIGINT, self.abort_handler)
     try:
-        repository_version = config['roleParams']['repository_version']
+        self.repository_version = config['roleParams']['repository_version']
         base_urls = json.loads(config['roleParams']['base_urls'])
         package_list = json.loads(config['roleParams']['package_list'])
         stack_id = config['roleParams']['stack_id']
     except KeyError:
-        repository_version = config['commandParams']['repository_version']
+        self.repository_version = config['commandParams']['repository_version']
         base_urls = json.loads(config['commandParams']['base_urls'])
         package_list = json.loads(config['commandParams']['package_list'])
         stack_id = config['commandParams']['stack_id']
+    self.repository_version = self.repository_version.strip()
     installed_repositories = []
-    current_repositories = ['base']
+    self.current_repositories = ['base']
     if OSCheck.is_redhat_family():
-        current_repositories.append('rhui*')
-    current_repo_files = set(['base'])
-    old_versions = self.hdp_versions()
+        self.current_repositories.append('rhui*')
+    self.current_repo_files = set(['base'])
+    Logger.info('Will install packages for repository version {0}'.format(self.repository_version))
     try:
         append_to_file = False
         for url_info in base_urls:
-            (repo_name, repo_file) = self.install_repository(url_info, repository_version, append_to_file)
-            current_repositories.append(repo_name)
-            current_repo_files.add(repo_file)
+            (repo_name, repo_file) = self.install_repository(url_info, append_to_file)
+            self.current_repositories.append(repo_name)
+            self.current_repo_files.add(repo_file)
             append_to_file = True
         installed_repositories = list_ambari_managed_repos()
     except Exception as err:
-        print 'Cannot distribute repositories.'
-        print traceback.format_exc()
+        Logger.logger.exception('Cannot distribute repositories. Error: {0}'.format(str(err)))
         num_errors += 1
-    structured_output = {'ambari_repositories': installed_repositories, 'installed_repository_version': repository_version, 'stack_id': stack_id, }
-    if (not num_errors):
-        packages_were_checked = False
-        try:
-            packages_installed_before = []
-            allInstalledPackages(packages_installed_before)
-            packages_installed_before = [package[0] for package in packages_installed_before]
-            packages_were_checked = True
-            for package in package_list:
-                name = self.format_package_name(package['name'], repository_version)
-                Package(name, use_repos=(list(current_repo_files) if OSCheck.is_ubuntu_family() else current_repositories))
-            package_install_result = True
-        except Exception as err:
-            print 'Cannot install packages.'
-            print traceback.format_exc()
+    self.structured_output = {'ambari_repositories': installed_repositories, 'installed_repository_version': self.repository_version, 'stack_id': stack_id, 'package_installation_result': 'FAIL', }
+    self.put_structured_out(self.structured_output)
+    if (num_errors > 0):
+        raise Fail('Failed to distribute repositories/install packages')
+    self.actual_version = None
+    if self.repository_version:
+        m = re.search('[\\d\\.]+-\\d+', self.repository_version)
+        if m:
+            self.actual_version = self.repository_version
+            self.structured_output['actual_version'] = self.actual_version
+            self.put_structured_out(self.structured_output)
+    self.old_versions = []
+    if (self.actual_version is None):
+        Logger.info("Repository version {0} doesn't contain a build number. Will have to calculate the actual version.".format(self.repository_version))
+        self.old_versions = self.hdp_versions()
+    try:
+        ret_code = self.install_packages(package_list)
+        if (ret_code == 0):
+            self.structured_output['package_installation_result'] = 'SUCCESS'
+            self.put_structured_out(self.structured_output)
+        else:
             num_errors += 1
-            if (packages_were_checked and packages_installed_before):
-                packages_installed_after = []
-                allInstalledPackages(packages_installed_after)
-                packages_installed_after = [package[0] for package in packages_installed_after]
-                packages_installed_before = set(packages_installed_before)
-                new_packages_installed = [package for package in packages_installed_after if (package not in packages_installed_before)]
-                if OSCheck.is_ubuntu_family():
-                    package_version_string = repository_version.replace('.', '-')
-                else:
-                    package_version_string = repository_version.replace('-', '_')
-                    package_version_string = package_version_string.replace('.', '_')
-                for package in new_packages_installed:
-                    if (package_version_string and (package_version_string in package)):
-                        Package(package, action='remove')
-    structured_output['package_installation_result'] = ('SUCCESS' if package_install_result else 'FAIL')
-    new_versions = self.hdp_versions()
-    deltas = (set(new_versions) - set(old_versions))
-    if (1 == len(deltas)):
-        structured_output['actual_version'] = next(iter(deltas))
-    self.put_structured_out(structured_output)
+    except Exception as err:
+        Logger.logger.exception('Could not install packages. Error: {0}'.format(str(err)))
     if (num_errors > 0):
         raise Fail('Failed to distribute repositories/install packages')

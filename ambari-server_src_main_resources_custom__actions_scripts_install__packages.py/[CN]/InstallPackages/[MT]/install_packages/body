@@ -1,0 +1,33 @@
+def install_packages(self, package_list):
+    '\n    Actually install the packages using the package manager.\n    :param package_list: List of package names to install\n    :return: Returns 0 if no errors were found, and 1 otherwise.\n    '
+    ret_code = 0
+    packages_were_checked = False
+    try:
+        packages_installed_before = []
+        allInstalledPackages(packages_installed_before)
+        packages_installed_before = [package[0] for package in packages_installed_before]
+        packages_were_checked = True
+        for package in package_list:
+            name = self.format_package_name(package['name'], self.repository_version)
+            Package(name, use_repos=(list(self.current_repo_files) if OSCheck.is_ubuntu_family() else self.current_repositories))
+    except Exception as err:
+        ret_code = 1
+        Logger.logger.exception('Package Manager failed to install packages. Error: {0}'.format(str(err)))
+        if (packages_were_checked and packages_installed_before):
+            packages_installed_after = []
+            allInstalledPackages(packages_installed_after)
+            packages_installed_after = [package[0] for package in packages_installed_after]
+            packages_installed_before = set(packages_installed_before)
+            new_packages_installed = [package for package in packages_installed_after if (package not in packages_installed_before)]
+            if OSCheck.is_ubuntu_family():
+                package_version_string = self.repository_version.replace('.', '-')
+            else:
+                package_version_string = self.repository_version.replace('-', '_')
+                package_version_string = package_version_string.replace('.', '_')
+            for package in new_packages_installed:
+                if (package_version_string and (package_version_string in package)):
+                    Package(package, action='remove')
+    else:
+        self.compute_actual_version()
+    pass
+    return ret_code
