@@ -1,21 +1,28 @@
 {
-  ResultSet resultSet=dbAccessor.executeSelect("SELECT DISTINCT type_name FROM clusterconfig ");
+  ResultSet resultSet=null;
   Set<String> configTypes=new HashSet<String>();
-  if (resultSet != null) {
-    try {
-      while (resultSet.next()) {
-        configTypes.add(resultSet.getString("type_name"));
-      }
-    }
-  finally {
-      resultSet.close();
-    }
-  }
   Connection connection=null;
   PreparedStatement orderedConfigsStatement=null;
   Map<String,List<Long>> configVersionMap=new HashMap<String,List<Long>>();
   try {
     connection=dbAccessor.getNewConnection();
+    Statement statement=null;
+    try {
+      statement=connection.createStatement();
+      if (statement != null) {
+        resultSet=statement.executeQuery("SELECT DISTINCT type_name FROM clusterconfig ");
+        if (resultSet != null) {
+          while (resultSet.next()) {
+            configTypes.add(resultSet.getString("type_name"));
+          }
+        }
+      }
+    }
+  finally {
+      if (statement != null) {
+        statement.close();
+      }
+    }
     try {
       orderedConfigsStatement=connection.prepareStatement("SELECT config_id FROM clusterconfig WHERE type_name = ? ORDER BY create_timestamp");
       for (      String configType : configTypes) {

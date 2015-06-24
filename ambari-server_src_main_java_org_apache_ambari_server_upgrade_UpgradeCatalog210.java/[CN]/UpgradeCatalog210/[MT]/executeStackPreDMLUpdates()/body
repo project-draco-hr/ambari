@@ -35,22 +35,32 @@
   }
   String INSERT_STACK_ID_TEMPLATE="UPDATE {0} SET {1} = {2} WHERE cluster_id = {3}";
   if (dbAccessor.tableHasColumn(CLUSTERS_TABLE,DESIRED_STACK_VERSION_COLUMN_NAME)) {
-    ResultSet resultSet=dbAccessor.executeSelect("SELECT * FROM " + CLUSTERS_TABLE);
+    Statement statement=null;
+    ResultSet rs=null;
     try {
-      while (resultSet.next()) {
-        long clusterId=resultSet.getLong("cluster_id");
-        String stackJson=resultSet.getString(DESIRED_STACK_VERSION_COLUMN_NAME);
-        StackId stackId=gson.fromJson(stackJson,StackId.class);
-        StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
-        String clusterConfigSQL=MessageFormat.format(INSERT_STACK_ID_TEMPLATE,"clusterconfig",STACK_ID_COLUMN_NAME,stackEntity.getStackId(),clusterId);
-        String serviceConfigSQL=MessageFormat.format(INSERT_STACK_ID_TEMPLATE,"serviceconfig",STACK_ID_COLUMN_NAME,stackEntity.getStackId(),clusterId);
-        dbAccessor.executeQuery(clusterConfigSQL);
-        dbAccessor.executeQuery(serviceConfigSQL);
+      statement=dbAccessor.getConnection().createStatement();
+      if (statement != null) {
+        rs=statement.executeQuery("SELECT * FROM " + CLUSTERS_TABLE);
+        if (rs != null) {
+          while (rs.next()) {
+            long clusterId=rs.getLong("cluster_id");
+            String stackJson=rs.getString(DESIRED_STACK_VERSION_COLUMN_NAME);
+            StackId stackId=gson.fromJson(stackJson,StackId.class);
+            StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
+            String clusterConfigSQL=MessageFormat.format(INSERT_STACK_ID_TEMPLATE,"clusterconfig",STACK_ID_COLUMN_NAME,stackEntity.getStackId(),clusterId);
+            String serviceConfigSQL=MessageFormat.format(INSERT_STACK_ID_TEMPLATE,"serviceconfig",STACK_ID_COLUMN_NAME,stackEntity.getStackId(),clusterId);
+            dbAccessor.executeQuery(clusterConfigSQL);
+            dbAccessor.executeQuery(serviceConfigSQL);
+          }
+        }
       }
     }
   finally {
-      if (null != resultSet) {
-        resultSet.close();
+      if (rs != null) {
+        rs.close();
+      }
+      if (statement != null) {
+        statement.close();
       }
     }
   }

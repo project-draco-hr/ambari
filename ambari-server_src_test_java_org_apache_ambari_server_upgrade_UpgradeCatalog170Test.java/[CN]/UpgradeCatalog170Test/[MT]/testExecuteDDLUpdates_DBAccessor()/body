@@ -1,5 +1,6 @@
 {
   final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
+  Statement statement=createNiceMock(Statement.class);
   Connection connection=createNiceMock(Connection.class);
   PreparedStatement stmt=createNiceMock(PreparedStatement.class);
   Configuration configuration=createNiceMock(Configuration.class);
@@ -54,20 +55,24 @@
   dbAccessor.alterColumn(eq("hostgroup_configuration"),capture(configDataHostGroupConfigurationCapture));
   dbAccessor.createTable(eq("serviceconfig"),capture(serviceConfigCapture),eq("service_config_id"));
   dbAccessor.createTable(eq("serviceconfigmapping"),capture(serviceConfigMappingCapture),eq("service_config_id"),eq("config_id"));
-  dbAccessor.executeSelect(anyObject(String.class));
+  dbAccessor.getConnection();
+  expectLastCall().andReturn(connection).anyTimes();
+  connection.createStatement();
+  expectLastCall().andReturn(statement).anyTimes();
+  statement.executeQuery(anyObject(String.class));
   expectLastCall().andReturn(resultSet).anyTimes();
   resultSet.next();
   expectLastCall().andReturn(false).anyTimes();
   resultSet.close();
   expectLastCall().anyTimes();
-  replay(dbAccessor,configuration,resultSet,connection,stmt);
+  replay(dbAccessor,configuration,resultSet,connection,stmt,statement);
   AbstractUpgradeCatalog upgradeCatalog=getUpgradeCatalog(dbAccessor);
   Class<?> c=AbstractUpgradeCatalog.class;
   Field f=c.getDeclaredField("configuration");
   f.setAccessible(true);
   f.set(upgradeCatalog,configuration);
   upgradeCatalog.executeDDLUpdates();
-  verify(dbAccessor,configuration,resultSet,connection,stmt);
+  verify(dbAccessor,configuration,resultSet,connection,stmt,statement);
   assertClusterConfigColumns(clusterConfigAttributesColumnCapture);
   assertHostgroupConfigColumns(hostgroupConfigAttributesColumnCapture);
   assertBlueprintConfigColumns(blueprintConfigAttributesColumnCapture);

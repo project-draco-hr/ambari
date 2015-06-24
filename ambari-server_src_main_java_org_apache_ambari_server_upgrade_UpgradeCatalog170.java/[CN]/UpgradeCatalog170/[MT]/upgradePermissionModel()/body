@@ -43,24 +43,33 @@
   final PermissionEntity clusterReadPermission=permissionDAO.findClusterReadPermission();
   final ResourceEntity ambariResource=resourceDAO.findAmbariResource();
   final Map<UserEntity,List<String>> roles=new HashMap<UserEntity,List<String>>();
-  ResultSet resultSet=null;
+  Statement statement=null;
+  ResultSet rs=null;
   try {
-    resultSet=dbAccessor.executeSelect("SELECT role_name, user_id FROM user_roles");
-    while (resultSet.next()) {
-      final String roleName=resultSet.getString(1);
-      final int userId=resultSet.getInt(2);
-      final UserEntity user=userDAO.findByPK(userId);
-      List<String> userRoles=roles.get(user);
-      if (userRoles == null) {
-        userRoles=new ArrayList<String>();
-        roles.put(user,userRoles);
+    statement=dbAccessor.getConnection().createStatement();
+    if (statement != null) {
+      rs=statement.executeQuery("SELECT role_name, user_id FROM user_roles");
+      if (rs != null) {
+        while (rs.next()) {
+          final String roleName=rs.getString(1);
+          final int userId=rs.getInt(2);
+          final UserEntity user=userDAO.findByPK(userId);
+          List<String> userRoles=roles.get(user);
+          if (userRoles == null) {
+            userRoles=new ArrayList<String>();
+            roles.put(user,userRoles);
+          }
+          userRoles.add(roleName);
+        }
       }
-      userRoles.add(roleName);
     }
   }
   finally {
-    if (resultSet != null) {
-      resultSet.close();
+    if (rs != null) {
+      rs.close();
+    }
+    if (statement != null) {
+      statement.close();
     }
   }
   for (  UserEntity user : userDAO.findAll()) {
