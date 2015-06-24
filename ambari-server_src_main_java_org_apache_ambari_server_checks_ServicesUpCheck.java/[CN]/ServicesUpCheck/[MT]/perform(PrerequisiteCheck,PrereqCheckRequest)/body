@@ -1,14 +1,38 @@
 {
   final String clusterName=request.getClusterName();
   final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+  List<String> errorMessages=new ArrayList<String>();
+  Set<String> failedServiceNames=new HashSet<String>();
   for (  Map.Entry<String,Service> serviceEntry : cluster.getServices().entrySet()) {
     final Service service=serviceEntry.getValue();
-    if (!service.isClientOnlyService() && service.getDesiredState() != State.STARTED) {
-      prerequisiteCheck.getFailedOn().add(service.getName());
+    if (!service.isClientOnlyService()) {
+      Map<String,ServiceComponent> serviceComponents=service.getServiceComponents();
+      for (      Map.Entry<String,ServiceComponent> component : serviceComponents.entrySet()) {
+        boolean ignoreComponent=false;
+        ServiceComponent serviceComponent=component.getValue();
+        if (serviceComponent.isClientComponent()) {
+          ignoreComponent=true;
+        }
+        if (!serviceComponent.isVersionAdvertised()) {
+          ignoreComponent=true;
+        }
+        if (!ignoreComponent) {
+          List<HostComponentSummary> hostComponentSummaries=HostComponentSummary.getHostComponentSummaries(service.getName(),serviceComponent.getName());
+          for (          HostComponentSummary s : hostComponentSummaries) {
+            if ((s.getDesiredState() == State.INSTALLED || s.getDesiredState() == State.STARTED) && State.STARTED != s.getCurrentState()) {
+              failedServiceNames.add(service.getName());
+              String message=MessageFormat.format("{0} - {1} (in {2} on host {3})",service.getName(),serviceComponent.getName(),s.getCurrentState(),s.getHostName());
+              errorMessages.add(message);
+              continue;
+            }
+          }
+        }
+      }
     }
   }
-  if (!prerequisiteCheck.getFailedOn().isEmpty()) {
+  if (!errorMessages.isEmpty()) {
+    prerequisiteCheck.setFailedOn(new ArrayList<String>(failedServiceNames));
     prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
-    prerequisiteCheck.setFailReason(getFailReason(prerequisiteCheck,request));
+    prerequisiteCheck.setFailReason("The following Service Components should be in a started state.  Please invoke a service Stop and full Start and try again. " + StringUtils.join(errorMessages,", "));
   }
 }
