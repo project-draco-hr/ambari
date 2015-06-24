@@ -10,17 +10,12 @@
   jpaDynamicHelper.addTypes(eq(true),eq(true),capture(typeCapture),capture(typeCapture2));
   expect(entityManagerFactory.createEntityManager()).andReturn(entityManager);
   expect(entityManager.getTransaction()).andReturn(transaction).anyTimes();
-  Capture<Class> entityClassCapture=new Capture<Class>();
-  expect(entityManager.find(capture(entityClassCapture),eq("bar"))).andReturn(null);
   Capture<Class> entityClassCapture2=new Capture<Class>();
   expect(entityManager.find(capture(entityClassCapture2),eq(99))).andReturn(null);
-  Capture<DynamicEntity> entityCapture=new Capture<DynamicEntity>();
-  entityManager.persist(capture(entityCapture));
-  Capture<DynamicEntity> entityCapture2=new Capture<DynamicEntity>();
-  entityManager.persist(capture(entityCapture2));
   entityManager.close();
   transaction.begin();
-  transaction.commit();
+  expect(transaction.isActive()).andReturn(true);
+  transaction.rollback();
   replay(entityManagerFactory,entityManager,jpaDynamicHelper,transaction,schemaManager);
   DataStoreImpl dataStore=getDataStore(entityManagerFactory,jpaDynamicHelper,classLoader,schemaManager);
   StringBuffer sb=new StringBuffer();
@@ -28,11 +23,11 @@
     sb.append("A");
   }
   String longString=sb.toString();
-  dataStore.store(new TestEntity(99,longString,new TestSubEntity("bar")));
-  Assert.assertEquals(entityClassCapture.getValue(),typeCapture.getValue().getJavaClass());
-  Assert.assertEquals(entityClassCapture2.getValue(),typeCapture2.getValue().getJavaClass());
-  Assert.assertEquals("bar",entityCapture.getValue().get("DS_name"));
-  Assert.assertEquals(99,entityCapture2.getValue().get("DS_id"));
-  Assert.assertEquals(longString,entityCapture2.getValue().get("DS_name"));
+  try {
+    dataStore.store(new TestEntity(99,longString,new TestSubEntity("bar")));
+    Assert.fail("Expected PersistenceException.");
+  }
+ catch (  PersistenceException e) {
+  }
   verify(entityManagerFactory,entityManager,jpaDynamicHelper,transaction,schemaManager);
 }
