@@ -1,0 +1,26 @@
+def _link_configs(package, version, old_conf, link_conf):
+    "\n  Link a specific package's configuration directory\n  "
+    if (not os.path.exists(old_conf)):
+        Logger.debug('Skipping {0} as it does not exist.'.format(old_conf))
+        return
+    if os.path.islink(old_conf):
+        Logger.debug('{0} is already a link to {1}'.format(old_conf, os.path.realpath(old_conf)))
+        return
+    old_parent = os.path.abspath(os.path.join(old_conf, os.pardir))
+    old_conf_copy = os.path.join(old_parent, 'conf.install')
+    if (not os.path.exists(old_conf_copy)):
+        try:
+            Execute(as_sudo(['cp', '-R', '-p', old_conf, old_conf_copy]), logoutput=True)
+        except:
+            pass
+    versioned_conf = conf_select.create('HDP', package, version, dry_run=True)
+    Logger.info('New conf directory is {0}'.format(versioned_conf))
+    if (not os.path.exists(versioned_conf)):
+        conf_select.create('HDP', package, version)
+        try:
+            Execute(as_sudo(['cp', '-R', '-p', os.path.join(old_conf, '*'), versioned_conf], auto_escape=False), logoutput=True)
+        except:
+            pass
+    conf_select.select('HDP', package, version)
+    shutil.rmtree(old_conf, ignore_errors=True)
+    os.symlink(link_conf, old_conf)
