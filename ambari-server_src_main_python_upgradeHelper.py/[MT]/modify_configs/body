@@ -5,12 +5,16 @@ def modify_configs():
         config_type = None
     catalog_farm = UpgradeCatalogFactory(Options.OPTIONS.upgrade_json)
     catalog = catalog_farm.get_catalog(Options.OPTIONS.from_stack, Options.OPTIONS.to_stack)
+    server_config_factory = ServerConfigFactory()
     if (catalog is None):
         raise FatalException(1, ('Upgrade catalog for version %s-%s not found, no configs was modified' % (Options.OPTIONS.from_stack, Options.OPTIONS.to_stack)))
-    if ((config_type is not None) and (config_type not in catalog.config_groups.list())):
+    catalog.add_handler(CatConst.TEMPLATE_HANDLER, _substitute_handler)
+    if ((config_type is not None) and (config_type not in catalog.items)):
         raise FatalException(('Config type %s not exists, no configs was modified' % config_type))
     if (config_type is not None):
-        modify_config_item(config_type, catalog)
+        modify_config_item(config_type, catalog, server_config_factory)
     else:
-        for collection_name in catalog.config_groups.list():
-            modify_config_item(collection_name, catalog)
+        for collection_name in catalog.items:
+            modify_config_item(collection_name, catalog, server_config_factory)
+    server_config_factory.process_mapping_transformations(catalog)
+    server_config_factory.commit()

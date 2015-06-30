@@ -1,8 +1,8 @@
 def get_config_resp_all():
     desired_configs = {}
-    CONFIG_ALL_PROPERTIES_URL = (Options.CLUSTER_URL + '/configurations?fields=properties')
-    desired_configs_resp = curl(Options.CLUSTER_URL, validate=True, validate_expect_body=True, parse=True, simulate=False)
-    all_options = curl(CONFIG_ALL_PROPERTIES_URL, validate=True, validate_expect_body=True, parse=True, simulate=False)
+    config_all_properties_url = (Options.CLUSTER_URL + '/configurations?fields=properties,properties_attributes')
+    desired_configs_resp = curl((Options.CLUSTER_URL + '?fields=Clusters/desired_configs'), validate=True, parse=True, simulate=False)
+    all_options = curl(config_all_properties_url, validate=True, parse=True, simulate=False)
     if ('Clusters' in desired_configs_resp):
         if ('desired_configs' in desired_configs_resp['Clusters']):
             desired_configs_resp = desired_configs_resp['Clusters']['desired_configs']
@@ -11,11 +11,20 @@ def get_config_resp_all():
     else:
         return None
     if (CatConst.ITEMS_TAG in all_options):
-        all_options = all_options['items']
+        all_options = all_options[CatConst.ITEMS_TAG]
     else:
         return None
-    all_options = filter((lambda x: ((x['type'] in desired_configs_resp) and (x['tag'] == desired_configs_resp[x['type']]['tag']))), all_options)
+    all_options = filter((lambda x: ((x[CatConst.TYPE_TAG] in desired_configs_resp) and (x['tag'] == desired_configs_resp[x[CatConst.TYPE_TAG]]['tag']))), all_options)
     for item in all_options:
+        dc_item = {}
         if (CatConst.STACK_PROPERTIES in item):
-            desired_configs[item['type']] = item['properties']
+            dc_item[CatConst.STACK_PROPERTIES] = item[CatConst.STACK_PROPERTIES]
+        else:
+            dc_item[CatConst.STACK_PROPERTIES] = {}
+        if (CatConst.STACK_PROPERTIES_ATTRIBUTES in item):
+            dc_item[CatConst.STACK_PROPERTIES_ATTRIBUTES] = item[CatConst.STACK_PROPERTIES_ATTRIBUTES]
+        if ('tag' in item):
+            dc_item['tag'] = item['tag']
+        if (dc_item != {}):
+            desired_configs[item[CatConst.TYPE_TAG]] = dc_item
     return desired_configs

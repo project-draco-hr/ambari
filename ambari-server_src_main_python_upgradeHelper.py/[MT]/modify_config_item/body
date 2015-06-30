@@ -1,35 +1,6 @@
-def modify_config_item(config_type, catalog):
-    if (catalog.get_parsed_version()['from'] == 13):
-        hostmapping = read_mapping()
-        jt_host = hostmapping['JOBTRACKER'][0]
-        jh_host = hostmapping['HISTORYSERVER'][0]
-    else:
-        jt_host = ''
-        jh_host = ''
-
-    def _substitute(tokens, value):
-        for token in tokens:
-            if (token == '{JOBHISTORY_HOST}'):
-                value = value.replace(token, jh_host)
-            elif (token == '{RESOURCEMANAGER_HOST}'):
-                value = value.replace(token, jt_host)
-            elif (token == '{ZOOKEEPER_QUORUM}'):
-                value = value.replace(token, get_zookeeper_quorum())
-        return value
-    catalog.set_substitution_handler(_substitute)
-    try:
-        (properties_latest, properties_attributes_latest) = get_config(config_type)
-        properties_latest = rename_all_properties(properties_latest, catalog.property_map_catalog)
-    except Exception as e:
-        properties_latest = {}
-        properties_attributes_latest = None
-    properties_copy = catalog.get_properties(config_type)
-    is_merged_copy = ((CatConst.MERGED_COPY_TAG in catalog.config_groups.get(config_type)) and (catalog.config_groups.get(config_type)[CatConst.MERGED_COPY_TAG] == CatConst.TRUE_TAG))
-    properties_copy = filter_properties_by_service_presence(config_type, catalog, properties_copy)
-    Options.logger.info(("Updating '%s' catalog item..." % config_type))
-    if is_merged_copy:
-        (tag, structured_resp) = get_config_resp(config_type, False)
-        if (structured_resp is not None):
-            update_config_using_existing_properties(config_type, properties_copy, properties_latest, properties_attributes_latest, catalog)
-    else:
-        update_config(catalog.get_properties_as_dict(properties_copy), config_type)
+def modify_config_item(config_type, catalog, server_config_factory):
+    '\n  Modify configuration item\n  :type config_type str\n  :type catalog UpgradeCatalog\n  :type server_config_factory ServerConfigFactory\n  '
+    if (config_type not in server_config_factory.items()):
+        server_config_factory.create_config(config_type)
+    server_config_catalog = server_config_factory.get_config(config_type)
+    server_config_catalog.merge(catalog)

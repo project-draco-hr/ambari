@@ -6,16 +6,16 @@ def verify_configuration():
         config_type = None
     catalog_farm = UpgradeCatalogFactory(Options.OPTIONS.upgrade_json)
     catalog = catalog_farm.get_catalog(Options.OPTIONS.from_stack, Options.OPTIONS.to_stack)
+    server_configs = ServerConfigFactory()
     if (catalog is None):
         raise FatalException(1, ('Upgrade catalog for version %s-%s not found' % (Options.OPTIONS.from_stack, Options.OPTIONS.to_stack)))
-    if ((config_type is not None) and (config_type not in catalog.config_groups.list())):
+    if ((config_type is not None) and (config_type not in catalog.items.keys()) and (config_type not in server_configs.items())):
         raise FatalException(('Config type %s not exists' % config_type))
-    actual_options = get_config_resp_all()
     if (config_type is not None):
-        diff_list[config_type] = configuration_item_diff(config_type, catalog, actual_options)
+        diff_list[config_type] = configuration_item_diff(config_type, catalog.items[config_type], server_configs.get_config(config_type).properties)
     else:
-        for collection_name in catalog.config_groups.list():
-            diff_list[collection_name] = configuration_item_diff(collection_name, catalog, actual_options)
+        for collection_name in catalog.items.keys():
+            diff_list[collection_name] = configuration_item_diff(collection_name, catalog.items[collection_name], server_configs.get_config(collection_name).properties)
     analyzed_list = configuration_diff_analyze(diff_list)
     report_file = None
     if (Options.REPORT_FILE is not None):
