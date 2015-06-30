@@ -11,5 +11,16 @@ def pre_upgrade_deregister():
     hive_server_conf_dir = params.hive_server_conf_dir
     if (not os.path.exists(hive_server_conf_dir)):
         hive_server_conf_dir = '/etc/hive/conf.server'
+    hive_execute_path = params.execute_path
+    if ('upgrade' == params.upgrade_direction):
+        upgrade_target_version = format_hdp_stack_version(params.version)
+        if (upgrade_target_version and (compare_versions(upgrade_target_version, '2.2') >= 0)):
+            upgrade_target_hive_bin = format('/usr/hdp/{version}/hive/bin')
+            if ((os.pathsep + params.hive_bin) in hive_execute_path):
+                hive_execute_path = hive_execute_path.replace((os.pathsep + params.hive_bin), (os.pathsep + upgrade_target_hive_bin))
+        upgrade_target_hadoop_bin = hdp_select.get_hadoop_dir('bin', upgrade_stack_only=True)
+        upgrade_source_hadoop_bin = params.hadoop_bin_dir
+        if (upgrade_target_hadoop_bin and (len(upgrade_target_hadoop_bin) > 0) and ((os.pathsep + upgrade_source_hadoop_bin) in hive_execute_path)):
+            hive_execute_path = hive_execute_path.replace((os.pathsep + upgrade_source_hadoop_bin), (os.pathsep + upgrade_target_hadoop_bin))
     command = format(('hive --config {hive_server_conf_dir} --service hiveserver2 --deregister ' + current_hiveserver_version))
-    Execute(command, user=params.hive_user, path=params.execute_path, tries=1)
+    Execute(command, user=params.hive_user, path=hive_execute_path, tries=1)
