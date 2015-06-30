@@ -25,7 +25,23 @@
     configParameters.put(ConfigureTask.PARAMETER_KEY_VALUE_PAIRS,m_gson.toJson(keyValuePairs));
   }
   if (null != transfers && !transfers.isEmpty()) {
-    configParameters.put(ConfigureTask.PARAMETER_TRANSFERS,m_gson.toJson(transfers));
+    List<Transfer> allowedTransfers=new ArrayList<Transfer>();
+    for (    Transfer transfer : transfers) {
+      if (transfer.operation == TransferOperation.DELETE) {
+        if (StringUtils.isNotBlank(transfer.ifKey) && StringUtils.isNotBlank(transfer.ifType) && transfer.ifValue != null) {
+          String ifConfigType=transfer.ifType;
+          String ifKey=transfer.ifKey;
+          String ifValue=transfer.ifValue;
+          String checkValue=getDesiredConfigurationValue(cluster,ifConfigType,ifKey);
+          if (!ifValue.toLowerCase().equals(StringUtils.lowerCase(checkValue))) {
+            LOG.info("Skipping property delete for {}/{} as the value {} for {}/{} is not equal to {}",this.getConfigType(),transfer.deleteKey,checkValue,ifConfigType,ifKey,ifValue);
+            continue;
+          }
+        }
+      }
+      allowedTransfers.add(transfer);
+    }
+    configParameters.put(ConfigureTask.PARAMETER_TRANSFERS,m_gson.toJson(allowedTransfers));
   }
   if (null != replacements && !replacements.isEmpty()) {
     configParameters.put(ConfigureTask.PARAMETER_REPLACEMENTS,m_gson.toJson(replacements));
