@@ -1,0 +1,23 @@
+def stop_zkfc_during_ru():
+    '\n  Restart ZKFC on either the standby or active Namenode. If done on the currently active namenode, wait for it to\n  become the standby.\n  '
+    import params
+    check_service_cmd = format('hdfs haadmin -getServiceState {namenode_id}')
+    (code, out) = shell.call(check_service_cmd, logoutput=True, user=params.hdfs_user)
+    original_state = 'unknown'
+    if ((code == 0) and out):
+        original_state = ('active' if ('active' in out) else ('standby' if ('standby' in out) else original_state))
+        Logger.info(('Namenode service state: %s' % original_state))
+        msg = 'Rolling Upgrade - Killing ZKFC on {0} NameNode host {1} {2}'.format(original_state, params.hostname, ('to initiate a failover' if (original_state == 'active') else ''))
+        Logger.info(msg)
+        was_zkfc_killed = kill_zkfc(params.hdfs_user)
+        check_standby_cmd = format('hdfs haadmin -getServiceState {namenode_id} | grep standby')
+        if (original_state == 'active'):
+            (code, out) = shell.call(check_standby_cmd, user=params.hdfs_user, logoutput=True)
+            Logger.info(format('Rolling Upgrade - check for standby returned {code}'))
+            if ((code == 255) and out):
+                Logger.info('Rolling Upgrade - namenode is already down.')
+            elif was_zkfc_killed:
+                Logger.info('Waiting for this NameNode to become the standby one.')
+                Execute(check_standby_cmd, user=params.hdfs_user, tries=50, try_sleep=6, logoutput=True)
+    else:
+        raise Fail('Unable to determine NameNode HA states by calling command: {0}'.format(check_service_cmd))

@@ -1,21 +1,27 @@
 def compute_actual_version(self):
     '\n    After packages are installed, determine what the new actual version is, in order to save it.\n    '
-    if (self.actual_version is None):
-        Logger.info('Attempting to determine actual version with build number.')
-        Logger.info('Old versions: {0}'.format(self.old_versions))
-        new_versions = self.hdp_versions()
-        Logger.info('New versions: {0}'.format(new_versions))
-        deltas = (set(new_versions) - set(self.old_versions))
-        Logger.info('Deltas: {0}'.format(deltas))
-        if (1 == len(deltas)):
-            self.actual_version = next(iter(deltas)).strip()
+    Logger.info('Attempting to determine actual version with build number.')
+    Logger.info('Old versions: {0}'.format(self.old_versions))
+    new_versions = self.hdp_versions()
+    Logger.info('New versions: {0}'.format(new_versions))
+    deltas = (set(new_versions) - set(self.old_versions))
+    Logger.info('Deltas: {0}'.format(deltas))
+    if (1 == len(deltas)):
+        self.actual_version = next(iter(deltas)).strip()
+        self.structured_output['actual_version'] = self.actual_version
+        self.put_structured_out(self.structured_output)
+        self.write_actual_version_to_file(self.actual_version)
+    else:
+        Logger.info('Cannot determine a new actual version installed by using the delta method.')
+        self.actual_version = self.get_actual_version_from_file()
+        if (self.actual_version is not None):
+            self.actual_version = self.actual_version.strip()
             self.structured_output['actual_version'] = self.actual_version
             self.put_structured_out(self.structured_output)
-            self.write_actual_version_to_file(self.actual_version)
+            Logger.info('Found actual version {0} by parsing file {1}'.format(self.actual_version, self.REPO_VERSION_HISTORY_FILE))
+        elif (not os.path.exists(self.stack_root_folder)):
+            msg = "Could not determine actual version. This stack's root directory ({0}) is not present on this host, so this host does not contain any versionable components. Therefore, ignore this host and allow other hosts to report the correct repository version.".format(self.stack_root_folder)
+            Logger.info(msg)
         else:
-            Logger.info('Cannot determine a new actual version installed by using the delta method. This is expected during the first install attempt since not all packages will yield a new version in "hdp-select versions".')
-            self.actual_version = self.get_actual_version_from_file()
-            if (self.actual_version is not None):
-                self.actual_version = self.actual_version.strip()
-                self.structured_output['actual_version'] = self.actual_version
-                self.put_structured_out(self.structured_output)
+            msg = "Could not determine actual version. This stack's root directory ({0}) exists but was not able to determine the actual repository version installed. Try reinstalling packages again.".format(self.stack_root_folder)
+            raise Fail(msg)

@@ -16,6 +16,16 @@ def actionexecute(self, env):
         base_urls = json.loads(config['commandParams']['base_urls'])
         package_list = json.loads(config['commandParams']['package_list'])
         stack_id = config['commandParams']['stack_id']
+    stack_name = None
+    self.stack_root_folder = None
+    if (stack_id and ('-' in stack_id)):
+        stack_split = stack_id.split('-')
+        if (len(stack_split) == 2):
+            stack_name = stack_split[0].upper()
+            if (stack_name in self.STACK_TO_ROOT_FOLDER):
+                self.stack_root_folder = self.STACK_TO_ROOT_FOLDER[stack_name]
+    if (self.stack_root_folder is None):
+        raise Fail("Cannot determine the stack's root directory by parsing the stack_id property, {0}".format(str(stack_id)))
     self.repository_version = self.repository_version.strip()
     installed_repositories = []
     self.current_repositories = []
@@ -42,10 +52,7 @@ def actionexecute(self, env):
         if m:
             self.structured_output['actual_version'] = self.repository_version
             self.put_structured_out(self.structured_output)
-    self.old_versions = []
-    if (self.actual_version is None):
-        Logger.info('Calculate the actual version.'.format(self.repository_version))
-        self.old_versions = self.hdp_versions()
+    self.old_versions = self.hdp_versions()
     try:
         ret_code = self.install_packages(package_list)
         if (ret_code == 0):
