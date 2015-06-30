@@ -4,20 +4,17 @@
   }
   try {
     Cluster cluster=clusters.get().getClusterById(event.getClusterId());
-    StackId currentStackId=cluster.getCurrentStackVersion();
-    Set<String> changedRepositoryVersions=new HashSet<String>();
     Collection<ClusterVersionEntity> allClusterVersions=cluster.getAllClusterVersions();
     for (    ClusterVersionEntity clusterVersion : allClusterVersions) {
       if (clusterVersion.getState() != RepositoryVersionState.CURRENT) {
         String hostName=event.getHostName();
         HostEntity hostEntity=hostDAO.get().findByName(hostName);
-        HostVersionEntity missingHostVersion=new HostVersionEntity(hostEntity,clusterVersion.getRepositoryVersion(),RepositoryVersionState.OUT_OF_SYNC);
+        RepositoryVersionEntity repositoryVersion=clusterVersion.getRepositoryVersion();
+        HostVersionEntity missingHostVersion=new HostVersionEntity(hostEntity,repositoryVersion,RepositoryVersionState.OUT_OF_SYNC);
         hostVersionDAO.get().create(missingHostVersion);
-        changedRepositoryVersions.add(clusterVersion.getRepositoryVersion().getVersion());
+        StackId stackId=new StackId(repositoryVersion.getStackName(),repositoryVersion.getStackVersion());
+        cluster.recalculateClusterVersionState(stackId,repositoryVersion.getVersion());
       }
-    }
-    for (    String version : changedRepositoryVersions) {
-      cluster.recalculateClusterVersionState(currentStackId,version);
     }
   }
  catch (  AmbariException e) {
