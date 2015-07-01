@@ -1,19 +1,19 @@
 {
-  GetMethod get=new GetMethod(url + path);
-  if (isNeedsAuthentication()) {
-    get.setDoAuthentication(true);
+  InputStream inputStream=null;
+  try {
+    Map<String,String> headers=new HashMap<String,String>();
+    if (isNeedsAuthentication()) {
+      inputStream=getUrlStreamProviderBasicAuth().readFrom(url + path,"GET",(String)null,headers);
+    }
+ else {
+      inputStream=getUrlStreamProviderBasicAuth().readAsCurrent(url + path,"GET",(String)null,headers);
+    }
   }
-  int executeMethod=getHttpClient().executeMethod(get);
-switch (executeMethod) {
-case HttpStatus.SC_OK:
-    JsonElement jsonElement=new JsonParser().parse(new JsonReader(new InputStreamReader(get.getResponseBodyAsStream())));
+ catch (  IOException e) {
+    logger.error("Error while reading from url " + url + path,e);
+    HttpException httpException=new HttpException(e.getLocalizedMessage());
+    throw httpException;
+  }
+  JsonElement jsonElement=new JsonParser().parse(new JsonReader(new InputStreamReader(inputStream)));
   return jsonElement;
-case HttpStatus.SC_NOT_FOUND:
-return null;
-default :
-HttpException httpException=new HttpException(get.getResponseBodyAsString());
-httpException.setReason(HttpStatus.getStatusText(executeMethod));
-httpException.setReasonCode(executeMethod);
-throw httpException;
-}
 }
