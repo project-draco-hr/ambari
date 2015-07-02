@@ -1,0 +1,20 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final ConfigHelper mockConfigHelper=easyMockSupport.createMock(ConfigHelper.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(ConfigHelper.class).toInstance(mockConfigHelper);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  String content="# Start HIVE_AUX_JARS_PATH \n" + "if [ \"${HIVE_AUX_JARS_PATH}\" != \"\" ]; then\n" + "  export HIVE_AUX_JARS_PATH=${HIVE_AUX_JARS_PATH}\n"+ "elif [ -d \"/usr/hdp/current/hive-webhcat/share/hcatalog\" ]; then \n"+ "  export HIVE_AUX_JARS_PATH=/usr/hdp/current/hive-webhcat/share/hcatalog\n"+ "fi\n"+ "#End HIVE_AUX_JARS_PATH";
+  String expectedContent="# Start HIVE_AUX_JARS_PATH \n" + "if [ \"${HIVE_AUX_JARS_PATH}\" != \"\" ]; then\n" + "  if [ -f \"${HIVE_AUX_JARS_PATH}\" ]; then    \n"+ "    export HIVE_AUX_JARS_PATH=${HIVE_AUX_JARS_PATH}\n"+ "  elif [ -d \"/usr/hdp/current/hive-webhcat/share/hcatalog\" ]; then\n"+ "    export HIVE_AUX_JARS_PATH=/usr/hdp/current/hive-webhcat/share/hcatalog/hive-hcatalog-core.jar\n"+ "  fi\n"+ "elif [ -d \"/usr/hdp/current/hive-webhcat/share/hcatalog\" ]; then\n"+ "  export HIVE_AUX_JARS_PATH=/usr/hdp/current/hive-webhcat/share/hcatalog/hive-hcatalog-core.jar\n"+ "fi\n"+ "#End HIVE_AUX_JARS_PATH";
+  String modifiedContent=mockInjector.getInstance(UpgradeCatalog210.class).updateHiveEnvContent(content);
+  Assert.assertEquals(modifiedContent,expectedContent);
+}
