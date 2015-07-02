@@ -85,13 +85,6 @@ throw new AmbariException("Unsupported target type = " + hostType);
 }
 for (String hostName : targetHosts) {
 stage.addHostRoleExecutionCommand(hostName,Role.valueOf(actionContext.getActionName()),RoleCommand.ACTIONEXECUTE,new ServiceComponentHostOpInProgressEvent(actionContext.getActionName(),hostName,System.currentTimeMillis()),clusterName,serviceName,retryAllowed);
-Map<String,Map<String,String>> hostConfigTags=configHelper.getEffectiveDesiredTags(cluster,hostName);
-Map<String,Map<String,String>> hostConfigurations=configHelper.getEffectiveConfigProperties(cluster,hostConfigTags);
-Map<String,Map<String,Map<String,String>>> configurationAttributes=new TreeMap<String,Map<String,Map<String,String>>>();
-Map<String,Map<String,String>> configTags=null;
-if (!StringUtils.isEmpty(serviceName) && null != cluster) {
-configTags=managementController.findConfigurationTagsWithOverrides(cluster,hostName);
-}
 Map<String,String> commandParams=new TreeMap<String,String>();
 int maxTaskTimeout=Integer.parseInt(configs.getDefaultAgentTaskTimeout(false));
 if (maxTaskTimeout < actionContext.getTimeout()) {
@@ -103,8 +96,9 @@ commandParams.put(COMMAND_TIMEOUT,actionContext.getTimeout().toString());
 commandParams.put(SCRIPT,actionName + ".py");
 commandParams.put(SCRIPT_TYPE,TYPE_PYTHON);
 ExecutionCommand execCmd=stage.getExecutionCommandWrapper(hostName,actionContext.getActionName()).getExecutionCommand();
-execCmd.setConfigurations(hostConfigurations);
-execCmd.setConfigurationAttributes(configurationAttributes);
+execCmd.setConfigurations(new TreeMap<String,Map<String,String>>());
+execCmd.setConfigurationAttributes(new TreeMap<String,Map<String,Map<String,String>>>());
+Map<String,Map<String,String>> configTags=managementController.findConfigurationTagsWithOverrides(cluster,hostName);
 execCmd.setConfigurationTags(configTags);
 execCmd.setCommandParams(commandParams);
 execCmd.setServiceName(serviceName == null || serviceName.isEmpty() ? resourceFilter.getServiceName() : serviceName);
@@ -118,6 +112,14 @@ if (componentInfo != null) {
 roleParams.put(COMPONENT_CATEGORY,componentInfo.getCategory());
 }
 execCmd.setRoleParams(roleParams);
+Map<String,String> actionParameters=actionContext.getParameters();
+if (null != actionParameters && !actionParameters.isEmpty()) {
+if (actionParameters.containsKey(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION)) {
+String[] split=StringUtils.split(actionParameters.get(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION));
+Set<String> configsToRefresh=new HashSet<String>(Arrays.asList(split));
+execCmd.setForceRefreshConfigTagsBeforeExecution(configsToRefresh);
+}
+}
 if (null != cluster) {
 execCmd.setClusterHostInfo(StageUtils.getClusterHostInfo(cluster));
 }
