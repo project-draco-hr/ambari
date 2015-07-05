@@ -1,7 +1,7 @@
-def pre_upgrade_deregister():
+def post_upgrade_deregister():
     '\n  Runs the "hive --service hiveserver2 --deregister <version>" command to\n  de-provision the server in preparation for an upgrade. This will contact\n  ZooKeeper to remove the server so that clients that attempt to connect\n  will be directed to other servers automatically. Once all\n  clients have drained, the server will shutdown automatically; this process\n  could take a very long time.\n  This function will obtain the Kerberos ticket if security is enabled.\n  :return:\n  '
     import params
-    Logger.info('HiveServer2 executing "deregister" command in preparation for upgrade...')
+    Logger.info('HiveServer2 executing "deregister" command to complete upgrade...')
     if params.security_enabled:
         kinit_command = format('{kinit_path_local} -kt {smoke_user_keytab} {smokeuser_principal}; ')
         Execute(kinit_command, user=params.smokeuser)
@@ -12,15 +12,10 @@ def pre_upgrade_deregister():
     if (not os.path.exists(hive_server_conf_dir)):
         hive_server_conf_dir = '/etc/hive/conf.server'
     hive_execute_path = params.execute_path
-    if ('upgrade' == params.upgrade_direction):
-        upgrade_target_version = format_hdp_stack_version(params.version)
-        if (upgrade_target_version and (compare_versions(upgrade_target_version, '2.2') >= 0)):
-            upgrade_target_hive_bin = format('/usr/hdp/{version}/hive/bin')
-            if ((os.pathsep + params.hive_bin) in hive_execute_path):
-                hive_execute_path = hive_execute_path.replace((os.pathsep + params.hive_bin), (os.pathsep + upgrade_target_hive_bin))
-        upgrade_target_hadoop_bin = hdp_select.get_hadoop_dir('bin', upgrade_stack_only=True)
-        upgrade_source_hadoop_bin = params.hadoop_bin_dir
-        if (upgrade_target_hadoop_bin and (len(upgrade_target_hadoop_bin) > 0) and ((os.pathsep + upgrade_source_hadoop_bin) in hive_execute_path)):
-            hive_execute_path = hive_execute_path.replace((os.pathsep + upgrade_source_hadoop_bin), (os.pathsep + upgrade_target_hadoop_bin))
+    if ('downgrade' == params.upgrade_direction):
+        downgrade_version = params.current_version
+        if params.downgrade_from_version:
+            downgrade_version = params.downgrade_from_version
+        hive_execute_path = _get_hive_execute_path(downgrade_version)
     command = format(('hive --config {hive_server_conf_dir} --service hiveserver2 --deregister ' + current_hiveserver_version))
     Execute(command, user=params.hive_user, path=hive_execute_path, tries=1)
