@@ -2,7 +2,6 @@
   AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
   AlertDefinitionDAO alertDefinitionDAO=injector.getInstance(AlertDefinitionDAO.class);
   Clusters clusters=ambariManagementController.getClusters();
-  AlertDefinitionFactory alertDefinitionFactory=injector.getInstance(AlertDefinitionFactory.class);
   List<String> metricAlerts=Arrays.asList("namenode_cpu","namenode_hdfs_blocks_health","namenode_hdfs_capacity_utilization","namenode_rpc_latency","namenode_directory_status","datanode_health_summary","datanode_storage");
   List<String> mapredAlerts=Arrays.asList("mapreduce_history_server_cpu","mapreduce_history_server_rpc_latency");
   List<String> rmAlerts=Arrays.asList("yarn_resourcemanager_cpu","yarn_resourcemanager_rpc_latency");
@@ -61,6 +60,26 @@
           rootJson.get("uri").getAsJsonObject().addProperty("kerberos_keytab","{{cluster-env/smokeuser_keytab}}");
           rootJson.get("uri").getAsJsonObject().addProperty("kerberos_principal","{{cluster-env/smokeuser_principal_name}}");
           updateAlertDefinitionEntitySource("oozie_server_webui",rootJson.toString(),UUID.randomUUID().toString());
+        }
+        List<String> hdfsMetricAlertsFloatDivision=Arrays.asList("namenode_hdfs_capacity_utilization","datanode_storage");
+        for (        String metricAlertName : hdfsMetricAlertsFloatDivision) {
+          AlertDefinitionEntity entity=alertDefinitionDAO.findByName(cluster.getClusterId(),metricAlertName);
+          if (null == entity) {
+            continue;
+          }
+          String source=entity.getSource();
+          JsonObject rootJson=new JsonParser().parse(source).getAsJsonObject();
+          JsonObject reporting=rootJson.getAsJsonObject("reporting");
+          JsonObject ok=reporting.getAsJsonObject("ok");
+          JsonObject warning=reporting.getAsJsonObject("warning");
+          JsonObject critical=reporting.getAsJsonObject("critical");
+          JsonElement okText=ok.remove("text");
+          ok.addProperty("text",okText.getAsString().replace("{2:d}","{2:.0f}"));
+          JsonElement warningText=warning.remove("text");
+          warning.addProperty("text",warningText.getAsString().replace("{2:d}","{2:.0f}"));
+          JsonElement criticalText=critical.remove("text");
+          critical.addProperty("text",criticalText.getAsString().replace("{2:d}","{2:.0f}"));
+          updateAlertDefinitionEntitySource(metricAlertName,rootJson.toString(),UUID.randomUUID().toString());
         }
       }
     }
