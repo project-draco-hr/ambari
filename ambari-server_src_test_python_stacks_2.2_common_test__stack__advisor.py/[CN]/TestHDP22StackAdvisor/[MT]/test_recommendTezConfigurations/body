@@ -1,6 +1,17 @@
-def test_recommendTezConfigurations(self):
+@patch('os.path.exists')
+@patch('os.path.isdir')
+@patch('os.listdir')
+def test_recommendTezConfigurations(self, os_listdir_mock, os_isdir_mock, os_exists_mock):
+    os_exists_mock.return_value = True
+    os_isdir_mock.return_value = True
+    os_listdir_mock.return_value = ['TEZ{0.7.0.2.3.0.0-2155}']
     configurations = {'yarn-site': {'properties': {'yarn.scheduler.minimum-allocation-mb': '256', 'yarn.scheduler.maximum-allocation-mb': '2048', }, }, }
     clusterData = {'mapMemory': 3000, 'amMemory': 2000, 'reduceMemory': 2056, 'containers': 3, 'ramPerContainer': 256, }
     expected = {'tez-site': {'properties': {'tez.am.resource.memory.mb': '2048', 'tez.task.resource.memory.mb': '768', 'tez.runtime.io.sort.mb': '307', 'tez.runtime.unordered.output.buffer.size-mb': '57', 'tez.session.am.dag.submit.timeout.secs': '600', }, }, 'yarn-site': {'properties': {'yarn.scheduler.minimum-allocation-mb': '256', 'yarn.scheduler.maximum-allocation-mb': '2048', }, }, }
-    self.stackAdvisor.recommendTezConfigurations(configurations, clusterData, None, None)
+    services = {'ambari-server-properties': {}, }
+    server_host = socket.getfqdn()
+    tez_ui_url = (('http://' + server_host) + ':8080/#/main/views/TEZ/0.7.0.2.3.0.0-2155/TEZ_CLUSTER_INSTANCE')
+    services['ambari-server-properties'] = {'api.ssl': 'false', }
+    expected['tez-site']['properties']['tez.tez-ui.history-url.base'] = tez_ui_url
+    self.stackAdvisor.recommendTezConfigurations(configurations, clusterData, services, None)
     self.assertEquals(configurations, expected)
