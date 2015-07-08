@@ -1,0 +1,31 @@
+{
+  String clusterName=getExecutionCommand().getClusterName();
+  Cluster cluster=clusters.getCluster(clusterName);
+  Config config=cluster.getDesiredConfigByType(SOURCE_CONFIG_TYPE);
+  if (config == null) {
+    return createCommandReport(0,HostRoleStatus.FAILED,"{}",String.format("Source type %s not found",SOURCE_CONFIG_TYPE),"");
+  }
+  Map<String,String> properties=config.getProperties();
+  String upperLimitStr=properties.get(OLD_UPPER_LIMIT_PROPERTY_NAME);
+  String lowerLimitStr=properties.get(OLD_LOWER_LIMIT_PROPERTY_NAME);
+  if (upperLimitStr == null || lowerLimitStr == null) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","Upper or lower memstore limit setting is not set, skipping","");
+  }
+  BigDecimal upperLimit;
+  BigDecimal lowerLimit;
+  try {
+    upperLimit=new BigDecimal(upperLimitStr);
+    lowerLimit=new BigDecimal(lowerLimitStr);
+  }
+ catch (  NumberFormatException e) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","Upper or lower memstore limit setting value is malformed, skipping","");
+  }
+  if (lowerLimit.scale() < 2)   lowerLimit=lowerLimit.setScale(2,BigDecimal.ROUND_HALF_UP);
+  BigDecimal lowerLimitNew=lowerLimit.divide(upperLimit,BigDecimal.ROUND_HALF_UP);
+  properties.put(NEW_LOWER_LIMIT_PROPERTY_NAME,lowerLimitNew.toString());
+  properties.remove(OLD_UPPER_LIMIT_PROPERTY_NAME);
+  properties.remove(OLD_LOWER_LIMIT_PROPERTY_NAME);
+  config.setProperties(properties);
+  config.persist(false);
+  return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("%s was set to %s",NEW_LOWER_LIMIT_PROPERTY_NAME,lowerLimitNew.toString()),"");
+}
