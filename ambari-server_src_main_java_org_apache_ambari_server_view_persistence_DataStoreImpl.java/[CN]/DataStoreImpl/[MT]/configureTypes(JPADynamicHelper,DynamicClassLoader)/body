@@ -11,6 +11,7 @@
     String entityName=entry.getValue();
     JPADynamicTypeBuilder typeBuilder=typeBuilderMap.get(entityName);
     Map<String,PropertyDescriptor> descriptorMap=getDescriptorMap(clazz);
+    long totalLength=0L;
     for (    Map.Entry<String,PropertyDescriptor> descriptorEntry : descriptorMap.entrySet()) {
       String fieldName=descriptorEntry.getKey();
       String attributeName=getAttributeName(fieldName);
@@ -21,8 +22,15 @@
       Class<?> propertyType=descriptor.getPropertyType();
       if (isDirectMappingType(propertyType)) {
         DirectToFieldMapping mapping=typeBuilder.addDirectMapping(attributeName,propertyType,attributeName);
+        DatabaseField field=mapping.getField();
         if (String.class.isAssignableFrom(propertyType)) {
-          mapping.getField().setLength(MAX_ENTITY_STRING_FIELD_LENGTH);
+          field.setLength(MAX_ENTITY_STRING_FIELD_LENGTH);
+        }
+        totalLength+=field.getLength();
+        if (totalLength > MAX_ENTITY_FIELD_LENGTH_TOTAL) {
+          String msg=String.format("The total length of the fields of the %s entity can not exceed %d characters.",clazz.getSimpleName(),MAX_ENTITY_FIELD_LENGTH_TOTAL);
+          LOG.error(msg);
+          throw new IllegalStateException(msg);
         }
       }
     }
