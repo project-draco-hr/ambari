@@ -1,6 +1,5 @@
-@patch('tarfile.open')
 @patch('os.path.isdir')
-def test_pre_rolling_restart(self, isdir_mock, tarfile_open_mock):
+def test_pre_rolling_restart(self, isdir_mock):
     isdir_mock.return_value = True
     config_file = (self.get_src_folder() + '/test/python/stacks/2.2/configs/knox_upgrade.json')
     with open(config_file, 'r') as f:
@@ -8,5 +7,7 @@ def test_pre_rolling_restart(self, isdir_mock, tarfile_open_mock):
     version = '2.2.1.0-3242'
     json_content['commandParams']['version'] = version
     self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/knox_gateway.py'), classname='KnoxGateway', command='pre_rolling_restart', config_dict=json_content, hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES)
-    self.assertTrue(tarfile_open_mock.called)
-    self.assertResourceCalled('Execute', ('hdp-select', 'set', 'knox-server', version), sudo=True)
+    self.assertResourceCalled('Execute', ('tar', '-zcvhf', '/tmp/knox-upgrade-backup/knox-conf-backup.tar', '/usr/hdp/current/knox-server/conf/'), sudo=True)
+    self.assertResourceCalled('Execute', ('tar', '-zcvhf', '/tmp/knox-upgrade-backup/knox-data-backup.tar', '/var/lib/knox/data'), sudo=True)
+    self.assertResourceCalled('Execute', ('hdp-select', 'set', 'knox-server', '2.2.1.0-3242'), sudo=True)
+    self.assertNoMoreResources()
