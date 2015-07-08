@@ -1,16 +1,31 @@
 {
   LOG.debug("Received event {}",event);
-  List<AlertDefinitionEntity> definitions=m_definitionDao.findByService(event.getClusterId(),event.getServiceName());
-  for (  AlertDefinitionEntity definition : definitions) {
+  Cluster cluster=null;
+  try {
+    cluster=clusters.get().getClusterById(event.getClusterId());
+  }
+ catch (  AmbariException e) {
+    LOG.warn("Unable to retrieve cluster info for id: " + event.getClusterId());
+  }
+  if (cluster != null) {
+    cluster.getClusterGlobalLock().writeLock().lock();
     try {
-      m_definitionDao.remove(definition);
-      AlertGroupEntity group=m_alertDispatchDao.findGroupByName(event.getClusterId(),event.getServiceName());
-      if (null != group && group.isDefault()) {
-        m_alertDispatchDao.remove(group);
+      List<AlertDefinitionEntity> definitions=m_definitionDao.findByService(event.getClusterId(),event.getServiceName());
+      for (      AlertDefinitionEntity definition : definitions) {
+        try {
+          m_definitionDao.remove(definition);
+          AlertGroupEntity group=m_alertDispatchDao.findGroupByName(event.getClusterId(),event.getServiceName());
+          if (null != group && group.isDefault()) {
+            m_alertDispatchDao.remove(group);
+          }
+        }
+ catch (        Exception exception) {
+          LOG.error("Unable to remove alert definition {}",definition.getDefinitionName(),exception);
+        }
       }
     }
- catch (    Exception exception) {
-      LOG.error("Unable to remove alert definition {}",definition.getDefinitionName(),exception);
+  finally {
+      cluster.getClusterGlobalLock().writeLock().unlock();
     }
   }
 }
