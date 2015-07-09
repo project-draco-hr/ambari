@@ -25,9 +25,55 @@ ConfigHelper configHelper=getManagementController().getConfigHelper();
 if (direction == Direction.UPGRADE) {
 Map<String,Map<String,String>> oldStackDefaultConfigurationsByType=configHelper.getDefaultProperties(currentStackId,cluster);
 newConfigurationsByType=configHelper.getDefaultProperties(targetStackId,cluster);
+Set<String> skipConfigTypes=new HashSet<String>();
+Set<String> upgradePackServices=new HashSet<String>();
+Set<String> upgradePackConfigTypes=new HashSet<String>();
+AmbariMetaInfo ambariMetaInfo=s_metaProvider.get();
+Map<String,ServiceInfo> stackServicesMap=ambariMetaInfo.getServices(targetStack.getStackName(),targetStack.getStackVersion());
+for (Grouping group : upgradePack.getGroups(direction)) {
+for (UpgradePack.OrderService service : group.services) {
+if (service.serviceName == null || upgradePackServices.contains(service.serviceName)) {
+  continue;
+}
+upgradePackServices.add(service.serviceName);
+ServiceInfo serviceInfo=stackServicesMap.get(service.serviceName);
+if (serviceInfo == null) {
+  continue;
+}
+Set<String> serviceConfigTypes=serviceInfo.getConfigTypeAttributes().keySet();
+for (String serviceConfigType : serviceConfigTypes) {
+  if (!upgradePackConfigTypes.contains(serviceConfigType)) {
+    upgradePackConfigTypes.add(serviceConfigType);
+  }
+}
+}
+}
+Set<String> servicesNotInUpgradePack=new HashSet<String>(stackServicesMap.keySet());
+servicesNotInUpgradePack.removeAll(upgradePackServices);
+for (String serviceNotInUpgradePack : servicesNotInUpgradePack) {
+ServiceInfo serviceInfo=stackServicesMap.get(serviceNotInUpgradePack);
+Set<String> configTypesOfServiceNotInUpgradePack=serviceInfo.getConfigTypeAttributes().keySet();
+for (String configType : configTypesOfServiceNotInUpgradePack) {
+if (!upgradePackConfigTypes.contains(configType) && !skipConfigTypes.contains(configType)) {
+  skipConfigTypes.add(configType);
+}
+}
+}
+Iterator<String> iterator=newConfigurationsByType.keySet().iterator();
+while (iterator.hasNext()) {
+String configType=(String)iterator.next();
+if (skipConfigTypes.contains(configType)) {
+LOG.info("RU: Removing configs for config-type {}",configType);
+iterator.remove();
+}
+}
 Map<String,DesiredConfig> existingDesiredConfigurationsByType=cluster.getDesiredConfigs();
 for (Map.Entry<String,DesiredConfig> existingEntry : existingDesiredConfigurationsByType.entrySet()) {
 String configurationType=existingEntry.getKey();
+if (skipConfigTypes.contains(configurationType)) {
+LOG.info("RU: Skipping config-type {} as upgrade-pack contains no updates to its service",configurationType);
+continue;
+}
 Config currentClusterConfig=cluster.getDesiredConfigByType(configurationType);
 if (null == currentClusterConfig) {
 continue;
