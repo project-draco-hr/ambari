@@ -1,0 +1,19 @@
+@patch.object(upgradeHelper, 'get_config_resp_all')
+def test_conditional_replace(self, get_config_resp_all_mock):
+    test_catalog = '\n        {\n      "version": "1.0",\n      "stacks": [\n        {\n          "name": "HDP",\n          "old-version": "1.0",\n          "target-version": "1.1",\n          "options": {\n            "config-types":{\n              "test": {\n                "merged-copy": "yes"\n              }\n            }\n          },\n          "properties": {\n             "test": {\n               "test": {\n                 "value": "10",\n                 "value-required": "-1"\n               },\n               "test2": {\n                 "value": "10",\n                 "value-required": "-2"\n               }\n            }\n          },\n          "property-mapping": {\n          }\n        }\n      ]\n    }\n    '
+    expected_properties = {'test': '10', 'test2': '15', }
+    old_opt = upgradeHelper.Options.OPTIONS
+    options = (lambda : '')
+    options.from_stack = '1.0'
+    options.to_stack = '1.1'
+    options.upgrade_json = ''
+    upgradeHelper.Options.OPTIONS = options
+    upgradeHelper.Options.SERVICES = [self.required_service]
+    get_config_resp_all_mock.return_value = {'test': {'properties': {'test': '-1', 'test2': '15', }, }, }
+    ucf = UpgradeCatalogFactoryMock(test_catalog)
+    scf = upgradeHelper.ServerConfigFactory()
+    cfg = scf.get_config('test')
+    ucfg = ucf.get_catalog('1.0', '1.1')
+    cfg.merge(ucfg)
+    upgradeHelper.Options.OPTIONS = old_opt
+    self.assertEqual(expected_properties, cfg.properties)
