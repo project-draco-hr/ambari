@@ -5,7 +5,7 @@
 @patch('shutil.rmtree', new=MagicMock())
 @patch('glob.iglob')
 @patch('shutil.copy2', new=MagicMock())
-def test_upgrade_23(self, glob_mock, remove_mock, isfile_mock, exists_mock, isdir_mock):
+def test_upgrade_23_ensure_falcon_copied(self, glob_mock, remove_mock, isfile_mock, exists_mock, isdir_mock):
 
     def exists_mock_side_effect(path):
         if (path == '/tmp/oozie-upgrade-backup/oozie-conf-backup.tar'):
@@ -21,6 +21,7 @@ def test_upgrade_23(self, glob_mock, remove_mock, isfile_mock, exists_mock, isdi
         json_content = json.load(f)
     version = '2.3.0.0-1234'
     json_content['commandParams']['version'] = version
+    json_content['clusterHostInfo']['falcon_server_hosts'] = ['c6401.ambari.apache.org']
     mocks_dict = {}
     self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/oozie_server.py'), classname='OozieServer', command='pre_rolling_restart', config_dict=json_content, hdp_stack_version=self.UPGRADE_STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES, call_mocks=[(0, None), (0, prepare_war_stdout)], mocks_dict=mocks_dict)
     self.assertTrue(isfile_mock.called)
@@ -34,6 +35,8 @@ def test_upgrade_23(self, glob_mock, remove_mock, isfile_mock, exists_mock, isdi
     self.assertResourceCalled('Execute', ('tar', '-xvf', '/tmp/oozie-upgrade-backup/oozie-conf-backup.tar', '-C', '/usr/hdp/current/oozie-server/conf//'), sudo=True)
     self.assertResourceCalled('Directory', '/tmp/oozie-upgrade-backup', action=['delete'])
     self.assertResourceCalled('Directory', '/usr/hdp/current/oozie-server/libext', mode=511)
+    self.assertResourceCalled('Execute', 'ambari-sudo.sh cp /usr/hdp/2.3.0.0-1234/falcon/oozie/ext/falcon-oozie-el-extension-*.jar /usr/hdp/current/oozie-server/libext')
+    self.assertResourceCalled('Execute', 'ambari-sudo.sh chown oozie:hadoop /usr/hdp/current/oozie-server/libext/falcon-oozie-el-extension-*.jar')
     self.assertNoMoreResources()
     self.assertEquals(1, mocks_dict['call'].call_count)
     self.assertEquals(1, mocks_dict['checked_call'].call_count)
