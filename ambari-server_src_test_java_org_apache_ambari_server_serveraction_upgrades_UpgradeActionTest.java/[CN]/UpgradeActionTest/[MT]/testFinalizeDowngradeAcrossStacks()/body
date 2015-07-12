@@ -1,5 +1,9 @@
 {
-  makeCrossStackUpgradeCluster();
+  StackId sourceStack=HDP_21_STACK;
+  StackId targetStack=HDP_22_STACK;
+  String sourceRepo=HDP_2_1_1_0;
+  String targetRepo=HDP_2_2_1_0;
+  makeCrossStackUpgradeCluster(sourceStack,sourceRepo,targetStack,targetRepo);
   Clusters clusters=m_injector.getInstance(Clusters.class);
   Cluster cluster=clusters.getCluster("c1");
   Service service=installService(cluster,"HDFS");
@@ -8,24 +12,24 @@
   createNewServiceComponentHost(cluster,"HDFS","NAMENODE","h1");
   createNewServiceComponentHost(cluster,"HDFS","DATANODE","h1");
   createConfigs(cluster);
-  cluster.setCurrentStackVersion(HDP_21_STACK);
-  cluster.setDesiredStackVersion(HDP_22_STACK);
+  cluster.setCurrentStackVersion(sourceStack);
+  cluster.setDesiredStackVersion(targetStack);
   createConfigs(cluster);
   cluster=clusters.getCluster("c1");
   Collection<Config> configs=cluster.getAllConfigs();
   assertEquals(6,configs.size());
   Map<String,String> commandParams=new HashMap<String,String>();
   commandParams.put(FinalizeUpgradeAction.UPGRADE_DIRECTION_KEY,"downgrade");
-  commandParams.put(FinalizeUpgradeAction.VERSION_KEY,HDP_2_1_1_0);
-  commandParams.put(FinalizeUpgradeAction.ORIGINAL_STACK_KEY,HDP_21_STACK.getStackId());
-  commandParams.put(FinalizeUpgradeAction.TARGET_STACK_KEY,HDP_22_STACK.getStackId());
+  commandParams.put(FinalizeUpgradeAction.VERSION_KEY,sourceRepo);
+  commandParams.put(FinalizeUpgradeAction.ORIGINAL_STACK_KEY,sourceStack.getStackId());
+  commandParams.put(FinalizeUpgradeAction.TARGET_STACK_KEY,targetStack.getStackId());
   ExecutionCommand executionCommand=new ExecutionCommand();
   executionCommand.setCommandParams(commandParams);
   executionCommand.setClusterName("c1");
   HostRoleCommand hostRoleCommand=hostRoleCommandFactory.create(null,null,null,null);
   hostRoleCommand.setExecutionCommandWrapper(new ExecutionCommandWrapper(executionCommand));
   HostVersionDAO dao=m_injector.getInstance(HostVersionDAO.class);
-  List<HostVersionEntity> hosts=dao.findByClusterStackAndVersion("c1",HDP_22_STACK,HDP_2_2_1_0);
+  List<HostVersionEntity> hosts=dao.findByClusterStackAndVersion("c1",targetStack,targetRepo);
   assertFalse(hosts.isEmpty());
   for (  HostVersionEntity hve : hosts) {
     assertFalse(hve.getState() == RepositoryVersionState.INSTALLED);
@@ -39,13 +43,12 @@
   StackId currentStackId=cluster.getCurrentStackVersion();
   StackId desiredStackId=cluster.getDesiredStackVersion();
   assertEquals(desiredStackId,currentStackId);
-  assertEquals(HDP_21_STACK,currentStackId);
-  assertEquals(HDP_21_STACK,desiredStackId);
+  assertEquals(sourceStack,currentStackId);
+  assertEquals(sourceStack,desiredStackId);
   cluster=clusters.getCluster("c1");
   configs=cluster.getAllConfigs();
   assertEquals(3,configs.size());
-  hosts=dao.findByClusterStackAndVersion("c1",HDP_22_STACK,HDP_2_2_1_0);
-  hosts=dao.findByClusterStackAndVersion("c1",HDP_22_STACK,HDP_2_2_1_0);
+  hosts=dao.findByClusterStackAndVersion("c1",targetStack,targetRepo);
   assertFalse(hosts.isEmpty());
   for (  HostVersionEntity hve : hosts) {
     assertTrue(hve.getState() == RepositoryVersionState.INSTALLED);

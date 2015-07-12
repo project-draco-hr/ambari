@@ -1,0 +1,39 @@
+{
+  UUID uuid=UUID.randomUUID();
+  RepositoryVersionEntity first=createSingleRecord();
+  Assert.assertNotNull(first);
+  StackEntity stackEntity=stackDAO.find(first.getStackName(),first.getStackVersion());
+  Assert.assertNotNull(stackEntity);
+  RepositoryVersionEntity dupVersion=new RepositoryVersionEntity();
+  dupVersion.setDisplayName("display name " + uuid.toString());
+  dupVersion.setOperatingSystems("repositories");
+  dupVersion.setStack(stackEntity);
+  dupVersion.setUpgradePackage("upgrade package");
+  dupVersion.setVersion(first.getVersion());
+  boolean exceptionThrown=false;
+  try {
+    repositoryVersionDAO.create(stackEntity,dupVersion.getVersion(),dupVersion.getDisplayName(),dupVersion.getUpgradePackage(),dupVersion.getOperatingSystemsJson());
+  }
+ catch (  AmbariException e) {
+    exceptionThrown=true;
+    Assert.assertTrue(e.getMessage().contains("already exists"));
+  }
+  Assert.assertTrue(exceptionThrown);
+  exceptionThrown=false;
+  dupVersion.setVersion("2.3-1234");
+  try {
+    repositoryVersionDAO.create(stackEntity,dupVersion.getVersion(),dupVersion.getDisplayName(),dupVersion.getUpgradePackage(),dupVersion.getOperatingSystemsJson());
+  }
+ catch (  AmbariException e) {
+    exceptionThrown=true;
+    Assert.assertTrue(e.getMessage().contains("needs to belong to stack"));
+  }
+  Assert.assertTrue(exceptionThrown);
+  dupVersion.setVersion(stackEntity.getStackVersion() + "-1234");
+  try {
+    repositoryVersionDAO.create(stackEntity,dupVersion.getVersion(),dupVersion.getDisplayName(),dupVersion.getUpgradePackage(),dupVersion.getOperatingSystemsJson());
+  }
+ catch (  AmbariException e) {
+    Assert.fail("Did not expect a failure creating the Repository Version");
+  }
+}
