@@ -1,0 +1,33 @@
+{
+  if (artifactEntity != null) {
+    Map<String,Object> data=artifactEntity.getArtifactData();
+    if (data != null) {
+      final KerberosDescriptor kerberosDescriptor=new KerberosDescriptorFactory().createInstance(data);
+      if (kerberosDescriptor != null) {
+        KerberosIdentityDescriptor hdfsIdentity=kerberosDescriptor.getIdentity("hdfs");
+        if (hdfsIdentity != null) {
+          KerberosServiceDescriptor hdfsService=kerberosDescriptor.getService("HDFS");
+          if (hdfsService == null) {
+            hdfsService=new KerberosServiceDescriptorFactory().createInstance("HDFS",(Map)null);
+            hdfsService.putIdentity(hdfsIdentity);
+            kerberosDescriptor.putService(hdfsService);
+          }
+ else {
+            KerberosIdentityDescriptor hdfsReferenceIdentity=hdfsService.getIdentity("/hdfs");
+            if (hdfsReferenceIdentity != null) {
+              hdfsIdentity.update(hdfsReferenceIdentity);
+              hdfsIdentity.setName("hdfs");
+              hdfsService.removeIdentity("/hdfs");
+            }
+            hdfsService.putIdentity(hdfsIdentity);
+          }
+          kerberosDescriptor.removeIdentity("hdfs");
+        }
+        updateKerberosDescriptorIdentityReferences(kerberosDescriptor,"/hdfs","/HDFS/hdfs");
+        updateKerberosDescriptorIdentityReferences(kerberosDescriptor.getServices(),"/hdfs","/HDFS/hdfs");
+        artifactEntity.setArtifactData(kerberosDescriptor.toMap());
+        artifactDAO.merge(artifactEntity);
+      }
+    }
+  }
+}
