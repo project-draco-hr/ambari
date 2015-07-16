@@ -30,10 +30,8 @@
     String newStateStr=(String)propertyMap.get(CLUSTER_STACK_VERSION_STATE_PROPERTY_ID);
     LOG.info("Initiating finalization for manual upgrade to version {} for cluster {}",desiredRepoVersion,clName);
     StackId stackId=rve.getStackId();
-    ClusterEntity cluster=clusterDAO.findByName(clName);
-    StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
-    cluster.setDesiredStack(stackEntity);
-    clusterDAO.merge(cluster);
+    Cluster cluster=getManagementController().getClusters().getCluster(clName);
+    cluster.setDesiredStackVersion(stackId);
     Map<String,String> args=new HashMap<String,String>();
     if (newStateStr.equals(RepositoryVersionState.CURRENT.toString())) {
       args.put(FinalizeUpgradeAction.UPGRADE_DIRECTION_KEY,"upgrade");
@@ -45,7 +43,8 @@
       throw new IllegalArgumentException(String.format("Invalid desired state %s. Should be either CURRENT or INSTALLED",newStateStr));
     }
     String defaultHostName=null;
-    List<HostEntity> hosts=new ArrayList(cluster.getHostEntities());
+    ClusterEntity clusterEntity=clusterDAO.findByName(clName);
+    List<HostEntity> hosts=new ArrayList(clusterEntity.getHostEntities());
     if (hosts != null && !hosts.isEmpty()) {
       Collections.sort(hosts);
       defaultHostName=hosts.get(0).getHostName();
