@@ -7,19 +7,35 @@
     if (null == hostName) {
       continue;
     }
+    Set<String> clusterNamesForHost=new HashSet<String>();
     if (null != hostRequest.getClusterName()) {
-      Cluster cluster=clusters.getCluster(hostRequest.getClusterName());
-      List<ServiceComponentHost> list=cluster.getServiceComponentHosts(hostName);
-      if (0 != list.size()) {
-        StringBuilder reason=new StringBuilder("Cannot remove host ").append(hostName).append(" from ").append(hostRequest.getClusterName()).append(".  The following roles exist: ");
-        int i=0;
-        for (        ServiceComponentHost sch : list) {
-          if ((i++) > 0) {
-            reason.append(", ");
-          }
-          reason.append(sch.getServiceComponentName());
+      clusterNamesForHost.add(hostRequest.getClusterName());
+    }
+ else {
+      Set<Cluster> clustersForHost=clusters.getClustersForHost(hostRequest.getHostname());
+      if (null != clustersForHost) {
+        for (        Cluster c : clustersForHost) {
+          clusterNamesForHost.add(c.getClusterName());
         }
-        throw new AmbariException(reason.toString());
+      }
+    }
+    for (    String clusterName : clusterNamesForHost) {
+      Cluster cluster=clusters.getCluster(clusterName);
+      List<ServiceComponentHost> list=cluster.getServiceComponentHosts(hostName);
+      if (!list.isEmpty()) {
+        List<String> componentsToRemove=new ArrayList<String>();
+        for (        ServiceComponentHost sch : list) {
+          Service s=cluster.getService(sch.getServiceName());
+          ServiceComponent sc=s.getServiceComponent(sch.getServiceComponentName());
+          if (!sc.isClientComponent()) {
+            componentsToRemove.add(sch.getServiceComponentName());
+          }
+        }
+        if (!componentsToRemove.isEmpty()) {
+          StringBuilder reason=new StringBuilder("Cannot remove host ").append(hostName).append(" from ").append(hostRequest.getClusterName()).append(".  The following roles exist, and these components must be stopped if running, and then deleted: ");
+          reason.append(StringUtils.join(componentsToRemove,", "));
+          throw new AmbariException(reason.toString());
+        }
       }
     }
     okToRemove.add(hostRequest);
