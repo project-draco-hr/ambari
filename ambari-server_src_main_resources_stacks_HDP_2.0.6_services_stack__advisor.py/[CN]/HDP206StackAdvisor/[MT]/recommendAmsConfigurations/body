@@ -1,8 +1,8 @@
 def recommendAmsConfigurations(self, configurations, clusterData, services, hosts):
-    putAmsEnvProperty = self.putProperty(configurations, 'ams-env')
-    putAmsHbaseSiteProperty = self.putProperty(configurations, 'ams-hbase-site')
-    putTimelineServiceProperty = self.putProperty(configurations, 'ams-site')
-    putHbaseEnvProperty = self.putProperty(configurations, 'ams-hbase-env')
+    putAmsEnvProperty = self.putProperty(configurations, 'ams-env', services)
+    putAmsHbaseSiteProperty = self.putProperty(configurations, 'ams-hbase-site', services)
+    putTimelineServiceProperty = self.putProperty(configurations, 'ams-site', services)
+    putHbaseEnvProperty = self.putProperty(configurations, 'ams-hbase-env', services)
     amsCollectorHosts = self.getComponentHostNames(services, 'AMBARI_METRICS', 'METRICS_COLLECTOR')
     putHbaseEnvProperty('hbase_regionserver_heapsize', '1024m')
     putAmsHbaseSiteProperty('hfile.block.cache.size', 0.3)
@@ -45,4 +45,24 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
             putAmsEnvProperty('metrics_collector_heapsize', '512m')
             putAmsHbaseSiteProperty('hbase_master_xmn_size', '128m')
         pass
+    rootDir = 'file:///var/lib/ambari-metrics-collector/hbase'
+    tmpDir = '/var/lib/ambari-metrics-collector/hbase-tmp'
+    mountpoint = '/'
+    if ('ams-hbase-site' in services['configurations']):
+        if ('hbase.rootdir' in services['configurations']['ams-hbase-site']['properties']):
+            rootDir = services['configurations']['ams-hbase-site']['properties']['hbase.rootdir']
+        if ('hbase.tmp.dir' in services['configurations']['ams-hbase-site']['properties']):
+            tmpDir = services['configurations']['ams-hbase-site']['properties']['hbase.tmp.dir']
+    for collectorHostName in amsCollectorHosts:
+        for host in hosts['items']:
+            if (host['Hosts']['host_name'] == collectorHostName):
+                mountpoint = self.getProperMountPoint(host['Hosts'])
+                break
+    if (not rootDir.startswith('hdfs://')):
+        rootDir = re.sub('^file:///|/', '', rootDir, count=1)
+        rootDir = ('file://' + os.path.join(mountpoint, rootDir))
+    tmpDir = re.sub('^file:///|/', '', tmpDir, count=1)
+    tmpDir = os.path.join(mountpoint, tmpDir)
+    putAmsHbaseSiteProperty('hbase.rootdir', rootDir)
+    putAmsHbaseSiteProperty('hbase.tmp.dir', tmpDir)
     pass
