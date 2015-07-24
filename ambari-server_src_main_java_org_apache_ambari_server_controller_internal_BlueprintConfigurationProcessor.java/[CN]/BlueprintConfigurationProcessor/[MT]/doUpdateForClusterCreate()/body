@@ -1,7 +1,8 @@
 {
+  Set<String> configTypesUpdated=new HashSet<String>();
   Configuration clusterConfig=clusterTopology.getConfiguration();
   Map<String,HostGroupInfo> groupInfoMap=clusterTopology.getHostGroupInfo();
-  doFilterPriorToClusterUpdate(clusterConfig);
+  doFilterPriorToClusterUpdate(clusterConfig,configTypesUpdated);
   Map<String,Map<String,String>> clusterProps=clusterConfig.getFullProperties();
   for (  Map<String,Map<String,PropertyUpdater>> updaterMap : createCollectionOfUpdaters()) {
     for (    Map.Entry<String,Map<String,PropertyUpdater>> entry : updaterMap.entrySet()) {
@@ -11,14 +12,24 @@
         PropertyUpdater updater=updaterEntry.getValue();
         Map<String,String> typeMap=clusterProps.get(type);
         if (typeMap != null && typeMap.containsKey(propertyName)) {
-          clusterConfig.setProperty(type,propertyName,updater.updateForClusterCreate(propertyName,typeMap.get(propertyName),clusterProps,clusterTopology));
+          final String originalValue=typeMap.get(propertyName);
+          final String updatedValue=updater.updateForClusterCreate(propertyName,originalValue,clusterProps,clusterTopology);
+          if (!updatedValue.equals(originalValue)) {
+            configTypesUpdated.add(type);
+          }
+          clusterConfig.setProperty(type,propertyName,updatedValue);
         }
         for (        HostGroupInfo groupInfo : groupInfoMap.values()) {
           Configuration hgConfig=groupInfo.getConfiguration();
           Map<String,Map<String,String>> hgConfigProps=hgConfig.getFullProperties(1);
           Map<String,String> hgTypeMap=hgConfigProps.get(type);
           if (hgTypeMap != null && hgTypeMap.containsKey(propertyName)) {
-            hgConfig.setProperty(type,propertyName,updater.updateForClusterCreate(propertyName,hgTypeMap.get(propertyName),hgConfigProps,clusterTopology));
+            final String originalValue=hgTypeMap.get(propertyName);
+            final String updatedValue=updater.updateForClusterCreate(propertyName,originalValue,hgConfigProps,clusterTopology);
+            if (!updatedValue.equals(originalValue)) {
+              configTypesUpdated.add(type);
+            }
+            hgConfig.setProperty(type,propertyName,updatedValue);
           }
         }
       }
@@ -33,7 +44,9 @@
       Iterator<String> nnHostIterator=nnHosts.iterator();
       clusterConfig.setProperty("hadoop-env","dfs_ha_initial_namenode_active",nnHostIterator.next());
       clusterConfig.setProperty("hadoop-env","dfs_ha_initial_namenode_standby",nnHostIterator.next());
+      configTypesUpdated.add("hadoop-env");
     }
   }
-  setMissingConfigurations(clusterConfig);
+  setMissingConfigurations(clusterConfig,configTypesUpdated);
+  return configTypesUpdated;
 }
