@@ -1,0 +1,28 @@
+{
+  final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
+  final OsFamily osFamily=createNiceMock(OsFamily.class);
+  final Cluster cluster=createMock(Cluster.class);
+  final Clusters clusters=createMock(Clusters.class);
+  expect(clusters.getClusters()).andReturn(Collections.singletonMap("c1",cluster));
+  final AmbariManagementController controller=createNiceMock(AmbariManagementController.class);
+  expect(controller.getClusters()).andReturn(clusters).once();
+  final Injector injector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(controller);
+      bind(DBAccessor.class).toInstance(dbAccessor);
+      bind(OsFamily.class).toInstance(osFamily);
+    }
+  }
+);
+  Method addNewConfigurationsFromXml=AbstractUpgradeCatalog.class.getDeclaredMethod("addNewConfigurationsFromXml");
+  Method updateKerberosConfigurations=UpgradeCatalog211.class.getDeclaredMethod("updateKerberosConfigurations",Cluster.class);
+  UpgradeCatalog211 upgradeCatalog211=createMockBuilder(UpgradeCatalog211.class).addMockedMethod(addNewConfigurationsFromXml).addMockedMethod(updateKerberosConfigurations).createMock();
+  setInjector(upgradeCatalog211,injector);
+  upgradeCatalog211.addNewConfigurationsFromXml();
+  expectLastCall().once();
+  upgradeCatalog211.updateKerberosConfigurations(anyObject(Cluster.class));
+  expectLastCall().once();
+  replayAll();
+  upgradeCatalog211.executeDMLUpdates();
+  verifyAll();
+}

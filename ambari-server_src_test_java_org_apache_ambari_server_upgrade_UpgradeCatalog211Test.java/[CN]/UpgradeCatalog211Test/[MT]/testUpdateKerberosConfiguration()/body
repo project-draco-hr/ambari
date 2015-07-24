@@ -1,0 +1,52 @@
+{
+  final AmbariManagementController controller=createNiceMock(AmbariManagementController.class);
+  final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
+  final OsFamily osFamily=createNiceMock(OsFamily.class);
+  final Map<String,String> propertiesKerberosEnv=new HashMap<String,String>(){
+{
+      put("create_attributes_template","create_attributes_template content");
+      put("realm","EXAMPLE.COM");
+      put("container_dn","");
+      put("ldap_url","");
+      put("encryption_types","aes des3-cbc-sha1 rc4 des-cbc-md5");
+      put("kdc_host","c6407.ambari.apache.org");
+      put("admin_server_host","c6407.ambari.apache.org");
+      put("kdc_type","mit-kdc");
+    }
+  }
+;
+  final Config configKerberosEnv=createNiceMock(Config.class);
+  expect(configKerberosEnv.getProperties()).andReturn(propertiesKerberosEnv).anyTimes();
+  expect(configKerberosEnv.getTag()).andReturn("tag1").anyTimes();
+  final Cluster cluster=createNiceMock(Cluster.class);
+  expect(cluster.getDesiredConfigByType("kerberos-env")).andReturn(configKerberosEnv).once();
+  final Injector injector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(controller);
+      bind(DBAccessor.class).toInstance(dbAccessor);
+      bind(OsFamily.class).toInstance(osFamily);
+    }
+  }
+);
+  expect(cluster.getConfigsByType("kerberos-env")).andReturn(Collections.singletonMap("tag1",configKerberosEnv)).once();
+  expect(cluster.getDesiredConfigByType("kerberos-env")).andReturn(configKerberosEnv).once();
+  Capture<ConfigurationRequest> captureCR=new Capture<ConfigurationRequest>();
+  expect(controller.createConfiguration(capture(captureCR))).andReturn(createNiceMock(ConfigurationResponse.class)).once();
+  replayAll();
+  injector.getInstance(UpgradeCatalog211.class).updateKerberosConfigurations(cluster);
+  verifyAll();
+  ConfigurationRequest capturedCR=captureCR.getValue();
+  Assert.assertNotNull(capturedCR);
+  Map<String,String> capturedCRProperties=capturedCR.getProperties();
+  Assert.assertNotNull(capturedCRProperties);
+  Assert.assertFalse(capturedCRProperties.containsKey("create_attributes_template"));
+  Assert.assertTrue(capturedCRProperties.containsKey("ad_create_attributes_template"));
+  for (  String property : propertiesKerberosEnv.keySet()) {
+    if ("create_attributes_template".equals(property)) {
+      Assert.assertEquals("create_attributes_template/ad_create_attributes_template",propertiesKerberosEnv.get(property),capturedCRProperties.get("ad_create_attributes_template"));
+    }
+ else {
+      Assert.assertEquals(property,propertiesKerberosEnv.get(property),capturedCRProperties.get(property));
+    }
+  }
+}

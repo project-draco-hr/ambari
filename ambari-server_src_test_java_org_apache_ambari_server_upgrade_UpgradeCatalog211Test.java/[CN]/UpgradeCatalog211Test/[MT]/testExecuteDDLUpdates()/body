@@ -1,0 +1,30 @@
+{
+  Injector injector=initInjector();
+  try {
+    Provider<EntityManager> entityManagerProvider=initEntityManagerProvider();
+    final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
+    final OsFamily osFamily=createNiceMock(OsFamily.class);
+    Configuration configuration=createNiceMock(Configuration.class);
+    Connection connection=createNiceMock(Connection.class);
+    Statement statement=createNiceMock(Statement.class);
+    ResultSet resultSet=createNiceMock(ResultSet.class);
+    expect(configuration.getDatabaseUrl()).andReturn(Configuration.JDBC_IN_MEMORY_URL).anyTimes();
+    dbAccessor.getConnection();
+    expectLastCall().andReturn(connection).anyTimes();
+    connection.createStatement();
+    expectLastCall().andReturn(statement).anyTimes();
+    statement.executeQuery(anyObject(String.class));
+    expectLastCall().andReturn(resultSet).anyTimes();
+    replayAll();
+    AbstractUpgradeCatalog upgradeCatalog=getUpgradeCatalog(dbAccessor,osFamily,entityManagerProvider.get());
+    Class<?> c=AbstractUpgradeCatalog.class;
+    Field f=c.getDeclaredField("configuration");
+    f.setAccessible(true);
+    f.set(upgradeCatalog,configuration);
+    upgradeCatalog.executeDDLUpdates();
+    verifyAll();
+  }
+  finally {
+    destroyInjector(injector);
+  }
+}
