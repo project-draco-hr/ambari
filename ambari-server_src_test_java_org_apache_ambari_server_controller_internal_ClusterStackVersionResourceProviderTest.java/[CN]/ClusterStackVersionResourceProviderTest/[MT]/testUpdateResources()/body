@@ -2,9 +2,6 @@
   Resource.Type type=Resource.Type.ClusterStackVersion;
   String clusterName="Cluster100";
   AmbariManagementController managementController=createMock(AmbariManagementController.class);
-  Clusters clusters=createNiceMock(Clusters.class);
-  Cluster cluster=createNiceMock(Cluster.class);
-  cluster.setClusterName(clusterName);
   StackId stackId=new StackId("HDP","2.0.1");
   StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
   Assert.assertNotNull(stackEntity);
@@ -17,40 +14,24 @@
   }
   ResourceEntity resourceEntity=new ResourceEntity();
   resourceEntity.setResourceType(resourceTypeEntity);
-  ClusterEntity clusterEntity=new ClusterEntity();
-  clusterEntity.setClusterName(clusterName);
-  clusterEntity.setResource(resourceEntity);
-  clusterEntity.setDesiredStack(stackEntity);
-  clusterDAO.create(clusterEntity);
   final Host host1=createNiceMock("host1",Host.class);
   final Host host2=createNiceMock("host2",Host.class);
-  List<HostEntity> hostEntities=new ArrayList<HostEntity>();
-  HostEntity hostEntity1=new HostEntity();
-  HostEntity hostEntity2=new HostEntity();
-  hostEntity1.setHostName("host1");
-  hostEntity2.setHostName("host2");
-  hostEntities.add(hostEntity1);
-  hostEntities.add(hostEntity2);
-  hostEntity1.setClusterEntities(Arrays.asList(clusterEntity));
-  hostEntity2.setClusterEntities(Arrays.asList(clusterEntity));
-  hostDAO.create(hostEntity1);
-  hostDAO.create(hostEntity2);
-  clusterEntity.setHostEntities(hostEntities);
-  clusterDAO.merge(clusterEntity);
   expect(host1.getHostName()).andReturn("host1").anyTimes();
-  expect(host1.getOsFamily()).andReturn("redhat6").anyTimes();
   expect(host2.getHostName()).andReturn("host2").anyTimes();
-  expect(host2.getOsFamily()).andReturn("redhat6").anyTimes();
   replay(host1,host2);
-  Map<String,Host> hostsForCluster=new HashMap<String,Host>(){
+  ServiceComponentHost sch=createMock(ServiceComponentHost.class);
+  List<ServiceComponentHost> schs=Collections.singletonList(sch);
+  Cluster cluster=createNiceMock(Cluster.class);
+  cluster.setClusterName(clusterName);
+  ArrayList<Host> hosts=new ArrayList<Host>(){
 {
-      put(host1.getHostName(),host1);
-      put(host2.getHostName(),host2);
+      add(host1);
+      add(host2);
     }
   }
 ;
-  ServiceComponentHost sch=createMock(ServiceComponentHost.class);
-  List<ServiceComponentHost> schs=Collections.singletonList(sch);
+  Clusters clusters=createNiceMock(Clusters.class);
+  expect(clusters.getCluster(anyObject(String.class))).andReturn(cluster);
   RepositoryVersionEntity repoVersion=new RepositoryVersionEntity();
   repoVersion.setOperatingSystems(operatingSystemsJson);
   StackEntity newDesiredStack=stackDAO.find("HDP","2.0.1");
@@ -83,10 +64,12 @@
   expect(managementController.getJdkResourceUrl()).andReturn("/JdkResourceUrl").anyTimes();
   expect(managementController.getPackagesForServiceHost(anyObject(ServiceInfo.class),(Map<String,String>)anyObject(List.class),anyObject(String.class))).andReturn(packages).anyTimes();
   expect(resourceProviderFactory.getHostResourceProvider(anyObject(Set.class),anyObject(Map.class),eq(managementController))).andReturn(csvResourceProvider).anyTimes();
-  expect(clusters.getCluster(anyObject(String.class))).andReturn(cluster);
-  expect(clusters.getHostsForCluster(anyObject(String.class))).andReturn(hostsForCluster);
   expect(cluster.getCurrentStackVersion()).andReturn(stackId);
   expect(cluster.getServiceComponentHosts(anyObject(String.class))).andReturn(schs).anyTimes();
+  Capture<StackId> capturedStackId=new Capture<StackId>();
+  cluster.setDesiredStackVersion(capture(capturedStackId));
+  expectLastCall().once();
+  expect(cluster.getHosts()).andReturn(hosts).anyTimes();
   expect(sch.getServiceName()).andReturn("HIVE").anyTimes();
   expect(repositoryVersionDAOMock.findByDisplayName(anyObject(String.class))).andReturn(repoVersion);
   expect(actionManager.getRequestTasks(anyLong())).andReturn(Collections.<HostRoleCommand>emptyList()).anyTimes();
@@ -107,5 +90,5 @@
   Request request=PropertyHelper.getUpdateRequest(properties,null);
   provider.updateResources(request,null);
   verify(managementController,response);
-  Assert.assertEquals(clusterEntity.getDesiredStack(),newDesiredStack);
+  Assert.assertEquals(capturedStackId.getValue(),new StackId(newDesiredStack.getStackName(),newDesiredStack.getStackVersion()));
 }

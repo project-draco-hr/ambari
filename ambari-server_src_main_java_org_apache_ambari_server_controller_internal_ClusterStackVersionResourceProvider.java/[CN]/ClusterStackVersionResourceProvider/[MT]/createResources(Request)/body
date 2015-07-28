@@ -46,8 +46,6 @@
   }
  else {
     StackId currentStackVersion=cluster.getCurrentStackVersion();
-    stackName=currentStackVersion.getStackName();
-    stackVersion=currentStackVersion.getStackVersion();
     stackId=currentStackVersion;
   }
   RepositoryVersionEntity repoVersionEnt=repositoryVersionDAO.findByStackAndVersion(stackId,desiredRepoVersion);
@@ -67,6 +65,7 @@
   int maxTasks=configuration.getAgentPackageParallelCommandsLimit();
   int hostCount=hostsForCluster.size();
   int batchCount=(int)(Math.ceil((double)hostCount / maxTasks));
+  ArrayList<Host> directTransitions=new ArrayList<Host>();
   long stageId=req.getLastStageId() + 1;
   if (0L == stageId) {
     stageId=1L;
@@ -86,7 +85,12 @@
     stageId++;
     for (int i=0; i < maxTasks && hostsForClusterIter.hasNext(); i++) {
       Host host=hostsForClusterIter.next();
-      addHostVersionInstallCommandsToStage(desiredRepoVersion,cluster,managementController,ami,stackId,perOsRepos,stage,host);
+      if (hostHasVersionableComponents(cluster,ami,stackId,host)) {
+        addHostVersionInstallCommandsToStage(desiredRepoVersion,cluster,managementController,ami,stackId,perOsRepos,stage,host);
+      }
+ else {
+        directTransitions.add(host);
+      }
     }
   }
   req.addStages(stages);
@@ -105,6 +109,9 @@
       cluster.transitionClusterVersion(stackId,desiredRepoVersion,RepositoryVersionState.INSTALLING);
     }
     cluster.inferHostVersions(existingCSVer);
+    for (    Host host : directTransitions) {
+      transitionHostVersionToInstalled(host,cluster,existingCSVer.getRepositoryVersion().getVersion());
+    }
     req.persist();
   }
  catch (  AmbariException e) {

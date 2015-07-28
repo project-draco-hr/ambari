@@ -14,13 +14,35 @@
     replay(host);
     hostsForCluster.put(hostname,host);
   }
-  ServiceComponentHost sch=createMock(ServiceComponentHost.class);
-  List<ServiceComponentHost> schs=Collections.singletonList(sch);
+  final ServiceComponentHost schDatanode=createMock(ServiceComponentHost.class);
+  expect(schDatanode.getServiceName()).andReturn("HDFS").anyTimes();
+  expect(schDatanode.getServiceComponentName()).andReturn("DATANODE").anyTimes();
+  final ServiceComponentHost schNamenode=createMock(ServiceComponentHost.class);
+  expect(schNamenode.getServiceName()).andReturn("HDFS").anyTimes();
+  expect(schNamenode.getServiceComponentName()).andReturn("NAMENODE").anyTimes();
+  final ServiceComponentHost schAMS=createMock(ServiceComponentHost.class);
+  expect(schAMS.getServiceName()).andReturn("AMBARI_METRICS").anyTimes();
+  expect(schAMS.getServiceComponentName()).andReturn("METRICS_COLLECTOR").anyTimes();
+  final List<ServiceComponentHost> schsH1=new ArrayList<ServiceComponentHost>(){
+{
+      add(schDatanode);
+      add(schNamenode);
+      add(schAMS);
+    }
+  }
+;
+  final List<ServiceComponentHost> schsH2=new ArrayList<ServiceComponentHost>(){
+{
+      add(schAMS);
+    }
+  }
+;
   RepositoryVersionEntity repoVersion=new RepositoryVersionEntity();
+  repoVersion.setId(1l);
   repoVersion.setOperatingSystems(operatingSystemsJson);
-  ServiceOsSpecific.Package hivePackage=new ServiceOsSpecific.Package();
-  hivePackage.setName("hive");
-  List<ServiceOsSpecific.Package> packages=Collections.singletonList(hivePackage);
+  ServiceOsSpecific.Package hdfsPackage=new ServiceOsSpecific.Package();
+  hdfsPackage.setName("hdfs");
+  List<ServiceOsSpecific.Package> packages=Collections.singletonList(hdfsPackage);
   ActionManager actionManager=createNiceMock(ActionManager.class);
   RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
   ResourceProviderFactory resourceProviderFactory=createNiceMock(ResourceProviderFactory.class);
@@ -33,13 +55,24 @@
   expect(managementController.getAuthName()).andReturn("admin").anyTimes();
   expect(managementController.getActionManager()).andReturn(actionManager).anyTimes();
   expect(managementController.getJdkResourceUrl()).andReturn("/JdkResourceUrl").anyTimes();
-  expect(managementController.getPackagesForServiceHost(anyObject(ServiceInfo.class),(Map<String,String>)anyObject(List.class),anyObject(String.class))).andReturn(packages).anyTimes();
+  expect(managementController.getPackagesForServiceHost(anyObject(ServiceInfo.class),(Map<String,String>)anyObject(List.class),anyObject(String.class))).andReturn(packages).times((hostCount - 1) * 2);
   expect(resourceProviderFactory.getHostResourceProvider(anyObject(Set.class),anyObject(Map.class),eq(managementController))).andReturn(csvResourceProvider).anyTimes();
   expect(clusters.getCluster(anyObject(String.class))).andReturn(cluster);
   expect(clusters.getHostsForCluster(anyObject(String.class))).andReturn(hostsForCluster);
+  String clusterName="Cluster100";
   expect(cluster.getCurrentStackVersion()).andReturn(stackId);
-  expect(cluster.getServiceComponentHosts(anyObject(String.class))).andReturn(schs).anyTimes();
-  expect(sch.getServiceName()).andReturn("HIVE").anyTimes();
+  expect(cluster.getServiceComponentHosts(anyObject(String.class))).andAnswer(new IAnswer<List<ServiceComponentHost>>(){
+    @Override public List<ServiceComponentHost> answer() throws Throwable {
+      String hostname=(String)EasyMock.getCurrentArguments()[0];
+      if (hostname.equals("host2")) {
+        return schsH2;
+      }
+ else {
+        return schsH1;
+      }
+    }
+  }
+).anyTimes();
   ExecutionCommand executionCommand=createNiceMock(ExecutionCommand.class);
   ExecutionCommandWrapper executionCommandWrapper=createNiceMock(ExecutionCommandWrapper.class);
   expect(executionCommandWrapper.getExecutionCommand()).andReturn(executionCommand).anyTimes();
@@ -48,7 +81,12 @@
   expect(stageFactory.createNew(anyLong(),anyObject(String.class),anyObject(String.class),anyLong(),anyObject(String.class),anyObject(String.class),anyObject(String.class),anyObject(String.class))).andReturn(stage).times((int)Math.ceil(hostCount / MAX_TASKS_PER_STAGE));
   expect(repositoryVersionDAOMock.findByStackAndVersion(anyObject(StackId.class),anyObject(String.class))).andReturn(repoVersion);
   expect(actionManager.getRequestTasks(anyLong())).andReturn(Collections.<HostRoleCommand>emptyList()).anyTimes();
-  replay(managementController,response,clusters,resourceProviderFactory,csvResourceProvider,cluster,repositoryVersionDAOMock,configHelper,sch,actionManager,executionCommand,executionCommandWrapper,stage,stageFactory);
+  ClusterEntity clusterEntity=new ClusterEntity();
+  clusterEntity.setClusterId(1l);
+  clusterEntity.setClusterName(clusterName);
+  ClusterVersionEntity cve=new ClusterVersionEntity(clusterEntity,repoVersion,RepositoryVersionState.INSTALL_FAILED,0,"");
+  expect(clusterVersionDAO.findByClusterAndStackAndVersion(anyObject(String.class),anyObject(StackId.class),anyObject(String.class))).andReturn(cve);
+  replay(managementController,response,clusters,resourceProviderFactory,csvResourceProvider,cluster,repositoryVersionDAOMock,configHelper,schDatanode,schNamenode,schAMS,actionManager,executionCommand,executionCommandWrapper,stage,stageFactory,clusterVersionDAO);
   ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
   injector.injectMembers(provider);
   Set<Map<String,Object>> propertySet=new LinkedHashSet<Map<String,Object>>();
@@ -56,7 +94,7 @@
   properties.put(ClusterStackVersionResourceProvider.CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID,"Cluster100");
   properties.put(ClusterStackVersionResourceProvider.CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID,"2.2.0.1-885");
   properties.put(ClusterStackVersionResourceProvider.CLUSTER_STACK_VERSION_STACK_PROPERTY_ID,"HDP");
-  properties.put(ClusterStackVersionResourceProvider.CLUSTER_STACK_VERSION_VERSION_PROPERTY_ID,"2.0.7");
+  properties.put(ClusterStackVersionResourceProvider.CLUSTER_STACK_VERSION_VERSION_PROPERTY_ID,"2.1.1");
   propertySet.add(properties);
   Request request=PropertyHelper.getCreateRequest(propertySet,null);
   RequestStatus status=provider.createResources(request);
