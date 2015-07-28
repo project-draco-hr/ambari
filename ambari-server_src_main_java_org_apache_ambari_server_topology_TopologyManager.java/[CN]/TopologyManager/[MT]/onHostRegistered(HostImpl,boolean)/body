@@ -1,6 +1,8 @@
 {
   ensureInitialized();
+  LOG.info("TopologyManager.onHostRegistered: Entering");
   if (associatedWithCluster || isHostIgnored(host.getHostName())) {
+    LOG.info("TopologyManager.onHostRegistered: host = {} is already associated with the cluster or is currently being processed",host.getHostName());
     return;
   }
   boolean matchedToRequest=false;
@@ -12,6 +14,7 @@ synchronized (reservedHosts) {
       if (response.getAnswer() != HostOfferResponse.Answer.ACCEPTED) {
         throw new RuntimeException("LogicalRequest declined host offer of explicitly requested host: " + hostName);
       }
+      LOG.info("TopologyManager.onHostRegistered: processing accepted host offer for reserved host = {}",hostName);
       processAcceptedHostOffer(getClusterTopology(request.getClusterName()),response,host);
       matchedToRequest=true;
     }
@@ -25,12 +28,15 @@ synchronized (outstandingRequests) {
 switch (hostOfferResponse.getAnswer()) {
 case ACCEPTED:
           matchedToRequest=true;
-        processAcceptedHostOffer(getClusterTopology(request.getClusterName()),hostOfferResponse,host);
-      break;
+        LOG.info("TopologyManager.onHostRegistered: processing accepted host offer for matched host = {}",hostName);
+      processAcceptedHostOffer(getClusterTopology(request.getClusterName()),hostOfferResponse,host);
+    break;
 case DECLINED_DONE:
-    outstandingRequestIterator.remove();
-  break;
+  LOG.info("TopologyManager.onHostRegistered: DECLINED_DONE received for host = {}",hostName);
+outstandingRequestIterator.remove();
+break;
 case DECLINED_PREDICATE:
+LOG.info("TopologyManager.onHostRegistered: DECLINED_PREDICATE received for host = {}",hostName);
 break;
 }
 }
@@ -41,7 +47,7 @@ synchronized (availableHosts) {
 boolean addToAvailableList=true;
 for (HostImpl registered : availableHosts) {
 if (registered.getHostId() == host.getHostId()) {
-LOG.debug("Host {} re-registered, will not be added to the available hosts list",hostName);
+LOG.info("Host {} re-registered, will not be added to the available hosts list",hostName);
 addToAvailableList=false;
 break;
 }

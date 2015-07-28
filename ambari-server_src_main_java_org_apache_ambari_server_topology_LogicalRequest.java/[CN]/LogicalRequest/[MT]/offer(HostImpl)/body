@@ -1,11 +1,16 @@
 {
 synchronized (requestsWithReservedHosts) {
+    LOG.info("LogicalRequest.offer: attempting to match a request to a request for a reserved host to hostname = {}",host.getHostName());
     HostRequest hostRequest=requestsWithReservedHosts.remove(host.getHostName());
     if (hostRequest != null) {
       HostOfferResponse response=hostRequest.offer(host);
       if (response.getAnswer() != HostOfferResponse.Answer.ACCEPTED) {
         throw new RuntimeException("LogicalRequest declined host offer of explicitly requested host: " + host.getHostName());
       }
+ else {
+        LOG.info("LogicalRequest.offer: request mapping ACCEPTED for host = {}",host.getHostName());
+      }
+      LOG.info("LogicalRequest.offer returning response, reservedHost list size = {}",requestsWithReservedHosts.size());
       return response;
     }
   }
@@ -13,17 +18,22 @@ synchronized (requestsWithReservedHosts) {
 synchronized (outstandingHostRequests) {
     Iterator<HostRequest> hostRequestIterator=outstandingHostRequests.iterator();
     while (hostRequestIterator.hasNext()) {
+      LOG.info("LogicalRequest.offer: attempting to match a request to a request for a reserved host to hostname = {}",host.getHostName());
       HostOfferResponse response=hostRequestIterator.next().offer(host);
 switch (response.getAnswer()) {
 case ACCEPTED:
         hostRequestIterator.remove();
-      return response;
+      LOG.info("LogicalRequest.offer: host request matched to non-reserved host, hostname = {}, host request has been removed from list",host.getHostName());
+    return response;
 case DECLINED_DONE:
-    hostRequestIterator.remove();
+  hostRequestIterator.remove();
+LOG.info("LogicalRequest.offer: host request returned DECLINED_DONE for hostname = {}, host request has been removed from list",host.getHostName());
 case DECLINED_PREDICATE:
-  predicateRejected=true;
+LOG.info("LogicalRequest.offer: host request returned DECLINED_PREDICATE for hostname = {}",host.getHostName());
+predicateRejected=true;
 }
 }
+LOG.info("LogicalRequest.offer: outstandingHost request list size = " + outstandingHostRequests.size());
 }
 return predicateRejected || !requestsWithReservedHosts.isEmpty() ? new HostOfferResponse(HostOfferResponse.Answer.DECLINED_PREDICATE) : new HostOfferResponse(HostOfferResponse.Answer.DECLINED_DONE);
 }

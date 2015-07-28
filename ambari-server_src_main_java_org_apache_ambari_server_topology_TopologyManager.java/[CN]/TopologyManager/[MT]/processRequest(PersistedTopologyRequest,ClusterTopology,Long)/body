@@ -1,4 +1,5 @@
 {
+  LOG.info("TopologyManager.processRequest: Entering");
   finalizeTopology(request.getRequest(),topology);
   LogicalRequest logicalRequest=createLogicalRequest(request,topology,requestId);
   boolean requestHostComplete=false;
@@ -10,27 +11,34 @@ synchronized (reservedHosts) {
         String hostname=host.getHostName();
         if (reservedHosts.containsKey(hostname)) {
           if (logicalRequest.equals(reservedHosts.get(hostname))) {
+            LOG.info("TopologyManager.processRequest: host name = {} is mapped to LogicalRequest ID = {} and will be removed from the reserved hosts.",hostname,logicalRequest.getRequestId());
             reservedHosts.remove(hostname);
           }
  else {
+            LOG.info("TopologyManager.processRequest: host name = {} is registered with another request, and will not be offered to LogicalRequest ID = {}",hostname,logicalRequest.getRequestId());
             continue;
           }
         }
       }
+      LOG.info("TopologyManager.processRequest: offering host name = {} to LogicalRequest ID = {}",host.getHostName(),logicalRequest.getRequestId());
       HostOfferResponse response=logicalRequest.offer(host);
 switch (response.getAnswer()) {
 case ACCEPTED:
         hostIterator.remove();
-      processAcceptedHostOffer(getClusterTopology(logicalRequest.getClusterName()),response,host);
-    break;
+      LOG.info("TopologyManager.processRequest: host name = {} was ACCEPTED by LogicalRequest ID = {} , host has been removed from available hosts.",host.getHostName(),logicalRequest.getRequestId());
+    processAcceptedHostOffer(getClusterTopology(logicalRequest.getClusterName()),response,host);
+  break;
 case DECLINED_DONE:
-  requestHostComplete=true;
+requestHostComplete=true;
+LOG.info("TopologyManager.processRequest: host name = {} was DECLINED_DONE by LogicalRequest ID = {}",host.getHostName(),logicalRequest.getRequestId());
 break;
 case DECLINED_PREDICATE:
+LOG.info("TopologyManager.processRequest: host name = {} was DECLINED_PREDICATE by LogicalRequest ID = {}",host.getHostName(),logicalRequest.getRequestId());
 break;
 }
 }
 if (!requestHostComplete) {
+LOG.info("TopologyManager.processRequest: not all required hosts have been matched, so adding LogicalRequest ID = {} to outstanding requests",logicalRequest.getRequestId());
 outstandingRequests.add(logicalRequest);
 }
 }
