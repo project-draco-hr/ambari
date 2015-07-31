@@ -1,0 +1,28 @@
+{
+  Resource.Type type=Resource.Type.User;
+  Injector injector=createInjector();
+  SecurityHelper securityHelper=injector.getInstance(SecurityHelper.class);
+  Users users=injector.getInstance(Users.class);
+  User user=createMock(User.class);
+  PrivilegeEntity privilegeEntity=createMock(PrivilegeEntity.class);
+  PermissionEntity permissionEntity=createMock(PermissionEntity.class);
+  AmbariManagementController managementController=injector.getInstance(AmbariManagementController.class);
+  RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
+  Collection<? extends GrantedAuthority> currentAuthorities=Collections.singleton(new AmbariGrantedAuthority(privilegeEntity));
+  expect(users.getAnyUser("User100")).andReturn(user).once();
+  users.grantAdminPrivilege(1000);
+  expectLastCall().once();
+  expect(user.getUserId()).andReturn(1000).once();
+  expect(privilegeEntity.getPermission()).andReturn(permissionEntity).once();
+  expect(permissionEntity.getId()).andReturn(PermissionEntity.AMBARI_ADMIN_PERMISSION).once();
+  securityHelper.getCurrentAuthorities();
+  expectLastCall().andReturn(currentAuthorities).once();
+  replay(securityHelper,user,users,privilegeEntity,permissionEntity,response);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  Map<String,Object> properties=new LinkedHashMap<String,Object>();
+  properties.put(UserResourceProvider.USER_ADMIN_PROPERTY_ID,"true");
+  Request request=PropertyHelper.getUpdateRequest(properties,null);
+  Predicate predicate=new PredicateBuilder().property(UserResourceProvider.USER_USERNAME_PROPERTY_ID).equals("User100").toPredicate();
+  provider.updateResources(request,predicate);
+  verify(securityHelper,user,users,privilegeEntity,permissionEntity,response);
+}
