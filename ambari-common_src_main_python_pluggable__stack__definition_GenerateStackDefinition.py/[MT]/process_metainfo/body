@@ -1,0 +1,93 @@
+def process_metainfo(file_path, config_data, stack_version_changes, common_services=[]):
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+    if ((root.find('versions') is not None) or (root.find('services') is None)):
+        extends_tag = root.find('extends')
+        if (extends_tag is not None):
+            version = extends_tag.text
+            if (version in stack_version_changes):
+                extends_tag.text = stack_version_changes[version]
+                tree.write(file_path)
+        current_version = file_path.split(os.sep)[(-2)]
+        modify_active_tag = False
+        active_tag_value = None
+        for stack in config_data.versions:
+            if ((stack.version == current_version) and ('active' in stack)):
+                modify_active_tag = True
+                active_tag_value = stack.active
+                break
+        if modify_active_tag:
+            versions_tag = root.find('versions')
+            if (versions_tag is None):
+                versions_tag = ET.SubElement(root, 'versions')
+            active_tag = versions_tag.find('active')
+            if (active_tag is None):
+                active_tag = ET.SubElement(versions_tag, 'active')
+            active_tag.text = active_tag_value
+            tree.write(file_path)
+    else:
+        services_tag = root.find('services')
+        if (services_tag is not None):
+            for service_tag in services_tag.findall('service'):
+                name = service_tag.find('name').text
+                extends_tag = service_tag.find('extends')
+                if (extends_tag is not None):
+                    common_services.append(extends_tag.text)
+                service_version_tag = service_tag.find('version')
+                split_path = file_path.split(os.path.sep)
+                split_path_len = len(split_path)
+                path_stack_version = split_path[(split_path_len - 4)]
+                for stack in config_data.versions:
+                    if (stack.version == path_stack_version):
+                        for service in stack.services:
+                            if (service.name == name):
+                                if ('version' in service):
+                                    if (service_version_tag is None):
+                                        service_version_tag = ET.SubElement(service_tag, 'version')
+                                    service_version_tag.text = service.version
+                                elif (service_version_tag is not None):
+                                    service_version_split = service_version_tag.text.split('.')
+                                    if (len(stack.baseVersion) < len(service_version_tag.text)):
+                                        version_suffix = service_version_tag.text[(- len(stack.baseVersion)):]
+                                        if (version_suffix == stack.baseVersion):
+                                            version_prefix = service_version_tag.text[0:(- len(stack.baseVersion))]
+                                            service_version_tag.text = (version_prefix + stack.version)
+                                osSpecifics_tag = service_tag.find('osSpecifics')
+                                if ('packages' in service):
+                                    if (osSpecifics_tag is not None):
+                                        service_tag.remove(osSpecifics_tag)
+                                    osSpecifics_tag = ET.SubElement(service_tag, 'osSpecifics')
+                                    for item in service['packages']:
+                                        osSpecific_tag = ET.SubElement(osSpecifics_tag, 'osSpecific')
+                                        family = item['family']
+                                        osFamily_tag = ET.SubElement(osSpecific_tag, 'osFamily')
+                                        osFamily_tag.text = family
+                                        packages_tag = ET.SubElement(osSpecific_tag, 'packages')
+                                        for package in item['packages']:
+                                            package_tag = ET.SubElement(packages_tag, 'package')
+                                            name_tag = ET.SubElement(package_tag, 'name')
+                                            if isinstance(package, basestring):
+                                                name_tag.text = package
+                                            else:
+                                                name_tag.text = package['name']
+                                            if ('skipUpgrade' in package):
+                                                skipUpgrade_tag = ET.SubElement(package_tag, 'skipUpgrade')
+                                                skipUpgrade_tag.text = package['skipUpgrade']
+                                else:
+                                    for packages_tag in service_tag.getiterator('packages'):
+                                        for package_tag in packages_tag.getiterator('package'):
+                                            name_tag = package_tag.find('name')
+                                            for base_version in stack_version_changes:
+                                                version = stack_version_changes[base_version]
+                                                dash_base_version = base_version.replace('.', '-')
+                                                dash_version = version.replace('.', '-')
+                                                underscore_base_version = base_version.replace('.', '_')
+                                                underscore_version = version.replace('.', '_')
+                                                if (dash_base_version in name_tag.text):
+                                                    name_tag.text = name_tag.text.replace(dash_base_version, dash_version)
+                                                    break
+                                                elif (underscore_base_version in name_tag.text):
+                                                    name_tag.text = name_tag.text.replace(underscore_base_version, underscore_version)
+                                                    break
+        tree.write(file_path)
+    return file_path

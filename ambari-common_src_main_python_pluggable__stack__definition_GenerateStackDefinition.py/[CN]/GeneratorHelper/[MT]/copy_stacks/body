@@ -1,0 +1,32 @@
+def copy_stacks(self):
+    original_folder = os.path.join(self.resources_folder, 'stacks', self.config_data.baseStackName)
+    target_folder = os.path.join(self.output_folder, 'stacks', self.config_data.stackName)
+    for stack in self.config_data.versions:
+        original_stack = os.path.join(original_folder, stack.baseVersion)
+        target_stack = os.path.join(target_folder, stack.version)
+        desired_services = [service.name for service in stack.services]
+        desired_services.append('stack_advisor.py')
+        base_stack_services = os.listdir(os.path.join(original_stack, 'services'))
+        ignored_files = [service for service in base_stack_services if (service not in desired_services)]
+        ignored_files.append('.pyc')
+
+        def post_copy(src, target):
+            if target.endswith('.xml'):
+                if target.endswith('metainfo.xml'):
+                    target = process_metainfo(target, self.config_data, self.stack_version_changes, self.common_services)
+                if target.endswith('repoinfo.xml'):
+                    target = process_repoinfo_xml(target, self.config_data, self.stack_version_changes, stack)
+                _upgrade_re = re.compile('upgrade-(.*)\\.xml')
+                result = re.search(_upgrade_re, target)
+                if result:
+                    target_version = result.group(1)
+                    target = process_upgrade_xml(target, target_version, self.config_data, self.stack_version_changes)
+                process_xml_files(target, self.config_data, self.stack_version_changes)
+                return
+            if target.endswith('.py'):
+                if target.endswith('stack_advisor.py'):
+                    target = process_stack_advisor(target, self.config_data, self.stack_version_changes)
+                target = process_py_files(target, self.config_data, self.stack_version_changes)
+                return
+        copy_tree(original_stack, target_stack, ignored_files, post_copy=post_copy)
+        shutil.copy(os.path.join(self.resources_folder, 'stacks', 'stack_advisor.py'), os.path.join(target_folder, '../stack_advisor.py'))

@@ -1,0 +1,34 @@
+def process_repoinfo_xml(file_path, config_data, stack_version_changes, stack):
+    if ('repoinfo' in stack):
+        root = ET.Element('reposinfo')
+        if ('latest' in stack.repoinfo):
+            latest_tag = ET.SubElement(root, 'latest')
+            latest_tag.text = stack.repoinfo.latest
+        if ('os' in stack.repoinfo):
+            for (family, repos) in stack.repoinfo.os.iteritems():
+                os_tag = ET.SubElement(root, 'os')
+                os_tag.set('family', family)
+                for repo in repos:
+                    repo_tag = ET.SubElement(os_tag, 'repo')
+                    baseurl_tag = ET.SubElement(repo_tag, 'baseurl')
+                    baseurl_tag.text = repo.baseurl
+                    repoid_tag = ET.SubElement(repo_tag, 'repoid')
+                    repoid_tag.text = repo.repoid
+                    reponame_tag = ET.SubElement(repo_tag, 'reponame')
+                    reponame_tag.text = repo.reponame
+        open(file_path, 'w').write(minidom.parseString(ET.tostring(root, 'utf-8')).toprettyxml(indent='  '))
+    else:
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+        for baseurl_tag in root.getiterator('baseurl'):
+            baseurl_tag.text = 'http://SET_REPO_URL'
+        for latest_tag in root.getiterator('latest'):
+            latest_tag.text = 'http://SET_LATEST_REPO_URL_INFO'
+        for repoid_tag in root.getiterator('repoid'):
+            repoid_tag.text = repoid_tag.text.replace(config_data.baseStackName, config_data.stackName)
+            for baseVersion in stack_version_changes:
+                repoid_tag.text = repoid_tag.text.replace(baseVersion, stack_version_changes[baseVersion])
+        for reponame_tag in root.getiterator('reponame'):
+            reponame_tag.text = reponame_tag.text.replace(config_data.baseStackName, config_data.stackName)
+        tree.write(file_path)
+    return file_path
