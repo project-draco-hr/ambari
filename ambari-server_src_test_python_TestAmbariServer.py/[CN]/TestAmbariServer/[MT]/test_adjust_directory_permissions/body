@@ -1,3 +1,5 @@
+@patch('ambari_server.setupSecurity.get_file_owner')
+@patch('ambari_server.setupSecurity.get_ambari_repo_file_full_name')
 @patch('os.path.exists')
 @patch('ambari_server.setupSecurity.set_file_permissions')
 @patch('ambari_server.setupSecurity.get_ambari_properties')
@@ -7,7 +9,7 @@
 @patch('shutil.rmtree')
 @patch('ambari_commons.os_utils.print_info_msg')
 @patch('ambari_server.setupSecurity.change_owner')
-def test_adjust_directory_permissions(self, change_owner_mock, print_info_msg_mock, rmtree_mock, mkdir_mock, get_value_from_properties_mock, get_resources_location_mock, get_ambari_properties_mock, set_file_permissions_mock, exists_mock):
+def test_adjust_directory_permissions(self, change_owner_mock, print_info_msg_mock, rmtree_mock, mkdir_mock, get_value_from_properties_mock, get_resources_location_mock, get_ambari_properties_mock, set_file_permissions_mock, exists_mock, get_ambari_repo_file_full_name_mock, get_file_owner_mock):
     properties_mock = Properties()
     properties_mock.process_pair(JDK_NAME_PROPERTY, 'dummy_jdk')
     properties_mock.process_pair(JCE_NAME_PROPERTY, 'dummy_jce')
@@ -35,4 +37,25 @@ def test_adjust_directory_permissions(self, change_owner_mock, print_info_msg_mo
     finally:
         configDefaults.NR_ADJUST_OWNERSHIP_LIST = old_adjust_owner_list
         configDefaults.NR_CHANGE_OWNERSHIP_LIST = old_change_owner_list
+    pass
+    set_file_permissions_mock.reset_mock()
+    old_adjust_owner_list = configDefaults.NR_ADJUST_OWNERSHIP_LIST
+    get_ambari_repo_file_full_name_mock.return_value = 'ambari.dummy.repo'
+    get_file_owner_mock.return_value = 'dummy.root'
+    try:
+        configDefaults.NR_ADJUST_OWNERSHIP_LIST = []
+        adjust_directory_permissions('dummy_user')
+        self.assertTrue(set_file_permissions_mock.called)
+        ambari_repo_file_entry = (get_ambari_repo_file_full_name_mock(), '644', get_file_owner_mock(), False)
+        entry_found = False
+        for args_entry in set_file_permissions_mock.call_args_list:
+            if (args_entry[0][0] == ambari_repo_file_entry[0]):
+                self.assertEquals(args_entry[0][1], ambari_repo_file_entry[1])
+                self.assertEquals(args_entry[0][2], ambari_repo_file_entry[2])
+                self.assertEquals(args_entry[0][3], ambari_repo_file_entry[3])
+                entry_found = True
+                break
+        self.assertTrue(entry_found)
+    finally:
+        configDefaults.NR_ADJUST_OWNERSHIP_LIST = old_adjust_owner_list
     pass
