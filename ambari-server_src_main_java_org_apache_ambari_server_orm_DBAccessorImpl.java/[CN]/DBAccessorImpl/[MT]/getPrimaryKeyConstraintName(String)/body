@@ -1,0 +1,42 @@
+{
+  String primaryKeyConstraintName=null;
+  Statement statement=null;
+  ResultSet resultSet=null;
+  Configuration.DatabaseType databaseType=configuration.getDatabaseType();
+switch (databaseType) {
+case ORACLE:
+{
+      String lookupPrimaryKeyNameSql=MessageFormat.format("SELECT constraint_name FROM all_constraints WHERE table_name = ''{0}'' AND constraint_type = ''P''",tableName.toUpperCase());
+      try {
+        statement=getConnection().createStatement();
+        resultSet=statement.executeQuery(lookupPrimaryKeyNameSql);
+        if (resultSet.next()) {
+          primaryKeyConstraintName=resultSet.getString("constraint_name");
+        }
+      }
+  finally {
+        JdbcUtils.closeResultSet(resultSet);
+        JdbcUtils.closeStatement(statement);
+      }
+      break;
+    }
+case SQL_SERVER:
+{
+    String lookupPrimaryKeyNameSql=MessageFormat.format("SELECT constraint_name FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE OBJECTPROPERTY(OBJECT_ID(constraint_name), 'IsPrimaryKey') = 1 AND table_name = {0}",tableName);
+    try {
+      statement=getConnection().createStatement();
+      resultSet=statement.executeQuery(lookupPrimaryKeyNameSql);
+      if (resultSet.next()) {
+        primaryKeyConstraintName=resultSet.getString("constraint_name");
+      }
+    }
+  finally {
+      JdbcUtils.closeResultSet(resultSet);
+      JdbcUtils.closeStatement(statement);
+    }
+  }
+default :
+break;
+}
+return primaryKeyConstraintName;
+}
