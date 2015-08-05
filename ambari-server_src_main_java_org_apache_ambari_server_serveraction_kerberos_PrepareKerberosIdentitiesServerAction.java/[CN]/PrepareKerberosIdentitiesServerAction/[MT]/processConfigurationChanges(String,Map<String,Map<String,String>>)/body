@@ -1,0 +1,45 @@
+{
+  actionLog.writeStdOut("Determining configuration changes");
+  if (!kerberosConfigurations.isEmpty()) {
+    if (dataDirectory == null) {
+      String message="The data directory has not been set.  Generated data can not be stored.";
+      LOG.error(message);
+      throw new AmbariException(message);
+    }
+    File configFile=new File(dataDirectory,KerberosConfigDataFileWriter.DATA_FILE_NAME);
+    KerberosConfigDataFileWriter kerberosConfDataFileWriter=null;
+    actionLog.writeStdOut(String.format("Writing configuration changes metadata file to %s",configFile.getAbsolutePath()));
+    try {
+      kerberosConfDataFileWriter=kerberosConfigDataFileWriterFactory.createKerberosConfigDataFileWriter(configFile);
+      for (      Map.Entry<String,Map<String,String>> entry : kerberosConfigurations.entrySet()) {
+        String type=entry.getKey();
+        Map<String,String> properties=entry.getValue();
+        if (properties != null) {
+          for (          Map.Entry<String,String> configTypeEntry : properties.entrySet()) {
+            kerberosConfDataFileWriter.addRecord(type,configTypeEntry.getKey(),configTypeEntry.getValue(),KerberosConfigDataFileWriter.OPERATION_TYPE_SET);
+          }
+        }
+      }
+    }
+ catch (    IOException e) {
+      String message=String.format("Failed to write kerberos configurations file - %s",configFile.getAbsolutePath());
+      LOG.error(message,e);
+      actionLog.writeStdOut(message);
+      actionLog.writeStdErr(message + "\n" + e.getLocalizedMessage());
+      throw new AmbariException(message,e);
+    }
+ finally {
+      if (kerberosConfDataFileWriter != null) {
+        try {
+          kerberosConfDataFileWriter.close();
+        }
+ catch (        IOException e) {
+          String message="Failed to close the kerberos configurations file writer";
+          LOG.warn(message,e);
+          actionLog.writeStdOut(message);
+          actionLog.writeStdErr(message + "\n" + e.getLocalizedMessage());
+        }
+      }
+    }
+  }
+}
