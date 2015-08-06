@@ -1,0 +1,34 @@
+{
+  if (searchId == null)   searchId=DEFAULT_SEARCH_ID;
+  key=key + "?" + searchId;
+  if (!canExpire)   key="$" + key;
+  if (fromBeginning != null && fromBeginning.equals("true") && getResultsCache().containsKey(key))   getResultsCache().remove(key);
+  Cursor resultSet=getResultsSet(key,makeResultsSet);
+  if (count == null)   count=DEFAULT_FETCH_COUNT;
+  ArrayList<ColumnDescription> schema=resultSet.getSchema();
+  ArrayList<Object[]> rows=new ArrayList<Object[]>(count);
+  int read=resultSet.readRaw(rows,count);
+  if (format != null && format.equalsIgnoreCase("d3")) {
+    List<Map<String,Object>> results=new ArrayList<Map<String,Object>>();
+    for (int i=0; i < rows.size(); i++) {
+      Object[] row=rows.get(i);
+      Map<String,Object> keyValue=new HashMap<String,Object>(row.length);
+      for (int j=0; j < row.length; j++) {
+        String schemaName=schema.get(j).getName();
+        keyValue.put(schemaName.replace('.','_'),row[j]);
+      }
+      results.add(keyValue);
+    }
+    return Response.ok(results);
+  }
+ else {
+    ResultsResponse resultsResponse=new ResultsResponse();
+    resultsResponse.setSchema(schema);
+    resultsResponse.setRows(rows);
+    resultsResponse.setReadCount(read);
+    resultsResponse.setHasNext(resultSet.hasNext());
+    resultsResponse.setOffset(resultSet.getOffset());
+    resultsResponse.setHasResults(true);
+    return Response.ok(resultsResponse);
+  }
+}
