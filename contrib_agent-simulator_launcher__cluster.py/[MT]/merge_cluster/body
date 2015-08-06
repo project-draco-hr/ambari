@@ -1,0 +1,46 @@
+def merge_cluster(argv):
+    '\n    Merge the cluster to another running cluster\n    :param argv: sys.argv\n    :return: None\n    '
+    if (len(argv) < 4):
+        print_help()
+        exit(1)
+    merged_cluster_name = argv[2]
+    merged_cluster = Cluster.load_from_json(merged_cluster_name)
+    if (merged_cluster is None):
+        print merged_cluster_name, ' cluster not found'
+        exit(1)
+    if (merged_cluster.state != Cluster.STATE_FREE):
+        print merged_cluster_name, ' cluster is already running'
+        exit(1)
+    weave_ip = ''
+    external_ip = ''
+    extended_cluster_name = ''
+    if (len(argv) == 4):
+        extended_cluster_name = argv[3]
+        extended_cluster = Cluster.load_from_json(extended_cluster_name)
+        if (extended_cluster is None):
+            print extended_cluster_name, ' cluster not found'
+            exit(1)
+        if (extended_cluster.state != Cluster.STATE_RUNNING):
+            if (extended_cluster.state == Cluster.STATE_FREE):
+                print extended_cluster_name, " cluster is not running, can't be extended"
+            elif extended_cluster.state.startswith(Cluster.STATE_MERGE):
+                print extended_cluster_name, " cluster is merged to another cluster, can't be extended"
+            exit(1)
+        ambari_server = extended_cluster.get_ambari_server_vm()
+        weave_ip = ambari_server.weave_internal_ip
+        external_ip = ambari_server.external_ip
+    elif (len(argv) == 5):
+        weave_ip = argv[3]
+        external_ip = argv[4]
+    else:
+        print_help()
+        exit(1)
+    if (merged_cluster.get_ambari_server_vm() is not None):
+        print merged_cluster, ' cluster has one VM to install Ambari-server, which will NOT be merged'
+    print 'Configuring cluster'
+    print 'Check output folder: ', Config.ATTRIBUTES['output_folder']
+    merged_cluster.run_cluster(weave_ip, external_ip)
+    data = Data()
+    data.set_cluster_state(merged_cluster_name, '{0} to {1}'.format(Cluster.STATE_MERGE, extended_cluster_name))
+    subprocess.call(['reset'])
+    print 'Complete'

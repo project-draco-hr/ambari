@@ -1,12 +1,13 @@
-def run_docker(self, server_weave_IP, server_external_IP, cluster):
-    config = Config()
-    config.load()
-    VMs_IP_list = []
-    for vm in cluster.VM_list:
-        VMs_IP_list.append(vm.external_ip)
-    cluster.export_hostnames('./Docker/hosts')
-    self.__centos7_docker_install__()
-    self.__centos7_weave_install__()
-    self.__build_docker_image__(config.ATTRIBUTES['Docker_image_name'])
-    self.__set_weave_network__(VMs_IP_list, server_external_IP)
-    self.__launch_containers__(config.ATTRIBUTES['Docker_image_name'], server_weave_IP)
+def run_docker(self, server_weave_ip, vm_ip_list):
+    '\n        run all Docker containers with Ambari-agent inside\n        :param server_weave_ip: Weave internal IP of Ambari-server\n        :param vm_ip_list: external IP list of all other VMs to be connected\n                each docker vm connect to each other and service VM (and ambari-server)\n        :return: None\n        '
+    self._centos7_docker_install()
+    if ('use_partition' in Config.ATTRIBUTES):
+        self._set_docker_partition(Config.ATTRIBUTES['use_partition'])
+    self._centos7_weave_install()
+    image_name = Config.ATTRIBUTES['docker_image_name']
+    if (('pull_docker_hub' in Config.ATTRIBUTES) and (Config.ATTRIBUTES['pull_docker_hub'] == 'yes')):
+        self._pull_docker_image(image_name)
+    else:
+        self._build_docker_image(image_name)
+    self._set_weave_network(vm_ip_list, self.weave_dns_ip)
+    self._launch_containers(Config.ATTRIBUTES['docker_image_name'], server_weave_ip)

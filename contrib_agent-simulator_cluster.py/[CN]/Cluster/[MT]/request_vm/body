@@ -1,0 +1,19 @@
+def request_vm(self, name, vm_num, gce_vm_type, gce_vm_os, gce_extra_cmd):
+    '\n        Request VMs from GCE\n        :param name: the name prefix of all requesting VMs\n        :param vm_num: the number of VM\n        :param gce_vm_type: the type of VM\n        :param gce_vm_os: the OS of VM\n        :param gce_extra_cmd: extra command for requesting the VMs\n        :return: A list of tuple, each tuple has domain name and IP of a VM\n        '
+    gce_key = Config.ATTRIBUTES['gce_controller_key_file']
+    gce_login = '{0}@{1}'.format(Config.ATTRIBUTES['gce_controller_user'], Config.ATTRIBUTES['gce_controller_ip'])
+    gce_up_cmd = 'gce up {0} {1} {2} {3} {4}'.format(name, vm_num, gce_vm_type, gce_vm_os, gce_extra_cmd)
+    subprocess.call(['ssh', '-o', 'StrictHostKeyChecking=no', '-i', gce_key, gce_login, gce_up_cmd])
+    Log.write('cluster launched, wait for cluster info ... ...')
+    fqdn_ip_pairs = []
+    for retry in range(max(6, vm_num)):
+        time.sleep(10)
+        with open(Config.ATTRIBUTES['gce_info_output'], 'w') as gce_info_output_file:
+            gce_info_cmd = 'gce info {0}'.format(name)
+            subprocess.call(['ssh', '-o', 'StrictHostKeyChecking=no', '-i', gce_key, gce_login, gce_info_cmd], stdout=gce_info_output_file)
+        fqdn_ip_pairs = self._extract_vm_fqdn_ip(Config.ATTRIBUTES['gce_info_output'])
+        if (len(fqdn_ip_pairs) == vm_num):
+            Log.write('Get info for all ', str(len(fqdn_ip_pairs)), ' VMs successfully')
+            break
+        Log.write('Only get info for ', str(len(fqdn_ip_pairs)), ' VMs, retry ... ...')
+    return fqdn_ip_pairs

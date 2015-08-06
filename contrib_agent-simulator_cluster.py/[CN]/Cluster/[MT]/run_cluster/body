@@ -1,0 +1,29 @@
+def run_cluster(self, server_weave_ip, server_external_ip):
+    '\n        Run all Ambari-agents and Ambari-server in the cluster in parallel\n        Wait until all processes finish\n        :param server_weave_ip: the Weave IP of Ambari-server\n        :param server_external_ip: the external IP of Ambari-server\n        :return: None\n        '
+    process_list = {}
+    process_list.update(self.run_ambari_server_asyn())
+    process_list.update(self.run_service_server_asyn(server_weave_ip, server_external_ip))
+    process_list.update(self.run_docker_on_cluster_asyn(server_weave_ip, server_external_ip))
+    terminate_state_list = {}
+    for hostname in process_list:
+        terminate_state_list[hostname] = False
+    Log.write('Wait for all VMs to finish configuration ... ...')
+    while True:
+        all_finished = True
+        for hostname in process_list:
+            (output_file, output_file_path, process) = process_list[hostname]
+            if (terminate_state_list[hostname] is False):
+                all_finished = False
+                returncode = process.poll()
+                if (returncode is None):
+                    continue
+                else:
+                    Log.write('VM ', hostname, ' configuration completed, return code: ', str(returncode), ', output file path: ', output_file_path)
+                    terminate_state_list[hostname] = True
+                    output_file.close()
+            else:
+                pass
+        if all_finished:
+            break
+        time.sleep(5)
+    Log.write('All VM configuration completed.')

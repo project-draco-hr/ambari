@@ -1,0 +1,18 @@
+def run_ambari_server_asyn(self):
+    '\n        Run configuration for Ambari-server in this cluster\n        Set up Ambari-server and Weave network\n        The method is NON-BLOCK\n        :return: a map of tuple, the key of the map is the host name of the VM,\n                the tuple has 3 elements: the file handler of the output of the VM,\n                the file path of the output of the VM,\n                and the process object of configuration for the VM\n        '
+    process_list = {}
+    for vm in self.ambari_server_vm:
+        vm_external_ip = vm.external_ip
+        self._scp_upload(vm_external_ip)
+        vm_output_file_path = vm.get_ssh_output_file_path()
+        vm_output_file = open(vm_output_file_path, 'w')
+        vm_ssh_login = '{0}@{1}'.format(Config.ATTRIBUTES['vm_user'], vm_external_ip)
+        vm_ssh_cd_cmd = 'cd {0}'.format(Config.ATTRIBUTES['vm_code_directory'])
+        vm_ssh_python_cmd = 'python launcher_ambari_server.py {0}'.format(self.cluster_name)
+        vm_ssh_cmd = '{0};{1}'.format(vm_ssh_cd_cmd, vm_ssh_python_cmd)
+        vm_key = Config.ATTRIBUTES['vm_key_file']
+        Log.write(vm_ssh_python_cmd)
+        process = subprocess.Popen(['ssh', '-o', 'StrictHostKeyChecking=no', '-t', '-i', vm_key, vm_ssh_login, vm_ssh_cmd], stdout=vm_output_file, stderr=vm_output_file)
+        process_list[vm.hostname] = (vm_output_file, vm_output_file_path, process)
+        Log.write('Configuring VM ', vm.hostname, ' ... ...')
+    return process_list

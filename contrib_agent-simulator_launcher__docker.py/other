@@ -2,12 +2,25 @@
 import sys
 from config import Config
 from cluster import Cluster
-config = Config()
-config.load()
-cluster = Cluster()
-cluster.load_cluster_info(config.ATTRIBUTES['cluster_info_file'])
-my_external_IP = sys.argv[1]
-server_weave_IP = sys.argv[2]
-server_external_IP = sys.argv[3]
-vm = get_VM(my_external_IP, cluster)
-vm.run_docker(server_weave_IP, server_external_IP, cluster)
+if (__name__ == '__main__'):
+    if (len(sys.argv) < 5):
+        print 'configure the VM to set Docker, Weave network, run Ambari-agent inside the Docker'
+        print 'Args: <the external IP of this VM>'
+        print '     <the Weave IP of the Ambari-server>'
+        print '     <the external IP of the Ambari-server>'
+        print '     <the name of the cluster>'
+        exit(1)
+    Config.load()
+    my_external_ip = sys.argv[1]
+    server_weave_ip = sys.argv[2]
+    server_external_ip = sys.argv[3]
+    cluster_name = sys.argv[4]
+    cluster = Cluster.load_from_json(cluster_name)
+    vm_ip_list = []
+    vm_ip_list.append(server_external_ip)
+    for vm in cluster.ambari_agent_vm_list:
+        vm_ip_list.append(vm.external_ip)
+    for vm in cluster.service_server_vm_list:
+        vm_ip_list.append(vm.external_ip)
+    vm = cluster.get_agent_vm(my_external_ip)
+    vm.run_docker(server_weave_ip, vm_ip_list)

@@ -1,19 +1,37 @@
-def generate_cluster_info(self, VM_IP_list, cluster_name, docker_num):
-    config = Config()
-    config.load()
-    Docker_IP_base = config.ATTRIBUTES['Docker_IP_base'].split('.')
-    Docker_IP_mask = config.ATTRIBUTES['Docker_IP_mask']
-    VM_index = 0
-    for VM_IP in VM_IP_list:
-        vm = VM(VM_IP)
-        for Docker_index in range(0, docker_num):
-            total_Docker_index = ((VM_index * docker_num) + Docker_index)
-            docker_IP = self.__increase_IP__(Docker_IP_base, total_Docker_index)
-            docker_IP_str = ((((((str(docker_IP[0]) + '.') + str(docker_IP[1])) + '.') + str(docker_IP[2])) + '.') + str(docker_IP[3]))
-            docker_hostname = ((((cluster_name + '-') + str(VM_index)) + '-') + str(Docker_index))
-            docker = Docker(docker_IP_str, str(Docker_IP_mask), docker_hostname)
+def generate_cluster_info(self, cluster_name, ambari_server_fqdn_ip_pairs, service_server_fqdn_ip_pairs, ambari_agent_fqdn_ip_pairs, docker_num):
+    '\n        generate VM and docker info for this cluster\n        set up parameter of the class instance as this info\n        :param cluster_name: the name of the cluster\n        :param ambari_server_fqdn_ip_pairs: the domain name and IP pairs for Ambari-server\n        :param service_server_fqdn_ip_pairs: the domain name and IP pairs for VMs with Ambari-agent installed\n        :param ambari_agent_fqdn_ip_pairs: the domain name and IP pairs for VM with Docker containers\n        :param docker_num: the number of Dockers inside each VMs\n        :return: None\n        '
+    weave_ip_base = Config.ATTRIBUTES['weave_ip_base']
+    weave_ip_mask = Config.ATTRIBUTES['weave_ip_mask']
+    current_ip = weave_ip_base
+    for (vm_domain_name, vm_ip) in ambari_server_fqdn_ip_pairs:
+        current_ip = self._increase_ip(current_ip, 1)
+        weave_dns_ip = current_ip
+        vm = VM(vm_ip, vm_domain_name, weave_dns_ip, weave_ip_mask)
+        current_ip = self._increase_ip(current_ip, 1)
+        vm.weave_internal_ip = current_ip
+        self.ambari_server_vm.append(vm)
+    for (vm_domain_name, vm_ip) in service_server_fqdn_ip_pairs:
+        current_ip = self._increase_ip(current_ip, 1)
+        weave_dns_ip = current_ip
+        vm = VM(vm_ip, vm_domain_name, weave_dns_ip, weave_ip_mask)
+        current_ip = self._increase_ip(current_ip, 1)
+        vm.weave_internal_ip = current_ip
+        self.service_server_vm_list.append(vm)
+    vm_index = 0
+    for (vm_domain_name, vm_ip) in ambari_agent_fqdn_ip_pairs:
+        current_ip = self._increase_ip(current_ip, 1)
+        weave_dns_ip = current_ip
+        vm = VM(vm_ip, vm_domain_name, weave_dns_ip, weave_ip_mask)
+        for docker_index in range(0, docker_num):
+            current_ip = self._increase_ip(current_ip, 1)
+            docker_ip_str = current_ip
+            total_docker_index = ((vm_index * docker_num) + docker_index)
+            docker_domain_name = Docker.get_weave_domain_name(cluster_name, total_docker_index)
+            docker = Docker(docker_ip_str, str(weave_ip_mask), docker_domain_name)
             vm.add_docker(docker)
-        VM_index = (VM_index + 1)
-        self.VM_list.append(vm)
-    self.VMs_num = len(VM_IP_list)
+        vm_index += 1
+        self.ambari_agent_vm_list.append(vm)
     self.cluster_name = cluster_name
+    self.create_time = str(datetime.datetime.now())
+    self.state = Cluster.STATE_FREE
+    Config.update('weave', 'weave_ip_base', current_ip)
