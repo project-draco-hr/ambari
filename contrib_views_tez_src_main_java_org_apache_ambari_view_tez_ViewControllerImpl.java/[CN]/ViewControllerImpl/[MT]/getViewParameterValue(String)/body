@@ -1,5 +1,30 @@
 {
-  String value=viewContext.getProperties().get(parameterName);
+  String value=null;
+  Cluster cluster=viewContext.getCluster();
+  if (cluster == null) {
+    value=viewContext.getProperties().get(parameterName);
+  }
+ else {
+    if (!parameterName.equals(ViewController.PARAM_YARN_ATS_URL) && !parameterName.equals(ViewController.PARAM_YARN_RESOURCEMANAGER_URL)) {
+      throw new RuntimeException("Requested configured value for unknown parameter: " + parameterName);
+    }
+    String httpPolicy=cluster.getConfigurationValue(TYPE_YARN_SITE,YARN_HTTP_POLICY_PROPERTY);
+    if (httpPolicy != null && httpPolicy.equalsIgnoreCase(YARN_HTTPS_ONLY)) {
+      String addr=cluster.getConfigurationValue(TYPE_YARN_SITE,HTTPS_PROPERTY_MAP.get(parameterName));
+      if (!addr.startsWith("https")) {
+        value="https://" + addr;
+      }
+    }
+ else {
+      String addr=cluster.getConfigurationValue(TYPE_YARN_SITE,HTTP_PROPERTY_MAP.get(parameterName));
+      if (!addr.startsWith("http")) {
+        value="http://" + addr;
+      }
+    }
+  }
+  if (LOG.isDebugEnabled()) {
+    LOG.debug("ViewControllerImpl, paramName=" + parameterName + ", value="+ value);
+  }
   if ("null".equals(value)) {
     return null;
   }
