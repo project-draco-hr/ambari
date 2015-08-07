@@ -1,12 +1,26 @@
 {
-  for (  RequestStatus status : EnumSet.of(RequestStatus.FAILED,RequestStatus.COMPLETED)) {
-    List<Long> requests=db.getRequestsByStatus(status,100,true);
-    if (requests != null) {
-synchronized (requestSharedDataMap) {
-        for (        Long requestId : requests) {
-          requestSharedDataMap.remove(requestId);
-        }
-      }
-    }
+  if (requestSharedDataMap.isEmpty()) {
+    return;
   }
+  try {
+synchronized (requestSharedDataMap) {
+      Set<Long> requestIds=requestSharedDataMap.keySet();
+      List<Request> requests=db.getRequests(requestIds);
+      for (      Request request : requests) {
+        CalculatedStatus calculatedStatus=CalculatedStatus.statusFromStages(request.getStages());
+        HostRoleStatus status=calculatedStatus.getStatus();
+switch (status) {
+case FAILED:
+case COMPLETED:
+          requestSharedDataMap.remove(request.getRequestId());
+        break;
+default :
+      break;
+  }
+}
+}
+}
+ catch (Exception exception) {
+LOG.warn("Unable to clear the server-side action request cache",exception);
+}
 }
