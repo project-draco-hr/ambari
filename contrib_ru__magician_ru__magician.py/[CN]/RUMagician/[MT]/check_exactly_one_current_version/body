@@ -1,0 +1,47 @@
+def check_exactly_one_current_version(self):
+    '\n    If there are no cluster_version records, or host_version records, the user will have to restart at least one component\n    that can advertise a version. Ideally, they need to restart all services.\n\n    If there is exactly one cluster_version, and every host_version record corresponds to the same repo_version,\n    then need to ensure that all of these entities have a state of CURRENT.\n    If not, prompt user if they want to change all to CURRENT.\n    '
+    expected_state = 'CURRENT'
+    query = 'SELECT COUNT(*) FROM cluster_version;'
+    self.cursor.execute(query)
+    result = self.cursor.fetchone()
+    if ((result is None) or (len(result) != 1)):
+        Logger.error('Unable to run query: {0}'.format(query))
+        return
+    count = result[0]
+    if (count == 0):
+        msg = (('There are no cluster_versions. Start ambari-server, and then perform a Restart on one of the services.\n' + 'Then navigate to the "Stacks and Versions > Versions" page and ensure you can see the stack version.\n') + 'Next, restart all services, one-by-one, so that Ambari knows what version each component is running.')
+        Logger.warning(msg)
+    elif (count == 1):
+        query = 'SELECT rv.repo_version_id, rv.version, cv.state FROM cluster_version cv JOIN repo_version rv ON cv.repo_version_id = rv.repo_version_id;'
+        self.cursor.execute(query)
+        result = self.cursor.fetchone()
+        repo_version_id = None
+        repo_version = None
+        cluster_version_state = None
+        if (result and (len(result) == 3)):
+            repo_version_id = result[0]
+            repo_version = result[1]
+            cluster_version_state = result[2]
+        if (repo_version_id and repo_version and cluster_version_state):
+            if (cluster_version_state.upper() == expected_state):
+                Logger.info('Everything looks correct. Cluster Version {0} has a state of {1}.'.format(repo_version, cluster_version_state))
+                self.check_all_hosts_current(repo_version_id, repo_version)
+            else:
+                Logger.error('Cluster Version {0} should have a state of {1} but is {2}. Make sure to restart all of the Services.'.format(repo_version, expected_state, cluster_version_state))
+        else:
+            Logger.error('Unable to run query: {0}'.format(query))
+    elif (count > 1):
+        Logger.info('Found multiple Cluster versions, checking that exactly one is {0}.'.format(expected_state))
+        query = "SELECT rv.repo_version_id, rv.version, cv.state FROM cluster_version cv JOIN repo_version rv ON cv.repo_version_id = rv.repo_version_id WHERE cv.state = '{0}';".format(expected_state)
+        self.cursor.execute(query)
+        rows = self.cursor.fetchall()
+        if rows:
+            if (len(rows) == 1):
+                Logger.info('Good news; Cluster Version {0} has a state of {1}.'.format(rows[0][1], expected_state))
+                self.check_all_hosts_current(rows[0][0], rows[0][1])
+            elif (len(rows) > 1):
+                repo_versions = [row[1] for row in rows if (len(row) == 3)]
+                Logger.error('Found multiple cluster versions with a state of {0}, but only one should be {0}.\nWill need to fix this manually, please contact Support. Cluster Versions found: {1}'.format(expected_state, ', '.join(repo_versions)))
+        else:
+            Logger.error('Unable to run query: {0}\n'.format(query))
+    pass

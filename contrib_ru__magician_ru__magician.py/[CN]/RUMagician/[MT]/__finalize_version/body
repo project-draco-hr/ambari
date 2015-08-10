@@ -1,0 +1,36 @@
+def __finalize_version(self, current_cluster_version, desired_cluster_version):
+    '\n    Finalize a version by marking it as CURRENT\n    :param current_cluster_version: Dictionary with information about the current version.\n    :param desired_cluster_version: String of version that should be marked as CURRENT.\n    '
+    if ((current_cluster_version is None) or ('version' not in current_cluster_version)):
+        Logger.error('Could not finalize to version {0} because did not receive a Cluster Version that is CURRENT.'.format(desired_cluster_version))
+        return
+    if (current_cluster_version['version'] == desired_cluster_version):
+        Logger.info('Asking to finalize to a version that is already CURRENT, nothing to do.\n')
+        return
+    repo_version = self.__get_repo_version(desired_cluster_version)
+    if ((repo_version is None) or ('repo_version_id' not in repo_version)):
+        Logger.error('Unable to query Repo Version {0}.\n'.format(desired_cluster_version))
+        return
+    statements = []
+    statements.append("UPDATE cluster_version SET state = 'CURRENT' WHERE repo_version_id = {0};".format(repo_version['repo_version_id']))
+    statements.append("UPDATE host_version SET state = 'CURRENT' WHERE repo_version_id = {0};".format(repo_version['repo_version_id']))
+    statements.append("UPDATE hostcomponentstate set version = '{0}' WHERE version NOT IN ('{0}', 'UNKNOWN');".format(desired_cluster_version))
+    statements.append("UPDATE hostcomponentstate set upgrade_state = 'NONE';")
+    statements.append("UPDATE cluster_version SET state = 'INSTALLED' WHERE repo_version_id = {0} AND state = 'CURRENT';".format(current_cluster_version['repo_version_id']))
+    statements.append("UPDATE host_version SET state = 'INSTALLED' WHERE repo_version_id = {0} AND state = 'CURRENT';".format(current_cluster_version['repo_version_id']))
+    upgrade_in_progress = self.__get_last_upgrade_id_for_repo_version(desired_cluster_version)
+    additional_statements = self.__get_update_statements_for_tasks_in_progress(upgrade_in_progress)
+    statements += additional_statements
+    if (self.compare_versions(self.ambari_version, '2.1.0') < 0):
+        '\n      # In Ambari 2.0, it was not possible to do major stack upgrades, so several columns will retain HDP 2.2 as the stackVersion.\n      E.g.,\n      _Table____________________|_Column________________|_Value____________________________________\n      clusters                  | desired_stack_version | {"stackName":"HDP","stackVersion":"2.2"}\n      clusterstate              | current_stack_version | {"stackName":"HDP","stackVersion":"2.2"}\n      hostcomponentstate        | current_stack_version | {"stackName":"HDP","stackVersion":"2.2"}\n      hostcomponentdesiredstate | desired_stack_version | {"stackName":"HDP","stackVersion":"2.2"}\n      '
+        pass
+    else:
+        statements.append('UPDATE clusters SET desired_stack_id = {0} WHERE cluster_id = {1};'.format(repo_version['stack_id'], self.cluster_id))
+        statements.append('UPDATE clusterstate SET current_stack_id = {0} WHERE cluster_id = {1};'.format(repo_version['stack_id'], self.cluster_id))
+    Logger.info((('Will run update statements:\n' + '\n'.join(statements)) + '\n'))
+    try:
+        for statement in statements:
+            self.cursor.execute(statement)
+        self.conn.commit()
+        Logger.info('Success, enjoy the rest of your day!\n')
+    except Exception as e:
+        Logger.error('Unable to run update statements to finalize version {0}. Error: {1}\n'.format(desired_cluster_version, e.message))

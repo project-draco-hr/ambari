@@ -1,0 +1,40 @@
+def __init__(self, argv):
+    parser = OptionParser()
+    parser.add_option('-v', '--verbose', action='store_true', dest='verbose', default=False)
+    (self.options, self.args) = parser.parse_args(argv)
+    logging_level = (logging.DEBUG if self.options.verbose else logging.INFO)
+    Logger.setLevel(logging_level)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging_level)
+    formatter = logging.Formatter('%(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    Logger.addHandler(ch)
+    signal.signal(signal.SIGTERM, self.terminate)
+    signal.signal(signal.SIGINT, self.terminate)
+    self.print_usage()
+    self.configure()
+    if (not self.check_ambari_server_process_down()):
+        Logger.info('Ambari Server cannot be running while we make database updates. Please call "ambari-server stop" and try running this script again.')
+        self.terminate()
+    stage = None
+    while (stage is None):
+        question = ('What stage of Stack Upgrade are you in? Enter a number.\n1) Just upgraded to Ambari {0} or higher, and do not see your stack version in the Versions page.\n'.format(MIN_AMBARI_VERSION) + '2) Registered a Repository and Installed Packages.\n3) Performed an automated/manual upgrade and want to force it to the version I want.\n')
+        stage = self.ask_question(question, numeric=True)
+        try:
+            if stage:
+                stage = int(stage)
+        except ValueError as e:
+            stage = None
+        if (stage == 1):
+            Logger.info('Selected {0}. Will verify that exactly one version exists and that it is marked as CURRENT.'.format(stage))
+            self.check_exactly_one_current_version()
+        elif (stage == 2):
+            Logger.info('Selected {0}. Will check that all Repository Versions are consistent.'.format(stage))
+            self.check_repo_versions()
+            self.check_installation()
+        elif (stage == 3):
+            Logger.info('Selected {0}. Will confirm that the cluster is in a good shape to finalize.'.format(stage))
+            self.finalize()
+        else:
+            Logger.error('Invalid option "{0}", please try again.'.format(stage))
+            stage = None

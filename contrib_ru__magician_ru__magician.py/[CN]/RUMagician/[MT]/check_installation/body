@@ -1,0 +1,36 @@
+def check_installation(self):
+    '\n    If any Cluster Versions are stuck in INSTALLING, ask the user if they want to\n    retry (transition to INSTALL_FAILED), or force it (transition to INSTALLED).\n    '
+    query = 'SELECT rv.repo_version_id, rv.version, rv.display_name, cv.state FROM cluster_version cv JOIN repo_version rv ON cv.repo_version_id = rv.repo_version_id ORDER BY rv.repo_version_id;'
+    self.cursor.execute(query)
+    rows = self.cursor.fetchall()
+    if ((rows is None) or (len(rows) == 0)):
+        Logger.warning('Did not find any Cluster Versions, nothing to do. Query: {0}'.format(query))
+        return
+    for row in rows:
+        if (len(row) == 4):
+            repo_version_id = row[0]
+            version = row[1]
+            display_name = row[2]
+            state = row[3]
+            if (state.upper() == 'INSTALLING'):
+                question = ('Repo Version {0} ({1}) is stuck in INSTALLING. '.format(display_name, version) + 'Do you want to,\n1) Leave as is (DEFAULT)\n2) Retry installation\n3) Force it to Installed (WARNING: Only if you are certain you have installed the bits already!!!)\n')
+                answer = self.ask_question(question, numeric=True)
+                desired_state = None
+                if ((answer is None) or (answer == 1)):
+                    Logger.info('  Ignoring, moving on...')
+                elif (answer == 2):
+                    Logger.info('  Retrying installation')
+                    desired_state = 'INSTALL_FAILED'
+                elif (answer == 3):
+                    Logger.info('  Forcing to INSTALLED')
+                    desired_state = 'INSTALLED'
+                if (desired_state is not None):
+                    statement1 = "UPDATE cluster_version SET state = '{0}' WHERE repo_version_id={1};".format(desired_state, repo_version_id)
+                    statement2 = "UPDATE host_version SET state = '{0}' WHERE repo_version_id={1};".format(desired_state, repo_version_id)
+                    Logger.info('Will run update statements:\n{0}\n{1}\n'.format(statement1, statement2))
+                    self.cursor.execute(statement1)
+                    self.cursor.execute(statement2)
+                    self.conn.commit()
+            elif (state.upper() in ['UPGRADING', 'UPGRADED']):
+                self.__handle_cluster_version_in_upgrading_or_upgraded(repo_version_id, version, display_name, state)
+    pass
