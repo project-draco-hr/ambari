@@ -1,7 +1,8 @@
 @patch.object(shell, 'call')
-def test_start_ha_bootstrap_standby_from_blueprint(self, call_mocks):
-    call_mocks = MagicMock(return_value=(0, ''))
-    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/namenode.py'), classname='NameNode', command='start', config_file='ha_bootstrap_standby_node.json', hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES, call_mocks=call_mocks)
+def test_start_ha_bootstrap_standby_from_blueprint_initial_start(self, call_mocks):
+    call_mocks = MagicMock()
+    call_mocks.side_effect = [(1, None), (0, None), (0, None)]
+    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/namenode.py'), classname='NameNode', command='start', config_file='ha_bootstrap_standby_node_initial_start.json', hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES, call_mocks=call_mocks)
     self.assert_configure_default()
     self.assertResourceCalled('File', '/etc/hadoop/conf/dfs.exclude', owner='hdfs', content=Template('exclude_hosts_list.j2'), group='hadoop')
     self.assertResourceCalled('Directory', '/var/run/hadoop', owner='hdfs', group='hadoop', mode=493)
@@ -15,6 +16,6 @@ def test_start_ha_bootstrap_standby_from_blueprint(self, call_mocks):
     self.assertResourceCalled('HdfsResource', None, security_enabled=False, only_if="ambari-sudo.sh su hdfs -l -s /bin/bash -c 'export  PATH=/bin:/usr/bin ; hdfs --config /etc/hadoop/conf haadmin -getServiceState nn2 | grep active'", keytab=UnknownConfigurationMock(), hadoop_bin_dir='/usr/bin', default_fs='hdfs://ns1', hdfs_site=self.getConfig()['configurations']['hdfs-site'], kinit_path_local='/usr/bin/kinit', principal_name=None, user='hdfs', action=['execute'], hadoop_conf_dir='/etc/hadoop/conf')
     self.assertNoMoreResources()
     self.assertTrue(call_mocks.called)
-    self.assertEqual(2, call_mocks.call_count)
-    calls = [call('hdfs namenode -bootstrapStandby -nonInteractive', logoutput=False, user=u'hdfs'), call("ambari-sudo.sh su hdfs -l -s /bin/bash -c 'export  PATH=/bin:/usr/bin ; hdfs --config /etc/hadoop/conf haadmin -getServiceState nn2 | grep active'", logoutput=True)]
-    call_mocks.assert_has_calls(calls, any_order=False)
+    self.assertEqual(3, call_mocks.call_count)
+    calls = [call("ambari-sudo.sh su hdfs -l -s /bin/bash -c 'export  PATH=/bin:/usr/bin ; hdfs --config /etc/hadoop/conf haadmin -getServiceState nn2 | grep active'", logoutput=True), call('hdfs namenode -bootstrapStandby -nonInteractive -force', logoutput=False, user=u'hdfs'), call('hdfs namenode -bootstrapStandby -nonInteractive -force', logoutput=False, user=u'hdfs')]
+    call_mocks.assert_has_calls(calls, any_order=True)
