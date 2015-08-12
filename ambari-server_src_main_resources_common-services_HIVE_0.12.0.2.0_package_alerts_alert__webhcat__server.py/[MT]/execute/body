@@ -23,29 +23,22 @@ def execute(configurations={}, parameters={}, host_name=None):
     total_time = 0
     json_response = {}
     if security_enabled:
-        if ((WEBHCAT_KEYTAB_KEY not in configurations) or (WEBHCAT_PRINCIPAL_KEY not in configurations)):
-            return (RESULT_CODE_UNKNOWN, [str(configurations)])
         try:
-            webhcat_keytab = configurations[WEBHCAT_KEYTAB_KEY]
-            webhcat_principal = configurations[WEBHCAT_PRINCIPAL_KEY]
-            webhcat_principal = webhcat_principal.replace('_HOST', host_name)
-            env = Environment.get_instance()
-            ccache_file = '{0}{1}webhcat_alert_cc_{2}'.format(env.tmp_dir, sep, getpid())
-            kerberos_env = {'KRB5CCNAME': ccache_file, }
+            smokeuser_keytab = SMOKEUSER_KEYTAB_DEFAULT
+            smokeuser_principal = SMOKEUSER_PRINCIPAL_DEFAULT
+            if (SMOKEUSER_PRINCIPAL_SCRIPT_PARAM_KEY in parameters):
+                smokeuser_principal = parameters[SMOKEUSER_PRINCIPAL_SCRIPT_PARAM_KEY]
+            if (SMOKEUSER_KEYTAB_SCRIPT_PARAM_KEY in parameters):
+                smokeuser_keytab = parameters[SMOKEUSER_KEYTAB_SCRIPT_PARAM_KEY]
+            if (SMOKEUSER_PRINCIPAL_KEY in configurations):
+                smokeuser_principal = configurations[SMOKEUSER_PRINCIPAL_KEY]
+            if (SMOKEUSER_KEYTAB_KEY in configurations):
+                smokeuser_keytab = configurations[SMOKEUSER_KEYTAB_KEY]
+            kerberos_executable_search_paths = None
             if (KERBEROS_EXECUTABLE_SEARCH_PATHS_KEY in configurations):
                 kerberos_executable_search_paths = configurations[KERBEROS_EXECUTABLE_SEARCH_PATHS_KEY]
-            else:
-                kerberos_executable_search_paths = None
-            klist_path_local = get_klist_path(kerberos_executable_search_paths)
-            klist_command = format('{klist_path_local} -s {ccache_file}')
-            (return_code, _) = shell.call(klist_command, user=smokeuser)
-            if (return_code != 0):
-                kinit_path_local = get_kinit_path(kerberos_executable_search_paths)
-                kinit_command = format('{kinit_path_local} -l 5m -c {ccache_file} -kt {webhcat_keytab} {webhcat_principal}; ')
-                Execute(kinit_command, user=smokeuser)
-            (_, stdout, stderr) = shell.checked_call(['curl', '--negotiate', '-u', ':', '-sL', '-w', '%{http_code}', '--connect-timeout', curl_connection_timeout, '-o', '/dev/null', query_url], stderr=subprocess.PIPE, env=kerberos_env)
-            if (stderr != ''):
-                raise Exception(stderr)
+            env = Environment.get_instance()
+            (stdout, stderr, time_millis) = curl_krb_request(env.tmp_dir, smokeuser_keytab, smokeuser_principal, query_url, 'webhcat_alert_cc_', kerberos_executable_search_paths, True, 'WebHCat Server Status', smokeuser, connection_timeout=curl_connection_timeout)
             response_code = int(stdout)
             if (response_code == 0):
                 label = CRITICAL_CONNECTION_MESSAGE.format(query_url)
@@ -53,11 +46,7 @@ def execute(configurations={}, parameters={}, host_name=None):
             if (response_code != 200):
                 label = CRITICAL_HTTP_MESSAGE.format(response_code, query_url)
                 return (RESULT_CODE_CRITICAL, [label])
-            start_time = time.time()
-            (_, stdout, stderr) = shell.checked_call(['curl', '--negotiate', '-u', ':', '-sL', '--connect-timeout', curl_connection_timeout, query_url], stderr=subprocess.PIPE, env=kerberos_env)
-            total_time = (time.time() - start_time)
-            if (stderr != ''):
-                raise Exception(stderr)
+            (stdout, stderr, total_time) = curl_krb_request(env.tmp_dir, smokeuser_keytab, smokeuser_principal, query_url, 'webhcat_alert_cc_', kerberos_executable_search_paths, False, 'WebHCat Server Status', smokeuser, connection_timeout=curl_connection_timeout)
             json_response = json.loads(stdout)
         except Exception as exception:
             return (RESULT_CODE_CRITICAL, [str(exception)])
