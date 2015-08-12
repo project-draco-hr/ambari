@@ -1,0 +1,68 @@
+{
+  int timeoutMillis=connectionTimeout * 1000;
+  final KdcConfig config=KdcConfig.getDefaultConfig();
+  config.setHostName(server);
+  config.setKdcPort(port);
+  config.setUseUdp(ConnectionProtocol.UDP == connectionProtocol);
+  config.setTimeout(timeoutMillis);
+  FutureTask<Boolean> future=new FutureTask<Boolean>(new Callable<Boolean>(){
+    @Override public Boolean call(){
+      try {
+        KdcConnection connection=getKdcConnection(config);
+        connection.getTgt("noUser@noRealm","noPassword");
+      }
+ catch (      KerberosException e) {
+        return !(e.getErrorCode() == ErrorType.KRB_ERR_GENERIC.getValue() && e.getMessage().contains("TimeOut"));
+      }
+catch (      Exception e) {
+        throw new RuntimeException(e);
+      }
+      return true;
+    }
+  }
+);
+  new Thread(future,"ambari-kdc-verify").start();
+  Boolean result;
+  try {
+    result=future.get(timeoutMillis,TimeUnit.MILLISECONDS);
+    if (result) {
+      LOG.info(String.format("Successfully connected to the KDC server at %s:%d over %s",server,port,connectionProtocol.name()));
+    }
+ else {
+      LOG.warn(String.format("Failed to connect to the KDC server at %s:%d over %s",server,port,connectionProtocol.name()));
+    }
+  }
+ catch (  InterruptedException e) {
+    String message=String.format("Interrupted while trying to communicate with KDC server at %s:%d over %s",server,port,connectionProtocol.name());
+    if (LOG.isDebugEnabled()) {
+      LOG.warn(message,e);
+    }
+ else {
+      LOG.warn(message);
+    }
+    result=false;
+    future.cancel(true);
+  }
+catch (  ExecutionException e) {
+    String message=String.format("An unexpected exception occurred while attempting to communicate with the KDC server at %s:%d over %s",server,port,connectionProtocol.name());
+    if (LOG.isDebugEnabled()) {
+      LOG.warn(message,e);
+    }
+ else {
+      LOG.warn(message);
+    }
+    result=false;
+  }
+catch (  TimeoutException e) {
+    String message=String.format("Timeout occurred while attempting to to communicate with KDC server at %s:%d over %s",server,port,connectionProtocol.name());
+    if (LOG.isDebugEnabled()) {
+      LOG.warn(message,e);
+    }
+ else {
+      LOG.warn(message);
+    }
+    result=false;
+    future.cancel(true);
+  }
+  return result;
+}
