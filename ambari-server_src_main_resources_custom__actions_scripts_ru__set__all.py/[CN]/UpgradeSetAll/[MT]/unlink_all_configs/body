@@ -1,0 +1,28 @@
+def unlink_all_configs(self, env):
+    '\n    Reverses the work performed in link_config. This should only be used when downgrading from\n    HDP 2.3 to 2.2 in order to under the symlink work required for 2.3.\n    '
+    stack_name = default('/hostLevelParams/stack_name', '').upper()
+    downgrade_to_version = default('/commandParams/version', None)
+    downgrade_from_version = default('/commandParams/downgrade_from_version', None)
+    upgrade_direction = default('/commandParams/upgrade_direction', Direction.UPGRADE)
+    if (upgrade_direction != Direction.DOWNGRADE):
+        Logger.warning('Unlinking configurations should only be performed on a downgrade.')
+        return
+    if (stack_name != 'HDP'):
+        Logger.warning('Unlinking configurations should only be performed on the HDP stack.')
+        return
+    if ((downgrade_to_version is None) or (downgrade_from_version is None)):
+        Logger.warning("Both 'commandParams/version' and 'commandParams/downgrade_from_version' must be specified to unlink configs on downgrade.")
+        return
+    stack_23 = format_hdp_stack_version('2.3')
+    downgrade_to_version = format_hdp_stack_version(downgrade_to_version)
+    downgrade_from_version = format_hdp_stack_version(downgrade_from_version)
+    if (compare_versions(downgrade_to_version, stack_23) >= 0):
+        Logger.warning('Unlinking configurations should only be performed when downgrading to HDP 2.2')
+        return
+    if (compare_versions(downgrade_from_version, stack_23) < 0):
+        Logger.warning('Unlinking configurations should only be performed when downgrading from HDP 2.3 or later')
+        return
+    for (key, value) in conf_select.PACKAGE_DIRS.iteritems():
+        for directory_mapping in value:
+            original_config_directory = directory_mapping['conf_dir']
+            self._unlink_config(original_config_directory)
