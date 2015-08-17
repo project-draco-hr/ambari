@@ -5,26 +5,51 @@
   for (  Map.Entry<String,Set<Resource>> resourceEntry : resources.entrySet()) {
     String componentName=resourceEntry.getKey();
     Set<Resource> resourceSet=resourceEntry.getValue();
-    TimelineMetrics timelineMetrics;
-    if (hostComponentHostMetrics.isEmpty()) {
-      String spec=getSpec(componentName);
-      timelineMetrics=getTimelineMetricsForSpec(spec);
-    }
- else {
-      Set<String> specs=getSpecsForHostComponentMetrics(componentName);
-      timelineMetrics=new TimelineMetrics();
-      for (      String spec : specs) {
-        if (!StringUtils.isEmpty(spec)) {
-          TimelineMetrics metrics=getTimelineMetricsForSpec(spec);
-          if (metrics != null) {
-            timelineMetrics.getMetrics().addAll(metrics.getMetrics());
-          }
+    TimelineMetrics timelineMetrics=new TimelineMetrics();
+    Set<String> nonHostComponentMetrics=new HashSet<String>(metrics.keySet());
+    nonHostComponentMetrics.removeAll(hostComponentHostMetrics);
+    String hostnames=getHostnames(resources.get(componentName));
+    if (!hostComponentHostMetrics.isEmpty()) {
+      String hostComponentHostMetricParams=getSetString(processRegexps(hostComponentHostMetrics),-1);
+      setQueryParams(hostComponentHostMetricParams,hostnames,true,componentName);
+      TimelineMetrics metricsResponse=null;
+      try {
+        metricsResponse=getTimelineMetricsFromCache(getTimelineAppMetricCacheKey(hostComponentHostMetrics,componentName,uriBuilder.toString()),componentName);
+      }
+ catch (      IOException e) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Caught exception fetching metric data.",e);
         }
+        if (e instanceof SocketTimeoutException) {
+          return Collections.emptySet();
+        }
+      }
+      if (metricsResponse != null) {
+        timelineMetrics.getMetrics().addAll(metricsResponse.getMetrics());
+      }
+    }
+    if (!nonHostComponentMetrics.isEmpty()) {
+      String nonHostComponentHostMetricParams=getSetString(processRegexps(nonHostComponentMetrics),-1);
+      setQueryParams(nonHostComponentHostMetricParams,hostnames,false,componentName);
+      TimelineMetrics metricsResponse=null;
+      try {
+        metricsResponse=getTimelineMetricsFromCache(getTimelineAppMetricCacheKey(nonHostComponentMetrics,componentName,uriBuilder.toString()),componentName);
+      }
+ catch (      IOException e) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Caught exception fetching metric data.",e);
+        }
+        if (e instanceof SocketTimeoutException) {
+          return Collections.emptySet();
+        }
+      }
+      if (metricsResponse != null) {
+        timelineMetrics.getMetrics().addAll(metricsResponse.getMetrics());
       }
     }
     Map<String,Set<TimelineMetric>> metricsMap=new HashMap<String,Set<TimelineMetric>>();
     Set<String> patterns=createPatterns(metrics.keySet());
-    if (timelineMetrics != null) {
+    if (!timelineMetrics.getMetrics().isEmpty()) {
       for (      TimelineMetric metric : timelineMetrics.getMetrics()) {
         if (metric.getMetricName() != null && metric.getMetricValues() != null && checkMetricName(patterns,metric.getMetricName())) {
           String hostname=metric.getHostName();
@@ -38,8 +63,9 @@
         String hostname=getHostName(resource);
         if (metricsMap.containsKey(hostname)) {
           for (          TimelineMetric metric : metricsMap.get(hostname)) {
-            metricsPaddingMethod.applyPaddingStrategy(metric,temporalInfo);
-            populateResource(resource,metric,temporalInfo);
+            TimelineMetric timelineMetricClone=new TimelineMetric(metric);
+            metricsPaddingMethod.applyPaddingStrategy(timelineMetricClone,temporalInfo);
+            populateResource(resource,timelineMetricClone,temporalInfo);
           }
         }
       }

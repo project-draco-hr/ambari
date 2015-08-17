@@ -1,0 +1,24 @@
+{
+  UpdatingCacheEntryFactory cacheEntryFactory=createMock(UpdatingCacheEntryFactory.class);
+  StringBuilder value=new StringBuilder("b");
+  expect(cacheEntryFactory.createEntry("a")).andReturn(value);
+  cacheEntryFactory.updateEntryValue("a",value);
+  expectLastCall().andAnswer(new IAnswer<Object>(){
+    @Override public Object answer() throws Throwable {
+      String key=(String)getCurrentArguments()[0];
+      StringBuilder value=(StringBuilder)getCurrentArguments()[1];
+      System.out.println("key = " + key + ", value = "+ value);
+      value.append("c");
+      return null;
+    }
+  }
+);
+  replay(cacheEntryFactory);
+  CacheManager manager=CacheManager.getInstance();
+  Cache cache=new Cache("test",10,false,false,10000,10000);
+  UpdatingSelfPopulatingCache testCache=new UpdatingSelfPopulatingCache(cache,cacheEntryFactory);
+  manager.addCache(testCache);
+  Assert.assertEquals("b",testCache.get("a").getObjectValue().toString());
+  Assert.assertEquals("bc",testCache.get("a").getObjectValue().toString());
+  verify(cacheEntryFactory);
+}
