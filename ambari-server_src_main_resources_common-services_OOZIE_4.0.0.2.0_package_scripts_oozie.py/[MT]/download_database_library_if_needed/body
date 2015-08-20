@@ -1,7 +1,7 @@
 def download_database_library_if_needed(target_directory=None):
     "\n  Downloads the library to use when connecting to the Oozie database, if\n  necessary. The library will be downloaded to 'params.target' unless\n  otherwise specified.\n  :param target_directory: the location where the database library will be\n  downloaded to.\n  :return:\n  "
     import params
-    jdbc_drivers = ['com.mysql.jdbc.Driver', 'com.microsoft.sqlserver.jdbc.SQLServerDriver', 'oracle.jdbc.driver.OracleDriver']
+    jdbc_drivers = ['com.mysql.jdbc.Driver', 'com.microsoft.sqlserver.jdbc.SQLServerDriver', 'oracle.jdbc.driver.OracleDriver', 'sap.jdbc4.sqlanywhere.IDriver']
     if (params.jdbc_driver_name not in jdbc_drivers):
         return
     if (target_directory is None):
@@ -9,5 +9,12 @@ def download_database_library_if_needed(target_directory=None):
     else:
         target_jar_with_directory = ((target_directory + os.path.sep) + params.jdbc_driver_jar)
     File(params.downloaded_custom_connector, content=DownloadSource(params.driver_curl_source))
-    Execute(('cp', '--remove-destination', params.downloaded_custom_connector, target_jar_with_directory), path=['/bin', '/usr/bin/'], sudo=True)
+    if params.sqla_db_used:
+        untar_sqla_type2_driver = ('tar', '-xvf', params.downloaded_custom_connector, '-C', params.tmp_dir)
+        Execute(untar_sqla_type2_driver, sudo=True)
+        Execute(as_sudo(['yes', '|', 'cp', params.jars_path_in_archive, params.oozie_libext_dir], auto_escape=False), path=['/bin', '/usr/bin/'])
+        Directory(params.jdbc_libs_dir, recursive=True)
+        Execute(as_sudo(['yes', '|', 'cp', params.libs_path_in_archive, params.jdbc_libs_dir], auto_escape=False), path=['/bin', '/usr/bin/'])
+    else:
+        Execute(('cp', '--remove-destination', params.downloaded_custom_connector, target_jar_with_directory), path=['/bin', '/usr/bin/'], sudo=True)
     File(target_jar_with_directory, owner=params.oozie_user, group=params.user_group)
