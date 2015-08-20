@@ -1,3 +1,5 @@
+@patch('os.path.exists')
+@patch.object(setup_agent, 'get_ambari_repo_file_full_name')
 @patch.object(OSCheck, 'os_distribution', new=MagicMock(return_value=os_distro_value))
 @patch.object(setup_agent, 'checkVerbose')
 @patch.object(setup_agent, 'isAgentPackageAlreadyInstalled')
@@ -11,7 +13,7 @@
 @patch('sys.exit')
 @patch('os.path.dirname')
 @patch('os.path.realpath')
-def test_setup_agent_main(self, dirname_mock, realpath_mock, exit_mock, checkServerReachability_mock, getOptimalVersion_mock, is_ubuntu_family_mock, is_suse_family_mock, installAgent_mock, configureAgent_mock, runAgent_mock, isAgentPackageAlreadyInstalled_mock, checkVerbose_mock):
+def test_setup_agent_main(self, dirname_mock, realpath_mock, exit_mock, checkServerReachability_mock, getOptimalVersion_mock, is_ubuntu_family_mock, is_suse_family_mock, installAgent_mock, configureAgent_mock, runAgent_mock, isAgentPackageAlreadyInstalled_mock, checkVerbose_mock, get_ambari_repo_file_full_name_mock, os_path_exists_mock):
     checkServerReachability_mock.return_value = {'log': 'log', 'exitstatus': 0, }
     installAgent_mock.return_value = {'log': 'log', 'exitstatus': 0, }
     configureAgent_mock.return_value = {'log': 'log', 'exitstatus': 0, }
@@ -29,6 +31,14 @@ def test_setup_agent_main(self, dirname_mock, realpath_mock, exit_mock, checkSer
     isAgentPackageAlreadyInstalled_mock.return_value = False
     is_suse_family_mock.return_value = True
     is_ubuntu_family_mock.return_value = False
+    get_ambari_repo_file_full_name_mock.return_value = 'Ambari_Repo_File'
+
+    def os_path_exists_side_effect(*args, **kwargs):
+        if (args[0] == get_ambari_repo_file_full_name_mock()):
+            return True
+        else:
+            return False
+    os_path_exists_mock.side_effect = os_path_exists_side_effect
     ret = setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
     self.assertFalse(exit_mock.called)
     self.assertTrue(getOptimalVersion_mock.called)
@@ -122,4 +132,42 @@ def test_setup_agent_main(self, dirname_mock, realpath_mock, exit_mock, checkSer
     self.assertFalse(exit_mock.called)
     self.assertTrue(('exitstatus' in ret))
     self.assertEqual(ret['exitstatus'], 1)
+    exit_mock.reset_mock()
+    installAgent_mock.reset_mock()
+    getOptimalVersion_mock.reset_mock()
+    os_path_exists_mock.side_effect = None
+    os_path_exists_mock.return_value = False
+    getOptimalVersion_mock.return_value = {'log': '1.1.1', 'exitstatus': 0, }
+    isAgentPackageAlreadyInstalled_mock.return_value = False
+    is_suse_family_mock.return_value = True
+    is_ubuntu_family_mock.return_value = False
+    get_ambari_repo_file_full_name_mock.return_value = 'Ambari_Repo_File'
+    ret = setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
+    self.assertFalse(exit_mock.called)
+    self.assertTrue(getOptimalVersion_mock.called)
+    self.assertTrue(isAgentPackageAlreadyInstalled_mock.called)
+    self.assertFalse(installAgent_mock.called)
+    self.assertFalse(is_suse_family_mock.called)
+    self.assertFalse(is_ubuntu_family_mock.called)
+    self.assertTrue(('exitstatus' in ret))
+    self.assertEqual(ret['exitstatus'], 2)
+    self.assertTrue((get_ambari_repo_file_full_name_mock() in ret['log']))
+    exit_mock.reset_mock()
+    os_path_exists_mock.side_effect = None
+    os_path_exists_mock.return_value = False
+    getOptimalVersion_mock.reset_mock()
+    isAgentPackageAlreadyInstalled_mock.reset_mock()
+    is_suse_family_mock.reset_mock()
+    is_ubuntu_family_mock.reset_mock()
+    installAgent_mock.reset_mock()
+    getOptimalVersion_mock.return_value = {'log': '', 'exitstatus': 1, }
+    ret = setup_agent.main(('setupAgent.py', 'agents_host', 'password', 'server_hostname', '1.1.1', '8080'))
+    self.assertFalse(exit_mock.called)
+    self.assertTrue(getOptimalVersion_mock.called)
+    self.assertFalse(isAgentPackageAlreadyInstalled_mock.called)
+    self.assertFalse(is_suse_family_mock.called)
+    self.assertFalse(is_ubuntu_family_mock.called)
+    self.assertTrue(('exitstatus' in ret))
+    self.assertEqual(ret['exitstatus'], 1)
+    self.assertTrue((get_ambari_repo_file_full_name_mock() in ret['log']))
     pass
