@@ -1,0 +1,53 @@
+{
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  Service service=createNiceMock(Service.class);
+class TestComponent {
+    public String Name;
+    public ServiceComponent Component;
+    public State DesiredState;
+    public TestComponent(    String name,    ServiceComponent component,    State desiredState){
+      Name=name;
+      Component=component;
+      DesiredState=desiredState;
+    }
+  }
+  ;
+  TestComponent component1=new TestComponent("Component100",createNiceMock(ServiceComponent.class),State.INSTALLED);
+  TestComponent component2=new TestComponent("Component101",createNiceMock(ServiceComponent.class),State.INSTALLED);
+  TestComponent component3=new TestComponent("Component102",createNiceMock(ServiceComponent.class),State.INSTALLED);
+  Map<String,ServiceComponent> scMap=new HashMap<String,ServiceComponent>();
+  scMap.put(component1.Name,component1.Component);
+  scMap.put(component2.Name,component2.Component);
+  scMap.put(component3.Name,component3.Component);
+  String clusterName="Cluster100";
+  String serviceName="Service100";
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getCluster(clusterName)).andReturn(cluster).anyTimes();
+  expect(cluster.getService(serviceName)).andReturn(service).anyTimes();
+  expect(service.getDesiredState()).andReturn(State.STARTED).anyTimes();
+  expect(service.getName()).andReturn(serviceName).anyTimes();
+  expect(service.getServiceComponents()).andReturn(scMap).anyTimes();
+  expect(component1.Component.getDesiredState()).andReturn(component1.DesiredState).anyTimes();
+  expect(component2.Component.getDesiredState()).andReturn(component2.DesiredState).anyTimes();
+  expect(component3.Component.getDesiredState()).andReturn(component3.DesiredState).anyTimes();
+  expect(component1.Component.canBeRemoved()).andReturn(component1.DesiredState.isRemovableState()).anyTimes();
+  expect(component2.Component.canBeRemoved()).andReturn(component2.DesiredState.isRemovableState()).anyTimes();
+  expect(component3.Component.canBeRemoved()).andReturn(component3.DesiredState.isRemovableState()).anyTimes();
+  expect(service.getCluster()).andReturn(cluster);
+  cluster.deleteService(serviceName);
+  replay(managementController,clusters,cluster,service,component1.Component,component2.Component,component3.Component);
+  ResourceProvider provider=getServiceProvider(managementController);
+  AbstractResourceProviderTest.TestObserver observer=new AbstractResourceProviderTest.TestObserver();
+  ((ObservableResourceProvider)provider).addObserver(observer);
+  Predicate predicate=new PredicateBuilder().property(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID).equals(clusterName).and().property(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID).equals(serviceName).toPredicate();
+  provider.deleteResources(predicate);
+  ResourceProviderEvent lastEvent=observer.getLastEvent();
+  Assert.assertNotNull(lastEvent);
+  Assert.assertEquals(Resource.Type.Service,lastEvent.getResourceType());
+  Assert.assertEquals(ResourceProviderEvent.Type.Delete,lastEvent.getType());
+  Assert.assertEquals(predicate,lastEvent.getPredicate());
+  Assert.assertNull(lastEvent.getRequest());
+  verify(managementController,clusters,cluster,service,component1.Component,component2.Component,component3.Component);
+}

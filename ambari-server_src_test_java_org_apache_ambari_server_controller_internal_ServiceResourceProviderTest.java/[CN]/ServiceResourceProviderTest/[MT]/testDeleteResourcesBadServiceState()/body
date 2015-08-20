@@ -9,15 +9,20 @@
   expect(cluster.getService(serviceName)).andReturn(service).anyTimes();
   expect(service.getDesiredState()).andReturn(State.STARTED).anyTimes();
   expect(service.getName()).andReturn(serviceName).anyTimes();
+  expect(service.getServiceComponents()).andReturn(new HashMap<String,ServiceComponent>());
+  expect(service.getCluster()).andReturn(cluster);
+  cluster.deleteService(serviceName);
   replay(managementController,clusters,cluster,service);
   ResourceProvider provider=getServiceProvider(managementController);
   AbstractResourceProviderTest.TestObserver observer=new AbstractResourceProviderTest.TestObserver();
   ((ObservableResourceProvider)provider).addObserver(observer);
   Predicate predicate=new PredicateBuilder().property(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID).equals(serviceName).toPredicate();
-  try {
-    provider.deleteResources(predicate);
-    Assert.fail("Expected exception deleting a service in a non-removable state.");
-  }
- catch (  SystemException e) {
-  }
+  provider.deleteResources(predicate);
+  ResourceProviderEvent lastEvent=observer.getLastEvent();
+  Assert.assertNotNull(lastEvent);
+  Assert.assertEquals(Resource.Type.Service,lastEvent.getResourceType());
+  Assert.assertEquals(ResourceProviderEvent.Type.Delete,lastEvent.getType());
+  Assert.assertEquals(predicate,lastEvent.getPredicate());
+  Assert.assertNull(lastEvent.getRequest());
+  verify(managementController,clusters,cluster,service);
 }
