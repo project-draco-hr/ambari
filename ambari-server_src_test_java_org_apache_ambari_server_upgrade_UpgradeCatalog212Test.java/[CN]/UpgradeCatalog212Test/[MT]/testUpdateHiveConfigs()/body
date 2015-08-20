@@ -1,0 +1,41 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final ConfigHelper mockConfigHelper=easyMockSupport.createMock(ConfigHelper.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Config mockHiveEnv=easyMockSupport.createNiceMock(Config.class);
+  final Config mockHiveSite=easyMockSupport.createNiceMock(Config.class);
+  final Map<String,String> propertiesExpectedHiveEnv=new HashMap<String,String>();
+  final Map<String,String> propertiesExpectedHiveSite=new HashMap<String,String>(){
+{
+      put("hive.heapsize","512");
+      put("hive.server2.custom.authentication.class","");
+    }
+  }
+;
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(ConfigHelper.class).toInstance(mockConfigHelper);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).once();
+  expect(mockClusterExpected.getDesiredConfigByType("hive-site")).andReturn(mockHiveSite).atLeastOnce();
+  expect(mockHiveSite.getProperties()).andReturn(propertiesExpectedHiveSite).atLeastOnce();
+  StackId stackId=new StackId("HDP-2.2");
+  expect(mockClusterExpected.getCurrentStackVersion()).andReturn(stackId).atLeastOnce();
+  easyMockSupport.replayAll();
+  mockInjector.getInstance(UpgradeCatalog212.class).updateHiveConfigs();
+  easyMockSupport.verifyAll();
+}

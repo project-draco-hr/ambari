@@ -1,0 +1,32 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (clusterMap != null && !clusterMap.isEmpty()) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        String content=null;
+        Boolean isHiveSitePresent=cluster.getDesiredConfigByType(HIVE_SITE) != null;
+        StackId stackId=cluster.getCurrentStackVersion();
+        Boolean isStackNotLess22=(stackId != null && stackId.getStackName().equals("HDP") && VersionUtils.compareVersions(stackId.getStackVersion(),"2.2") >= 0);
+        if (cluster.getDesiredConfigByType(HIVE_ENV) != null && isStackNotLess22) {
+          Map<String,String> hiveEnvProps=new HashMap<String,String>();
+          content=cluster.getDesiredConfigByType(HIVE_ENV).getProperties().get("content");
+          if (content != null) {
+            content=updateHiveEnvContent(content);
+            hiveEnvProps.put("content",content);
+          }
+          updateConfigurationPropertiesForCluster(cluster,HIVE_ENV,hiveEnvProps,true,true);
+        }
+        if (isHiveSitePresent && isStackNotLess22) {
+          Set<String> hiveSiteRemoveProps=new HashSet<String>();
+          hiveSiteRemoveProps.add("hive.heapsize");
+          hiveSiteRemoveProps.add("hive.optimize.mapjoin.mapreduce");
+          hiveSiteRemoveProps.add("hive.server2.enable.impersonation");
+          hiveSiteRemoveProps.add("hive.auto.convert.sortmerge.join.noconditionaltask");
+          updateConfigurationPropertiesForCluster(cluster,HIVE_SITE,new HashMap<String,String>(),hiveSiteRemoveProps,false,true);
+        }
+      }
+    }
+  }
+}
