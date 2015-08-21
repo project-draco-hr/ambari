@@ -4,14 +4,23 @@
     Map<String,Object> updateProperties=iterator.next();
     String statusPropertyId=STAGE_MAPPED_IDS.get(StageResourceProvider.STAGE_STATUS);
     String stageStatus=(String)updateProperties.get(statusPropertyId);
-    if (stageStatus != null) {
-      HostRoleStatus desiredStatus=HostRoleStatus.valueOf(stageStatus);
-      Set<Resource> resources=getResources(PropertyHelper.getReadRequest(),predicate);
-      for (      Resource resource : resources) {
-        Long requestId=(Long)resource.getPropertyValue(UPGRADE_REQUEST_ID);
-        Long stageId=(Long)resource.getPropertyValue(UPGRADE_ITEM_STAGE_ID);
-        StageResourceProvider.updateStageStatus(requestId,stageId,desiredStatus,getManagementController());
+    if (null == stageStatus) {
+      throw new IllegalArgumentException("Upgrade items can only have their status changed.");
+    }
+    HostRoleStatus desiredStatus=HostRoleStatus.valueOf(stageStatus);
+    Set<Resource> resources=getResources(PropertyHelper.getReadRequest(),predicate);
+    for (    Resource resource : resources) {
+      Long requestId=(Long)resource.getPropertyValue(UPGRADE_REQUEST_ID);
+      Long stageId=(Long)resource.getPropertyValue(UPGRADE_ITEM_STAGE_ID);
+      StageEntityPK primaryKey=new StageEntityPK();
+      primaryKey.setRequestId(requestId);
+      primaryKey.setStageId(stageId);
+      StageEntity stageEntity=s_stageDao.findByPK(primaryKey);
+      if (null == stageEntity) {
+        LOG.warn("Unable to change the status of request {} and stage {} to {} because it does not exist",requestId,stageId,desiredStatus);
+        return getRequestStatus(null);
       }
+      s_stageDao.updateStageStatus(stageEntity,desiredStatus,getManagementController().getActionManager());
     }
   }
   notifyUpdate(Resource.Type.UpgradeItem,request,predicate);

@@ -38,10 +38,18 @@ catch (    AmbariException e) {
     }
 catch (    InvalidStateTransitionException e) {
       LOG.error("Invalid transition ",e);
-      if ((e.getEvent() == ServiceComponentHostEventType.HOST_SVCCOMP_START) && (e.getCurrentState() == State.STARTED)) {
-        LOG.warn("Component request for component = " + serviceComponentName + " to start is invalid, since component is already started. Ignoring this request.");
+      boolean isFailure=true;
+      Enum<?> currentState=e.getCurrentState();
+      Enum<?> failedEvent=e.getEvent();
+      if (currentState == State.STARTED && failedEvent == ServiceComponentHostEventType.HOST_SVCCOMP_START) {
+        isFailure=false;
+        LOG.warn("The start request for {} is invalid since the component is already started. Ignoring the request.",serviceComponentName);
       }
- else {
+      if (currentState == State.UNKNOWN && failedEvent == ServiceComponentHostEventType.HOST_SVCCOMP_OP_IN_PROGRESS) {
+        isFailure=false;
+        LOG.warn("The host {} is in an unknown state; attempting to put {} back in progress.",event.getHostName(),serviceComponentName);
+      }
+      if (isFailure) {
         failedEvents.put(event,String.format("Invalid transition. %s",e.getMessage()));
       }
     }
