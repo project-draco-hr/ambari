@@ -8,15 +8,11 @@
     throw new UnsupportedOperationException("Multiple requests cannot be executed at the same time.");
   }
   Map<String,Object> propertyMap=iterator.next();
-  Set<String> requiredProperties=new HashSet<String>(){
-{
-      add(CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID);
-      add(CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID);
-      add(CLUSTER_STACK_VERSION_STACK_PROPERTY_ID);
-      add(CLUSTER_STACK_VERSION_VERSION_PROPERTY_ID);
-    }
-  }
-;
+  Set<String> requiredProperties=new HashSet<String>();
+  requiredProperties.add(CLUSTER_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID);
+  requiredProperties.add(CLUSTER_STACK_VERSION_REPOSITORY_VERSION_PROPERTY_ID);
+  requiredProperties.add(CLUSTER_STACK_VERSION_STACK_PROPERTY_ID);
+  requiredProperties.add(CLUSTER_STACK_VERSION_VERSION_PROPERTY_ID);
   for (  String requiredProperty : requiredProperties) {
     if (!propertyMap.containsKey(requiredProperty)) {
       throw new IllegalArgumentException(String.format("The required property %s is not defined",requiredProperty));
@@ -47,6 +43,11 @@
  else {
     StackId currentStackVersion=cluster.getCurrentStackVersion();
     stackId=currentStackVersion;
+  }
+  Float successFactor=INSTALL_PACKAGES_SUCCESS_FACTOR;
+  String successFactorProperty=(String)propertyMap.get(CLUSTER_STACK_VERSION_STAGE_SUCCESS_FACTOR);
+  if (StringUtils.isNotBlank(successFactorProperty)) {
+    successFactor=Float.valueOf(successFactorProperty);
   }
   RepositoryVersionEntity repoVersionEnt=repositoryVersionDAO.findByStackAndVersion(stackId,desiredRepoVersion);
   if (repoVersionEnt == null) {
@@ -80,9 +81,10 @@
       stageName=String.format(INSTALL_PACKAGES_FULL_NAME + ". Batch %d of %d",batchId,batchCount);
     }
     Stage stage=stageFactory.createNew(req.getId(),"/tmp/ambari",cluster.getClusterName(),cluster.getClusterId(),stageName,"{}","{}",hostParamsJson);
+    stage.getSuccessFactors().put(Role.INSTALL_PACKAGES,successFactor);
     stage.setStageId(stageId);
-    stages.add(stage);
     stageId++;
+    stages.add(stage);
     for (int i=0; i < maxTasks && hostsForClusterIter.hasNext(); i++) {
       Host host=hostsForClusterIter.next();
       if (hostHasVersionableComponents(cluster,ami,stackId,host)) {
