@@ -2,15 +2,8 @@
   if (sourceClusterVersion == null) {
     throw new AmbariException("Could not find current stack version of cluster " + getClusterName());
   }
-  RepositoryVersionState desiredState=sourceClusterVersion.getState();
-  @SuppressWarnings("serial") Set<RepositoryVersionState> validStates=new HashSet<RepositoryVersionState>(){
-{
-      add(RepositoryVersionState.INSTALLING);
-    }
-  }
-;
-  if (!validStates.contains(desiredState)) {
-    throw new AmbariException("The state must be one of " + validStates);
+  if (RepositoryVersionState.INSTALLING != sourceClusterVersion.getState()) {
+    throw new AmbariException("Unable to transition cluster hosts into " + RepositoryVersionState.INSTALLING + ". The only valid state is INSTALLING");
   }
   Map<String,Host> hosts=clusters.getHostsForCluster(getClusterName());
   Set<String> existingHostsWithClusterStackAndVersion=new HashSet<String>();
@@ -20,14 +13,17 @@
     StackEntity repoVersionStackEntity=sourceClusterVersion.getRepositoryVersion().getStack();
     StackId repoVersionStackId=new StackId(repoVersionStackEntity);
     List<HostVersionEntity> existingHostVersionEntities=hostVersionDAO.findByClusterStackAndVersion(getClusterName(),repoVersionStackId,sourceClusterVersion.getRepositoryVersion().getVersion());
-    if (existingHostVersionEntities != null) {
-      for (      HostVersionEntity entity : existingHostVersionEntities) {
-        existingHostsWithClusterStackAndVersion.add(entity.getHostName());
-        existingHostStackVersions.put(entity.getHostName(),entity);
-      }
+    for (    HostVersionEntity entity : existingHostVersionEntities) {
+      String hostName=entity.getHostName();
+      existingHostsWithClusterStackAndVersion.add(hostName);
+      existingHostStackVersions.put(hostName,entity);
     }
     Sets.SetView<String> hostsMissingRepoVersion=Sets.difference(hosts.keySet(),existingHostsWithClusterStackAndVersion);
     for (    String hostname : hosts.keySet()) {
+      Host host=hosts.get(hostname);
+      if (host.getMaintenanceState(getClusterId()) != MaintenanceState.OFF) {
+        continue;
+      }
       if (hostsMissingRepoVersion.contains(hostname)) {
         HostEntity hostEntity=hostDAO.findByName(hostname);
         HostVersionEntity hostVersionEntity=new HostVersionEntity(hostEntity,sourceClusterVersion.getRepositoryVersion(),RepositoryVersionState.INSTALLING);
@@ -35,7 +31,7 @@
       }
  else {
         HostVersionEntity hostVersionEntity=existingHostStackVersions.get(hostname);
-        hostVersionEntity.setState(desiredState);
+        hostVersionEntity.setState(RepositoryVersionState.INSTALLING);
         hostVersionDAO.merge(hostVersionEntity);
       }
     }

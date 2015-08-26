@@ -15,7 +15,7 @@
   assertNotNull(entityHDP2);
   List<HostVersionEntity> hostVersionsH1Before=hostVersionDAO.findByClusterAndHost("c1","h1");
   assertEquals(1,hostVersionsH1Before.size());
-  c1.inferHostVersions(entityHDP2);
+  c1.transitionHostsToInstalling(entityHDP2);
   List<HostVersionEntity> hostVersionsH1After=hostVersionDAO.findByClusterAndHost("c1","h1");
   assertEquals(2,hostVersionsH1After.size());
   boolean checked=false;
@@ -28,7 +28,7 @@
     }
   }
   assertTrue(checked);
-  c1.inferHostVersions(entityHDP2);
+  c1.transitionHostsToInstalling(entityHDP2);
   hostVersionsH1After=hostVersionDAO.findByClusterAndHost("c1","h1");
   assertEquals(2,hostVersionsH1After.size());
   checked=false;
@@ -41,4 +41,33 @@
     }
   }
   assertTrue(checked);
+  List<HostVersionEntity> hostVersionEntities=hostVersionDAO.findAll();
+  for (  HostVersionEntity hostVersionEntity : hostVersionEntities) {
+    hostVersionEntity.setState(RepositoryVersionState.INSTALL_FAILED);
+    hostVersionDAO.merge(hostVersionEntity);
+  }
+  hostVersionEntities=hostVersionDAO.findAll();
+  for (  HostVersionEntity hostVersionEntity : hostVersionEntities) {
+    assertEquals(RepositoryVersionState.INSTALL_FAILED,hostVersionEntity.getState());
+  }
+  Collection<Host> hosts=c1.getHosts();
+  Iterator<Host> iterator=hosts.iterator();
+  Host hostInMaintenanceMode=iterator.next();
+  Host hostNotInMaintenanceMode=iterator.next();
+  hostInMaintenanceMode.setMaintenanceState(c1.getClusterId(),MaintenanceState.ON);
+  c1.transitionHostsToInstalling(entityHDP2);
+  List<HostVersionEntity> hostInMaintModeVersions=hostVersionDAO.findByClusterAndHost("c1",hostInMaintenanceMode.getHostName());
+  List<HostVersionEntity> otherHostVersions=hostVersionDAO.findByClusterAndHost("c1",hostNotInMaintenanceMode.getHostName());
+  for (  HostVersionEntity hostVersionEntity : hostInMaintModeVersions) {
+    StackEntity repoVersionStackEntity=hostVersionEntity.getRepositoryVersion().getStack();
+    if (repoVersionStackEntity.getStackName().equals("HDP") && repoVersionStackEntity.getStackVersion().equals("0.2")) {
+      assertEquals(RepositoryVersionState.INSTALL_FAILED,hostVersionEntity.getState());
+    }
+  }
+  for (  HostVersionEntity hostVersionEntity : otherHostVersions) {
+    StackEntity repoVersionStackEntity=hostVersionEntity.getRepositoryVersion().getStack();
+    if (repoVersionStackEntity.getStackName().equals("HDP") && repoVersionStackEntity.getStackVersion().equals("0.2")) {
+      assertEquals(RepositoryVersionState.INSTALLING,hostVersionEntity.getState());
+    }
+  }
 }
