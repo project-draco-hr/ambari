@@ -1,15 +1,34 @@
 {
   final String clusterName=request.getClusterName();
   final Cluster cluster=clustersProvider.get().getCluster(clusterName);
-  final Map<String,Host> clusterHosts=clustersProvider.get().getHostsForCluster(clusterName);
-  for (  Map.Entry<String,Host> hostEntry : clusterHosts.entrySet()) {
-    final Host host=hostEntry.getValue();
-    if (host.getHealthStatus().getHealthStatus() == HostHealthStatus.HealthStatus.UNKNOWN && host.getMaintenanceState(cluster.getClusterId()) == MaintenanceState.OFF) {
-      prerequisiteCheck.getFailedOn().add(host.getHostName());
-    }
-  }
-  if (!prerequisiteCheck.getFailedOn().isEmpty()) {
-    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
-    prerequisiteCheck.setFailReason(getFailReason(prerequisiteCheck,request));
-  }
+  Collection<Host> hosts=cluster.getHosts();
+  for (  Host host : hosts) {
+    HealthStatus hostHealth=host.getHealthStatus().getHealthStatus();
+    MaintenanceState maintenanceState=host.getMaintenanceState(cluster.getClusterId());
+switch (hostHealth) {
+case UNHEALTHY:
+case UNKNOWN:
+      if (maintenanceState == MaintenanceState.OFF) {
+        prerequisiteCheck.getFailedOn().add(host.getHostName());
+      }
+    break;
+default :
+  break;
+}
+}
+if (!prerequisiteCheck.getFailedOn().isEmpty()) {
+prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+prerequisiteCheck.setFailReason(getFailReason(prerequisiteCheck,request));
+return;
+}
+for (Host host : hosts) {
+MaintenanceState maintenanceState=host.getMaintenanceState(cluster.getClusterId());
+if (maintenanceState != MaintenanceState.OFF) {
+prerequisiteCheck.getFailedOn().add(host.getHostName());
+}
+}
+if (!prerequisiteCheck.getFailedOn().isEmpty()) {
+prerequisiteCheck.setStatus(PrereqCheckStatus.WARNING);
+prerequisiteCheck.setFailReason(getFailReason(KEY_HOSTS_IN_MM_WARNING,prerequisiteCheck,request));
+}
 }
