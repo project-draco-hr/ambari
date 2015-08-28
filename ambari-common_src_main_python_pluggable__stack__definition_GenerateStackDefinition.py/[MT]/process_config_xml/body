@@ -1,0 +1,61 @@
+def process_config_xml(file_path, config_data):
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+    COMMON_SERVICES_CONFIG_PATH_REGEX = 'common-services/([A-Za-z_-]+)/([0-9\\.]+)/configuration/([A-Za-z0-9_-]+).xml'
+    STACK_SERVICE_CONFIG_PATH_REGEX = 'stacks/([A-Za-z_-]+)/([0-9\\.]+)/services/([A-Za-z_-]+)/configuration/([A-Za-z0-9_-]+).xml'
+    STACK_CONFIG_PATH_REGEX = 'stacks/([A-Za-z_-]+)/([0-9\\.]+)/configuration/([A-Za-z0-9_-]+).xml'
+    match = re.search(COMMON_SERVICES_CONFIG_PATH_REGEX, file_path)
+    if match:
+        path_service_name = match.group(1)
+        path_service_version = match.group(2)
+        path_config_name = match.group(3)
+        if ('common-services' in config_data):
+            for service in config_data['common-services']:
+                if (service.name == path_service_name):
+                    for serviceVersion in service.versions:
+                        if (serviceVersion.version == path_service_version):
+                            if ('configurations' in serviceVersion):
+                                for conf in serviceVersion['configurations']:
+                                    if (conf.name == path_config_name):
+                                        for property_tag in root.findall('property'):
+                                            property_name = property_tag.find('name').text
+                                            if (property_name in conf.properties):
+                                                value_tag = property_tag.find('value')
+                                                value_tag.text = conf.properties[property_name]
+    else:
+        match = re.search(STACK_SERVICE_CONFIG_PATH_REGEX, file_path)
+        if match:
+            path_stack_name = match.group(1)
+            path_stack_version = match.group(2)
+            path_service_name = match.group(3)
+            path_config_name = match.group(4)
+            for stack in config_data.versions:
+                if (stack.version == path_stack_version):
+                    for service in stack.services:
+                        if (service.name == path_service_name):
+                            if ('configurations' in service):
+                                for conf in service['configurations']:
+                                    if (conf.name == path_config_name):
+                                        for property_tag in root.findall('property'):
+                                            property_name = property_tag.find('name').text
+                                            if (property_name in conf.properties):
+                                                value_tag = property_tag.find('value')
+                                                value_tag.text = conf.properties[property_name]
+        else:
+            match = re.search(STACK_CONFIG_PATH_REGEX, file_path)
+            if match:
+                path_stack_name = match.group(1)
+                path_stack_version = match.group(2)
+                path_config_name = match.group(3)
+                for stack in config_data.versions:
+                    if (stack.version == path_stack_version):
+                        if ('configurations' in stack):
+                            for conf in stack['configurations']:
+                                if (conf.name == path_config_name):
+                                    for property_tag in root.findall('property'):
+                                        property_name = property_tag.find('name').text
+                                        if (property_name in conf.properties):
+                                            value_tag = property_tag.find('value')
+                                            value_tag.text = conf.properties[property_name]
+    tree.write(file_path)
+    return file_path
