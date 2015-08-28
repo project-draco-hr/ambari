@@ -2,19 +2,31 @@ def setup_ranger_db(rolling_upgrade=False):
     import params
     File(params.downloaded_custom_connector, content=DownloadSource(params.driver_curl_source), mode=420)
     Directory(params.java_share_dir, mode=493, recursive=True, cd_access='a')
-    Execute(('cp', '--remove-destination', params.downloaded_custom_connector, params.driver_curl_target), path=['/bin', '/usr/bin/'], sudo=True)
-    File(params.driver_curl_target, mode=420)
+    if (params.db_flavor.lower() != 'sqla'):
+        Execute(('cp', '--remove-destination', params.downloaded_custom_connector, params.driver_curl_target), path=['/bin', '/usr/bin/'], sudo=True)
+        File(params.driver_curl_target, mode=420)
     ranger_home = params.ranger_home
     if rolling_upgrade:
         ranger_home = format('/usr/hdp/{version}/ranger-admin')
-    Execute(('cp', '--remove-destination', params.downloaded_custom_connector, os.path.join(params.ranger_home, 'ews', 'lib')), path=['/bin', '/usr/bin/'], sudo=True)
+    if (params.db_flavor.lower() == 'sqla'):
+        Execute(('tar', '-xvf', params.downloaded_custom_connector, '-C', params.tmp_dir), sudo=True)
+        Execute(('cp', '--remove-destination', params.jar_path_in_archive, os.path.join(params.ranger_home, 'ews', 'lib')), path=['/bin', '/usr/bin/'], sudo=True)
+        Directory(params.jdbc_libs_dir, cd_access='a', recursive=True)
+        Execute(as_sudo(['yes', '|', 'cp', params.libs_path_in_archive, params.jdbc_libs_dir], auto_escape=False), path=['/bin', '/usr/bin/'])
+    else:
+        Execute(('cp', '--remove-destination', params.downloaded_custom_connector, os.path.join(params.ranger_home, 'ews', 'lib')), path=['/bin', '/usr/bin/'], sudo=True)
     File(os.path.join(params.ranger_home, 'ews', 'lib', params.jdbc_jar_name), mode=420)
     ModifyPropertiesFile(format('{ranger_home}/install.properties'), properties=params.config['configurations']['admin-properties'], owner=params.unix_user)
+    if (params.db_flavor.lower() == 'sqla'):
+        ModifyPropertiesFile(format('{ranger_home}/install.properties'), properties={'SQL_CONNECTOR_JAR': format('{ranger_home}/ews/lib/{jdbc_jar_name}'), }, owner=params.unix_user)
+    env_dict = {'RANGER_ADMIN_HOME': ranger_home, 'JAVA_HOME': params.java_home, }
+    if (params.db_flavor.lower() == 'sqla'):
+        env_dict = {'RANGER_ADMIN_HOME': ranger_home, 'JAVA_HOME': params.java_home, 'LD_LIBRARY_PATH': params.ld_lib_path, }
     if params.create_db_dbuser:
         Logger.info('Setting up Ranger DB and DB User')
         dba_setup = format('python {ranger_home}/dba_script.py -q')
-        Execute(dba_setup, environment={'RANGER_ADMIN_HOME': ranger_home, 'JAVA_HOME': params.java_home, }, logoutput=True, user=params.unix_user)
+        Execute(dba_setup, environment=env_dict, logoutput=True, user=params.unix_user)
     else:
         Logger.info('Separate DBA property not set. Assuming Ranger DB and DB User exists!')
     db_setup = format('python {ranger_home}/db_setup.py')
-    Execute(db_setup, environment={'RANGER_ADMIN_HOME': ranger_home, 'JAVA_HOME': params.java_home, }, logoutput=True, user=params.unix_user)
+    Execute(db_setup, environment=env_dict, logoutput=True, user=params.unix_user)
