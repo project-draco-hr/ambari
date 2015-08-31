@@ -1,0 +1,35 @@
+{
+  ViewContext viewContext=getViewContext(new HashMap<String,String>());
+  AmbariApi ambariApi=createNiceMock(AmbariApi.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  URLStreamProvider urlStreamProvider=createNiceMock(URLStreamProvider.class);
+  Services services=new Services(ambariApi,viewContext);
+  InputStream inputStream=IOUtils.toInputStream("{\"clusterInfo\": {\"haState\": \"ACTIVE\"}}");
+  expect(ambariApi.isClusterAssociated()).andReturn(true).anyTimes();
+  setClusterExpectationInHA(cluster,"HTTP_ONLY");
+  expect(ambariApi.getCluster()).andReturn(cluster).anyTimes();
+  expect(viewContext.getURLStreamProvider()).andReturn(urlStreamProvider).anyTimes();
+  expect(urlStreamProvider.readFrom(eq(HTTP_RM_URL1 + RM_INFO_API_ENDPOINT),eq("GET"),anyString(),EasyMock.<Map<String,String>>anyObject())).andReturn(inputStream);
+  replayAll();
+  assertEquals(HTTP_RM_URL1,services.getRMUrl());
+  reset(cluster,urlStreamProvider);
+  setClusterExpectationInHA(cluster,"HTTP_ONLY");
+  inputStream=IOUtils.toInputStream("{\"clusterInfo\": {\"haState\": \"ACTIVE\"}}");
+  expect(urlStreamProvider.readFrom(eq(HTTP_RM_URL1 + RM_INFO_API_ENDPOINT),eq("GET"),anyString(),EasyMock.<Map<String,String>>anyObject())).andThrow(new IOException());
+  expect(urlStreamProvider.readFrom(eq(HTTP_RM_URL2 + RM_INFO_API_ENDPOINT),eq("GET"),anyString(),EasyMock.<Map<String,String>>anyObject())).andReturn(inputStream);
+  replay(cluster,urlStreamProvider);
+  assertEquals(HTTP_RM_URL2,services.getRMUrl());
+  reset(cluster,urlStreamProvider);
+  setClusterExpectationInHA(cluster,"HTTPS_ONLY");
+  inputStream=IOUtils.toInputStream("{\"clusterInfo\": {\"haState\": \"ACTIVE\"}}");
+  expect(urlStreamProvider.readFrom(eq(HTTPS_RM_URL1 + RM_INFO_API_ENDPOINT),eq("GET"),anyString(),EasyMock.<Map<String,String>>anyObject())).andReturn(inputStream);
+  replay(cluster,urlStreamProvider);
+  assertEquals(HTTPS_RM_URL1,services.getRMUrl());
+  reset(cluster,urlStreamProvider);
+  setClusterExpectationInHA(cluster,"HTTPS_ONLY");
+  inputStream=IOUtils.toInputStream("{\"clusterInfo\": {\"haState\": \"ACTIVE\"}}");
+  expect(urlStreamProvider.readFrom(eq(HTTPS_RM_URL1 + RM_INFO_API_ENDPOINT),eq("GET"),anyString(),EasyMock.<Map<String,String>>anyObject())).andThrow(new IOException());
+  expect(urlStreamProvider.readFrom(eq(HTTPS_RM_URL2 + RM_INFO_API_ENDPOINT),eq("GET"),anyString(),EasyMock.<Map<String,String>>anyObject())).andReturn(inputStream);
+  replay(cluster,urlStreamProvider);
+  assertEquals(HTTPS_RM_URL2,services.getRMUrl());
+}
