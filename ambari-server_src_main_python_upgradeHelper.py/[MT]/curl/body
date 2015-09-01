@@ -1,10 +1,11 @@
-def curl(url, tokens=None, headers=None, request_type='GET', data=None, parse=False, simulate=None, validate=False, soft_validation=False):
+def curl(url, tokens=None, headers=None, request_type='GET', data=None, parse=False, validate=False, soft_validation=False):
+    '\n  :rtype type\n  '
     _headers = {}
     handler_chain = []
     post_req = ['POST', 'PUT']
     get_req = ['GET', 'DELETE']
-    simulate_only = ((Options.CURL_PRINT_ONLY is not None) or ((simulate is not None) and (simulate is True)))
-    print_url = ((Options.CURL_PRINT_ONLY is not None) and (simulate is not None))
+    print_url = (Options.CURL_PRINT_ONLY is not None)
+    write_only_print = (Options.CURL_WRITE_ONLY is not None)
     if (request_type not in (post_req + get_req)):
         raise IOError(('Wrong request type "%s" passed' % request_type))
     if ((data is not None) and isinstance(data, dict)):
@@ -27,9 +28,13 @@ def curl(url, tokens=None, headers=None, request_type='GET', data=None, parse=Fa
         req = Request(url, headers=_headers)
     req.get_method = (lambda : request_type)
     if print_url:
-        Options.logger.info(url)
+        if write_only_print:
+            if (request_type in post_req):
+                Options.logger.info(url)
+        else:
+            Options.logger.info(url)
     code = 200
-    if (not simulate_only):
+    if (not (print_url and (request_type in post_req))):
         try:
             resp = director.open(req)
             out = resp.read()
@@ -46,7 +51,7 @@ def curl(url, tokens=None, headers=None, request_type='GET', data=None, parse=Fa
         if (not print_url):
             Options.logger.info(url)
         out = '{}'
-    if (validate and (not simulate_only) and ((code > 299) or (code < 200))):
+    if (validate and (not print_url) and ((code > 299) or (code < 200))):
         if soft_validation:
             Options.logger.warning('Response validation failed, please check previous action result manually.')
         else:
