@@ -1,0 +1,45 @@
+{
+  TimelineMetricAggregator aggregatorMinute=TimelineMetricAggregatorFactory.createTimelineMetricAggregatorMinute(hdb,getConfigurationForTest(true));
+  TimelineMetricReadHelper readHelper=new TimelineMetricReadHelper(false);
+  long startTime=System.currentTimeMillis();
+  long ctime=startTime;
+  long minute=60 * 1000;
+  hdb.insertMetricRecords(prepareTimelineMetrics(startTime,"local"));
+  hdb.insertMetricRecords(prepareTimelineMetrics(ctime+=minute,"local"));
+  hdb.insertMetricRecords(prepareTimelineMetrics(ctime+=minute,"local"));
+  hdb.insertMetricRecords(prepareTimelineMetrics(ctime+=minute,"local"));
+  hdb.insertMetricRecords(prepareTimelineMetrics(ctime+=minute,"local"));
+  long endTime=startTime + 1000 * 60 * 4;
+  boolean success=aggregatorMinute.doWork(startTime,endTime);
+  assertTrue(success);
+  Condition condition=new DefaultCondition(null,null,null,null,startTime,endTime,null,null,true);
+  condition.setStatement(String.format(GET_METRIC_AGGREGATE_ONLY_SQL,PhoenixTransactSQL.getNaiveTimeRangeHint(startTime,NATIVE_TIME_RANGE_DELTA),METRICS_AGGREGATE_MINUTE_TABLE_NAME));
+  PreparedStatement pstmt=PhoenixTransactSQL.prepareGetMetricsSqlStmt(conn,condition);
+  ResultSet rs=pstmt.executeQuery();
+  MetricHostAggregate expectedAggregate=MetricTestHelper.createMetricHostAggregate(2.0,0.0,20,15.0);
+  int count=0;
+  while (rs.next()) {
+    TimelineMetric currentMetric=readHelper.getTimelineMetricKeyFromResultSet(rs);
+    MetricHostAggregate currentHostAggregate=readHelper.getMetricHostAggregateFromResultSet(rs);
+    if ("disk_free".equals(currentMetric.getMetricName())) {
+      assertEquals(2.0,currentHostAggregate.getMax());
+      assertEquals(0.0,currentHostAggregate.getMin());
+      assertEquals(20,currentHostAggregate.getNumberOfSamples());
+      assertEquals(15.0,currentHostAggregate.getSum());
+      assertEquals(15.0 / 20,currentHostAggregate.getAvg());
+      count++;
+    }
+ else     if ("mem_free".equals(currentMetric.getMetricName())) {
+      assertEquals(2.0,currentHostAggregate.getMax());
+      assertEquals(0.0,currentHostAggregate.getMin());
+      assertEquals(20,currentHostAggregate.getNumberOfSamples());
+      assertEquals(15.0,currentHostAggregate.getSum());
+      assertEquals(15.0 / 20,currentHostAggregate.getAvg());
+      count++;
+    }
+ else {
+      fail("Unexpected entry");
+    }
+  }
+  assertEquals("Two aggregated entries expected",2,count);
+}
