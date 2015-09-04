@@ -1,0 +1,57 @@
+{
+  LOG.debug(String.format("Persisting master key into %s",masterKeyFile.getAbsolutePath()));
+  EncryptionResult atom=null;
+  if (masterKey != null) {
+    try {
+      atom=aes.encrypt(masterKey);
+    }
+ catch (    Exception e) {
+      LOG.error(String.format("Failed to encrypt master key, no changes have been made: %s",e.getLocalizedMessage()),e);
+      return false;
+    }
+  }
+  if (masterKeyFile.exists()) {
+    if ((masterKeyFile.length() == 0) || isMasterKeyFile(masterKeyFile)) {
+      LOG.info(String.format("Master key file exists at %s, resetting.",masterKeyFile.getAbsolutePath()));
+      FileChannel fileChannel=null;
+      try {
+        fileChannel=new FileOutputStream(masterKeyFile).getChannel();
+        fileChannel.truncate(0);
+      }
+ catch (      FileNotFoundException e) {
+        LOG.error(String.format("Failed to open key file at %s: %s",masterKeyFile.getAbsolutePath(),e.getLocalizedMessage()),e);
+      }
+catch (      IOException e) {
+        LOG.error(String.format("Failed to reset key file at %s: %s",masterKeyFile.getAbsolutePath(),e.getLocalizedMessage()),e);
+      }
+ finally {
+        if (fileChannel != null) {
+          try {
+            fileChannel.close();
+          }
+ catch (          IOException e) {
+          }
+        }
+      }
+    }
+ else {
+      LOG.info(String.format("File exists at %s, but may not be a master key file. " + "It must be manually removed before this file location can be used",masterKeyFile.getAbsolutePath()));
+      return false;
+    }
+  }
+  if (atom != null) {
+    try {
+      ArrayList<String> lines=new ArrayList<String>();
+      lines.add(MASTER_PERSISTENCE_TAG_PREFIX + TimeStamp.getCurrentTime().toDateString());
+      String line=Base64.encodeBase64String((Base64.encodeBase64String(atom.salt) + "::" + Base64.encodeBase64String(atom.iv)+ "::"+ Base64.encodeBase64String(atom.cipher)).getBytes("UTF8"));
+      lines.add(line);
+      FileUtils.writeLines(masterKeyFile,"UTF8",lines);
+      protectAccess(masterKeyFile);
+    }
+ catch (    IOException e) {
+      LOG.error(String.format("Failed to persist master key to %s: %s ",masterKeyFile.getAbsolutePath(),e.getLocalizedMessage()),e);
+      return false;
+    }
+  }
+  return true;
+}
