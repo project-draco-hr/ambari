@@ -1,0 +1,52 @@
+{
+  String clusterName=actionExecutionContext.getClusterName();
+  final Cluster cluster=clusters.getCluster(clusterName);
+  final String componentName=actionMetadata.getClient(resourceFilter.getServiceName());
+  final String serviceName=resourceFilter.getServiceName();
+  String smokeTestRole=actionMetadata.getServiceCheckAction(serviceName);
+  if (null == smokeTestRole) {
+    smokeTestRole=actionExecutionContext.getActionName();
+  }
+  long nowTimestamp=System.currentTimeMillis();
+  Map<String,String> actionParameters=actionExecutionContext.getParameters();
+  final Set<String> candidateHosts;
+  if (componentName != null) {
+    Map<String,ServiceComponentHost> components=cluster.getService(serviceName).getServiceComponent(componentName).getServiceComponentHosts();
+    if (components.isEmpty()) {
+      throw new AmbariException("Hosts not found, component=" + componentName + ", service = "+ serviceName+ ", cluster = "+ clusterName);
+    }
+    List<String> candidateHostsList=resourceFilter.getHostNames();
+    if (candidateHostsList != null && !candidateHostsList.isEmpty()) {
+      candidateHosts=new HashSet<String>(candidateHostsList);
+    }
+ else {
+      candidateHosts=components.keySet();
+    }
+  }
+ else {
+    Map<String,ServiceComponent> components=cluster.getService(serviceName).getServiceComponents();
+    if (components.isEmpty()) {
+      throw new AmbariException("Components not found, service = " + serviceName + ", cluster = "+ clusterName);
+    }
+    ServiceComponent serviceComponent=components.values().iterator().next();
+    if (serviceComponent.getServiceComponentHosts().isEmpty()) {
+      throw new AmbariException("Hosts not found, component=" + serviceComponent.getName() + ", service = "+ serviceName+ ", cluster = "+ clusterName);
+    }
+    candidateHosts=serviceComponent.getServiceComponentHosts().keySet();
+  }
+  Set<String> ignoredHosts=new HashSet<String>();
+  if (!actionExecutionContext.isIgnoreMaintenance()) {
+    ignoredHosts.addAll(maintenanceStateHelper.filterHostsInMaintenanceState(candidateHosts,new MaintenanceStateHelper.HostPredicate(){
+      @Override public boolean shouldHostBeRemoved(      final String hostname) throws AmbariException {
+        return !maintenanceStateHelper.isOperationAllowed(cluster,actionExecutionContext.getOperationLevel(),resourceFilter,serviceName,componentName,hostname);
+      }
+    }
+));
+  }
+  String hostName=managementController.getHealthyHost(candidateHosts);
+  if (hostName == null) {
+    String msg=String.format("Unable to find a healthy host " + "amongst the provided set of " + "hosts: %s. You may also see this message if "+ "all healthy hosts are not appropriate for service check "+ "due to maintenance state (these hosts are %s). ",candidateHosts,ignoredHosts);
+    LOG.info(msg);
+  }
+  addServiceCheckAction(stage,hostName,smokeTestRole,nowTimestamp,serviceName,componentName,actionParameters,actionExecutionContext.isRetryAllowed(),actionExecutionContext.isFailureAutoSkipped());
+}

@@ -1,0 +1,127 @@
+{
+  String actionName=actionContext.getActionName();
+  String clusterName=actionContext.getClusterName();
+  final Cluster cluster;
+  if (null != clusterName) {
+    cluster=clusters.getCluster(clusterName);
+  }
+ else {
+    cluster=null;
+  }
+  ComponentInfo componentInfo=null;
+  List<RequestResourceFilter> resourceFilters=actionContext.getResourceFilters();
+  final RequestResourceFilter resourceFilter;
+  if (resourceFilters != null && !resourceFilters.isEmpty()) {
+    resourceFilter=resourceFilters.get(0);
+  }
+ else {
+    resourceFilter=new RequestResourceFilter();
+  }
+  Set<String> candidateHosts=new HashSet<String>();
+  final String serviceName=actionContext.getExpectedServiceName();
+  final String componentName=actionContext.getExpectedComponentName();
+  if (null != cluster) {
+    StackId stackId=cluster.getCurrentStackVersion();
+    if (serviceName != null && !serviceName.isEmpty()) {
+      if (componentName != null && !componentName.isEmpty()) {
+        Map<String,ServiceComponentHost> componentHosts=cluster.getService(serviceName).getServiceComponent(componentName).getServiceComponentHosts();
+        candidateHosts.addAll(componentHosts.keySet());
+        try {
+          componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
+        }
+ catch (        ObjectNotFoundException e) {
+        }
+      }
+ else {
+        for (        String component : cluster.getService(serviceName).getServiceComponents().keySet()) {
+          Map<String,ServiceComponentHost> componentHosts=cluster.getService(serviceName).getServiceComponent(component).getServiceComponentHosts();
+          candidateHosts.addAll(componentHosts.keySet());
+        }
+      }
+    }
+ else {
+      candidateHosts.addAll(clusters.getHostsForCluster(cluster.getClusterName()).keySet());
+    }
+    Set<String> ignoredHosts=maintenanceStateHelper.filterHostsInMaintenanceState(candidateHosts,new MaintenanceStateHelper.HostPredicate(){
+      @Override public boolean shouldHostBeRemoved(      final String hostname) throws AmbariException {
+        return !maintenanceStateHelper.isOperationAllowed(cluster,actionContext.getOperationLevel(),resourceFilter,serviceName,componentName,hostname);
+      }
+    }
+);
+    if (!ignoredHosts.isEmpty()) {
+      LOG.debug("Ignoring action for hosts due to maintenance state." + "Ignored hosts =" + ignoredHosts + ", component="+ componentName+ ", service="+ serviceName+ ", cluster="+ cluster.getClusterName()+ ", "+ "actionName="+ actionContext.getActionName());
+    }
+  }
+  if (resourceFilter.getHostNames().isEmpty() && candidateHosts.isEmpty()) {
+    throw new AmbariException("Suitable hosts not found, component=" + componentName + ", service="+ serviceName+ ((null == cluster) ? "" : ", cluster=" + cluster.getClusterName() + ", ")+ "actionName="+ actionContext.getActionName());
+  }
+  if (!resourceFilter.getHostNames().isEmpty() && !candidateHosts.isEmpty()) {
+    for (    String hostname : resourceFilter.getHostNames()) {
+      if (!candidateHosts.contains(hostname)) {
+        throw new AmbariException("Request specifies host " + hostname + " but its not a valid host based on the "+ "target service="+ serviceName+ " and component="+ componentName);
+      }
+    }
+  }
+  List<String> targetHosts=resourceFilter.getHostNames();
+  if (targetHosts.isEmpty()) {
+    TargetHostType hostType=actionContext.getTargetType();
+switch (hostType) {
+case ALL:
+      targetHosts.addAll(candidateHosts);
+    break;
+case ANY:
+  targetHosts.add(managementController.getHealthyHost(candidateHosts));
+break;
+case MAJORITY:
+for (int i=0; i < (candidateHosts.size() / 2) + 1; i++) {
+String hostname=managementController.getHealthyHost(candidateHosts);
+targetHosts.add(hostname);
+candidateHosts.remove(hostname);
+}
+break;
+default :
+throw new AmbariException("Unsupported target type = " + hostType);
+}
+}
+for (String hostName : targetHosts) {
+stage.addHostRoleExecutionCommand(hostName,Role.valueOf(actionContext.getActionName()),RoleCommand.ACTIONEXECUTE,new ServiceComponentHostOpInProgressEvent(actionContext.getActionName(),hostName,System.currentTimeMillis()),clusterName,serviceName,actionContext.isRetryAllowed(),actionContext.isFailureAutoSkipped());
+Map<String,String> commandParams=new TreeMap<String,String>();
+int maxTaskTimeout=Integer.parseInt(configs.getDefaultAgentTaskTimeout(false));
+if (maxTaskTimeout < actionContext.getTimeout()) {
+commandParams.put(COMMAND_TIMEOUT,Integer.toString(maxTaskTimeout));
+}
+ else {
+commandParams.put(COMMAND_TIMEOUT,actionContext.getTimeout().toString());
+}
+commandParams.put(SCRIPT,actionName + ".py");
+commandParams.put(SCRIPT_TYPE,TYPE_PYTHON);
+ExecutionCommand execCmd=stage.getExecutionCommandWrapper(hostName,actionContext.getActionName()).getExecutionCommand();
+execCmd.setConfigurations(new TreeMap<String,Map<String,String>>());
+execCmd.setConfigurationAttributes(new TreeMap<String,Map<String,Map<String,String>>>());
+Map<String,Map<String,String>> configTags=managementController.findConfigurationTagsWithOverrides(cluster,hostName);
+execCmd.setConfigurationTags(configTags);
+execCmd.setCommandParams(commandParams);
+execCmd.setServiceName(serviceName == null || serviceName.isEmpty() ? resourceFilter.getServiceName() : serviceName);
+execCmd.setComponentName(componentName == null || componentName.isEmpty() ? resourceFilter.getComponentName() : componentName);
+Map<String,String> roleParams=execCmd.getRoleParams();
+if (roleParams == null) {
+roleParams=new TreeMap<String,String>();
+}
+roleParams.putAll(actionContext.getParameters());
+if (componentInfo != null) {
+roleParams.put(COMPONENT_CATEGORY,componentInfo.getCategory());
+}
+execCmd.setRoleParams(roleParams);
+Map<String,String> actionParameters=actionContext.getParameters();
+if (null != actionParameters && !actionParameters.isEmpty()) {
+if (actionParameters.containsKey(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION)) {
+String[] split=StringUtils.split(actionParameters.get(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION));
+Set<String> configsToRefresh=new HashSet<String>(Arrays.asList(split));
+execCmd.setForceRefreshConfigTagsBeforeExecution(configsToRefresh);
+}
+}
+if (null != cluster) {
+execCmd.setClusterHostInfo(StageUtils.getClusterHostInfo(cluster));
+}
+}
+}

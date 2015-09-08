@@ -9,34 +9,39 @@
   List<HostRoleCommandEntity> commandEntities=hostRoleCommandDAO.findByPKs(taskReports.keySet());
   for (  HostRoleCommandEntity commandEntity : commandEntities) {
     CommandReport report=taskReports.get(commandEntity.getTaskId());
-    if (commandEntity.getStatus() != HostRoleStatus.ABORTED) {
-      HostRoleStatus status=HostRoleStatus.valueOf(report.getStatus());
-      if (status == HostRoleStatus.FAILED && commandEntity.isRetryAllowed()) {
-        status=HostRoleStatus.HOLDING_FAILED;
-      }
-      commandEntity.setStatus(status);
-    }
- else {
+switch (commandEntity.getStatus()) {
+case ABORTED:
       abortedCommandUpdates.add(commandEntity.getTaskId());
-    }
-    commandEntity.setStdOut(report.getStdOut().getBytes());
-    commandEntity.setStdError(report.getStdErr().getBytes());
-    commandEntity.setStructuredOut(report.getStructuredOut() == null ? null : report.getStructuredOut().getBytes());
-    commandEntity.setExitcode(report.getExitCode());
-    if (HostRoleStatus.getCompletedStates().contains(commandEntity.getStatus())) {
-      commandEntity.setEndTime(now);
-      String actionId=report.getActionId();
-      long[] requestStageIds=StageUtils.getRequestStage(actionId);
-      long requestId=requestStageIds[0];
-      long stageId=requestStageIds[1];
-      if (requestDAO.getLastStageId(requestId).equals(stageId)) {
-        requestsToCheck.add(requestId);
-      }
-    }
+    break;
+default :
+  HostRoleStatus status=HostRoleStatus.valueOf(report.getStatus());
+if (status == HostRoleStatus.FAILED && commandEntity.isRetryAllowed()) {
+  status=HostRoleStatus.HOLDING_FAILED;
+  if (commandEntity.isFailureAutoSkipped()) {
+    status=HostRoleStatus.SKIPPED_FAILED;
   }
-  hostRoleCommandDAO.mergeAll(commandEntities);
-  hostRoleCommandCache.invalidateAll(abortedCommandUpdates);
-  for (  Long requestId : requestsToCheck) {
-    endRequestIfCompleted(requestId);
-  }
+}
+commandEntity.setStatus(status);
+break;
+}
+commandEntity.setStdOut(report.getStdOut().getBytes());
+commandEntity.setStdError(report.getStdErr().getBytes());
+commandEntity.setStructuredOut(report.getStructuredOut() == null ? null : report.getStructuredOut().getBytes());
+commandEntity.setExitcode(report.getExitCode());
+if (HostRoleStatus.getCompletedStates().contains(commandEntity.getStatus())) {
+commandEntity.setEndTime(now);
+String actionId=report.getActionId();
+long[] requestStageIds=StageUtils.getRequestStage(actionId);
+long requestId=requestStageIds[0];
+long stageId=requestStageIds[1];
+if (requestDAO.getLastStageId(requestId).equals(stageId)) {
+requestsToCheck.add(requestId);
+}
+}
+}
+hostRoleCommandDAO.mergeAll(commandEntities);
+hostRoleCommandCache.invalidateAll(abortedCommandUpdates);
+for (Long requestId : requestsToCheck) {
+endRequestIfCompleted(requestId);
+}
 }

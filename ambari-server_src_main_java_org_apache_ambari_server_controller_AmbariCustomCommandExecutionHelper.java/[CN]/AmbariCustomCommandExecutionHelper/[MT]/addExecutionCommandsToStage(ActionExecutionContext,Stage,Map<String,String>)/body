@@ -1,0 +1,40 @@
+{
+  List<RequestResourceFilter> resourceFilters=actionExecutionContext.getResourceFilters();
+  for (  RequestResourceFilter resourceFilter : resourceFilters) {
+    LOG.debug("Received a command execution request" + ", clusterName=" + actionExecutionContext.getClusterName() + ", serviceName="+ resourceFilter.getServiceName()+ ", request="+ actionExecutionContext.toString());
+    String actionName=actionExecutionContext.getActionName();
+    if (actionName.contains(SERVICE_CHECK_COMMAND_NAME)) {
+      findHostAndAddServiceCheckAction(actionExecutionContext,resourceFilter,stage);
+    }
+ else     if (actionName.equals(DECOMMISSION_COMMAND_NAME)) {
+      addDecommissionAction(actionExecutionContext,resourceFilter,stage);
+    }
+ else     if (isValidCustomCommand(actionExecutionContext,resourceFilter)) {
+      String commandDetail=getReadableCustomCommandDetail(actionExecutionContext,resourceFilter);
+      Map<String,String> extraParams=new HashMap<String,String>();
+      ;
+      String componentName=(null == resourceFilter.getComponentName()) ? null : resourceFilter.getComponentName().toLowerCase();
+      if (null != componentName && requestParams.containsKey(componentName)) {
+        extraParams.put(componentName,requestParams.get(componentName));
+      }
+      if (requestParams.containsKey(KeyNames.REFRESH_ADITIONAL_COMPONENT_TAGS)) {
+        actionExecutionContext.getParameters().put(KeyNames.REFRESH_ADITIONAL_COMPONENT_TAGS,requestParams.get(KeyNames.REFRESH_ADITIONAL_COMPONENT_TAGS));
+      }
+      if (requestParams.containsKey(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION)) {
+        actionExecutionContext.getParameters().put(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION,requestParams.get(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION));
+      }
+      RequestOperationLevel operationLevel=actionExecutionContext.getOperationLevel();
+      if (operationLevel != null) {
+        String clusterName=operationLevel.getClusterName();
+        String serviceName=operationLevel.getServiceName();
+        if (isTopologyRefreshRequired(actionName,clusterName,serviceName)) {
+          extraParams.put(KeyNames.REFRESH_TOPOLOGY,"True");
+        }
+      }
+      addCustomCommandAction(actionExecutionContext,resourceFilter,stage,extraParams,commandDetail);
+    }
+ else {
+      throw new AmbariException("Unsupported action " + actionName);
+    }
+  }
+}
