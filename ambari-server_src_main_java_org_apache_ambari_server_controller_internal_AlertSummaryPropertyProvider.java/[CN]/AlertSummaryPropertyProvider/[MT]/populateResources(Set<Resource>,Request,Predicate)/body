@@ -1,12 +1,41 @@
 {
   Set<String> propertyIds=getRequestPropertyIds(request,predicate);
   try {
+    Map<Long,Map<String,AlertSummaryDTO>> perHostSummaryMap=new HashMap<Long,Map<String,AlertSummaryDTO>>();
+    Map<Long,AlertHostSummaryDTO> hostsSummaryMap=new HashMap<Long,AlertHostSummaryDTO>();
+    Map<String,Cluster> resourcesClusterMap=new HashMap<String,Cluster>();
     for (    Resource res : resources) {
-      populateResource(res,propertyIds);
+      String clusterName=(String)res.getPropertyValue(m_clusterPropertyId);
+      if (clusterName == null || resourcesClusterMap.containsKey(clusterName)) {
+        continue;
+      }
+      Cluster cluster=s_clusters.get().getCluster(clusterName);
+      resourcesClusterMap.put(clusterName,cluster);
     }
-  }
- catch (  AmbariException e) {
-    LOG.error("Could not load built-in alerts - Executor exception ({})",e.getMessage());
-  }
-  return resources;
+    for (    Cluster cluster : resourcesClusterMap.values()) {
+      long clusterId=cluster.getClusterId();
+switch (m_resourceType.getInternalType()) {
+case Cluster:
+        if (BaseProvider.isPropertyRequested(ALERTS_SUMMARY_HOSTS,propertyIds)) {
+          hostsSummaryMap.put(clusterId,s_dao.findCurrentHostCounts(clusterId));
+        }
+      break;
+case Host:
+    if (resources.size() > 1) {
+      Map<String,AlertSummaryDTO> perHostCounts=s_dao.findCurrentPerHostCounts(clusterId);
+      perHostSummaryMap.put(clusterId,perHostCounts);
+    }
+  break;
+default :
+break;
+}
+}
+for (Resource res : resources) {
+populateResource(res,propertyIds,perHostSummaryMap,hostsSummaryMap);
+}
+}
+ catch (AmbariException e) {
+LOG.error("Could not load built-in alerts - Executor exception ({})",e.getMessage());
+}
+return resources;
 }
