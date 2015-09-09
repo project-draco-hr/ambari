@@ -1,0 +1,35 @@
+def main(argv=None):
+    scriptDir = os.path.realpath(os.path.dirname(argv[0]))
+    serviceMetricsDir = os.path.join(scriptDir, 'service-metrics')
+    if os.path.exists(serviceMetricsDir):
+        onlyargs = argv[1:]
+        if (len(onlyargs) < 3):
+            sys.stderr.write('Usage: dict(ams-hbase-site) dict(ams-hbase-env) list(services)\n')
+            sys.exit(2)
+        pass
+        ams_hbase_site = None
+        ams_hbase_env = None
+        services = None
+        try:
+            ams_hbase_site = ast.literal_eval(str(onlyargs[0]))
+            ams_hbase_env = ast.literal_eval(str(onlyargs[1]))
+            services = onlyargs[2]
+            if services:
+                services = str(services).split(',')
+            pass
+        except Exception as ex:
+            sys.stderr.write(str(ex))
+            sys.stderr.write('\nUsage: Expected items not found in input. Found  ams-hbase-site => {0}, ams-hbase-env => {1}, services => {2}'.format(ams_hbase_site, ams_hbase_env, services))
+            sys.exit(2)
+        print '--------- AMS Regions Split point finder ---------'
+        print ('Services: %s' % services)
+        mode = ('distributed' if (('hbase.rootdir' in ams_hbase_site) and ('hdfs' in ams_hbase_site['hbase.rootdir'])) else 'embedded')
+        split_point_finder = FindSplitPointsForAMSRegions(ams_hbase_site, ams_hbase_env, serviceMetricsDir, mode, services)
+        result = split_point_finder.get_split_points()
+        print ('Split points for precision table : %s' % len(result.precision))
+        print ('precision: %s' % str(result.precision))
+        print ('Split points for aggregate table : %s' % len(result.aggregate))
+        print ('aggregate: %s' % str(result.aggregate))
+        return 0
+    else:
+        print ('Cannot find service metrics dir in %s' % scriptDir)
