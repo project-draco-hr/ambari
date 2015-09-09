@@ -1,0 +1,29 @@
+{
+  Map<String,Long> clusterNameIdMap=new HashMap<String,Long>();
+  try (Statement statement=dbAccessor.getConnection().createStatement();ResultSet rs=statement.executeQuery("SELECT DISTINCT cluster_name, cluster_id FROM clusters")){
+    while (rs.next()) {
+      long clusterId=rs.getLong("cluster_id");
+      String clusterName=rs.getString("cluster_name");
+      clusterNameIdMap.put(clusterName,clusterId);
+    }
+  }
+   for (  String clusterName : clusterNameIdMap.keySet()) {
+    try (PreparedStatement preparedStatement=dbAccessor.getConnection().prepareStatement("UPDATE topology_request " + "SET cluster_id=? WHERE cluster_name=?")){
+      preparedStatement.setLong(1,clusterNameIdMap.get(clusterName));
+      preparedStatement.setString(2,clusterName);
+      preparedStatement.executeUpdate();
+    }
+   }
+  if (clusterNameIdMap.entrySet().size() >= 1) {
+    try (PreparedStatement preparedStatement=dbAccessor.getConnection().prepareStatement("UPDATE topology_request " + "SET cluster_id=? WHERE cluster_id IS NULL")){
+      preparedStatement.setLong(1,clusterNameIdMap.entrySet().iterator().next().getValue());
+      preparedStatement.executeUpdate();
+    }
+   }
+  if (clusterNameIdMap.entrySet().size() == 0) {
+    LOG.warn("Cluster not found. topology_request.cluster_id is not set");
+  }
+  if (clusterNameIdMap.entrySet().size() > 1) {
+    LOG.warn("Found more than one cluster. topology_request.cluster_id can be incorrect if you have renamed the cluster.");
+  }
+}
