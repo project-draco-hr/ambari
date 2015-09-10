@@ -1,0 +1,21 @@
+{
+  OrmTestHelper helper=m_injector.getInstance(OrmTestHelper.class);
+  helper.createDefaultData();
+  Long requestId=Long.valueOf(100L);
+  ClusterEntity clusterEntity=m_clusterDAO.findByName("test_cluster1");
+  RequestEntity requestEntity=new RequestEntity();
+  requestEntity.setRequestId(requestId);
+  requestEntity.setClusterId(clusterEntity.getClusterId());
+  requestEntity.setStages(new ArrayList<StageEntity>());
+  m_requestDAO.create(requestEntity);
+  AtomicLong stageId=new AtomicLong(1);
+  HostEntity host=m_hostDAO.findByName("test_host1");
+  host.setHostRoleCommandEntities(new ArrayList<HostRoleCommandEntity>());
+  createStage(stageId.getAndIncrement(),3,host,requestEntity,HostRoleStatus.COMPLETED,false);
+  createStage(stageId.getAndIncrement(),2,host,requestEntity,HostRoleStatus.SKIPPED_FAILED,false);
+  createStage(stageId.getAndIncrement(),1,host,requestEntity,HostRoleStatus.ABORTED,false);
+  List<HostRoleCommandEntity> tasks=m_hostRoleCommandDAO.findByStatusBetweenStages(requestId,HostRoleStatus.SKIPPED_FAILED,1,3);
+  Assert.assertEquals(2,tasks.size());
+  tasks=m_hostRoleCommandDAO.findByStatusBetweenStages(requestId,HostRoleStatus.SKIPPED_FAILED,1,1);
+  Assert.assertEquals(0,tasks.size());
+}

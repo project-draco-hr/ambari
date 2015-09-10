@@ -1,0 +1,60 @@
+{
+  HostRoleCommand hostRoleCommand=getHostRoleCommand();
+  long requestId=hostRoleCommand.getRequestId();
+  long stageId=hostRoleCommand.getStageId();
+  UpgradeItemEntity upgradeItem=m_upgradeDAO.findUpgradeItemByRequestAndStage(requestId,stageId);
+  UpgradeGroupEntity upgradeGroup=upgradeItem.getGroupEntity();
+  long upgradeGroupId=upgradeGroup.getId();
+  UpgradeGroupEntity upgradeGroupEntity=m_upgradeDAO.findUpgradeGroup(upgradeGroupId);
+  List<UpgradeItemEntity> groupUpgradeItems=upgradeGroupEntity.getItems();
+  TreeSet<Long> stageIds=new TreeSet<>();
+  for (  UpgradeItemEntity groupUpgradeItem : groupUpgradeItems) {
+    stageIds.add(groupUpgradeItem.getStageId());
+  }
+  long minStageId=stageIds.first();
+  long maxStageId=stageIds.last();
+  List<HostRoleCommandEntity> skippedTasks=m_hostRoleCommandDAO.findByStatusBetweenStages(hostRoleCommand.getRequestId(),HostRoleStatus.SKIPPED_FAILED,minStageId,maxStageId);
+  if (skippedTasks.isEmpty()) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","There were no skipped failures",null);
+  }
+  StringBuilder buffer=new StringBuilder("The following steps failed and were automatically skipped:\n");
+  for (  HostRoleCommandEntity skippedTask : skippedTasks) {
+    try {
+      ServiceComponentHostEventWrapper eventWrapper=new ServiceComponentHostEventWrapper(skippedTask.getEvent());
+      ServiceComponentHostEvent event=eventWrapper.getEvent();
+      String hostName=skippedTask.getHostName();
+      if (null != hostName) {
+        Map<String,Object> failures=m_structuredFailures.get(hostName);
+        if (null == failures) {
+          failures=new HashMap<>();
+          m_structuredFailures.put(hostName,failures);
+        }
+        failures.put("id",skippedTask.getTaskId());
+        failures.put("exit_code",skippedTask.getExitcode());
+        failures.put("output_log",skippedTask.getOutputLog());
+        failures.put("error_log",skippedTask.getErrorLog());
+        String stdOut=StringUtils.abbreviateMiddle(new String(skippedTask.getStdOut()),MIDDLE_ELLIPSIZE_MARKER,1000);
+        String stderr=StringUtils.abbreviateMiddle(new String(skippedTask.getStdError()),MIDDLE_ELLIPSIZE_MARKER,1000);
+        failures.put("stdout",stdOut);
+        failures.put("stderr",stderr);
+      }
+      buffer.append(event.getServiceComponentName());
+      if (null != event.getHostName()) {
+        buffer.append(" on ");
+        buffer.append(event.getHostName());
+      }
+      buffer.append(": ");
+      buffer.append(skippedTask.getCommandDetail());
+      buffer.append("\n");
+    }
+ catch (    Exception exception) {
+      LOG.warn("Unable to extract failure information for {}",skippedTask);
+      buffer.append(": ");
+      buffer.append(skippedTask);
+    }
+  }
+  String structuredOutput=m_gson.toJson(m_structuredFailures);
+  String standardOutput=MessageFormat.format(FAILURE_STD_OUT_TEMPLATE,skippedTasks.size());
+  String standardError=buffer.toString();
+  return createCommandReport(0,HostRoleStatus.HOLDING,structuredOutput,standardOutput,standardError);
+}
