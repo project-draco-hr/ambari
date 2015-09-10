@@ -16,8 +16,13 @@
     expectLastCall().andReturn(statement).anyTimes();
     statement.executeQuery("SELECT COUNT(*) from ambari_sequences where sequence_name='hostcomponentstate_id_seq'");
     expectLastCall().andReturn(resultSet).atLeastOnce();
+    ResultSet rs1=createNiceMock(ResultSet.class);
+    expect(rs1.next()).andReturn(Boolean.TRUE).once();
     statement.executeQuery(anyObject(String.class));
-    expectLastCall().andReturn(resultSet).anyTimes();
+    expectLastCall().andReturn(rs1).anyTimes();
+    Capture<String> queryCapture=new Capture<String>();
+    dbAccessor.executeQuery(capture(queryCapture));
+    expectLastCall().once();
     dbAccessor.setColumnNullable("viewinstanceproperty","value",true);
     expectLastCall().once();
     dbAccessor.setColumnNullable("viewinstancedata","value",true);
@@ -28,8 +33,13 @@
     Field f=c.getDeclaredField("configuration");
     f.setAccessible(true);
     f.set(upgradeCatalog,configuration);
+    f=UpgradeCatalog211.class.getDeclaredField("m_hcsId");
+    f.setAccessible(true);
+    f.set(upgradeCatalog,new AtomicLong(1001));
     upgradeCatalog.executeDDLUpdates();
     verifyAll();
+    Assert.assertTrue(queryCapture.hasCaptured());
+    Assert.assertTrue(queryCapture.getValue().contains("1001"));
   }
   finally {
     destroyInjector(injector);
