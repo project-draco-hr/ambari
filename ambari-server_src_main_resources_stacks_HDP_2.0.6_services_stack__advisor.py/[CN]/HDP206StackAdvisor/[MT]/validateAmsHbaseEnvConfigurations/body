@@ -2,7 +2,9 @@ def validateAmsHbaseEnvConfigurations(self, properties, recommendedDefaults, con
     regionServerItem = self.validatorLessThenDefaultValue(properties, recommendedDefaults, 'hbase_regionserver_heapsize')
     masterItem = self.validatorLessThenDefaultValue(properties, recommendedDefaults, 'hbase_master_heapsize')
     ams_env = getSiteProperties(configurations, 'ams-env')
+    amsHbaseSite = getSiteProperties(configurations, 'ams-hbase-site')
     logDirItem = self.validatorEqualsPropertyItem(properties, 'hbase_log_dir', ams_env, 'metrics_collector_log_dir')
+    validationItems = []
     masterHostItem = None
     if (masterItem is None):
         hostMasterComponents = {}
@@ -21,11 +23,27 @@ def validateAmsHbaseEnvConfigurations(self, properties, recommendedDefaults, con
                     if ((len(hosts['items']) > 31) and (len(hostMasterComponents[collectorHostName]) > 2) and (host['Hosts']['total_mem'] < ((32 * 1024) * 1024))):
                         masterHostMessage = 'Host {0} is used by multiple master components ({1}). It is recommended to use a separate host for the Ambari Metrics Collector component and ensure the host has sufficient memory available.'
                         masterHostItem = self.getWarnItem(masterHostMessage.format(collectorHostName, str(', '.join(hostMasterComponents[collectorHostName]))))
+                hostComponents = []
+                for service in services['services']:
+                    for component in service['components']:
+                        if (component['StackServiceComponents']['hostnames'] is not None):
+                            if (collectorHostName in component['StackServiceComponents']['hostnames']):
+                                hostComponents.append(component['StackServiceComponents']['component_name'])
+                requiredMemory = getMemorySizeRequired(hostComponents, configurations)
+                unusedMemory = ((host['Hosts']['total_mem'] * 1024) - requiredMemory)
+                hbase_rootdir = amsHbaseSite.get('hbase.rootdir')
+                if (unusedMemory > 4294967296):
+                    propertyToIncrease = ('hbase_regionserver_heapsize' if hbase_rootdir.startswith('hdfs://') else 'hbase_master_heapsize')
+                    collector_heapsize = (int(((unusedMemory - 4294967296) / 5)) + (to_number(ams_env.get('metrics_collector_heapsize')) * 1048576))
+                    hbase_heapsize = (int((((unusedMemory - 4294967296) * 4) / 5)) + (to_number(properties.get(propertyToIncrease)) * 1048576))
+                    msg = '{0} MB RAM is unused on the host {1} based on components assigned. Consider allocating  {2} MB to metrics_collector_heapsize in ams-env and {3} MB to {4} in ams-hbase-env'
+                    unusedMemoryHbaseItem = self.getWarnItem(msg.format((unusedMemory / 1048576), collectorHostName, (collector_heapsize / 1048576), (hbase_heapsize / 1048576), propertyToIncrease))
+                    validationItems.extend([{'config-name': propertyToIncrease, 'item': unusedMemoryHbaseItem, }])
         pass
     hbase_site = getSiteProperties(configurations, 'ams-hbase-site')
     hbase_rootdir = hbase_site.get('hbase.rootdir')
     regionServerMinMemItem = None
     if (hbase_rootdir and hbase_rootdir.startswith('hdfs://')):
         regionServerMinMemItem = self.validateMinMemorySetting(properties, 1024, 'hbase_regionserver_heapsize')
-    validationItems = [{'config-name': 'hbase_regionserver_heapsize', 'item': regionServerItem, }, {'config-name': 'hbase_regionserver_heapsize', 'item': regionServerMinMemItem, }, {'config-name': 'hbase_master_heapsize', 'item': masterItem, }, {'config-name': 'hbase_master_heapsize', 'item': masterHostItem, }, {'config-name': 'hbase_log_dir', 'item': logDirItem, }]
+    validationItems.extend([{'config-name': 'hbase_regionserver_heapsize', 'item': regionServerItem, }, {'config-name': 'hbase_regionserver_heapsize', 'item': regionServerMinMemItem, }, {'config-name': 'hbase_master_heapsize', 'item': masterItem, }, {'config-name': 'hbase_master_heapsize', 'item': masterHostItem, }, {'config-name': 'hbase_log_dir', 'item': logDirItem, }])
     return self.toConfigurationValidationProblems(validationItems, 'ams-hbase-env')

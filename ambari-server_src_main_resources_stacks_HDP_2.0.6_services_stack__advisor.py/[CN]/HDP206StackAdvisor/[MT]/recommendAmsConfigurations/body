@@ -4,10 +4,6 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
     putTimelineServiceProperty = self.putProperty(configurations, 'ams-site', services)
     putHbaseEnvProperty = self.putProperty(configurations, 'ams-hbase-env', services)
     amsCollectorHosts = self.getComponentHostNames(services, 'AMBARI_METRICS', 'METRICS_COLLECTOR')
-    putAmsHbaseSiteProperty('hfile.block.cache.size', 0.3)
-    putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.upperLimit', 0.35)
-    putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.lowerLimit', 0.3)
-    putTimelineServiceProperty('timeline.metrics.host.aggregator.ttl', 86400)
     rootDir = 'file:///var/lib/ambari-metrics-collector/hbase'
     tmpDir = '/var/lib/ambari-metrics-collector/hbase-tmp'
     if ('ams-hbase-site' in services['configurations']):
@@ -15,14 +11,38 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
             rootDir = services['configurations']['ams-hbase-site']['properties']['hbase.rootdir']
         if ('hbase.tmp.dir' in services['configurations']['ams-hbase-site']['properties']):
             tmpDir = services['configurations']['ams-hbase-site']['properties']['hbase.tmp.dir']
+    mountpoints = ['/']
+    for collectorHostName in amsCollectorHosts:
+        for host in hosts['items']:
+            if (host['Hosts']['host_name'] == collectorHostName):
+                mountpoints = self.getPreferredMountPoints(host['Hosts'])
+                break
+    if (not rootDir.startswith('hdfs://')):
+        rootDir = re.sub('^file:///|/', '', rootDir, count=1)
+        rootDir = ('file://' + os.path.join(mountpoints[0], rootDir))
+    tmpDir = re.sub('^file:///|/', '', tmpDir, count=1)
+    if ((len(mountpoints) > 1) and (not rootDir.startswith('hdfs://'))):
+        tmpDir = os.path.join(mountpoints[1], tmpDir)
+    else:
+        tmpDir = os.path.join(mountpoints[0], tmpDir)
+    putAmsHbaseSiteProperty('hbase.rootdir', rootDir)
+    putAmsHbaseSiteProperty('hbase.tmp.dir', tmpDir)
+    (collector_heapsize, hbase_heapsize, total_sinks_count) = self.getAmsMemoryRecommendation(services, hosts)
+    putAmsEnvProperty('metrics_collector_heapsize', (str(collector_heapsize) + 'm'))
+    putAmsHbaseSiteProperty('hfile.block.cache.size', 0.3)
+    putAmsHbaseSiteProperty('hbase.hregion.memstore.flush.size', 134217728)
+    putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.upperLimit', 0.35)
+    putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.lowerLimit', 0.3)
+    putTimelineServiceProperty('timeline.metrics.host.aggregator.ttl', 86400)
+    if rootDir.startswith('hdfs://'):
+        putHbaseEnvProperty('hbase_master_heapsize', '512m')
+        putHbaseEnvProperty('hbase_regionserver_heapsize', (str(hbase_heapsize) + 'm'))
+    else:
+        putHbaseEnvProperty('hbase_master_heapsize', (str(hbase_heapsize) + 'm'))
     if (len(amsCollectorHosts) > 1):
         pass
     else:
-        totalHostsCount = len(hosts['items'])
-        putHbaseEnvProperty('hbase_master_heapsize', '512m')
-        if (totalHostsCount >= 400):
-            hbase_heapsize = '12288m'
-            putAmsEnvProperty('metrics_collector_heapsize', '8192m')
+        if (total_sinks_count >= 2000):
             putAmsHbaseSiteProperty('hbase.regionserver.handler.count', 60)
             putAmsHbaseSiteProperty('hbase.regionserver.hlog.blocksize', 134217728)
             putAmsHbaseSiteProperty('hbase.regionserver.maxlogs', 64)
@@ -33,38 +53,26 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
             putTimelineServiceProperty('phoenix.query.maxGlobalMemoryPercentage', 30)
             putAmsHbaseSiteProperty('hbase_master_xmn_size', '512m')
             putAmsHbaseSiteProperty('regionserver_xmn_size', '512m')
-        elif (totalHostsCount >= 100):
-            hbase_heapsize = '6144m'
-            putAmsEnvProperty('metrics_collector_heapsize', '4096m')
+        elif (total_sinks_count >= 500):
             putAmsHbaseSiteProperty('hbase.regionserver.handler.count', 60)
             putAmsHbaseSiteProperty('hbase.regionserver.hlog.blocksize', 134217728)
             putAmsHbaseSiteProperty('hbase.regionserver.maxlogs', 64)
             putAmsHbaseSiteProperty('hbase.hregion.memstore.flush.size', 268435456)
             putAmsHbaseSiteProperty('hbase_master_xmn_size', '512m')
-        elif (totalHostsCount >= 50):
-            hbase_heapsize = '2048m'
-            putAmsEnvProperty('metrics_collector_heapsize', '2048m')
+        elif (total_sinks_count >= 250):
             putAmsHbaseSiteProperty('hbase_master_xmn_size', '256m')
         else:
-            hbase_heapsize = '512m'
-            putAmsEnvProperty('metrics_collector_heapsize', '512m')
             putAmsHbaseSiteProperty('hbase_master_xmn_size', '128m')
         pass
-        if rootDir.startswith('hdfs://'):
-            putHbaseEnvProperty('hbase_regionserver_heapsize', hbase_heapsize)
-        else:
-            putHbaseEnvProperty('hbase_master_heapsize', hbase_heapsize)
-    mountpoint = '/'
-    for collectorHostName in amsCollectorHosts:
-        for host in hosts['items']:
-            if (host['Hosts']['host_name'] == collectorHostName):
-                mountpoint = self.getProperMountPoint(host['Hosts'])
-                break
-    if (not rootDir.startswith('hdfs://')):
-        rootDir = re.sub('^file:///|/', '', rootDir, count=1)
-        rootDir = ('file://' + os.path.join(mountpoint, rootDir))
-    tmpDir = re.sub('^file:///|/', '', tmpDir, count=1)
-    tmpDir = os.path.join(mountpoint, tmpDir)
-    putAmsHbaseSiteProperty('hbase.rootdir', rootDir)
-    putAmsHbaseSiteProperty('hbase.tmp.dir', tmpDir)
+    scriptDir = os.path.dirname(os.path.abspath(__file__))
+    metricsDir = os.path.join(scriptDir, '../../../../common-services/AMBARI_METRICS/0.1.0/package')
+    serviceMetricsDir = os.path.join(metricsDir, 'files', 'service-metrics')
+    sys.path.append(os.path.join(metricsDir, 'scripts'))
+    mode = ('distributed' if rootDir.startswith('hdfs://') else 'embedded')
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    from split_points import FindSplitPointsForAMSRegions
+    split_point_finder = FindSplitPointsForAMSRegions(configurations['ams-hbase-site']['properties'], configurations['ams-hbase-env']['properties'], serviceMetricsDir, mode, servicesList)
+    result = split_point_finder.get_split_points()
+    putTimelineServiceProperty('timeline.metrics.host.aggregate.splitpoints', ','.join(result.precision))
+    putTimelineServiceProperty('timeline.metrics.cluster.aggregate.splitpoints', ','.join(result.aggregate))
     pass
