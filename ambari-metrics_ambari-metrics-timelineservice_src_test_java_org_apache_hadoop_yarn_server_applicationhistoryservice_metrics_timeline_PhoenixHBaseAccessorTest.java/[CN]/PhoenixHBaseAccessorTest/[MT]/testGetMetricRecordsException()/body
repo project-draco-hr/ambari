@@ -1,0 +1,32 @@
+{
+  Configuration hbaseConf=new Configuration();
+  hbaseConf.setStrings(ZOOKEEPER_QUORUM,"quorum");
+  Configuration metricsConf=new Configuration();
+  ConnectionProvider connectionProvider=new ConnectionProvider(){
+    @Override public Connection getConnection() throws SQLException {
+      return null;
+    }
+  }
+;
+  PhoenixHBaseAccessor accessor=new PhoenixHBaseAccessor(hbaseConf,metricsConf,connectionProvider);
+  List<String> metricNames=new LinkedList<>();
+  List<String> hostnames=new LinkedList<>();
+  Map<String,List<Function>> metricFunctions=new HashMap<>();
+  PowerMock.mockStatic(PhoenixTransactSQL.class);
+  PreparedStatement preparedStatementMock=EasyMock.createNiceMock(PreparedStatement.class);
+  Condition condition=new DefaultCondition(metricNames,hostnames,"appid","instanceid",123L,234L,Precision.SECONDS,10,true);
+  EasyMock.expect(PhoenixTransactSQL.prepareGetMetricsSqlStmt(null,condition)).andReturn(preparedStatementMock).once();
+  ResultSet rsMock=EasyMock.createNiceMock(ResultSet.class);
+  RuntimeException runtimeException=EasyMock.createNiceMock(RuntimeException.class);
+  IOException io=EasyMock.createNiceMock(IOException.class);
+  EasyMock.expect(preparedStatementMock.executeQuery()).andThrow(runtimeException);
+  EasyMock.expect(runtimeException.getCause()).andReturn(io).atLeastOnce();
+  StackTraceElement stackTrace[]=new StackTraceElement[]{new StackTraceElement("TimeRange","method","file",1)};
+  EasyMock.expect(io.getStackTrace()).andReturn(stackTrace).atLeastOnce();
+  PowerMock.replayAll();
+  EasyMock.replay(preparedStatementMock,rsMock,io,runtimeException);
+  TimelineMetrics tml=accessor.getMetricRecords(condition,metricFunctions);
+  assertEquals(0,tml.getMetrics().size());
+  PowerMock.verifyAll();
+  EasyMock.verify(preparedStatementMock,rsMock,io,runtimeException);
+}
