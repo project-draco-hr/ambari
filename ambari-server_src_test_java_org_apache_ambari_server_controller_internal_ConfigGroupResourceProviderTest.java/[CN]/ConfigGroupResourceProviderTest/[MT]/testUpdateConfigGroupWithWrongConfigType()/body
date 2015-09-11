@@ -10,7 +10,7 @@
   HostEntity hostEntity2=createMock(HostEntity.class);
   final ConfigGroup configGroup=createNiceMock(ConfigGroup.class);
   ConfigGroupResponse configGroupResponse=createNiceMock(ConfigGroupResponse.class);
-  expect(cluster.isConfigTypeExists("core-site")).andReturn(true).anyTimes();
+  expect(cluster.isConfigTypeExists("core-site")).andReturn(false).anyTimes();
   expect(managementController.getClusters()).andReturn(clusters).anyTimes();
   expect(managementController.getAuthName()).andReturn("admin").anyTimes();
   expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
@@ -38,9 +38,6 @@
     }
   }
 );
-  expect(managementController.getConfigHelper()).andReturn(configHelper).once();
-  configHelper.invalidateStaleConfigsCache();
-  expectLastCall().once();
   replay(managementController,clusters,cluster,configGroup,response,configGroupResponse,configHelper,hostDAO,hostEntity1,hostEntity2,h1,h2);
   ResourceProvider provider=getConfigGroupResourceProvider(managementController);
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
@@ -68,6 +65,13 @@
   mapRequestProps.put("context","Called from a test");
   Request request=PropertyHelper.getUpdateRequest(properties,mapRequestProps);
   Predicate predicate=new PredicateBuilder().property(ConfigGroupResourceProvider.CONFIGGROUP_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ConfigGroupResourceProvider.CONFIGGROUP_ID_PROPERTY_ID).equals(25L).toPredicate();
-  provider.updateResources(request,predicate);
+  SystemException systemException=null;
+  try {
+    provider.updateResources(request,predicate);
+  }
+ catch (  SystemException e) {
+    systemException=e;
+  }
+  assertNotNull(systemException);
   verify(managementController,clusters,cluster,configGroup,response,configGroupResponse,configHelper,hostDAO,hostEntity1,hostEntity2,h1,h2);
 }
