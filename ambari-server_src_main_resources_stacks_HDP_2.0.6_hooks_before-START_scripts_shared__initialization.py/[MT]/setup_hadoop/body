@@ -2,15 +2,16 @@ def setup_hadoop():
     '\n  Setup hadoop files and directories\n  '
     import params
     Execute(('setenforce', '0'), only_if='test -f /selinux/enforce', not_if='(! which getenforce ) || (which getenforce && getenforce | grep -q Disabled)', sudo=True)
-    if params.has_namenode:
+    if (params.has_namenode or (params.dfs_type == 'HCFS')):
         Directory(params.hdfs_log_dir_prefix, recursive=True, owner='root', group=params.user_group, mode=509, cd_access='a')
-        Directory(params.hadoop_pid_dir_prefix, recursive=True, owner='root', group='root', cd_access='a')
+        if params.has_namenode:
+            Directory(params.hadoop_pid_dir_prefix, recursive=True, owner='root', group='root', cd_access='a')
         Directory(params.hadoop_tmp_dir, recursive=True, owner=params.hdfs_user, cd_access='a')
         if params.security_enabled:
             tc_owner = 'root'
         else:
             tc_owner = params.hdfs_user
-        if (not WebHDFSUtil.is_webhdfs_available(params.is_webhdfs_enabled, params.default_fs)):
+        if ((params.dfs_type == 'HCFS') or (not WebHDFSUtil.is_webhdfs_available(params.is_webhdfs_enabled, params.default_fs))):
             File(format('{ambari_libs_dir}/fast-hdfs-resource.jar'), mode=420, content=StaticFile('fast-hdfs-resource.jar'))
         if os.path.exists(params.hadoop_conf_dir):
             File(os.path.join(params.hadoop_conf_dir, 'commons-logging.properties'), owner=tc_owner, content=Template('commons-logging.properties.j2'))
