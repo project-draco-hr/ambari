@@ -1,0 +1,59 @@
+{
+  ResourceDefinition resourceDefinition=new HostResourceDefinition();
+  Map<Resource.Type,String> mapIds=new HashMap<Resource.Type,String>();
+  final AtomicInteger pageCallCount=new AtomicInteger(0);
+  ClusterControllerImpl clusterControllerImpl=new ClusterControllerImpl(new ClusterControllerImplTest.TestProviderModule()){
+    public PageResponse getPage(    Resource.Type type,    QueryResponse queryResponse,    Request request,    Predicate predicate,    PageRequest pageRequest,    SortRequest sortRequest) throws UnsupportedPropertyException, SystemException, NoSuchResourceException, NoSuchParentResourceException {
+      pageCallCount.incrementAndGet();
+      return super.getPage(type,queryResponse,request,predicate,pageRequest,sortRequest);
+    }
+  }
+;
+  QueryImpl instance=new TestQuery(mapIds,resourceDefinition,clusterControllerImpl);
+  pageCallCount.set(0);
+  Result result=instance.execute();
+  TreeNode<Resource> tree=result.getResultTree();
+  Assert.assertEquals(4,tree.getChildren().size());
+  Assert.assertEquals(1,pageCallCount.get());
+  pageCallCount.set(0);
+  PredicateBuilder pb=new PredicateBuilder();
+  Predicate predicate=pb.property("alerts_summary/CRITICAL").greaterThan(0).toPredicate();
+  instance.setUserPredicate(predicate);
+  result=instance.execute();
+  tree=result.getResultTree();
+  Assert.assertEquals(2,tree.getChildren().size());
+  Assert.assertEquals(2,pageCallCount.get());
+  TreeNode<Resource> hostNode=tree.getChild("Host:1");
+  Assert.assertEquals("Host:1",hostNode.getName());
+  Assert.assertEquals("host:0",hostNode.getObject().getPropertyValue(PropertyHelper.getPropertyId("Hosts","host_name")));
+  Assert.assertEquals(Resource.Type.Host,hostNode.getObject().getType());
+  Assert.assertEquals("1",hostNode.getObject().getPropertyValue(PropertyHelper.getPropertyId("alerts_summary","CRITICAL")));
+  hostNode=tree.getChild("Host:2");
+  Assert.assertEquals("Host:2",hostNode.getName());
+  Assert.assertEquals("host:2",hostNode.getObject().getPropertyValue(PropertyHelper.getPropertyId("Hosts","host_name")));
+  Assert.assertEquals(Resource.Type.Host,hostNode.getObject().getType());
+  Assert.assertEquals("1",hostNode.getObject().getPropertyValue(PropertyHelper.getPropertyId("alerts_summary","CRITICAL")));
+  pageCallCount.set(0);
+  pb=new PredicateBuilder();
+  predicate=pb.property("alerts_summary/WARNING").greaterThan(0).toPredicate();
+  instance.setUserPredicate(predicate);
+  instance.setPageRequest(new PageRequestImpl(PageRequest.StartingPoint.Beginning,1,0,null,null));
+  result=instance.execute();
+  tree=result.getResultTree();
+  Assert.assertEquals(1,tree.getChildren().size());
+  Assert.assertEquals(2,pageCallCount.get());
+  hostNode=tree.getChild("Host:1");
+  Assert.assertEquals("Host:1",hostNode.getName());
+  Assert.assertEquals("host:1",hostNode.getObject().getPropertyValue(PropertyHelper.getPropertyId("Hosts","host_name")));
+  Assert.assertEquals(Resource.Type.Host,hostNode.getObject().getType());
+  Assert.assertEquals("1",hostNode.getObject().getPropertyValue(PropertyHelper.getPropertyId("alerts_summary","WARNING")));
+  pageCallCount.set(0);
+  pb=new PredicateBuilder();
+  predicate=pb.property("alerts_summary/WARNING").greaterThan(0).or().property("host_components/HostRoles/component_name").equals("DATANODE").toPredicate();
+  instance.setUserPredicate(predicate);
+  instance.setPageRequest(null);
+  result=instance.execute();
+  tree=result.getResultTree();
+  Assert.assertEquals(0,tree.getChildren().size());
+  Assert.assertEquals(6,pageCallCount.get());
+}
