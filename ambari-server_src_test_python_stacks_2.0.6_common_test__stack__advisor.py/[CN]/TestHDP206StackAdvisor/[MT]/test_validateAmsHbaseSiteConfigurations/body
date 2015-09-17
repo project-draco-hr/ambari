@@ -1,0 +1,29 @@
+def test_validateAmsHbaseSiteConfigurations(self):
+    configurations = {'hdfs-site': {'properties': {'dfs.datanode.data.dir': '/hadoop/data', }, }, 'ams-site': {'properties': {'timeline.metrics.service.operation.mode': 'embedded', }, }, }
+    recommendedDefaults = {'hbase.rootdir': 'file:///var/lib/ambari-metrics-collector/hbase', 'hbase.tmp.dir': '/var/lib/ambari-metrics-collector/hbase', 'hbase.cluster.distributed': 'false', }
+    properties = {'hbase.rootdir': 'file:///var/lib/ambari-metrics-collector/hbase', 'hbase.tmp.dir': '/var/lib/ambari-metrics-collector/hbase', 'hbase.cluster.distributed': 'false', }
+    host = {'href': '/api/v1/hosts/host1', 'Hosts': {'cpu_count': 1, 'host_name': 'host1', 'os_arch': 'x86_64', 'os_type': 'centos6', 'ph_cpu_count': 1, 'public_host_name': 'host1', 'rack_info': '/default-rack', 'total_mem': 2097152, 'disk_info': [{'available': str((15 << 30)), 'type': 'ext4', 'mountpoint': '/', }], }, }
+    hosts = {'items': [host], }
+    services = {'services': [{'StackServices': {'service_name': 'AMBARI_METRICS', }, 'components': [{'StackServiceComponents': {'component_name': 'METRICS_COLLECTOR', 'hostnames': ['host1'], }, }, {'StackServiceComponents': {'component_name': 'METRICS_MONITOR', 'hostnames': ['host1'], }, }], }, {'StackServices': {'service_name': 'HDFS', }, 'components': [{'StackServiceComponents': {'component_name': 'DATANODE', 'hostnames': ['host1'], }, }], }], 'configurations': configurations, }
+    res = self.stackAdvisor.validateAmsHbaseSiteConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    expected = []
+    self.assertEquals(res, expected)
+    host['Hosts']['disk_info'] = [{'available': '1', 'type': 'ext4', 'mountpoint': '/', }]
+    res = self.stackAdvisor.validateAmsHbaseSiteConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    expected = [{'config-name': 'hbase.rootdir', 'config-type': 'ams-hbase-site', 'level': 'WARN', 'message': 'Ambari Metrics disk space requirements not met. \nRecommended disk space for partition / is 10G', 'type': 'configuration', }]
+    self.assertEquals(res, expected)
+    host['Hosts']['disk_info'] = [{'available': str((15 << 30)), 'type': 'ext4', 'mountpoint': '/grid/0', }, {'available': str((15 << 30)), 'type': 'ext4', 'mountpoint': '/', }]
+    recommendedDefaults = {'hbase.rootdir': 'file:///grid/0/var/lib/ambari-metrics-collector/hbase', 'hbase.tmp.dir': '/var/lib/ambari-metrics-collector/hbase', 'hbase.cluster.distributed': 'false', }
+    properties = {'hbase.rootdir': 'file:///grid/0/var/lib/ambari-metrics-collector/hbase', 'hbase.tmp.dir': '/var/lib/ambari-metrics-collector/hbase', 'hbase.cluster.distributed': 'false', }
+    res = self.stackAdvisor.validateAmsHbaseSiteConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    expected = []
+    self.assertEquals(res, expected)
+    properties = {'hbase.rootdir': 'file:///var/lib/ambari-metrics-collector/hbase', 'hbase.tmp.dir': '/var/lib/ambari-metrics-collector/hbase', 'hbase.cluster.distributed': 'false', }
+    res = self.stackAdvisor.validateAmsHbaseSiteConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    expected = [{'config-name': 'hbase.rootdir', 'config-type': 'ams-hbase-site', 'level': 'WARN', 'message': 'It is not recommended to use root partition for hbase.rootdir', 'type': 'configuration', }, {'config-name': 'hbase.tmp.dir', 'config-type': 'ams-hbase-site', 'level': 'WARN', 'message': 'Consider not using / partition for storing metrics temporary data. / partition is already used as hbase.rootdir to store metrics data', 'type': 'configuration', }, {'config-name': 'hbase.rootdir', 'config-type': 'ams-hbase-site', 'level': 'WARN', 'message': 'Consider not using / partition for storing metrics data. / is already used by datanode to store HDFS data', 'type': 'configuration', }]
+    self.assertEquals(res, expected)
+    properties = {'hbase.rootdir': 'file:///grid/0/var/lib/ambari-metrics-collector/hbase', 'hbase.tmp.dir': '/var/lib/ambari-metrics-collector/hbase', 'hbase.cluster.distributed': 'false', }
+    configurations['ams-site']['properties']['timeline.metrics.service.operation.mode'] = 'distributed'
+    res = self.stackAdvisor.validateAmsHbaseSiteConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    expected = [{'config-name': 'hbase.rootdir', 'config-type': 'ams-hbase-site', 'level': 'WARN', 'message': 'In distributed mode hbase.rootdir should point to HDFS. Collector will operate in embedded mode otherwise.', 'type': 'configuration', }]
+    self.assertEquals(res, expected)

@@ -15,6 +15,7 @@ def validateAmsHbaseSiteConfigurations(self, properties, recommendedDefaults, co
     rootdir_item = None
     op_mode = ams_site.get('timeline.metrics.service.operation.mode')
     hbase_rootdir = properties.get('hbase.rootdir')
+    hbase_tmpdir = properties.get('hbase.tmp.dir')
     if ((op_mode == 'distributed') and (not hbase_rootdir.startswith('hdfs://'))):
         rootdir_item = self.getWarnItem('In distributed mode hbase.rootdir should point to HDFS. Collector will operate in embedded mode otherwise.')
         pass
@@ -27,20 +28,23 @@ def validateAmsHbaseSiteConfigurations(self, properties, recommendedDefaults, co
         for host in hosts['items']:
             if (host['Hosts']['host_name'] == collectorHostName):
                 validationItems.extend([{'config-name': 'hbase.rootdir', 'item': self.validatorEnoughDiskSpace(properties, 'hbase.rootdir', host['Hosts'], recommendedDiskSpace), }])
-                validationItems.extend([{'config-name': 'hbase.rootdir', 'item': self.validatorNotRootFs(properties, 'hbase.rootdir', host['Hosts']), }])
-                validationItems.extend([{'config-name': 'hbase.tmp.dir', 'item': self.validatorNotRootFs(properties, 'hbase.tmp.dir', host['Hosts']), }])
-                dn_hosts = self.getComponentHostNames(services, 'HDFS', 'DATANODE')
-                if ((not hbase_rootdir.startswith('hdfs')) and dn_hosts and (collectorHostName in dn_hosts)):
-                    hdfs_site = getSiteProperties(configurations, 'hdfs-site')
+                validationItems.extend([{'config-name': 'hbase.rootdir', 'item': self.validatorNotRootFs(properties, recommendedDefaults, 'hbase.rootdir', host['Hosts']), }])
+                validationItems.extend([{'config-name': 'hbase.tmp.dir', 'item': self.validatorNotRootFs(properties, recommendedDefaults, 'hbase.tmp.dir', host['Hosts']), }])
+                if (not hbase_rootdir.startswith('hdfs')):
                     mountPoints = []
                     for mountPoint in host['Hosts']['disk_info']:
                         mountPoints.append(mountPoint['mountpoint'])
                     hbase_rootdir_mountpoint = getMountPointForDir(hbase_rootdir, mountPoints)
-                    if (ams_site and hdfs_site and ('dfs.datanode.data.dir' in hdfs_site)):
-                        for dfs_datadir in hdfs_site.get('dfs.datanode.data.dir').split(','):
-                            mountPoints = []
-                            for mountPoint in host['Hosts']['disk_info']:
-                                mountPoints.append(mountPoint['mountpoint'])
+                    hbase_tmpdir_mountpoint = getMountPointForDir(hbase_tmpdir, mountPoints)
+                    preferred_mountpoints = self.getPreferredMountPoints(host['Hosts'])
+                    if ((hbase_rootdir_mountpoint == hbase_tmpdir_mountpoint) and (len(preferred_mountpoints) > 1)):
+                        item = self.getWarnItem('Consider not using {0} partition for storing metrics temporary data. {0} partition is already used as hbase.rootdir to store metrics data'.format(hbase_tmpdir_mountpoint))
+                        validationItems.extend([{'config-name': 'hbase.tmp.dir', 'item': item, }])
+                    dn_hosts = self.getComponentHostNames(services, 'HDFS', 'DATANODE')
+                    hdfs_site = getSiteProperties(configurations, 'hdfs-site')
+                    dfs_datadirs = (hdfs_site.get('dfs.datanode.data.dir').split(',') if (hdfs_site and ('dfs.datanode.data.dir' in hdfs_site)) else [])
+                    if (dn_hosts and (collectorHostName in dn_hosts) and ams_site and dfs_datadirs and (len(preferred_mountpoints) > len(dfs_datadirs))):
+                        for dfs_datadir in dfs_datadirs:
                             dfs_datadir_mountpoint = getMountPointForDir(dfs_datadir, mountPoints)
                             if (dfs_datadir_mountpoint == hbase_rootdir_mountpoint):
                                 item = self.getWarnItem('Consider not using {0} partition for storing metrics data. {0} is already used by datanode to store HDFS data'.format(hbase_rootdir_mountpoint))
