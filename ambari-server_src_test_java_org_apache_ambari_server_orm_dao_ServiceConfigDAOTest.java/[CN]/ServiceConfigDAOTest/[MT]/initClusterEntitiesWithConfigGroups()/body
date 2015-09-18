@@ -1,0 +1,97 @@
+{
+  String userName="admin";
+  ServiceConfigEntity oozieServiceConfigEntity=createServiceConfig("OOZIE",userName,1L,1L,System.currentTimeMillis(),null);
+  ClusterEntity clusterEntity=oozieServiceConfigEntity.getClusterEntity();
+  Long clusterId=clusterEntity.getClusterId();
+  if (null == clusterId) {
+    clusterId=1L;
+    clusterEntity.setClusterId(clusterId);
+    clusterEntity=clusterDAO.merge(clusterEntity);
+  }
+  StackEntity stackEntityHDP01=stackDAO.find(HDP_01.getStackName(),HDP_01.getStackVersion());
+  String oozieSite="oozie-site";
+  int count=3;
+  for (int i=1; i < count; i++) {
+    ClusterConfigEntity entity=new ClusterConfigEntity();
+    entity.setClusterEntity(clusterEntity);
+    entity.setClusterId(clusterEntity.getClusterId());
+    entity.setType(oozieSite);
+    entity.setVersion(Long.valueOf(i));
+    entity.setTag("version" + i);
+    entity.setTimestamp(new Date().getTime());
+    entity.setStack(stackEntityHDP01);
+    entity.setData("");
+    clusterDAO.createConfig(entity);
+    clusterEntity.getClusterConfigEntities().add(entity);
+    clusterDAO.merge(clusterEntity);
+  }
+  Collection<ClusterConfigMappingEntity> entities=clusterEntity.getConfigMappingEntities();
+  if (null == entities) {
+    entities=new ArrayList<ClusterConfigMappingEntity>();
+    clusterEntity.setConfigMappingEntities(entities);
+  }
+  ClusterConfigMappingEntity e1=new ClusterConfigMappingEntity();
+  e1.setClusterEntity(clusterEntity);
+  e1.setClusterId(clusterEntity.getClusterId());
+  e1.setCreateTimestamp(System.currentTimeMillis());
+  e1.setSelected(0);
+  e1.setUser(userName);
+  e1.setType(oozieSite);
+  e1.setTag("version1");
+  entities.add(e1);
+  clusterDAO.merge(clusterEntity);
+  ClusterConfigMappingEntity e2=new ClusterConfigMappingEntity();
+  e2.setClusterEntity(clusterEntity);
+  e2.setClusterId(clusterEntity.getClusterId());
+  e2.setCreateTimestamp(System.currentTimeMillis());
+  e2.setSelected(1);
+  e2.setUser(userName);
+  e2.setType(oozieSite);
+  e2.setTag("version2");
+  entities.add(e2);
+  clusterDAO.merge(clusterEntity);
+  ConfigGroupEntity configGroupEntity=new ConfigGroupEntity();
+  ResourceTypeEntity resourceTypeEntity=resourceTypeDAO.findById(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE);
+  if (resourceTypeEntity == null) {
+    resourceTypeEntity=new ResourceTypeEntity();
+    resourceTypeEntity.setId(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE);
+    resourceTypeEntity.setName(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE_NAME);
+    resourceTypeEntity=resourceTypeDAO.merge(resourceTypeEntity);
+  }
+  ResourceEntity resourceEntity=new ResourceEntity();
+  resourceEntity.setResourceType(resourceTypeEntity);
+  configGroupEntity.setClusterEntity(clusterEntity);
+  configGroupEntity.setClusterId(clusterEntity.getClusterId());
+  configGroupEntity.setGroupName("oozie_server");
+  configGroupEntity.setDescription("oozie server");
+  configGroupEntity.setTag("OOZIE");
+  ClusterConfigEntity configEntity=new ClusterConfigEntity();
+  configEntity.setType("oozie-site");
+  configEntity.setTag("version3");
+  configEntity.setData("someData");
+  configEntity.setAttributes("someAttributes");
+  configEntity.setStack(stackEntityHDP01);
+  List<ClusterConfigEntity> configEntities=new ArrayList<ClusterConfigEntity>();
+  configEntities.add(configEntity);
+  configGroupDAO.create(configGroupEntity);
+  if (configEntities != null && !configEntities.isEmpty()) {
+    List<ConfigGroupConfigMappingEntity> configMappingEntities=new ArrayList<ConfigGroupConfigMappingEntity>();
+    for (    ClusterConfigEntity config : configEntities) {
+      config.setClusterEntity(clusterEntity);
+      config.setClusterId(clusterEntity.getClusterId());
+      clusterDAO.createConfig(config);
+      ConfigGroupConfigMappingEntity configMappingEntity=new ConfigGroupConfigMappingEntity();
+      configMappingEntity.setClusterId(clusterEntity.getClusterId());
+      configMappingEntity.setClusterConfigEntity(config);
+      configMappingEntity.setConfigGroupEntity(configGroupEntity);
+      configMappingEntity.setConfigGroupId(configGroupEntity.getGroupId());
+      configMappingEntity.setVersionTag(config.getTag());
+      configMappingEntity.setConfigType(config.getType());
+      configMappingEntity.setTimestamp(System.currentTimeMillis());
+      configMappingEntities.add(configMappingEntity);
+      configGroupConfigMappingDAO.create(configMappingEntity);
+    }
+    configGroupEntity.setConfigGroupConfigMappingEntities(configMappingEntities);
+    configGroupDAO.merge(configGroupEntity);
+  }
+}
