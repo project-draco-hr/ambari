@@ -39,7 +39,8 @@
   hdfs.getServiceComponent(Role.NAMENODE.name()).addServiceComponentHost("h1").persist();
   hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h1").persist();
   hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h2").persist();
-  controller.getAmbariMetaInfo().addActionDefinition(new ActionDefinition("a1",ActionType.SYSTEM,"test,[optional1]","","","Does file exist",TargetHostType.SPECIFIC,Short.valueOf("100")));
+  ActionDefinition a1=new ActionDefinition("a1",ActionType.SYSTEM,"test,[optional1]","","","Does file exist",TargetHostType.SPECIFIC,Short.valueOf("100"));
+  controller.getAmbariMetaInfo().addActionDefinition(a1);
   controller.getAmbariMetaInfo().addActionDefinition(new ActionDefinition("a2",ActionType.SYSTEM,"","HDFS","DATANODE","Does file exist",TargetHostType.ALL,Short.valueOf("1000")));
   Map<String,String> params=new HashMap<String,String>(){
 {
@@ -82,8 +83,14 @@
   Assert.assertEquals("HDFS",cmd.getServiceName());
   Assert.assertEquals("DATANODE",cmd.getComponentName());
   Assert.assertNotNull(hostParametersStage.get("jdk_location"));
-  Assert.assertEquals("100",cmd.getCommandParams().get("command_timeout"));
+  Assert.assertEquals("900",cmd.getCommandParams().get("command_timeout"));
   Assert.assertEquals(requestProperties.get(REQUEST_CONTEXT_PROPERTY),response.getRequestContext());
+  a1.setDefaultTimeout((short)1800);
+  actionRequest=new ExecuteActionRequest("c1",null,"a1",resourceFilters,null,params,false);
+  response=controller.createAction(actionRequest,requestProperties);
+  List<HostRoleCommand> storedTasks1=actionDB.getRequestTasks(response.getRequestId());
+  cmd=storedTasks1.get(0).getExecutionCommandWrapper().getExecutionCommand();
+  Assert.assertEquals("1800",cmd.getCommandParams().get("command_timeout"));
   resourceFilters.clear();
   resourceFilter=new RequestResourceFilter("","",null);
   resourceFilters.add(resourceFilter);
