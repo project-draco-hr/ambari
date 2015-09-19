@@ -1,0 +1,79 @@
+{
+  if (source == null || source.isEmpty() || startIndex == endIndex) {
+    return new ParallelLoopResult<R>(true,(List<R>)Collections.emptyList());
+  }
+  if (startIndex < 0 || startIndex >= source.size()) {
+    throw new IndexOutOfBoundsException("startIndex is out of bounds");
+  }
+  if (endIndex < 0 || endIndex > source.size()) {
+    throw new IndexOutOfBoundsException("endIndex is out of bounds");
+  }
+  if (startIndex > endIndex) {
+    throw new IndexOutOfBoundsException("startIndex > endIndex");
+  }
+  if (source.size() == 1 || (endIndex - startIndex) == 1) {
+    List<R> result=Collections.singletonList(loopBody.run(source.get(startIndex)));
+    return new ParallelLoopResult<R>(true,result);
+  }
+  CompletionService<ResultWrapper<R>> completionService=new ExecutorCompletionService<ResultWrapper<R>>(executor);
+  List<Future<ResultWrapper<R>>> futures=new LinkedList<Future<ResultWrapper<R>>>();
+  for (int i=startIndex; i < endIndex; i++) {
+    final Integer k=i;
+    Future<ResultWrapper<R>> future=completionService.submit(new Callable<ResultWrapper<R>>(){
+      @Override public ResultWrapper<R> call() throws Exception {
+        ResultWrapper<R> res=new ResultWrapper<R>();
+        res.index=k;
+        res.result=loopBody.run(source.get(k));
+        return res;
+      }
+    }
+);
+    futures.add(future);
+  }
+  boolean completed=true;
+  R[] result=(R[])new Object[futures.size()];
+  try {
+    for (int i=0; i < futures.size(); i++) {
+      Future<ResultWrapper<R>> futureResult=completionService.poll(POLL_DURATION_MILLISECONDS,TimeUnit.MILLISECONDS);
+      if (futureResult == null) {
+        LOG.error("Completion service in Parallel.forLoop timed out!");
+        completed=false;
+        for (int fIndex=0; fIndex < futures.size(); fIndex++) {
+          Future<ResultWrapper<R>> future=futures.get(fIndex);
+          if (future.isDone()) {
+            LOG.debug("    Task - {} has already completed",fIndex);
+          }
+ else           if (future.isCancelled()) {
+            LOG.debug("    Task - {} has already been cancelled",fIndex);
+          }
+ else           if (!future.cancel(true)) {
+            LOG.debug("    Task - {} could not be cancelled",fIndex);
+          }
+ else {
+            LOG.debug("    Task - {} successfully cancelled",fIndex);
+          }
+        }
+        break;
+      }
+ else {
+        ResultWrapper<R> res=futureResult.get();
+        if (res.result != null) {
+          result[res.index]=res.result;
+        }
+ else {
+          LOG.error("Result is null for {}",res.index);
+          completed=false;
+        }
+      }
+    }
+  }
+ catch (  InterruptedException e) {
+    LOG.error("Caught InterruptedException in Parallel.forLoop",e);
+    completed=false;
+  }
+catch (  ExecutionException e) {
+    LOG.error("Caught ExecutionException in Parallel.forLoop",e);
+    completed=false;
+  }
+  return new ParallelLoopResult<R>(completed,Arrays.asList(result));
+}
