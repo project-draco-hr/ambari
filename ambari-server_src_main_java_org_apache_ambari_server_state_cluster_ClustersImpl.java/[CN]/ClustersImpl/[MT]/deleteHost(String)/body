@@ -1,35 +1,7 @@
 {
-  checkLoaded();
-  if (!hosts.containsKey(hostname)) {
-    throw new HostNotFoundException("Could not find host " + hostname);
-  }
-  w.lock();
-  try {
-    HostEntity entity=hostDAO.findByName(hostname);
-    if (entity == null) {
-      return;
-    }
-    Set<Cluster> clusters=hostClusterMap.get(hostname);
-    unmapHostFromClusters(hostname,clusters);
-    hostDAO.refresh(entity);
-    hostVersionDAO.removeByHostName(hostname);
-    entity.setHostRoleCommandEntities(null);
-    hostRoleCommandDAO.removeByHostId(entity.getHostId());
-    entity.setHostStateEntity(null);
-    hostStateDAO.removeByHostId(entity.getHostId());
-    hostConfigMappingDAO.removeByHostId(entity.getHostId());
-    serviceConfigDAO.removeHostFromServiceConfigs(entity.getHostId());
-    requestOperationLevelDAO.removeByHostId(entity.getHostId());
-    hosts.remove(hostname);
-    hostsById.remove(entity.getHostId());
-    hostDAO.remove(entity);
-    HostRemovedEvent event=new HostRemovedEvent(hostname);
-    eventPublisher.publish(event);
-  }
- catch (  Exception e) {
-    throw new AmbariException("Could not remove host",e);
-  }
- finally {
-    w.unlock();
-  }
+  Set<Cluster> clusters=hostClusterMap.get(hostname);
+  Set<Cluster> hostsClusters=new HashSet<>(clusters);
+  deleteHostEntityRelationships(hostname);
+  HostRemovedEvent event=new HostRemovedEvent(hostname,hostsClusters);
+  eventPublisher.publish(event);
 }
