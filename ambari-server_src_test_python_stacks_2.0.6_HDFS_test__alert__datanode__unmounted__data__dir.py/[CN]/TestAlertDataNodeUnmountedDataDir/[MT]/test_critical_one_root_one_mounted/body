@@ -1,0 +1,14 @@
+@patch('resource_management.libraries.functions.dfs_datanode_helper.get_data_dir_to_mount_from_file')
+@patch('resource_management.libraries.functions.file_system.get_mount_point_for_dir')
+@patch('os.path.exists')
+@patch('os.path.isdir')
+def test_critical_one_root_one_mounted(self, is_dir_mock, exists_mock, get_mount_mock, get_data_dir_to_mount_from_file_mock):
+    '\n    Test that the status is CRITICAL when the history file is missing\n    and at least one data dir is on a mount and at least one data dir is on the root partition.\n    '
+    configs = {'{{hdfs-site/dfs.datanode.data.dir}}': '/grid/0/data,/grid/1/data,/grid/2/data,/grid/3/data', '{{hadoop-env/dfs.datanode.data.dir.mount.file}}': DATA_DIR_MOUNT_HIST_FILE_PATH, }
+    exists_mock.return_value = False
+    is_dir_mock.return_value = True
+    get_mount_mock.side_effect = ['/', '/', '/device1', '/device2']
+    [status, messages] = alert.execute(configurations=configs)
+    self.assertEqual(status, RESULT_STATE_CRITICAL)
+    self.assertTrue(((messages is not None) and (len(messages) == 1)))
+    self.assertTrue(('Detected at least one data dir on a mount point, but these are writing to the root partition: /grid/0/data, /grid/1/data' in messages[0]))
