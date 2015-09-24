@@ -1,8 +1,16 @@
 def compute_actual_version(self):
-    '\n    After packages are installed, determine what the new actual version is, in order to save it.\n    '
+    '\n    After packages are installed, determine what the new actual version is.\n    '
+    self.actual_version = None
+    self.repo_version_with_build_number = None
+    if self.repository_version:
+        m = re.search('[\\d\\.]+-\\d+', self.repository_version)
+        if m:
+            self.repo_version_with_build_number = self.repository_version
+            self.structured_output['actual_version'] = self.repo_version_with_build_number
+            self.put_structured_out(self.structured_output)
     Logger.info('Attempting to determine actual version with build number.')
     Logger.info('Old versions: {0}'.format(self.old_versions))
-    new_versions = get_hdp_versions()
+    new_versions = get_hdp_versions(self.stack_root_folder)
     Logger.info('New versions: {0}'.format(new_versions))
     deltas = (set(new_versions) - set(self.old_versions))
     Logger.info('Deltas: {0}'.format(deltas))
@@ -12,14 +20,16 @@ def compute_actual_version(self):
         self.structured_output['actual_version'] = self.actual_version
         self.put_structured_out(self.structured_output)
         write_actual_version_to_history_file(normalized_repo_version, self.actual_version)
+        Logger.info('Found actual version {0} by checking the delta between versions before and after installing packages'.format(self.actual_version))
     else:
-        Logger.info('Cannot determine a new actual version installed by using the delta method.')
-        self.actual_version = read_actual_version_from_history_file(normalized_repo_version)
+        Logger.info('Cannot determine actual version installed by checking the delta between versions before and after installing package')
+        Logger.info('Will try to find for the actual version by searching for best possible match in the list of versions installed')
+        self.actual_version = self.find_best_fit_version(new_versions, self.repository_version)
         if (self.actual_version is not None):
             self.actual_version = self.actual_version.strip()
             self.structured_output['actual_version'] = self.actual_version
             self.put_structured_out(self.structured_output)
-            Logger.info('Found actual version {0} by parsing file {1}'.format(self.actual_version, REPO_VERSION_HISTORY_FILE))
-        elif (self.repo_version_with_build_number is None):
+            Logger.info('Found actual version {0} by searching for best possible match'.format(self.actual_version))
+        else:
             msg = 'Could not determine actual version installed. Try reinstalling packages again.'
             raise Fail(msg)
