@@ -1,0 +1,32 @@
+{
+  String clusterName=getClusterName(properties);
+  String alias=getAlias(properties);
+  CredentialStoreType credentialStoreType=properties.containsKey(CREDENTIAL_TYPE_PROPERTY_ID) ? getCredentialStoreType(properties) : credentialStoreService.getCredentialStoreType(clusterName,alias);
+  validateForCreateOrModify(credentialStoreType);
+  Credential credential=credentialStoreService.getCredential(clusterName,alias);
+  if (credential instanceof PrincipalKeyCredential) {
+    PrincipalKeyCredential principalKeyCredential=(PrincipalKeyCredential)credential;
+    Map<String,Object> credentialProperties=new HashMap<String,Object>();
+    credentialStoreService.removeCredential(clusterName,alias);
+    if (properties.containsKey(CREDENTIAL_PRINCIPAL_PROPERTY_ID)) {
+      credentialProperties.put(CREDENTIAL_PRINCIPAL_PROPERTY_ID,properties.get(CREDENTIAL_PRINCIPAL_PROPERTY_ID));
+    }
+ else {
+      credentialProperties.put(CREDENTIAL_PRINCIPAL_PROPERTY_ID,principalKeyCredential.getPrincipal());
+    }
+    if (properties.containsKey(CREDENTIAL_KEY_PROPERTY_ID)) {
+      credentialProperties.put(CREDENTIAL_KEY_PROPERTY_ID,properties.get(CREDENTIAL_KEY_PROPERTY_ID));
+    }
+ else {
+      char[] credentialKey=principalKeyCredential.getKey();
+      if (credentialKey != null) {
+        credentialProperties.put(CREDENTIAL_KEY_PROPERTY_ID,String.valueOf(credentialKey));
+      }
+    }
+    credentialStoreService.setCredential(clusterName,alias,createCredential(credentialProperties),credentialStoreType);
+    return alias;
+  }
+ else {
+    return null;
+  }
+}

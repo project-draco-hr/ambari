@@ -1,0 +1,33 @@
+{
+  Injector injector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      Properties properties=new Properties();
+      bind(CredentialStoreService.class).to(CredentialStoreServiceImpl.class);
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+      bind(SecurePasswordHelper.class).toInstance(new SecurePasswordHelper());
+      bind(Configuration.class).toInstance(new Configuration(properties));
+    }
+  }
+);
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Request request=createMock(Request.class);
+  CredentialResourceProvider credentialResourceProvider=new CredentialResourceProvider(managementController);
+  injector.injectMembers(credentialResourceProvider);
+  expect(request.getProperties()).andReturn(getCredentialTestProperties("c1","alias1","username1","password1",CredentialStoreType.TEMPORARY)).once();
+  expect(request.getProperties()).andReturn(getCredentialTestProperties("c1","alias1","username1","password1",CredentialStoreType.PERSISTED)).once();
+  expect(request.getPropertyIds()).andReturn(null).anyTimes();
+  ResourceProviderFactory factory=createMock(ResourceProviderFactory.class);
+  expect(factory.getCredentialResourceProvider(anyObject(AmbariManagementController.class))).andReturn(credentialResourceProvider);
+  replay(request,factory,managementController);
+  AbstractControllerResourceProvider.init(factory);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(Resource.Type.Credential,PropertyHelper.getPropertyIds(Resource.Type.Credential),PropertyHelper.getKeyPropertyIds(Resource.Type.Credential),managementController);
+  provider.createResources(request);
+  try {
+    provider.createResources(request);
+    Assert.fail("Expected IllegalArgumentException thrown");
+  }
+ catch (  IllegalArgumentException e) {
+    Assert.assertEquals("Credentials cannot be stored in Ambari's persistent secure credential " + "store since secure persistent storage has not yet be configured.  Use ambari-server " + "setup-security to enable this feature.",e.getLocalizedMessage());
+  }
+  verify(request,factory,managementController);
+}
