@@ -26,11 +26,12 @@
           final String upgradePackage=propertyMap.get(REPOSITORY_VERSION_UPGRADE_PACK_PROPERTY_ID).toString();
           entity.setUpgradePackage(upgradePackage);
         }
+        List<OperatingSystemEntity> operatingSystemEntities=null;
         if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(SUBRESOURCE_OPERATING_SYSTEMS_PROPERTY_ID)))) {
           final Object operatingSystems=propertyMap.get(SUBRESOURCE_OPERATING_SYSTEMS_PROPERTY_ID);
           final String operatingSystemsJson=gson.toJson(operatingSystems);
           try {
-            repositoryVersionHelper.parseOperatingSystems(operatingSystemsJson);
+            operatingSystemEntities=repositoryVersionHelper.parseOperatingSystems(operatingSystemsJson);
           }
  catch (          Exception ex) {
             throw new AmbariException("Json structure for operating systems is incorrect",ex);
@@ -42,6 +43,16 @@
         }
         validateRepositoryVersion(entity);
         repositoryVersionDAO.merge(entity);
+        if (operatingSystemEntities != null) {
+          String stackName=entity.getStackName();
+          String stackVersion=entity.getStackVersion();
+          for (          OperatingSystemEntity osEntity : operatingSystemEntities) {
+            List<RepositoryEntity> repositories=osEntity.getRepositories();
+            for (            RepositoryEntity repository : repositories) {
+              ambariMetaInfo.updateRepoBaseURL(stackName,stackVersion,osEntity.getOsType(),repository.getRepositoryId(),repository.getBaseUrl());
+            }
+          }
+        }
       }
       return null;
     }

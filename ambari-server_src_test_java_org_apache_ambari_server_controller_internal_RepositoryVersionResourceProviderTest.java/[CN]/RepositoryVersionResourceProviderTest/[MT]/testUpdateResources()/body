@@ -23,6 +23,26 @@
   final Request updateRequest=PropertyHelper.getUpdateRequest(properties,null);
   provider.updateResources(updateRequest,new AndPredicate(predicateStackName,predicateStackVersion));
   Assert.assertEquals("name2",provider.getResources(getRequest,new AndPredicate(predicateStackName,predicateStackVersion)).iterator().next().getPropertyValue(RepositoryVersionResourceProvider.REPOSITORY_VERSION_DISPLAY_NAME_PROPERTY_ID));
+  AmbariMetaInfo ambariMetaInfo=injector.getInstance(AmbariMetaInfo.class);
+  String stackName=properties.get(RepositoryVersionResourceProvider.REPOSITORY_VERSION_STACK_NAME_PROPERTY_ID).toString();
+  String stackVersion=properties.get(RepositoryVersionResourceProvider.REPOSITORY_VERSION_STACK_VERSION_PROPERTY_ID).toString();
+  Object operatingSystems=properties.get(RepositoryVersionResourceProvider.SUBRESOURCE_OPERATING_SYSTEMS_PROPERTY_ID);
+  Gson gson=new Gson();
+  String operatingSystemsJson=gson.toJson(operatingSystems);
+  RepositoryVersionHelper repositoryVersionHelper=new RepositoryVersionHelper();
+  List<OperatingSystemEntity> operatingSystemEntities=repositoryVersionHelper.parseOperatingSystems(operatingSystemsJson);
+  for (  OperatingSystemEntity operatingSystemEntity : operatingSystemEntities) {
+    String osType=operatingSystemEntity.getOsType();
+    List<RepositoryEntity> repositories=operatingSystemEntity.getRepositories();
+    for (    RepositoryEntity repository : repositories) {
+      RepositoryInfo repo=ambariMetaInfo.getRepository(stackName,stackVersion,osType,repository.getRepositoryId());
+      if (repo != null) {
+        String baseUrlActual=repo.getBaseUrl();
+        String baseUrlExpected=repository.getBaseUrl();
+        Assert.assertEquals(baseUrlExpected,baseUrlActual);
+      }
+    }
+  }
   properties.put(RepositoryVersionResourceProvider.SUBRESOURCE_OPERATING_SYSTEMS_PROPERTY_ID,new Gson().fromJson("[{\"OperatingSystems/os_type\":\"redhat6\",\"repositories\":[{\"Repositories/repo_id\":\"2\",\"Repositories/repo_name\":\"2\",\"Repositories/base_url\":\"2\"}]}]",Object.class));
   provider.updateResources(updateRequest,new AndPredicate(predicateStackName,predicateStackVersion));
   properties.put(RepositoryVersionResourceProvider.REPOSITORY_VERSION_UPGRADE_PACK_PROPERTY_ID,"pack2");
