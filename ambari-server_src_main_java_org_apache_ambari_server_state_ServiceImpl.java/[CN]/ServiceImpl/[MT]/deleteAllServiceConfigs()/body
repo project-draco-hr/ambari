@@ -1,7 +1,21 @@
 {
   LOG.info("Deleting all serviceconfigs for service" + ", clusterName=" + cluster.getClusterName() + ", serviceName="+ getName());
   List<ServiceConfigEntity> serviceConfigEntities=serviceConfigDAO.findByService(cluster.getClusterId(),getName());
+  Long maxServiceConfigEntityId=-1L;
+  ServiceConfigEntity lastServiceConfigEntity=null;
   for (  ServiceConfigEntity serviceConfigEntity : serviceConfigEntities) {
+    if (serviceConfigEntity.getServiceConfigId() > maxServiceConfigEntityId) {
+      maxServiceConfigEntityId=serviceConfigEntity.getServiceConfigId();
+      lastServiceConfigEntity=serviceConfigEntity;
+    }
     serviceConfigDAO.remove(serviceConfigEntity);
+  }
+  if (lastServiceConfigEntity != null) {
+    for (    ClusterConfigEntity clusterConfigEntity : lastServiceConfigEntity.getClusterConfigEntities()) {
+      List<ClusterConfigMappingEntity> clusterConfigMappingEntities=clusterDAO.findClusterConfigMappingEntitiesByType(cluster.getClusterId(),clusterConfigEntity.getType());
+      for (      ClusterConfigMappingEntity clusterConfigMappingEntity : clusterConfigMappingEntities) {
+        clusterDAO.removeConfigMapping(clusterConfigMappingEntity);
+      }
+    }
   }
 }
