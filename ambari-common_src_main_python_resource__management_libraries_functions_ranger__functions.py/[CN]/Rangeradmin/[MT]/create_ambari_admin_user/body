@@ -1,4 +1,9 @@
 def create_ambari_admin_user(self, ambari_admin_username, ambari_admin_password, usernamepassword):
+    '\n    param ambari_admin_username: username of user to be created \n    param ambari_admin_username: user password of user to be created \n    return: Returns response code for successful user creation else None\n    '
+    flag_ambari_admin_present = False
+    match = re.match('[a-zA-Z0-9_\\S]+$', ambari_admin_password)
+    if (match is None):
+        raise Fail('Invalid password given for Ranger Admin user for Ambari')
     try:
         url = ((self.urlUsers + '?name=') + str(ambari_admin_username))
         request = urllib2.Request(url)
@@ -10,18 +15,15 @@ def create_ambari_admin_user(self, ambari_admin_username, ambari_admin_password,
         response_code = result.getcode()
         response = json.loads(result.read())
         if ((response_code == 200) and (len(response['vXUsers']) >= 0)):
-            ambari_admin_username = ambari_admin_username
-            flag_ambari_admin_present = False
             for vxuser in response['vXUsers']:
-                rangerlist_username = vxuser['name']
-                if (rangerlist_username == ambari_admin_username):
+                if (vxuser['name'] == ambari_admin_username):
                     flag_ambari_admin_present = True
                     break
                 else:
                     flag_ambari_admin_present = False
             if flag_ambari_admin_present:
-                Logger.info((ambari_admin_username + ' user already exists, using existing user from configurations.'))
-                return (ambari_admin_username, ambari_admin_password)
+                Logger.info((ambari_admin_username + ' user already exists.'))
+                return response_code
             else:
                 Logger.info((ambari_admin_username + ' user is not present, creating user using given configurations'))
                 url = self.urlSecUsers
@@ -42,21 +44,19 @@ def create_ambari_admin_user(self, ambari_admin_username, ambari_admin_password,
                 response = json.loads(json.JSONEncoder().encode(result.read()))
                 if ((response_code == 200) and (response is not None)):
                     Logger.info('Ambari admin user creation successful.')
+                    return response_code
                 else:
-                    Logger.info('Ambari admin user creation failed,setting username and password as blank')
-                    ambari_admin_username = ''
-                    ambari_admin_password = ''
-                return (ambari_admin_username, ambari_admin_password)
+                    Logger.info('Ambari admin user creation failed.')
+                    return None
         else:
-            return ('', '')
+            return None
     except urllib2.URLError as e:
         if isinstance(e, urllib2.HTTPError):
-            Logger.error('HTTP Code: {0}'.format(e.code))
-            Logger.error('HTTP Data: {0}'.format(e.read()))
-            return ('', '')
+            Logger.error('Error creating ambari admin user. Http status code - {0}. \n {1}'.format(e.code, e.read()))
+            return None
         else:
-            Logger.error('Error: {0}'.format(e.reason))
-            return ('', '')
+            Logger.error('Error creating ambari admin user. Reason - {0}.'.format(e.reason))
+            return None
     except httplib.BadStatusLine:
         Logger.error('Ranger Admin service is not reachable, please restart the service and then try again')
-        return ('', '')
+        return None

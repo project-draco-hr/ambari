@@ -1,13 +1,15 @@
 def create_ranger_repository(self, component, repo_name, repo_properties, ambari_ranger_admin, ambari_ranger_password, admin_uname, admin_password, policy_user):
-    (response_code, response_recieved) = self.check_ranger_login_urllib2(self.url_login, 'test:test')
+    response_code = self.check_ranger_login_urllib2(self.base_url)
     repo_data = json.dumps(repo_properties)
+    ambari_ranger_password = unicode(ambari_ranger_password)
+    admin_password = unicode(admin_password)
+    ambari_username_password_for_ranger = format('{ambari_ranger_admin}:{ambari_ranger_password}')
     if ((response_code is not None) and (response_code == 200)):
-        (ambari_ranger_admin, ambari_ranger_password) = self.create_ambari_admin_user(ambari_ranger_admin, ambari_ranger_password, format('{admin_uname}:{admin_password}'))
-        ambari_username_password_for_ranger = ((ambari_ranger_admin + ':') + ambari_ranger_password)
-        if ((ambari_ranger_admin != '') and (ambari_ranger_password != '')):
+        user_resp_code = self.create_ambari_admin_user(ambari_ranger_admin, ambari_ranger_password, format('{admin_uname}:{admin_password}'))
+        if ((user_resp_code is not None) and (user_resp_code == 200)):
             repo = self.get_repository_by_name_urllib2(repo_name, component, 'true', ambari_username_password_for_ranger)
-            if (repo and (repo['name'] == repo_name)):
-                Logger.info('{0} Repository exist'.format(component.title()))
+            if (repo is not None):
+                Logger.info('{0} Repository {1} exist'.format(component.title(), repo['name']))
             else:
                 response = self.create_repository_urllib2(repo_data, ambari_username_password_for_ranger)
                 if (response is not None):
@@ -15,4 +17,4 @@ def create_ranger_repository(self, component, repo_name, repo_properties, ambari
                 else:
                     Logger.error('{0} Repository creation failed in Ranger admin'.format(component.title()))
         else:
-            Logger.error('Ambari admin username and password are blank ')
+            Logger.error('Ambari admin user creation failed')
