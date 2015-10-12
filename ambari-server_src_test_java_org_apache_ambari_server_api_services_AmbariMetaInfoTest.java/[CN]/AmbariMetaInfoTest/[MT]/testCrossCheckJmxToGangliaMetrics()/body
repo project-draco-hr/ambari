@@ -1,0 +1,63 @@
+{
+  File stacks=new File("src/main/resources/stacks");
+  File version=new File("src/test/resources/version");
+  File commonServicesRoot=new File("src/main/resources/common-services");
+  if (System.getProperty("os.name").contains("Windows")) {
+    stacks=new File(ClassLoader.getSystemClassLoader().getResource("stacks").getPath());
+    version=new File(new File(ClassLoader.getSystemClassLoader().getResource("").getPath()).getParent(),"version");
+    commonServicesRoot=new File(ClassLoader.getSystemClassLoader().getResource("common-services").getPath());
+  }
+  Properties properties=new Properties();
+  properties.setProperty(Configuration.METADATA_DIR_PATH,stacks.getPath());
+  properties.setProperty(Configuration.COMMON_SERVICES_DIR_PATH,commonServicesRoot.getPath());
+  properties.setProperty(Configuration.SERVER_VERSION_FILE,version.getPath());
+  Configuration configuration=new Configuration(properties);
+  TestAmbariMetaInfo ambariMetaInfo=new TestAmbariMetaInfo(configuration);
+  ambariMetaInfo.replayAllMocks();
+  try {
+    ambariMetaInfo.init();
+  }
+ catch (  Exception e) {
+    LOG.info("Error in metainfo initializing ",e);
+    throw e;
+  }
+  waitForAllReposToBeResolved(ambariMetaInfo);
+  String[] metricsTypes={Resource.Type.Component.name(),Resource.Type.HostComponent.name()};
+  for (  StackInfo stackInfo : ambariMetaInfo.getStacks(STACK_NAME_HDP)) {
+    for (    ServiceInfo serviceInfo : stackInfo.getServices()) {
+      for (      ComponentInfo componentInfo : serviceInfo.getComponents()) {
+        for (        String metricType : metricsTypes) {
+          List<MetricDefinition> list=ambariMetaInfo.getMetrics(stackInfo.getName(),stackInfo.getVersion(),serviceInfo.getName(),componentInfo.getName(),metricType);
+          String currentComponentInfo=stackInfo.getName() + "-" + stackInfo.getVersion()+ ", "+ serviceInfo.getName()+ ", "+ componentInfo.getName()+ ", "+ metricType;
+          if (list == null) {
+            LOG.info("No metrics found for " + currentComponentInfo);
+            continue;
+          }
+          LOG.info("Cross-checking JMX-to-Ganglia metrics for " + currentComponentInfo);
+          Map<String,Metric> jmxMetrics=Collections.emptyMap();
+          for (          MetricDefinition metricDefinition : list) {
+            if ("jmx".equals(metricDefinition.getType())) {
+              jmxMetrics=metricDefinition.getMetrics();
+              for (              Metric metric : jmxMetrics.values()) {
+                Assert.assertTrue(metric.isPointInTime());
+                Assert.assertFalse(metric.isTemporal());
+              }
+            }
+          }
+          LinkedList<String> failedMetrics=new LinkedList<String>();
+          for (          MetricDefinition metricDefinition : list) {
+            if ("ganglia".equals(metricDefinition.getType())) {
+              for (              Map.Entry<String,Metric> metricEntry : metricDefinition.getMetrics().entrySet()) {
+                Assert.assertTrue(metricEntry.getValue().isTemporal());
+                if (metricEntry.getValue().isPointInTime() && jmxMetrics.containsKey(metricEntry.getKey())) {
+                  failedMetrics.add(metricEntry.getKey());
+                }
+              }
+            }
+          }
+          Assert.assertEquals(failedMetrics.toString() + " metrics defined with pointInTime=true for both jmx and ganglia types.",0,failedMetrics.size());
+        }
+      }
+    }
+  }
+}
