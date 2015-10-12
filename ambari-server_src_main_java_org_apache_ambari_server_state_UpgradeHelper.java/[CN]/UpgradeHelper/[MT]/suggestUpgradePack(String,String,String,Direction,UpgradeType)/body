@@ -1,0 +1,29 @@
+{
+  Cluster cluster=clusters.get().getCluster(clusterName);
+  StackId stack=cluster.getCurrentStackVersion();
+  String repoVersion=upgradeToVersion;
+  if (direction.isDowngrade() && null != upgradeFromVersion) {
+    repoVersion=upgradeFromVersion;
+  }
+  RepositoryVersionEntity versionEntity=s_repoVersionDAO.get().findByStackNameAndVersion(stack.getStackName(),repoVersion);
+  if (versionEntity == null) {
+    throw new AmbariException(String.format("Repository version %s was not found",repoVersion));
+  }
+  Map<String,UpgradePack> packs=m_ambariMetaInfo.get().getUpgradePacks(stack.getStackName(),stack.getStackVersion());
+  UpgradePack pack=null;
+  String repoStackId=versionEntity.getStackId().getStackId();
+  for (  UpgradePack upgradePack : packs.values()) {
+    if (upgradePack.getTargetStack() != null && upgradePack.getTargetStack().equals(repoStackId) && upgradeType == upgradePack.getType()) {
+      if (pack == null) {
+        pack=upgradePack;
+      }
+ else {
+        throw new AmbariException(String.format("Found multiple upgrade packs for type %s and target version %s",upgradeType.toString(),repoVersion));
+      }
+    }
+  }
+  if (pack == null) {
+    throw new AmbariException(String.format("No upgrade pack found for type %s and target version %s",upgradeType.toString(),repoVersion));
+  }
+  return pack;
+}

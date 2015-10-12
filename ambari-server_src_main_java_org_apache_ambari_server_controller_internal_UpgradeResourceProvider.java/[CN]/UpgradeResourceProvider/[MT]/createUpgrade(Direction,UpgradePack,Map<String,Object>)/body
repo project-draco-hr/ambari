@@ -20,7 +20,7 @@ sourceStackId=cluster.getCurrentStackVersion();
 targetStackId=cluster.getDesiredStackVersion();
 break;
 }
-UpgradeContext ctx=new UpgradeContext(resolver,sourceStackId,targetStackId,version,direction);
+UpgradeContext ctx=new UpgradeContext(resolver,sourceStackId,targetStackId,version,direction,pack.getType());
 if (direction.isDowngrade()) {
 if (requestMap.containsKey(UPGRADE_FROM_VERSION)) {
 ctx.setDowngradeFromVersion((String)requestMap.get(UPGRADE_FROM_VERSION));
@@ -46,7 +46,22 @@ throw new AmbariException("There are no groupings available");
 }
 List<UpgradeGroupEntity> groupEntities=new ArrayList<UpgradeGroupEntity>();
 RequestStageContainer req=createRequest(direction,version);
-processConfigurations(targetStackId.getStackName(),cluster,version,direction,pack);
+if (pack.getType() == UpgradeType.ROLLING) {
+applyStackAndProcessConfigurations(targetStackId.getStackName(),cluster,version,direction,pack);
+}
+List<UpgradePack.IntermediateStack> intermediateStacks=pack.getIntermediateStacks();
+ConfigUpgradePack configUpgradePack;
+if (intermediateStacks == null || intermediateStacks.isEmpty()) {
+configUpgradePack=s_metaProvider.get().getConfigUpgradePack(targetStackId.getStackName(),targetStackId.getStackVersion());
+}
+ else {
+ArrayList<ConfigUpgradePack> intermediateConfigUpgradePacks=new ArrayList<>();
+for (UpgradePack.IntermediateStack intermediateStack : intermediateStacks) {
+ConfigUpgradePack intermediateConfigUpgradePack=s_metaProvider.get().getConfigUpgradePack(targetStackId.getStackName(),intermediateStack.version);
+intermediateConfigUpgradePacks.add(intermediateConfigUpgradePack);
+}
+configUpgradePack=ConfigUpgradePack.merge(intermediateConfigUpgradePacks);
+}
 for (UpgradeGroupHolder group : groups) {
 UpgradeGroupEntity groupEntity=new UpgradeGroupEntity();
 groupEntity.setName(group.name);
@@ -63,8 +78,11 @@ itemEntity.setText(wrapper.getText());
 itemEntity.setTasks(wrapper.getTasksJson());
 itemEntity.setHosts(wrapper.getHostsJson());
 itemEntities.add(itemEntity);
+if (UpdateStackGrouping.class.equals(group.groupClass)) {
+ctx.setEffectiveStackId(ctx.getTargetStackId());
+}
 injectVariables(configHelper,cluster,itemEntity);
-makeServerSideStage(ctx,req,itemEntity,(ServerSideActionTask)task,skippable,allowRetry);
+makeServerSideStage(ctx,req,itemEntity,(ServerSideActionTask)task,skippable,allowRetry,configUpgradePack);
 }
 }
 }
@@ -85,8 +103,10 @@ UpgradeEntity entity=new UpgradeEntity();
 entity.setFromVersion(cluster.getCurrentClusterVersion().getRepositoryVersion().getVersion());
 entity.setToVersion(version);
 entity.setUpgradeGroups(groupEntities);
-entity.setClusterId(Long.valueOf(cluster.getClusterId()));
+entity.setClusterId(cluster.getClusterId());
 entity.setDirection(direction);
+entity.setUpgradePackage(pack.getName());
+entity.setUpgradeType(pack.getType());
 req.getRequestStatusResponse();
 entity.setRequestId(req.getId());
 req.persist();

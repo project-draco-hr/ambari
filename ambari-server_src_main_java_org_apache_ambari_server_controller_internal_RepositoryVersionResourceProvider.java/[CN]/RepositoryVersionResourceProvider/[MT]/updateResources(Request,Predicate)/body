@@ -14,17 +14,13 @@
         if (entity == null) {
           throw new ObjectNotFoundException("There is no repository version with id " + id);
         }
-        if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(REPOSITORY_VERSION_UPGRADE_PACK_PROPERTY_ID)))) {
-          StackEntity stackEntity=entity.getStack();
-          String stackName=stackEntity.getStackName();
-          String stackVersion=stackEntity.getStackVersion();
-          final List<ClusterVersionEntity> clusterVersionEntities=clusterVersionDAO.findByStackAndVersion(stackName,stackVersion,entity.getVersion());
-          if (!clusterVersionEntities.isEmpty()) {
-            final ClusterVersionEntity firstClusterVersion=clusterVersionEntities.get(0);
-            throw new AmbariException("Upgrade pack can't be changed for repository version which is " + firstClusterVersion.getState().name() + " on cluster "+ firstClusterVersion.getClusterEntity().getClusterName());
-          }
-          final String upgradePackage=propertyMap.get(REPOSITORY_VERSION_UPGRADE_PACK_PROPERTY_ID).toString();
-          entity.setUpgradePackage(upgradePackage);
+        StackEntity stackEntity=entity.getStack();
+        String stackName=stackEntity.getStackName();
+        String stackVersion=stackEntity.getStackVersion();
+        final List<ClusterVersionEntity> clusterVersionEntities=clusterVersionDAO.findByStackAndVersion(stackName,stackVersion,entity.getVersion());
+        if (!clusterVersionEntities.isEmpty()) {
+          final ClusterVersionEntity firstClusterVersion=clusterVersionEntities.get(0);
+          throw new AmbariException("Upgrade pack can't be changed for repository version which has a state of " + firstClusterVersion.getState().name() + " on cluster "+ firstClusterVersion.getClusterEntity().getClusterName());
         }
         List<OperatingSystemEntity> operatingSystemEntities=null;
         if (StringUtils.isNotBlank(ObjectUtils.toString(propertyMap.get(SUBRESOURCE_OPERATING_SYSTEMS_PROPERTY_ID)))) {
@@ -44,12 +40,12 @@
         validateRepositoryVersion(entity);
         repositoryVersionDAO.merge(entity);
         if (operatingSystemEntities != null) {
-          String stackName=entity.getStackName();
-          String stackVersion=entity.getStackVersion();
+          String entityStackName=entity.getStackName();
+          String entityStackVersion=entity.getStackVersion();
           for (          OperatingSystemEntity osEntity : operatingSystemEntities) {
             List<RepositoryEntity> repositories=osEntity.getRepositories();
             for (            RepositoryEntity repository : repositories) {
-              ambariMetaInfo.updateRepoBaseURL(stackName,stackVersion,osEntity.getOsType(),repository.getRepositoryId(),repository.getBaseUrl());
+              ambariMetaInfo.updateRepoBaseURL(entityStackName,entityStackVersion,osEntity.getOsType(),repository.getRepositoryId(),repository.getBaseUrl());
             }
           }
         }

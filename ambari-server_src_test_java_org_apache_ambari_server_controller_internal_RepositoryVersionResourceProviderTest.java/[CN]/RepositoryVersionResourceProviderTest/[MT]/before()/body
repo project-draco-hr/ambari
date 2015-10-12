@@ -1,7 +1,8 @@
 {
   final Set<String> validVersions=Sets.newHashSet("1.1","1.1-17","1.1.1.1","1.1.343432.2","1.1.343432.2-234234324");
+  final Set<StackInfo> stacks=new HashSet<StackInfo>();
   final AmbariMetaInfo ambariMetaInfo=Mockito.mock(AmbariMetaInfo.class);
-  final ClusterVersionDAO clusterVersionDAO=Mockito.mock(ClusterVersionDAO.class);
+  clusterVersionDAO=Mockito.mock(ClusterVersionDAO.class);
   final InMemoryDefaultTestModule injectorModule=new InMemoryDefaultTestModule(){
     @Override protected void configure(){
       super.configure();
@@ -15,12 +16,18 @@
     @Override public Map<String,UpgradePack> getUpgradePacks(){
       final Map<String,UpgradePack> map=new HashMap<String,UpgradePack>();
       final UpgradePack pack1=new UpgradePack(){
+        @Override public String getName(){
+          return "pack1";
+        }
         @Override public String getTarget(){
           return "1.1.*.*";
         }
       }
 ;
       final UpgradePack pack2=new UpgradePack(){
+        @Override public String getName(){
+          return "pack2";
+        }
         @Override public String getTarget(){
           return "1.1.*.*";
         }
@@ -32,6 +39,9 @@
     }
   }
 ;
+  stackInfo.setName("HDP");
+  stackInfo.setVersion("1.1");
+  stacks.add(stackInfo);
   Mockito.when(ambariMetaInfo.getStack(Mockito.anyString(),Mockito.anyString())).thenAnswer(new Answer<StackInfo>(){
     @Override public StackInfo answer(    InvocationOnMock invocation) throws Throwable {
       final String stack=invocation.getArguments()[0].toString();
@@ -45,6 +55,7 @@
     }
   }
 );
+  Mockito.when(ambariMetaInfo.getStacks()).thenReturn(stacks);
   Mockito.when(ambariMetaInfo.getUpgradePacks(Mockito.anyString(),Mockito.anyString())).thenAnswer(new Answer<Map<String,UpgradePack>>(){
     @Override public Map<String,UpgradePack> answer(    InvocationOnMock invocation) throws Throwable {
       return stackInfo.getUpgradePacks();
@@ -72,19 +83,10 @@
       final String stack=invocation.getArguments()[0].toString();
       final String version=invocation.getArguments()[1].toString();
       if (stack.equals("HDP-1.1") && version.equals("1.1.1.1")) {
-        final List<ClusterVersionEntity> notEmptyList=new ArrayList<ClusterVersionEntity>();
-        notEmptyList.add(null);
-        return notEmptyList;
+        return getNoClusterVersions();
       }
  else {
-        final List<ClusterVersionEntity> clusterVersions=new ArrayList<ClusterVersionEntity>();
-        final RepositoryVersionEntity repositoryVersion=new RepositoryVersionEntity();
-        repositoryVersion.setId(1L);
-        final ClusterVersionEntity installFailedVersion=new ClusterVersionEntity();
-        installFailedVersion.setState(RepositoryVersionState.INSTALL_FAILED);
-        installFailedVersion.setRepositoryVersion(repositoryVersion);
-        clusterVersions.add(installFailedVersion);
-        return clusterVersions;
+        return getInstallFailedClusterVersions();
       }
     }
   }
@@ -95,4 +97,6 @@
   stackEntity.setStackName("HDP");
   stackEntity.setStackVersion("1.1");
   stackDAO.create(stackEntity);
+  Clusters clusters=injector.getInstance(Clusters.class);
+  clusters.addCluster("c1",new StackId("HDP","1.1"));
 }
