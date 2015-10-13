@@ -1,0 +1,44 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final ConfigHelper mockConfigHelper=easyMockSupport.createMock(ConfigHelper.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Map<String,String> propertiesAmsEnv=new HashMap<String,String>(){
+{
+      put("kafka.metrics.reporters","{{kafka_metrics_reporters}}");
+    }
+  }
+;
+  final Map<String,Service> installedServices=new HashMap<String,Service>(){
+{
+      put("KAFKA",null);
+      put("AMBARI_METRICS",null);
+    }
+  }
+;
+  final Config mockAmsEnv=easyMockSupport.createNiceMock(Config.class);
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(ConfigHelper.class).toInstance(mockConfigHelper);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).once();
+  expect(mockClusterExpected.getServices()).andReturn(installedServices).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("kafka-broker")).andReturn(mockAmsEnv).atLeastOnce();
+  expect(mockAmsEnv.getProperties()).andReturn(propertiesAmsEnv).atLeastOnce();
+  easyMockSupport.replayAll();
+  mockInjector.getInstance(UpgradeCatalog213.class).updateKafkaConfigs();
+  easyMockSupport.verifyAll();
+}
