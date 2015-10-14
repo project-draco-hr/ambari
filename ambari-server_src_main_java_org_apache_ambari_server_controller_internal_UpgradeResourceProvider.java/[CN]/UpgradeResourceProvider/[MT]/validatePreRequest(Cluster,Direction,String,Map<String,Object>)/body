@@ -1,7 +1,8 @@
 {
-  Cluster cluster=clusters.get().getCluster(clusterName);
   boolean skipPrereqChecks=Boolean.parseBoolean((String)requestMap.get(UPGRADE_SKIP_PREREQUISITE_CHECKS));
   boolean failOnCheckWarnings=Boolean.parseBoolean((String)requestMap.get(UPGRADE_FAIL_ON_CHECK_WARNINGS));
+  String preferredUpgradePack=requestMap.containsKey(UPGRADE_PACK) ? (String)requestMap.get(UPGRADE_PACK) : null;
+  UpgradeType upgradeType=requestMap.containsKey(UPGRADE_TYPE) ? UpgradeType.valueOf(requestMap.get(UPGRADE_TYPE).toString()) : UpgradeType.ROLLING;
   List<UpgradeEntity> upgrades=s_upgradeDAO.findUpgrades(cluster.getClusterId());
   for (  UpgradeEntity entity : upgrades) {
     if (entity.getDirection() == direction) {
@@ -9,13 +10,13 @@
       CalculatedStatus calc=CalculatedStatus.statusFromStageSummary(summary,summary.keySet());
       HostRoleStatus status=calc.getStatus();
       if (!HostRoleStatus.getCompletedStates().contains(status)) {
-        throw new AmbariException(String.format("Unable to perform %s as another %s is in progress. %s %d is in %s",direction.getText(false),direction.getText(false),direction.getText(true),entity.getRequestId().longValue(),status));
+        throw new AmbariException(String.format("Unable to perform %s as another %s is in progress. %s request %d is in %s",direction.getText(false),direction.getText(false),direction.getText(true),entity.getRequestId().longValue(),status));
       }
     }
   }
   if (direction.isUpgrade() && !skipPrereqChecks) {
     PreUpgradeCheckResourceProvider preUpgradeCheckResourceProvider=(PreUpgradeCheckResourceProvider)getResourceProvider(Resource.Type.PreUpgradeCheck);
-    Predicate preUpgradeCheckPredicate=new PredicateBuilder().property(PreUpgradeCheckResourceProvider.UPGRADE_CHECK_CLUSTER_NAME_PROPERTY_ID).equals(clusterName).and().property(PreUpgradeCheckResourceProvider.UPGRADE_CHECK_REPOSITORY_VERSION_PROPERTY_ID).equals(repoVersion).toPredicate();
+    Predicate preUpgradeCheckPredicate=new PredicateBuilder().property(PreUpgradeCheckResourceProvider.UPGRADE_CHECK_CLUSTER_NAME_PROPERTY_ID).equals(cluster.getClusterName()).and().property(PreUpgradeCheckResourceProvider.UPGRADE_CHECK_REPOSITORY_VERSION_PROPERTY_ID).equals(repoVersion).and().property(PreUpgradeCheckResourceProvider.UPGRADE_CHECK_UPGRADE_TYPE_PROPERTY_ID).equals(upgradeType).and().property(PreUpgradeCheckResourceProvider.UPGRADE_CHECK_UPGRADE_PACK_PROPERTY_ID).equals(preferredUpgradePack).toPredicate();
     Request preUpgradeCheckRequest=PropertyHelper.getReadRequest();
     Set<Resource> preUpgradeCheckResources;
     try {
