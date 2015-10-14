@@ -110,14 +110,21 @@ def recommendHIVEConfigurations(self, configurations, clusterData, services, hos
     leafQueues = sorted(leafQueues, key=(lambda q: q['value']))
     putHiveSitePropertyAttribute('hive.server2.tez.default.queues', 'entries', leafQueues)
     putHiveSiteProperty('hive.server2.tez.default.queues', ','.join([leafQueue['value'] for leafQueue in leafQueues]))
-    if (('ranger-env' in services['configurations']) and ('ranger-hive-plugin-properties' in services['configurations']) and ('ranger-hive-plugin-enabled' in services['configurations']['ranger-env']['properties'])):
-        putHiveRangerPluginProperty = self.putProperty(configurations, 'ranger-hive-plugin-properties', services)
+    if (('ranger-env' in services['configurations']) and ('hive-env' in services['configurations']) and ('ranger-hive-plugin-enabled' in services['configurations']['ranger-env']['properties'])):
         rangerEnvHivePluginProperty = services['configurations']['ranger-env']['properties']['ranger-hive-plugin-enabled']
-        putHiveRangerPluginProperty('ranger-hive-plugin-enabled', rangerEnvHivePluginProperty)
+        if (rangerEnvHivePluginProperty.lower() == 'yes'):
+            putHiveEnvProperty('hive_security_authorization', 'RANGER')
     if (('configurations' not in services) or ('hive-env' not in services['configurations']) or ('properties' not in services['configurations']['hive-env']) or ('hive_security_authorization' not in services['configurations']['hive-env']['properties']) or (str(services['configurations']['hive-env']['properties']['hive_security_authorization']).lower() == 'none')):
         putHiveEnvProperty('hive_security_authorization', 'None')
     else:
         putHiveEnvProperty('hive_security_authorization', services['configurations']['hive-env']['properties']['hive_security_authorization'])
+    if (('ranger-env' in services['configurations']) and ('hive-env' in services['configurations']) and ('ranger-hive-plugin-enabled' in services['configurations']['ranger-env']['properties'])):
+        rangerEnvHivePluginProperty = services['configurations']['ranger-env']['properties']['ranger-hive-plugin-enabled']
+        rangerEnvHiveAuthProperty = services['configurations']['hive-env']['properties']['hive_security_authorization']
+        if (rangerEnvHivePluginProperty.lower() == 'yes'):
+            putHiveEnvProperty('hive_security_authorization', 'Ranger')
+        elif (rangerEnvHiveAuthProperty.lower() == 'ranger'):
+            putHiveEnvProperty('hive_security_authorization', 'None')
     if (str(configurations['hive-env']['properties']['hive_security_authorization']).lower() == 'none'):
         putHiveSiteProperty('hive.security.authorization.manager', 'org.apache.hadoop.hive.ql.security.authorization.plugin.sqlstd.SQLStdConfOnlyAuthorizerFactory')
         if (('hive.security.authorization.manager' in configurations['hiveserver2-site']['properties']) or ('hiveserver2-site' not in services['configurations']) or (('hiveserver2-site' in services['configurations']) and ('hive.security.authorization.manager' in services['configurations']['hiveserver2-site']['properties']))):
