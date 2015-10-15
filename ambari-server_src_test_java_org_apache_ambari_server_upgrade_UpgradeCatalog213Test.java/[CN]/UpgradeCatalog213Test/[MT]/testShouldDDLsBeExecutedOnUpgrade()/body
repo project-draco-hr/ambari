@@ -1,0 +1,28 @@
+{
+  Injector mockedInjector=mocksControl.createMock(Injector.class);
+  DBAccessor mockedDbAccessor=mocksControl.createMock(DBAccessor.class);
+  DaoUtils mockedDaoUtils=mocksControl.createMock(DaoUtils.class);
+  Configuration mockedConfiguration=mocksControl.createMock(Configuration.class);
+  StackUpgradeUtil mockedStackUpgradeUtil=mocksControl.createMock(StackUpgradeUtil.class);
+  Capture<String> capturedTableName=EasyMock.newCapture();
+  Capture<String> capturedPKColumn=EasyMock.newCapture();
+  Capture<List<DBAccessor.DBColumnInfo>> capturedColumns=EasyMock.newCapture();
+  EasyMock.expect(mockedInjector.getInstance(DaoUtils.class)).andReturn(mockedDaoUtils);
+  mockedInjector.injectMembers(anyObject(UpgradeCatalog.class));
+  EasyMock.expect(mockedConfiguration.getDatabaseType()).andReturn(Configuration.DatabaseType.POSTGRES).times(2);
+  EasyMock.expect(mockedConfiguration.getDatabaseUser()).andReturn("ambari");
+  EasyMock.expect(mockedConfiguration.getServerJDBCPostgresSchemaName()).andReturn("fo");
+  mockedDbAccessor.executeQuery("ALTER SCHEMA fo OWNER TO \"ambari\";");
+  mockedDbAccessor.executeQuery("ALTER ROLE \"ambari\" SET search_path to 'fo';");
+  mockedDbAccessor.createTable(capture(capturedTableName),capture(capturedColumns),capture(capturedPKColumn));
+  mocksControl.replay();
+  UpgradeCatalog213 testSubject=new UpgradeCatalog213(mockedInjector);
+  EasyMockSupport.injectMocks(testSubject);
+  testSubject.stackUpgradeUtil=mockedStackUpgradeUtil;
+  testSubject.dbAccessor=mockedDbAccessor;
+  testSubject.configuration=mockedConfiguration;
+  testSubject.upgradeSchema();
+  Assert.assertEquals("The table name is wrong!","kerberos_descriptor",capturedTableName.getValue());
+  Assert.assertEquals("The primary key is wrong!","kerberos_descriptor_name",capturedPKColumn.getValue());
+  Assert.assertTrue("Ther number of columns is wrong!",capturedColumns.getValue().size() == 2);
+}
