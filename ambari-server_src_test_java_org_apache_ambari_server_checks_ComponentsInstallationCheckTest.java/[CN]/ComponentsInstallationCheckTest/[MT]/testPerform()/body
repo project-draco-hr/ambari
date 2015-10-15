@@ -1,13 +1,13 @@
 {
   PowerMockito.mockStatic(HostComponentSummary.class);
-  final ServicesUpCheck servicesUpCheck=new ServicesUpCheck();
-  servicesUpCheck.clustersProvider=new Provider<Clusters>(){
+  final ComponentsInstallationCheck componentsInstallationCheck=new ComponentsInstallationCheck();
+  componentsInstallationCheck.clustersProvider=new Provider<Clusters>(){
     @Override public Clusters get(){
       return clusters;
     }
   }
 ;
-  servicesUpCheck.ambariMetaInfo=new Provider<AmbariMetaInfo>(){
+  componentsInstallationCheck.ambariMetaInfo=new Provider<AmbariMetaInfo>(){
     @Override public AmbariMetaInfo get(){
       return ambariMetaInfo;
     }
@@ -110,35 +110,18 @@
     Mockito.when(hcs.getDesiredState()).thenReturn(State.INSTALLED);
     Mockito.when(hcs.getCurrentState()).thenReturn(State.STARTED);
   }
+  Mockito.when(hcsTezClient.getCurrentState()).thenReturn(State.INSTALLED);
   PrerequisiteCheck check=new PrerequisiteCheck(null,null);
-  servicesUpCheck.perform(check,new PrereqCheckRequest("cluster"));
+  componentsInstallationCheck.perform(check,new PrereqCheckRequest("cluster"));
   Assert.assertEquals(PrereqCheckStatus.PASS,check.getStatus());
-  Mockito.when(hcsNameNode.getDesiredState()).thenReturn(State.STARTED);
-  Mockito.when(hcsDataNode1.getDesiredState()).thenReturn(State.STARTED);
+  Mockito.when(hcsMetricsCollector.getCurrentState()).thenReturn(State.INSTALL_FAILED);
+  Mockito.when(hcsMetricsMonitor.getCurrentState()).thenReturn(State.INSTALL_FAILED);
   check=new PrerequisiteCheck(null,null);
-  servicesUpCheck.perform(check,new PrereqCheckRequest("cluster"));
+  componentsInstallationCheck.perform(check,new PrereqCheckRequest("cluster"));
   Assert.assertEquals(PrereqCheckStatus.PASS,check.getStatus());
-  Mockito.when(hcsZKFC.getCurrentState()).thenReturn(State.INSTALLED);
-  Mockito.when(hcsMetricsCollector.getCurrentState()).thenReturn(State.INSTALLED);
-  Mockito.when(hcsMetricsMonitor.getCurrentState()).thenReturn(State.INSTALLED);
+  Mockito.when(hcsTezClient.getCurrentState()).thenReturn(State.INSTALL_FAILED);
   check=new PrerequisiteCheck(null,null);
-  servicesUpCheck.perform(check,new PrereqCheckRequest("cluster"));
-  Assert.assertEquals(PrereqCheckStatus.PASS,check.getStatus());
-  Mockito.when(hcsNameNode.getCurrentState()).thenReturn(State.INSTALLED);
-  Mockito.when(hcsDataNode1.getCurrentState()).thenReturn(State.INSTALLED);
-  check=new PrerequisiteCheck(null,null);
-  servicesUpCheck.perform(check,new PrereqCheckRequest("cluster"));
+  componentsInstallationCheck.perform(check,new PrereqCheckRequest("cluster"));
   Assert.assertEquals(PrereqCheckStatus.FAIL,check.getStatus());
-  Mockito.when(hcsNameNode.getCurrentState()).thenReturn(State.STARTED);
-  Mockito.when(hcsDataNode1.getCurrentState()).thenReturn(State.INSTALLED);
-  check=new PrerequisiteCheck(null,null);
-  servicesUpCheck.perform(check,new PrereqCheckRequest("cluster"));
-  Assert.assertEquals(PrereqCheckStatus.PASS,check.getStatus());
-  Mockito.when(hcsNameNode.getCurrentState()).thenReturn(State.STARTED);
-  Mockito.when(hcsDataNode1.getCurrentState()).thenReturn(State.INSTALLED);
-  Mockito.when(hcsDataNode2.getCurrentState()).thenReturn(State.INSTALLED);
-  check=new PrerequisiteCheck(null,null);
-  servicesUpCheck.perform(check,new PrereqCheckRequest("cluster"));
-  Assert.assertEquals(PrereqCheckStatus.FAIL,check.getStatus());
-  Assert.assertTrue(check.getFailReason().indexOf("50%") > -1);
+  Assert.assertTrue(check.getFailReason().indexOf("Service components in INSTALL_FAILED state") > -1);
 }
