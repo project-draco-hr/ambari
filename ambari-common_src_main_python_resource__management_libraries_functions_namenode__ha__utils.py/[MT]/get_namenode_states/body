@@ -1,16 +1,35 @@
-def get_namenode_states(hdfs_site, security_enabled, run_user, times=10, sleep_time=1, backoff_factor=2):
+def get_namenode_states(hdfs_site, security_enabled, run_user):
     "\n  return format [('nn1', 'hdfs://hostname1:port1'), ('nn2', 'hdfs://hostname2:port2')] , [....], [....]\n  "
-
-    @retry(times=times, sleep_time=sleep_time, backoff_factor=backoff_factor, err_class=Fail)
-    def doRetries(hdfs_site, security_enabled, run_user):
-        doRetries.attempt += 1
-        (active_namenodes, standby_namenodes, unknown_namenodes) = get_namenode_states_noretries(hdfs_site, security_enabled, run_user)
-        Logger.info('NameNode HA states: active_namenodes = {0}, standby_namenodes = {1}, unknown_namenodes = {2}'.format(active_namenodes, standby_namenodes, unknown_namenodes))
-        if active_namenodes:
-            return (active_namenodes, standby_namenodes, unknown_namenodes)
-        elif (doRetries.attempt == times):
-            Logger.warning('No active NameNode was found after {0} retries. Will return current NameNode HA states'.format(times))
-            return (active_namenodes, standby_namenodes, unknown_namenodes)
-        raise Fail('No active NameNode was found.')
-    doRetries.attempt = 0
-    return doRetries(hdfs_site, security_enabled, run_user)
+    active_namenodes = []
+    standby_namenodes = []
+    unknown_namenodes = []
+    name_service = hdfs_site['dfs.nameservices']
+    nn_unique_ids_key = ('dfs.ha.namenodes.' + name_service)
+    nn_unique_ids = hdfs_site[nn_unique_ids_key].split(',')
+    for nn_unique_id in nn_unique_ids:
+        is_https_enabled = (hdfs_site['dfs.https.enable'] if (not is_empty(hdfs_site['dfs.https.enable'])) else False)
+        if (not is_https_enabled):
+            key = NAMENODE_HTTP_FRAGMENT.format(name_service, nn_unique_id)
+            protocol = 'http'
+        else:
+            key = NAMENODE_HTTPS_FRAGMENT.format(name_service, nn_unique_id)
+            protocol = 'https'
+        if (key in hdfs_site):
+            value = str(hdfs_site[key])
+            jmx_uri = JMX_URI_FRAGMENT.format(protocol, value)
+            state = get_value_from_jmx(jmx_uri, 'tag.HAState', security_enabled, run_user, is_https_enabled)
+            if (not state):
+                check_service_cmd = 'hdfs haadmin -getServiceState {0}'.format(nn_unique_id)
+                (code, out) = shell.call(check_service_cmd, logoutput=True, user=run_user)
+                if ((code == 0) and out):
+                    if (HDFS_NN_STATE_STANDBY in out):
+                        state = HDFS_NN_STATE_STANDBY
+                    elif (HDFS_NN_STATE_ACTIVE in out):
+                        state = HDFS_NN_STATE_ACTIVE
+            if (state == HDFS_NN_STATE_ACTIVE):
+                active_namenodes.append((nn_unique_id, value))
+            elif (state == HDFS_NN_STATE_STANDBY):
+                standby_namenodes.append((nn_unique_id, value))
+            else:
+                unknown_namenodes.append((nn_unique_id, value))
+    return (active_namenodes, standby_namenodes, unknown_namenodes)
