@@ -1,5 +1,5 @@
 def upgrade_schema(self, env):
-    "\n    Executes the schema upgrade binary.  This is its own function because it could\n    be called as a standalone task from the upgrade pack, but is safe to run it for each\n    metastore instance.\n\n    The metastore schema upgrade requires a database driver library for most\n    databases. During an upgrade, it's possible that the library is not present,\n    so this will also attempt to copy/download the appropriate driver.\n    "
+    "\n    Executes the schema upgrade binary.  This is its own function because it could\n    be called as a standalone task from the upgrade pack, but is safe to run it for each\n    metastore instance. The schema upgrade on an already upgraded metastore is a NOOP.\n\n    The metastore schema upgrade requires a database driver library for most\n    databases. During an upgrade, it's possible that the library is not present,\n    so this will also attempt to copy/download the appropriate driver.\n    "
     Logger.info('Upgrading Hive Metastore')
     import params
     env.set_params(params)
@@ -8,17 +8,19 @@ def upgrade_schema(self, env):
         Execute(kinit_command, user=params.smokeuser)
     if ((params.hive_jdbc_driver in params.hive_jdbc_drivers_list) and params.hive_use_existing_db):
         target_directory = format('/usr/hdp/{version}/hive/lib')
-        if (not os.path.exists(params.target)):
+        source_jdbc_file = format(params.target.replace('/usr/hdp/current', '/usr/hdp/{current_version}'))
+        if (not os.path.exists(source_jdbc_file)):
             jdbc_connector()
+        target_directory_and_filename = os.path.join(target_directory, os.path.basename(source_jdbc_file))
         if params.sqla_db_used:
             target_native_libs_directory = format('{target_directory}/native/lib64')
             Execute(format('yes | {sudo} cp {jars_in_hive_lib} {target_directory}'))
             Directory(target_native_libs_directory, recursive=True)
             Execute(format('yes | {sudo} cp {libs_in_hive_lib} {target_native_libs_directory}'))
             Execute(format('{sudo} chown -R {hive_user}:{user_group} {hive_lib}/*'))
-        else:
-            Execute(('cp', params.target, target_directory), path=['/bin', '/usr/bin/'], sudo=True)
-        File(os.path.join(target_directory, os.path.basename(params.target)), mode=420)
+        elif (not os.path.exists(target_directory_and_filename)):
+            Execute(('cp', source_jdbc_file, target_directory), path=['/bin', '/usr/bin/'], sudo=True)
+        File(target_directory_and_filename, mode=420)
     binary = format('/usr/hdp/{version}/hive/bin/schematool')
     schematool_hive_server_conf_dir = params.hive_server_conf_dir
     if (params.current_version is not None):
