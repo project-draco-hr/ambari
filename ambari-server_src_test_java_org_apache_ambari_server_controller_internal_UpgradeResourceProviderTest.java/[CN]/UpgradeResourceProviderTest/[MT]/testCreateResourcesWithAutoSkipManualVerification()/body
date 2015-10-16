@@ -1,0 +1,31 @@
+{
+  Cluster cluster=clusters.getCluster("c1");
+  Map<String,Object> requestProps=new HashMap<String,Object>();
+  requestProps.put(UpgradeResourceProvider.UPGRADE_CLUSTER_NAME,"c1");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_VERSION,"2.2.0.0");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_PACK,"upgrade_test");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_TYPE,UpgradeType.ROLLING.toString());
+  requestProps.put(UpgradeResourceProvider.UPGRADE_SKIP_MANUAL_VERIFICATION,Boolean.TRUE.toString());
+  requestProps.put(UpgradeResourceProvider.UPGRADE_SKIP_PREREQUISITE_CHECKS,Boolean.TRUE.toString());
+  ResourceProvider upgradeResourceProvider=createProvider(amc);
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  upgradeResourceProvider.createResources(request);
+  List<UpgradeEntity> upgrades=upgradeDao.findUpgrades(cluster.getClusterId());
+  assertEquals(1,upgrades.size());
+  UpgradeEntity entity=upgrades.get(0);
+  assertEquals(cluster.getClusterId(),entity.getClusterId().longValue());
+  List<UpgradeGroupEntity> upgradeGroups=entity.getUpgradeGroups();
+  assertEquals(2,upgradeGroups.size());
+  UpgradeGroupEntity zookeeperGroup=upgradeGroups.get(0);
+  assertEquals("ZOOKEEPER",zookeeperGroup.getName());
+  List<UpgradeItemEntity> zookeeperUpgradeItems=zookeeperGroup.getItems();
+  assertEquals(3,zookeeperUpgradeItems.size());
+  assertEquals("Restarting ZooKeeper Server on h1",zookeeperUpgradeItems.get(0).getText());
+  assertEquals("Skipping Configuration Task",zookeeperUpgradeItems.get(1).getText());
+  assertEquals("Service Check ZooKeeper",zookeeperUpgradeItems.get(2).getText());
+  UpgradeGroupEntity postClusterGroup=upgradeGroups.get(1);
+  assertEquals("POST_CLUSTER",postClusterGroup.getName());
+  List<UpgradeItemEntity> postClusterUpgradeItems=postClusterGroup.getItems();
+  assertEquals(1,postClusterUpgradeItems.size());
+  assertEquals("Save Cluster State",postClusterUpgradeItems.get(0).getText());
+}
