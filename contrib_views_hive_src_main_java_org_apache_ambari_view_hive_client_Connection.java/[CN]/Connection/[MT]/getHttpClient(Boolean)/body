@@ -1,0 +1,71 @@
+{
+  boolean isCookieEnabled=authParams.get(Utils.HiveAuthenticationParams.COOKIE_AUTH) == null || (!Utils.HiveAuthenticationParams.COOKIE_AUTH_FALSE.equalsIgnoreCase(authParams.get(Utils.HiveAuthenticationParams.COOKIE_AUTH)));
+  String cookieName=authParams.get(Utils.HiveAuthenticationParams.COOKIE_NAME) == null ? Utils.HiveAuthenticationParams.DEFAULT_COOKIE_NAMES_HS2 : authParams.get(Utils.HiveAuthenticationParams.COOKIE_NAME);
+  CookieStore cookieStore=isCookieEnabled ? new BasicCookieStore() : null;
+  HttpClientBuilder httpClientBuilder;
+  HttpRequestInterceptor requestInterceptor;
+  Map<String,String> additionalHttpHeaders=new HashMap<String,String>();
+  for (  Map.Entry<String,String> entry : authParams.entrySet()) {
+    String key=entry.getKey();
+    if (key.startsWith(Utils.HiveAuthenticationParams.HTTP_HEADER_PREFIX)) {
+      additionalHttpHeaders.put(key.substring(Utils.HiveAuthenticationParams.HTTP_HEADER_PREFIX.length()),entry.getValue());
+    }
+  }
+  if (isKerberosAuthMode()) {
+    Boolean assumeSubject=Utils.HiveAuthenticationParams.AUTH_KERBEROS_AUTH_TYPE_FROM_SUBJECT.equals(authParams.get(Utils.HiveAuthenticationParams.AUTH_KERBEROS_AUTH_TYPE));
+    requestInterceptor=new HttpKerberosRequestInterceptor(authParams.get(Utils.HiveAuthenticationParams.AUTH_PRINCIPAL),host,getServerHttpUrl(useSsl),assumeSubject,cookieStore,cookieName,useSsl,additionalHttpHeaders);
+  }
+ else {
+    requestInterceptor=new HttpBasicAuthInterceptor(getAuthParamDefault(Utils.HiveAuthenticationParams.AUTH_USER,getUsername()),getPassword(),cookieStore,cookieName,useSsl,additionalHttpHeaders);
+  }
+  if (isCookieEnabled) {
+    httpClientBuilder=HttpClients.custom().setServiceUnavailableRetryStrategy(new ServiceUnavailableRetryStrategy(){
+      @Override public boolean retryRequest(      final HttpResponse response,      final int executionCount,      final HttpContext context){
+        int statusCode=response.getStatusLine().getStatusCode();
+        boolean ret=statusCode == 401 && executionCount <= 1;
+        if (ret) {
+          context.setAttribute(Utils.HIVE_SERVER2_RETRY_KEY,Utils.HIVE_SERVER2_RETRY_TRUE);
+        }
+        return ret;
+      }
+      @Override public long getRetryInterval(){
+        return 0;
+      }
+    }
+);
+  }
+ else {
+    httpClientBuilder=HttpClientBuilder.create();
+  }
+  httpClientBuilder.addInterceptorFirst(requestInterceptor);
+  if (useSsl) {
+    String useTwoWaySSL=authParams.get(Utils.HiveAuthenticationParams.USE_TWO_WAY_SSL);
+    String sslTrustStorePath=authParams.get(Utils.HiveAuthenticationParams.SSL_TRUST_STORE);
+    String sslTrustStorePassword=authParams.get(Utils.HiveAuthenticationParams.SSL_TRUST_STORE_PASSWORD);
+    KeyStore sslTrustStore;
+    SSLSocketFactory socketFactory;
+    try {
+      if (useTwoWaySSL != null && useTwoWaySSL.equalsIgnoreCase(Utils.HiveAuthenticationParams.TRUE)) {
+        socketFactory=getTwoWaySSLSocketFactory();
+      }
+ else       if (sslTrustStorePath == null || sslTrustStorePath.isEmpty()) {
+        socketFactory=SSLSocketFactory.getSocketFactory();
+      }
+ else {
+        sslTrustStore=KeyStore.getInstance(Utils.HiveAuthenticationParams.SSL_TRUST_STORE_TYPE);
+        try (FileInputStream fis=new FileInputStream(sslTrustStorePath)){
+          sslTrustStore.load(fis,sslTrustStorePassword.toCharArray());
+        }
+         socketFactory=new SSLSocketFactory(sslTrustStore);
+      }
+      socketFactory.setHostnameVerifier(SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);
+      final Registry<ConnectionSocketFactory> registry=RegistryBuilder.<ConnectionSocketFactory>create().register("https",socketFactory).build();
+      httpClientBuilder.setConnectionManager(new BasicHttpClientConnectionManager(registry));
+    }
+ catch (    Exception e) {
+      String msg="Could not create an https connection to " + getServerHttpUrl(useSsl) + ". "+ e.getMessage();
+      throw new SQLException(msg," 08S01",e);
+    }
+  }
+  return httpClientBuilder.build();
+}
