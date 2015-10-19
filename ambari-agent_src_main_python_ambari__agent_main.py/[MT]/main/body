@@ -31,22 +31,34 @@ def main(heartbeat_stop_callback=None):
         sys.exit(1)
     ping_port_listener.start()
     update_log_level(config)
-    server_hostname = hostname.server_hostname(config)
-    server_url = config.get_api_url()
     if (not (OSCheck.get_os_family() == OSConst.WINSRV_FAMILY)):
         daemonize()
-    try:
-        server_ip = socket.gethostbyname(server_hostname)
-        logger.info('Connecting to Ambari server at %s (%s)', server_url, server_ip)
-    except socket.error:
-        logger.warn("Unable to determine the IP address of the Ambari server '%s'", server_hostname)
-    netutil = NetUtil(heartbeat_stop_callback)
-    (retries, connected) = netutil.try_to_connect(server_url, (-1), logger)
-    if connected:
-        controller = Controller(config, heartbeat_stop_callback)
-        controller.start()
-        controller.join()
-    if (not (OSCheck.get_os_family() == OSConst.WINSRV_FAMILY)):
-        ExitHelper.execute_cleanup()
-        stop_agent()
-    logger.info('finished')
+    active_server = None
+    server_hostnames = hostname.server_hostnames(config)
+    connected = False
+    stopped = False
+    while ((not connected) and (not stopped)):
+        for server_hostname in server_hostnames:
+            try:
+                server_ip = socket.gethostbyname(server_hostname)
+                server_url = config.get_api_url(server_hostname)
+                logger.info('Connecting to Ambari server at %s (%s)', server_url, server_ip)
+            except socket.error:
+                logger.warn("Unable to determine the IP address of the Ambari server '%s'", server_hostname)
+            netutil = NetUtil(heartbeat_stop_callback)
+            (retries, connected, stopped) = netutil.try_to_connect(server_url, MAX_RETRIES, logger)
+            if connected:
+                logger.info('Connected to Ambari server %s', server_hostname)
+                active_server = server_hostname
+                controller = Controller(config, server_hostname, heartbeat_stop_callback)
+                controller.start()
+                controller.join()
+            if (connected or stopped):
+                if (not (OSCheck.get_os_family() == OSConst.WINSRV_FAMILY)):
+                    ExitHelper.execute_cleanup()
+                    stop_agent()
+                logger.info('finished')
+                break
+        pass
+    pass
+    return active_server

@@ -1,6 +1,7 @@
 {
   final long requestId1=1;
   final long requestId2=2;
+  final long requestId3=3;
   final String clusterName="c1";
   final String hostName1="h1";
   final String context="Test invocation";
@@ -39,6 +40,14 @@
   stages.get(1).addHostRoleExecutionCommand(hostName1,Role.HBASE_CLIENT,RoleCommand.START,new ServiceComponentHostStartEvent(Role.HBASE_CLIENT.toString(),hostName1,System.currentTimeMillis()),clusterName,"HBASE",false,false);
   request=new Request(stages,clusters);
   actionDB.persistActions(request);
+  ServiceComponentHostServerActionEvent serviceComponentHostServerActionEvent=new ServiceComponentHostServerActionEvent(Role.AMBARI_SERVER_ACTION.toString(),null,System.currentTimeMillis());
+  stages.clear();
+  stages.add(stageFactory.createNew(requestId3,"/a6",clusterName,1L,context,CLUSTER_HOST_INFO,"",""));
+  stages.get(0).setStageId(6);
+  stages.get(0).addServerActionCommand("some.action.class.name",null,Role.AMBARI_SERVER_ACTION,RoleCommand.EXECUTE,clusterName,serviceComponentHostServerActionEvent,null,null,null,null,false,false);
+  assertEquals("_internal_ambari",stages.get(0).getOrderedHostRoleCommands().get(0).getHostName());
+  request=new Request(stages,clusters);
+  actionDB.persistActions(request);
   Set<TaskStatusRequest> taskStatusRequests;
   Set<TaskStatusResponse> taskStatusResponses;
   taskStatusRequests=new HashSet<TaskStatusRequest>(){
@@ -74,6 +83,12 @@
 ;
   taskStatusResponses=controller.getTaskStatus(taskStatusRequests);
   assertEquals(5L,taskStatusResponses.iterator().next().getTaskId());
+  taskStatusResponses=controller.getTaskStatus(Collections.singleton(new TaskStatusRequest(requestId3,null)));
+  assertEquals(1,taskStatusResponses.size());
+  TaskStatusResponse response=taskStatusResponses.iterator().next();
+  assertNotNull(response);
+  assertEquals(6L,response.getTaskId());
+  assertEquals(StageUtils.getHostName(),response.getHostName());
   taskStatusRequests=new HashSet<TaskStatusRequest>(){
 {
       add(new TaskStatusRequest(requestId1,5L));

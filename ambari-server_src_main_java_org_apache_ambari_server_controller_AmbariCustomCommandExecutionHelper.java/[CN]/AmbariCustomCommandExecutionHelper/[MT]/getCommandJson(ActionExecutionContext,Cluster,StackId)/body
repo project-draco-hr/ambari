@@ -1,0 +1,40 @@
+{
+  Map<String,String> commandParamsStage=StageUtils.getCommandParamsStage(actionExecContext);
+  Map<String,String> hostParamsStage=new HashMap<String,String>();
+  Map<String,Set<String>> clusterHostInfo;
+  String clusterHostInfoJson="{}";
+  if (null != cluster) {
+    clusterHostInfo=StageUtils.getClusterHostInfo(cluster);
+    hostParamsStage=createDefaultHostParams(cluster,stackId);
+    String componentName=null;
+    String serviceName=null;
+    if (actionExecContext.getOperationLevel() != null) {
+      componentName=actionExecContext.getOperationLevel().getHostComponentName();
+      serviceName=actionExecContext.getOperationLevel().getServiceName();
+    }
+    if (serviceName != null && componentName != null) {
+      ComponentInfo componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
+      List<String> clientsToUpdateConfigsList=componentInfo.getClientsToUpdateConfigs();
+      if (clientsToUpdateConfigsList == null) {
+        clientsToUpdateConfigsList=new ArrayList<String>();
+        clientsToUpdateConfigsList.add("*");
+      }
+      String clientsToUpdateConfigs=gson.toJson(clientsToUpdateConfigsList);
+      hostParamsStage.put(CLIENTS_TO_UPDATE_CONFIGS,clientsToUpdateConfigs);
+    }
+    clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
+    Iterator<Service> it=cluster.getServices().values().iterator();
+    while (it.hasNext()) {
+      ServiceInfo serviceInfoInstance=ambariMetaInfo.getService(stackId.getStackName(),stackId.getStackVersion(),it.next().getName());
+      LOG.info("Iterating service type Instance in getCommandJson:: " + serviceInfoInstance.getName());
+      if (serviceInfoInstance.getServiceType() != null) {
+        LOG.info("Adding service type info in getCommandJson:: " + serviceInfoInstance.getServiceType());
+        commandParamsStage.put("dfs_type",serviceInfoInstance.getServiceType());
+        break;
+      }
+    }
+  }
+  String hostParamsStageJson=StageUtils.getGson().toJson(hostParamsStage);
+  String commandParamsStageJson=StageUtils.getGson().toJson(commandParamsStage);
+  return new ExecuteCommandJson(clusterHostInfoJson,commandParamsStageJson,hostParamsStageJson);
+}

@@ -1,0 +1,66 @@
+{
+  Map<String,String> configParameters=new HashMap<>();
+  if (this.id == null || this.id.isEmpty()) {
+    LOG.warn("Config task id is not defined, skipping config change");
+    return configParameters;
+  }
+  if (configUpgradePack == null) {
+    LOG.warn("Config upgrade pack is not defined, skipping config change");
+    return configParameters;
+  }
+  ConfigUpgradeChangeDefinition definition=configUpgradePack.enumerateConfigChangesByID().get(this.id);
+  if (definition == null) {
+    LOG.warn(String.format("Can not resolve config change definition by id %s, " + "skipping config change",this.id));
+    return configParameters;
+  }
+  List<Condition> conditions=definition.getConditions();
+  if (null != conditions && !conditions.isEmpty()) {
+    for (    Condition condition : conditions) {
+      String conditionConfigType=condition.getConditionConfigType();
+      String conditionKey=condition.getConditionKey();
+      String conditionValue=condition.getConditionValue();
+      configParameters.put(PARAMETER_CONFIG_TYPE,condition.getConfigType());
+      String checkValue=getDesiredConfigurationValue(cluster,conditionConfigType,conditionKey);
+      if (conditionValue.equals(checkValue)) {
+        List<ConfigurationKeyValue> configurations=new ArrayList<>(1);
+        ConfigurationKeyValue keyValue=new ConfigurationKeyValue();
+        keyValue.key=condition.getKey();
+        keyValue.value=condition.getValue();
+        configurations.add(keyValue);
+        configParameters.put(ConfigureTask.PARAMETER_KEY_VALUE_PAIRS,m_gson.toJson(configurations));
+        return configParameters;
+      }
+    }
+  }
+  if (null != definition.getConfigType()) {
+    configParameters.put(PARAMETER_CONFIG_TYPE,definition.getConfigType());
+  }
+  if (null != definition.getKeyValuePairs() && !definition.getKeyValuePairs().isEmpty()) {
+    configParameters.put(ConfigureTask.PARAMETER_KEY_VALUE_PAIRS,m_gson.toJson(definition.getKeyValuePairs()));
+  }
+  List<Transfer> transfers=definition.getTransfers();
+  if (null != transfers && !transfers.isEmpty()) {
+    List<Transfer> allowedTransfers=new ArrayList<>();
+    for (    Transfer transfer : transfers) {
+      if (transfer.operation == TransferOperation.DELETE) {
+        if (StringUtils.isNotBlank(transfer.ifKey) && StringUtils.isNotBlank(transfer.ifType) && transfer.ifValue != null) {
+          String ifConfigType=transfer.ifType;
+          String ifKey=transfer.ifKey;
+          String ifValue=transfer.ifValue;
+          String checkValue=getDesiredConfigurationValue(cluster,ifConfigType,ifKey);
+          if (!ifValue.toLowerCase().equals(StringUtils.lowerCase(checkValue))) {
+            LOG.info("Skipping property delete for {}/{} as the value {} for {}/{} is not equal to {}",definition.getConfigType(),transfer.deleteKey,checkValue,ifConfigType,ifKey,ifValue);
+            continue;
+          }
+        }
+      }
+      allowedTransfers.add(transfer);
+    }
+    configParameters.put(ConfigureTask.PARAMETER_TRANSFERS,m_gson.toJson(allowedTransfers));
+  }
+  List<Replace> replacements=definition.getReplacements();
+  if (null != replacements && !replacements.isEmpty()) {
+    configParameters.put(ConfigureTask.PARAMETER_REPLACEMENTS,m_gson.toJson(replacements));
+  }
+  return configParameters;
+}

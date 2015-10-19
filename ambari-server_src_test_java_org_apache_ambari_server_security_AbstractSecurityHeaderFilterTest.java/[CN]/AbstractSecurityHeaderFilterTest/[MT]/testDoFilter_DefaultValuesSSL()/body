@@ -1,0 +1,32 @@
+{
+  final File httpPassFile=temporaryFolder.newFile();
+  Injector injector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      Properties properties=new Properties();
+      properties.setProperty(Configuration.API_USE_SSL,"true");
+      properties.setProperty(Configuration.CLIENT_API_SSL_KSTR_DIR_NAME_KEY,httpPassFile.getParent());
+      properties.setProperty(Configuration.CLIENT_API_SSL_CRT_PASS_FILE_NAME_KEY,httpPassFile.getName());
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+      bind(Configuration.class).toInstance(new Configuration(properties));
+    }
+  }
+);
+  FilterConfig filterConfig=createNiceMock(FilterConfig.class);
+  HttpServletRequest servletRequest=createStrictMock(HttpServletRequest.class);
+  HttpServletResponse servletResponse=createStrictMock(HttpServletResponse.class);
+  servletResponse.setHeader(AbstractSecurityHeaderFilter.STRICT_TRANSPORT_HEADER,defatulPropertyValueMap.get(AbstractSecurityHeaderFilter.STRICT_TRANSPORT_HEADER));
+  expectLastCall().once();
+  servletResponse.setHeader(AbstractSecurityHeaderFilter.X_FRAME_OPTIONS_HEADER,defatulPropertyValueMap.get(AbstractSecurityHeaderFilter.X_FRAME_OPTIONS_HEADER));
+  expectLastCall().once();
+  servletResponse.setHeader(AbstractSecurityHeaderFilter.X_XSS_PROTECTION_HEADER,defatulPropertyValueMap.get(AbstractSecurityHeaderFilter.X_XSS_PROTECTION_HEADER));
+  expectLastCall().once();
+  FilterChain filterChain=createStrictMock(FilterChain.class);
+  filterChain.doFilter(servletRequest,servletResponse);
+  expectLastCall().once();
+  replayAll();
+  AbstractSecurityHeaderFilter securityFilter=injector.getInstance(filterClass);
+  Assert.assertNotNull(securityFilter);
+  securityFilter.init(filterConfig);
+  securityFilter.doFilter(servletRequest,servletResponse,filterChain);
+  verifyAll();
+}

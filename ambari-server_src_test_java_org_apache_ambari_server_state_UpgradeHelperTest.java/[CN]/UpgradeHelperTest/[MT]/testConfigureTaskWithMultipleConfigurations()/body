@@ -2,25 +2,26 @@
   Map<String,UpgradePack> upgrades=ambariMetaInfo.getUpgradePacks("HDP","2.1.1");
   assertTrue(upgrades.containsKey("upgrade_test"));
   UpgradePack upgrade=upgrades.get("upgrade_test");
+  ConfigUpgradePack cup=ambariMetaInfo.getConfigUpgradePack("HDP","2.1.1");
   assertNotNull(upgrade);
   Cluster cluster=makeCluster();
-  UpgradeContext context=new UpgradeContext(m_masterHostResolver,HDP_21,HDP_21,UPGRADE_VERSION,Direction.UPGRADE);
+  UpgradeContext context=new UpgradeContext(m_masterHostResolver,HDP_21,HDP_21,UPGRADE_VERSION,Direction.UPGRADE,UpgradeType.ROLLING);
   List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgrade,context);
   assertEquals(6,groups.size());
   UpgradeGroupHolder hiveGroup=groups.get(4);
   assertEquals("HIVE",hiveGroup.name);
   ConfigureTask configureTask=(ConfigureTask)hiveGroup.items.get(1).getTasks().get(1).getTasks().get(0);
-  Map<String,String> configProperties=configureTask.getConfigurationChanges(cluster);
+  Map<String,String> configProperties=configureTask.getConfigurationChanges(cluster,cup);
   assertFalse(configProperties.isEmpty());
   assertEquals(configProperties.get(ConfigureTask.PARAMETER_CONFIG_TYPE),"hive-site");
   String configurationJson=configProperties.get(ConfigureTask.PARAMETER_KEY_VALUE_PAIRS);
   String transferJson=configProperties.get(ConfigureTask.PARAMETER_TRANSFERS);
   assertNotNull(configurationJson);
   assertNotNull(transferJson);
-  List<ConfigureTask.ConfigurationKeyValue> keyValuePairs=m_gson.fromJson(configurationJson,new TypeToken<List<ConfigureTask.ConfigurationKeyValue>>(){
+  List<ConfigUpgradeChangeDefinition.ConfigurationKeyValue> keyValuePairs=m_gson.fromJson(configurationJson,new TypeToken<List<ConfigUpgradeChangeDefinition.ConfigurationKeyValue>>(){
   }
 .getType());
-  List<ConfigureTask.Transfer> transfers=m_gson.fromJson(transferJson,new TypeToken<List<ConfigureTask.Transfer>>(){
+  List<ConfigUpgradeChangeDefinition.Transfer> transfers=m_gson.fromJson(transferJson,new TypeToken<List<ConfigUpgradeChangeDefinition.Transfer>>(){
   }
 .getType());
   assertEquals("fooKey",keyValuePairs.get(0).key);

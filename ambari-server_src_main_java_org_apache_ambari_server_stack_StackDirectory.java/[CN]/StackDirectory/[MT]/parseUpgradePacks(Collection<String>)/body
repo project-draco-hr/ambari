@@ -1,15 +1,34 @@
 {
-  Map<String,UpgradePack> upgradeMap=new HashMap<String,UpgradePack>();
+  Map<String,UpgradePack> upgradeMap=new HashMap<>();
+  ConfigUpgradePack configUpgradePack=null;
   if (subDirs.contains(UPGRADE_PACK_FOLDER_NAME)) {
     File f=new File(getAbsolutePath() + File.separator + UPGRADE_PACK_FOLDER_NAME);
     if (f.isDirectory()) {
       upgradesDir=f.getAbsolutePath();
       for (      File upgradeFile : f.listFiles(XML_FILENAME_FILTER)) {
-        try {
-          upgradeMap.put(FilenameUtils.removeExtension(upgradeFile.getName()),unmarshaller.unmarshal(UpgradePack.class,upgradeFile));
+        if (upgradeFile.getName().toLowerCase().startsWith(CONFIG_UPGRADE_XML_FILENAME_PREFIX)) {
+          try {
+            if (configUpgradePack == null) {
+              configUpgradePack=unmarshaller.unmarshal(ConfigUpgradePack.class,upgradeFile);
+            }
+ else {
+              throw new AmbariException(String.format("There are multiple files with name like %s" + upgradeFile.getAbsolutePath()));
+            }
+          }
+ catch (          JAXBException e) {
+            throw new AmbariException("Unable to parse stack upgrade file at location: " + upgradeFile.getAbsolutePath(),e);
+          }
         }
- catch (        JAXBException e) {
-          throw new AmbariException("Unable to parse stack upgrade file at location: " + upgradeFile.getAbsolutePath(),e);
+ else {
+          try {
+            String upgradePackName=FilenameUtils.removeExtension(upgradeFile.getName());
+            UpgradePack pack=unmarshaller.unmarshal(UpgradePack.class,upgradeFile);
+            pack.setName(upgradePackName);
+            upgradeMap.put(upgradePackName,pack);
+          }
+ catch (          JAXBException e) {
+            throw new AmbariException("Unable to parse stack upgrade file at location: " + upgradeFile.getAbsolutePath(),e);
+          }
         }
       }
     }
@@ -19,5 +38,11 @@
   }
   if (!upgradeMap.isEmpty()) {
     upgradePacks=upgradeMap;
+  }
+  if (configUpgradePack != null) {
+    this.configUpgradePack=configUpgradePack;
+  }
+ else {
+    LOG.info("Stack '{}' doesn't contain config upgrade pack file",getPath());
   }
 }

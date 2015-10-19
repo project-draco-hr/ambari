@@ -3,29 +3,45 @@
   Cluster cluster=context.getCluster();
   MasterHostResolver mhr=context.getResolver();
   Map<String,Map<String,ProcessingComponent>> allTasks=upgradePack.getTasks();
-  List<UpgradeGroupHolder> groups=new ArrayList<UpgradeGroupHolder>();
+  List<UpgradeGroupHolder> groups=new ArrayList<>();
   for (  Grouping group : upgradePack.getGroups(context.getDirection())) {
     UpgradeGroupHolder groupHolder=new UpgradeGroupHolder();
     groupHolder.name=group.name;
     groupHolder.title=group.title;
+    groupHolder.groupClass=group.getClass();
     groupHolder.skippable=group.skippable;
     groupHolder.allowRetry=group.allowRetry;
     if (context.getDirection().isDowngrade()) {
       groupHolder.skippable=true;
     }
+    if (upgradePack.getType() == UpgradeType.NON_ROLLING) {
+      group.performServiceCheck=false;
+    }
     StageWrapperBuilder builder=group.getBuilder();
     List<UpgradePack.OrderService> services=group.services;
-    if (context.getDirection().isDowngrade() && !services.isEmpty()) {
-      List<UpgradePack.OrderService> reverse=new ArrayList<UpgradePack.OrderService>(services);
-      Collections.reverse(reverse);
-      services=reverse;
+    if (upgradePack.getType() == UpgradeType.ROLLING) {
+      if (context.getDirection().isDowngrade() && !services.isEmpty()) {
+        List<UpgradePack.OrderService> reverse=new ArrayList<>(services);
+        Collections.reverse(reverse);
+        services=reverse;
+      }
     }
     for (    UpgradePack.OrderService service : services) {
-      if (!allTasks.containsKey(service.serviceName)) {
+      if (upgradePack.getType() == UpgradeType.ROLLING && !allTasks.containsKey(service.serviceName)) {
         continue;
       }
+      Task.Type functionName=null;
+      if (RestartGrouping.class.isInstance(group)) {
+        functionName=((RestartGrouping)group).getFunction();
+      }
+      if (StartGrouping.class.isInstance(group)) {
+        functionName=((StartGrouping)group).getFunction();
+      }
+      if (StopGrouping.class.isInstance(group)) {
+        functionName=((StopGrouping)group).getFunction();
+      }
       for (      String component : service.components) {
-        if (!allTasks.get(service.serviceName).containsKey(component)) {
+        if (upgradePack.getType() == UpgradeType.ROLLING && !allTasks.get(service.serviceName).containsKey(component)) {
           continue;
         }
         HostsType hostsType=mhr.getMasterAndHosts(service.serviceName,component);
@@ -36,11 +52,34 @@
           context.addUnhealthy(hostsType.unhealthy);
         }
         Service svc=cluster.getService(service.serviceName);
-        ProcessingComponent pc=allTasks.get(service.serviceName).get(component);
+        ProcessingComponent pc=null;
+        if (upgradePack.getType() == UpgradeType.ROLLING) {
+          pc=allTasks.get(service.serviceName).get(component);
+        }
+ else         if (upgradePack.getType() == UpgradeType.NON_ROLLING) {
+          if (null != functionName) {
+            pc=new ProcessingComponent();
+            pc.name=component;
+            pc.tasks=new ArrayList<>();
+            if (functionName == Type.START) {
+              pc.tasks.add(new StartTask());
+            }
+ else             if (functionName == Type.STOP) {
+              pc.tasks.add(new StopTask());
+            }
+ else             if (functionName == Type.RESTART) {
+              pc.tasks.add(new RestartTask());
+            }
+          }
+        }
+        if (pc == null) {
+          LOG.error(MessageFormat.format("Couldn't create a processing component for service {0} and component {1}.",service.serviceName,component));
+          continue;
+        }
         setDisplayNames(context,service.serviceName,component);
         if (service.serviceName.equalsIgnoreCase("HDFS") && component.equalsIgnoreCase("NAMENODE")) {
           if (!hostsType.hosts.isEmpty() && hostsType.master != null && hostsType.secondary != null) {
-            LinkedHashSet<String> order=new LinkedHashSet<String>();
+            LinkedHashSet<String> order=new LinkedHashSet<>();
             order.add(hostsType.secondary);
             order.add(hostsType.master);
             hostsType.hosts=order;

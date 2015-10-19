@@ -1,0 +1,66 @@
+{
+  Cluster cluster=context.getCluster();
+  Map<String,String> commandParams=getNewParameterMap();
+  commandParams.put(COMMAND_PARAM_CLUSTER_NAME,cluster.getClusterName());
+  commandParams.put(COMMAND_PARAM_VERSION,context.getVersion());
+  commandParams.put(COMMAND_PARAM_DIRECTION,context.getDirection().name().toLowerCase());
+  commandParams.put(COMMAND_PARAM_ORIGINAL_STACK,context.getOriginalStackId().getStackId());
+  commandParams.put(COMMAND_PARAM_TARGET_STACK,context.getTargetStackId().getStackId());
+  commandParams.put(COMMAND_DOWNGRADE_FROM_VERSION,context.getDowngradeFromVersion());
+  String itemDetail=entity.getText();
+  String stageText=StringUtils.abbreviate(entity.getText(),255);
+switch (task.getType()) {
+case MANUAL:
+{
+      ManualTask mt=(ManualTask)task;
+      itemDetail=mt.message;
+      if (null != mt.summary) {
+        stageText=mt.summary;
+      }
+      entity.setText(itemDetail);
+      if (null != mt.structuredOut) {
+        commandParams.put(COMMAND_PARAM_STRUCT_OUT,mt.structuredOut);
+      }
+      break;
+    }
+case CONFIGURE:
+{
+    ConfigureTask ct=(ConfigureTask)task;
+    Map<String,String> configurationChanges=ct.getConfigurationChanges(cluster,configUpgradePack);
+    commandParams.putAll(configurationChanges);
+    String configType=configurationChanges.get(ConfigureTask.PARAMETER_CONFIG_TYPE);
+    if (null != configType) {
+      itemDetail=String.format("Updating configuration %s",configType);
+    }
+ else {
+      itemDetail="Skipping Configuration Task";
+    }
+    entity.setText(itemDetail);
+    if (null != ct.summary) {
+      stageText=ct.summary;
+    }
+ else {
+      stageText=itemDetail;
+    }
+    break;
+  }
+default :
+break;
+}
+ActionExecutionContext actionContext=new ActionExecutionContext(cluster.getClusterName(),Role.AMBARI_SERVER_ACTION.toString(),Collections.<RequestResourceFilter>emptyList(),commandParams);
+actionContext.setTimeout(Short.valueOf((short)-1));
+actionContext.setIgnoreMaintenance(true);
+actionContext.setRetryAllowed(allowRetry);
+actionContext.setAutoSkipFailures(context.isComponentFailureAutoSkipped());
+ExecuteCommandJson jsons=s_commandExecutionHelper.get().getCommandJson(actionContext,cluster,context.getEffectiveStackId());
+Stage stage=s_stageFactory.get().createNew(request.getId().longValue(),"/tmp/ambari",cluster.getClusterName(),cluster.getClusterId(),stageText,jsons.getClusterHostInfo(),jsons.getCommandParamsForStage(),jsons.getHostParamsForStage());
+stage.setSkippable(skippable);
+long stageId=request.getLastStageId() + 1;
+if (0L == stageId) {
+stageId=1L;
+}
+stage.setStageId(stageId);
+entity.setStageId(Long.valueOf(stageId));
+stage.addServerActionCommand(task.getImplementationClass(),getManagementController().getAuthName(),Role.AMBARI_SERVER_ACTION,RoleCommand.EXECUTE,cluster.getClusterName(),new ServiceComponentHostServerActionEvent(null,System.currentTimeMillis()),commandParams,itemDetail,null,Integer.valueOf(1200),allowRetry,context.isComponentFailureAutoSkipped());
+request.addStages(Collections.singletonList(stage));
+}
