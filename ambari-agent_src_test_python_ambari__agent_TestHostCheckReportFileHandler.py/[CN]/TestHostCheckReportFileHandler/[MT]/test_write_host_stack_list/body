@@ -1,0 +1,19 @@
+@patch('os.path.exists')
+@patch('os.listdir')
+def test_write_host_stack_list(self, list_mock, exists_mock):
+    exists_mock.return_value = True
+    list_mock.return_value = ['1.1.1.1-1234', 'current', 'test']
+    tmpfile = tempfile.mktemp()
+    config = ConfigParser.RawConfigParser()
+    config.add_section('agent')
+    config.set('agent', 'prefix', os.path.dirname(tmpfile))
+    handler = HostCheckReportFileHandler(config)
+    mydict = {}
+    mydict['hostHealth'] = {}
+    mydict['stackFoldersAndFiles'] = [{'name': '/a/b', 'type': 'directory', }, {'name': '/a/b.txt', 'type': 'file', }]
+    handler.writeHostCheckFile(mydict)
+    configValidator = ConfigParser.RawConfigParser()
+    configPath = os.path.join(os.path.dirname(tmpfile), HostCheckReportFileHandler.HOST_CHECK_FILE)
+    configValidator.read(configPath)
+    paths = configValidator.get('directories', 'dir_list')
+    self.chkItemsEqual(paths, ['/a/b', '/a/b.txt', '/usr/hdp/1.1.1.1-1234', '/usr/hdp/current'])
