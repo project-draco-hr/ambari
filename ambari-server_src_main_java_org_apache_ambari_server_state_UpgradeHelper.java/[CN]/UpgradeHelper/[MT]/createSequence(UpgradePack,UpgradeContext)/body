@@ -78,38 +78,64 @@
         }
         setDisplayNames(context,service.serviceName,component);
         if (service.serviceName.equalsIgnoreCase("HDFS") && component.equalsIgnoreCase("NAMENODE")) {
-          if (!hostsType.hosts.isEmpty() && hostsType.master != null && hostsType.secondary != null) {
-            LinkedHashSet<String> order=new LinkedHashSet<>();
-            order.add(hostsType.secondary);
-            order.add(hostsType.master);
-            hostsType.hosts=order;
-          }
-          builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc);
-        }
+switch (upgradePack.getType()) {
+case ROLLING:
+            if (!hostsType.hosts.isEmpty() && hostsType.master != null && hostsType.secondary != null) {
+              LinkedHashSet<String> order=new LinkedHashSet<String>();
+              order.add(hostsType.secondary);
+              order.add(hostsType.master);
+              hostsType.hosts=order;
+              builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc,null);
+            }
+          break;
+case NON_ROLLING:
+        boolean isNameNodeHA=mhr.isNameNodeHA();
+      if (isNameNodeHA && hostsType.master != null && hostsType.secondary != null) {
+        HostsType ht1=new HostsType();
+        LinkedHashSet<String> h1Hosts=new LinkedHashSet<String>();
+        h1Hosts.add(hostsType.master);
+        ht1.hosts=h1Hosts;
+        Map<String,String> h1Params=new HashMap<String,String>();
+        h1Params.put("desired_namenode_role","active");
+        HostsType ht2=new HostsType();
+        LinkedHashSet<String> h2Hosts=new LinkedHashSet<String>();
+        h2Hosts.add(hostsType.secondary);
+        ht2.hosts=h2Hosts;
+        Map<String,String> h2Params=new HashMap<String,String>();
+        h2Params.put("desired_namenode_role","standby");
+        builder.add(context,ht1,service.serviceName,svc.isClientOnlyService(),pc,h1Params);
+        builder.add(context,ht2,service.serviceName,svc.isClientOnlyService(),pc,h2Params);
+      }
  else {
-          builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc);
-        }
+        builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc,null);
       }
-    }
-    List<StageWrapper> proxies=builder.build(context);
-    if (!proxies.isEmpty()) {
-      groupHolder.items=proxies;
-      postProcess(context,groupHolder);
-      groups.add(groupHolder);
-    }
-  }
-  if (LOG.isDebugEnabled()) {
-    for (    UpgradeGroupHolder group : groups) {
-      LOG.debug(group.name);
-      int i=0;
-      for (      StageWrapper proxy : group.items) {
-        LOG.debug("  Stage {}",Integer.valueOf(i++));
-        int j=0;
-        for (        TaskWrapper task : proxy.getTasks()) {
-          LOG.debug("    Task {} {}",Integer.valueOf(j++),task);
-        }
-      }
-    }
-  }
-  return groups;
+    break;
+}
+}
+ else {
+builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc,null);
+}
+}
+}
+List<StageWrapper> proxies=builder.build(context);
+if (!proxies.isEmpty()) {
+groupHolder.items=proxies;
+postProcess(context,groupHolder);
+groups.add(groupHolder);
+}
+}
+if (LOG.isDebugEnabled()) {
+for (UpgradeGroupHolder group : groups) {
+LOG.debug(group.name);
+int i=0;
+for (StageWrapper proxy : group.items) {
+LOG.debug("  Stage {}",Integer.valueOf(i++));
+int j=0;
+for (TaskWrapper task : proxy.getTasks()) {
+LOG.debug("    Task {} {}",Integer.valueOf(j++),task);
+}
+}
+}
+}
+return groups;
 }

@@ -1,0 +1,49 @@
+{
+  boolean forUpgrade=ctx.getDirection().isUpgrade();
+  int count=Double.valueOf(Math.ceil((double)m_batch.percent / 100 * hostsType.hosts.size())).intValue();
+  int i=0;
+  for (  String host : hostsType.hosts) {
+    HostsType singleHostsType=new HostsType();
+    singleHostsType.hosts.add(host);
+    Map<String,List<TaskProxy>> targetMap=((i++) < count) ? initialBatch : finalBatches;
+    List<TaskProxy> targetList=targetMap.get(host);
+    if (null == targetList) {
+      targetList=new ArrayList<TaskProxy>();
+      targetMap.put(host,targetList);
+    }
+    TaskProxy proxy=null;
+    List<Task> tasks=resolveTasks(forUpgrade,true,pc);
+    if (null != tasks && tasks.size() > 0) {
+      proxy=new TaskProxy();
+      proxy.clientOnly=clientOnly;
+      proxy.message=getStageText("Preparing",ctx.getComponentDisplay(service,pc.name),Collections.singleton(host));
+      proxy.tasks.addAll(TaskWrapperBuilder.getTaskList(service,pc.name,singleHostsType,tasks,params));
+      proxy.service=service;
+      proxy.component=pc.name;
+      targetList.add(proxy);
+    }
+    if (null != pc.tasks && 1 == pc.tasks.size()) {
+      Task t=pc.tasks.get(0);
+      if (RestartTask.class.isInstance(t)) {
+        proxy=new TaskProxy();
+        proxy.clientOnly=clientOnly;
+        proxy.tasks.add(new TaskWrapper(service,pc.name,Collections.singleton(host),params,t));
+        proxy.restart=true;
+        proxy.service=service;
+        proxy.component=pc.name;
+        proxy.message=getStageText("Restarting",ctx.getComponentDisplay(service,pc.name),Collections.singleton(host));
+        targetList.add(proxy);
+      }
+    }
+    tasks=resolveTasks(forUpgrade,false,pc);
+    if (null != tasks && tasks.size() > 0) {
+      proxy=new TaskProxy();
+      proxy.clientOnly=clientOnly;
+      proxy.component=pc.name;
+      proxy.service=service;
+      proxy.tasks.addAll(TaskWrapperBuilder.getTaskList(service,pc.name,singleHostsType,tasks,params));
+      proxy.message=getStageText("Completing",ctx.getComponentDisplay(service,pc.name),Collections.singleton(host));
+      targetList.add(proxy);
+    }
+  }
+}

@@ -1,0 +1,14 @@
+def pre_rolling_upgrade_shutdown(hdfs_binary):
+    '\n  Runs the "shutdownDatanode {ipc_address} upgrade" command to shutdown the\n  DataNode in preparation for an upgrade. This will then periodically check\n  "getDatanodeInfo" to ensure the DataNode has shutdown correctly.\n  This function will obtain the Kerberos ticket if security is enabled.\n  :param hdfs_binary: name/path of the HDFS binary to use\n  :return: Return True if ran ok (even with errors), and False if need to stop the datanode forcefully.\n  '
+    import params
+    Logger.info('DataNode executing "shutdownDatanode" command in preparation for upgrade...')
+    if params.security_enabled:
+        Execute(params.dn_kinit_cmd, user=params.hdfs_user)
+    command = format('{hdfs_binary} dfsadmin -shutdownDatanode {dfs_dn_ipc_address} upgrade')
+    (code, output) = shell.call(command, user=params.hdfs_user)
+    if (code == 0):
+        _check_datanode_shutdown(hdfs_binary)
+    elif ((output is not None) and re.search('Shutdown already in progress', output)):
+        Logger.error('Due to a known issue in DataNode, the command {0} did not work, so will need to shutdown the datanode forcefully.'.format(command))
+        return False
+    return True

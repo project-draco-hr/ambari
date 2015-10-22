@@ -1,10 +1,10 @@
-def reach_safemode_state(user, safemode_state, in_ha):
-    '\n  Enter or leave safemode for the Namenode.\n  @param user: user to perform action as\n  @param safemode_state: Desired state of ON or OFF\n  @param in_ha: bool indicating if Namenode High Availability is enabled\n  @:return Returns a tuple of (transition success, original state). If no change is needed, the indicator of\n  success will be True\n  '
+def reach_safemode_state(user, safemode_state, in_ha, hdfs_binary):
+    '\n  Enter or leave safemode for the Namenode.\n  :param user: user to perform action as\n  :param safemode_state: Desired state of ON or OFF\n  :param in_ha: bool indicating if Namenode High Availability is enabled\n  :param hdfs_binary: name/path of the HDFS binary to use\n  :return: Returns a tuple of (transition success, original state). If no change is needed, the indicator of\n  success will be True\n  '
     Logger.info(('Prepare to transition into safemode state %s' % safemode_state))
     import params
     original_state = SafeMode.UNKNOWN
     hostname = params.hostname
-    safemode_check = format('hdfs dfsadmin -safemode get')
+    safemode_check = format('{hdfs_binary} dfsadmin -safemode get')
     grep_pattern = (format('Safe mode is {safemode_state} in {hostname}') if in_ha else format('Safe mode is {safemode_state}'))
     safemode_check_with_grep = format("hdfs dfsadmin -safemode get | grep '{grep_pattern}'")
     (code, out) = shell.call(safemode_check, user=user)
@@ -18,7 +18,7 @@ def reach_safemode_state(user, safemode_state, in_ha):
             if (original_state == safemode_state):
                 return (True, original_state)
             else:
-                command = ('hdfs dfsadmin -safemode %s' % safemode_to_instruction[safemode_state])
+                command = '{0} dfsadmin -safemode {1}'.format(hdfs_binary, safemode_to_instruction[safemode_state])
                 Execute(command, user=user, logoutput=True, path=[params.hadoop_bin_dir])
                 (code, out) = shell.call(safemode_check_with_grep, user=user)
                 Logger.info(('Command: %s\nCode: %d. Out: %s' % (safemode_check_with_grep, code, out)))

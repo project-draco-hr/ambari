@@ -1,0 +1,22 @@
+def prepare_upgrade_backup_namenode_dir():
+    '\n  During a NonRolling (aka Express Upgrade), preparing the NameNode requires backing up the NameNode Name Dirs.\n  '
+    import params
+    i = 0
+    failed_paths = []
+    nn_name_dirs = params.dfs_name_dir.split(',')
+    backup_destination_root_dir = '/tmp/upgrades/{0}'.format(params.stack_version_unformatted)
+    if (len(nn_name_dirs) > 0):
+        Logger.info("Backup the NameNode name directory's CURRENT folder.")
+    for nn_dir in nn_name_dirs:
+        i += 1
+        namenode_current_image = os.path.join(nn_dir, 'current')
+        unique = ((get_unique_id_and_date() + '_') + str(i))
+        backup_current_folder = '{0}/namenode_{1}/'.format(backup_destination_root_dir, unique)
+        if (os.path.isdir(namenode_current_image) and (not os.path.isdir(backup_current_folder))):
+            try:
+                os.makedirs(backup_current_folder)
+                Execute(('cp', '-ar', namenode_current_image, backup_current_folder), sudo=True)
+            except Exception as e:
+                failed_paths.append(namenode_current_image)
+    if (len(failed_paths) > 0):
+        Logger.error('Could not backup the NameNode Name Dir(s) to {0}, make sure that the destination path is writeable and copy the directories on your own. Directories: {1}'.format(backup_destination_root_dir, ', '.join(failed_paths)))

@@ -1,5 +1,5 @@
-def prepare_rolling_upgrade():
-    '\n  Perform either an upgrade or a downgrade.\n\n  Rolling Upgrade for HDFS Namenode requires the following.\n  0. Namenode must be up\n  1. Leave safemode if the safemode status is not OFF\n  2. Execute a rolling upgrade "prepare"\n  3. Execute a rolling upgrade "query"\n  '
+def prepare_rolling_upgrade(hdfs_binary):
+    '\n  Perform either an upgrade or a downgrade.\n\n  Rolling Upgrade for HDFS Namenode requires the following.\n  0. Namenode must be up\n  1. Leave safemode if the safemode status is not OFF\n  2. Execute a rolling upgrade "prepare"\n  3. Execute a rolling upgrade "query"\n  :param hdfs_binary: name/path of the HDFS binary to use\n  '
     import params
     if ((not params.upgrade_direction) or (params.upgrade_direction not in [Direction.UPGRADE, Direction.DOWNGRADE])):
         raise Fail(('Could not retrieve upgrade direction: %s' % str(params.upgrade_direction)))
@@ -8,11 +8,11 @@ def prepare_rolling_upgrade():
         kinit_command = format('{params.kinit_path_local} -kt {params.hdfs_user_keytab} {params.hdfs_principal_name}')
         Execute(kinit_command, user=params.hdfs_user, logoutput=True)
     if (params.upgrade_direction == Direction.UPGRADE):
-        (safemode_transition_successful, original_state) = reach_safemode_state(params.hdfs_user, SafeMode.OFF, True)
+        (safemode_transition_successful, original_state) = reach_safemode_state(params.hdfs_user, SafeMode.OFF, True, hdfs_binary)
         if (not safemode_transition_successful):
             raise Fail(('Could not transition to safemode state %s. Please check logs to make sure namenode is up.' % str(SafeMode.OFF)))
-        prepare = 'hdfs dfsadmin -rollingUpgrade prepare'
-        query = 'hdfs dfsadmin -rollingUpgrade query'
+        prepare = format('{hdfs_binary} dfsadmin -rollingUpgrade prepare')
+        query = format('{hdfs_binary} dfsadmin -rollingUpgrade query')
         Execute(prepare, user=params.hdfs_user, logoutput=True)
         Execute(query, user=params.hdfs_user, logoutput=True)
     elif (params.upgrade_direction == Direction.DOWNGRADE):
