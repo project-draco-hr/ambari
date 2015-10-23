@@ -1,0 +1,78 @@
+{
+  final String hardcodedInitialVersion="2.1.0.0-0001";
+  AmbariManagementController amc=injector.getInstance(AmbariManagementController.class);
+  AmbariMetaInfo ambariMetaInfo=amc.getAmbariMetaInfo();
+  StackDAO stackDAO=injector.getInstance(StackDAO.class);
+  RepositoryVersionHelper repositoryVersionHelper=injector.getInstance(RepositoryVersionHelper.class);
+  RepositoryVersionDAO repositoryVersionDAO=injector.getInstance(RepositoryVersionDAO.class);
+  ClusterVersionDAO clusterVersionDAO=injector.getInstance(ClusterVersionDAO.class);
+  HostVersionDAO hostVersionDAO=injector.getInstance(HostVersionDAO.class);
+  Clusters clusters=amc.getClusters();
+  if (clusters == null) {
+    LOG.error("Unable to get Clusters entity.");
+    return;
+  }
+  for (  Cluster cluster : clusters.getClusters().values()) {
+    ClusterEntity clusterEntity=clusterDAO.findByName(cluster.getClusterName());
+    final StackId stackId=cluster.getCurrentStackVersion();
+    LOG.info(MessageFormat.format("Analyzing cluster {0}, currently at stack {1} and version {2}",cluster.getClusterName(),stackId.getStackName(),stackId.getStackVersion()));
+    if (stackId.getStackName().equalsIgnoreCase("HDP") && stackId.getStackVersion().equalsIgnoreCase("2.1")) {
+      final StackInfo stackInfo=ambariMetaInfo.getStack(stackId.getStackName(),stackId.getStackVersion());
+      StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
+      LOG.info("Bootstrapping the versions since using HDP-2.1");
+      String displayName=stackId.getStackName() + "-" + hardcodedInitialVersion;
+      String operatingSystems=repositoryVersionHelper.serializeOperatingSystems(stackInfo.getRepositories());
+      RepositoryVersionEntity repoVersionEntity=repositoryVersionDAO.findByDisplayName(displayName);
+      if (null != repoVersionEntity) {
+        LOG.info(MessageFormat.format("A Repo Version already exists with Display Name: {0}",displayName));
+      }
+ else {
+        final long repoVersionIdSeq=repositoryVersionDAO.findMaxId("id");
+        addSequence("repo_version_id_seq",repoVersionIdSeq,false);
+        repoVersionEntity=repositoryVersionDAO.create(stackEntity,hardcodedInitialVersion,displayName,operatingSystems);
+        LOG.info(MessageFormat.format("Created Repo Version with ID: {0,number,#}\n, Display Name: {1}, Repo URLs: {2}\n",repoVersionEntity.getId(),displayName,operatingSystems));
+      }
+      ClusterVersionEntity clusterVersionEntity=clusterVersionDAO.findByClusterAndStackAndVersion(cluster.getClusterName(),stackId,hardcodedInitialVersion);
+      if (null != clusterVersionEntity) {
+        LOG.info(MessageFormat.format("A Cluster Version version for cluster: {0}, version: {1}, already exists; its state is {2}.",cluster.getClusterName(),clusterVersionEntity.getRepositoryVersion().getVersion(),clusterVersionEntity.getState()));
+        if (clusterVersionEntity.getState() != RepositoryVersionState.CURRENT && clusterVersionDAO.findByClusterAndState(cluster.getClusterName(),RepositoryVersionState.CURRENT).isEmpty()) {
+          clusterVersionEntity.setState(RepositoryVersionState.CURRENT);
+          clusterVersionDAO.merge(clusterVersionEntity);
+        }
+      }
+ else {
+        final long clusterVersionIdSeq=clusterVersionDAO.findMaxId("id");
+        addSequence("cluster_version_id_seq",clusterVersionIdSeq,false);
+        clusterVersionEntity=clusterVersionDAO.create(clusterEntity,repoVersionEntity,RepositoryVersionState.CURRENT,System.currentTimeMillis(),System.currentTimeMillis(),"admin");
+        LOG.info(MessageFormat.format("Created Cluster Version with ID: {0,number,#}, cluster: {1}, version: {2}, state: {3}.",clusterVersionEntity.getId(),cluster.getClusterName(),clusterVersionEntity.getRepositoryVersion().getVersion(),clusterVersionEntity.getState()));
+      }
+      Collection<HostEntity> hosts=clusterEntity.getHostEntities();
+      boolean addedAtLeastOneHost=false;
+      if (null != hosts && !hosts.isEmpty()) {
+        for (        HostEntity hostEntity : hosts) {
+          HostVersionEntity hostVersionEntity=hostVersionDAO.findByClusterStackVersionAndHost(cluster.getClusterName(),stackId,hardcodedInitialVersion,hostEntity.getHostName());
+          if (null != hostVersionEntity) {
+            LOG.info(MessageFormat.format("A Host Version version for cluster: {0}, version: {1}, host: {2}, already exists; its state is {3}.",cluster.getClusterName(),hostVersionEntity.getRepositoryVersion().getVersion(),hostEntity.getHostName(),hostVersionEntity.getState()));
+            if (hostVersionEntity.getState() != RepositoryVersionState.CURRENT && hostVersionDAO.findByClusterHostAndState(cluster.getClusterName(),hostEntity.getHostName(),RepositoryVersionState.CURRENT).isEmpty()) {
+              hostVersionEntity.setState(RepositoryVersionState.CURRENT);
+              hostVersionDAO.merge(hostVersionEntity);
+            }
+          }
+ else {
+            if (!addedAtLeastOneHost) {
+              final long hostVersionIdSeq=hostVersionDAO.findMaxId("id");
+              addSequence("host_version_id_seq",hostVersionIdSeq,false);
+              addedAtLeastOneHost=true;
+            }
+            hostVersionEntity=new HostVersionEntity(hostEntity,repoVersionEntity,RepositoryVersionState.CURRENT);
+            hostVersionDAO.create(hostVersionEntity);
+            LOG.info(MessageFormat.format("Created Host Version with ID: {0,number,#}, cluster: {1}, version: {2}, host: {3}, state: {4}.",hostVersionEntity.getId(),cluster.getClusterName(),hostVersionEntity.getRepositoryVersion().getVersion(),hostEntity.getHostName(),hostVersionEntity.getState()));
+          }
+        }
+      }
+ else {
+        LOG.info(MessageFormat.format("Not inserting any Host Version records since cluster {0} does not have any hosts.",cluster.getClusterName()));
+      }
+    }
+  }
+}

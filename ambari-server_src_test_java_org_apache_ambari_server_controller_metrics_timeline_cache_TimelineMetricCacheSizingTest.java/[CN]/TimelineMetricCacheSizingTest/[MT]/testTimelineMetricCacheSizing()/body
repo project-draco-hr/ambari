@@ -1,0 +1,34 @@
+{
+  Set<String> metricNames=new HashSet<>();
+  String metric1="prefix1.suffix1.suffix2.actualNamePrefix.longMetricName1";
+  String metric2="prefix1.suffix1.suffix2.actualNamePrefix.longMetricName2";
+  String metric3="prefix1.suffix1.suffix2.actualNamePrefix.longMetricName3";
+  String metric4="prefix1.suffix1.suffix2.actualNamePrefix.longMetricName4";
+  String metric5="prefix1.suffix1.suffix2.actualNamePrefix.longMetricName5";
+  String metric6="prefix1.suffix1.suffix2.actualNamePrefix.longMetricName6";
+  metricNames.add(metric1);
+  metricNames.add(metric2);
+  metricNames.add(metric3);
+  metricNames.add(metric4);
+  metricNames.add(metric5);
+  metricNames.add(metric6);
+  long now=System.currentTimeMillis();
+  TemporalInfo temporalInfo=new TemporalInfoImpl(now - 1000,now,15);
+  TimelineAppMetricCacheKey key=new TimelineAppMetricCacheKey(metricNames,"KAFKA_BROKER",temporalInfo);
+  key.setSpec("http://104.196.94.129:6188/ws/v1/timeline/metrics?metricNames=" + "jvm.JvmMetrics.MemHeapCommittedM&appId=RESOURCEMANAGER&" + "startTime=1439522640000&endTime=1440127440000&precision=hours");
+  Map<String,TimelineMetric> metricMap=new HashMap<>();
+  metricMap.put(metric1,getSampleTimelineMetric(metric1));
+  metricMap.put(metric2,getSampleTimelineMetric(metric2));
+  metricMap.put(metric3,getSampleTimelineMetric(metric3));
+  metricMap.put(metric4,getSampleTimelineMetric(metric4));
+  metricMap.put(metric5,getSampleTimelineMetric(metric5));
+  metricMap.put(metric6,getSampleTimelineMetric(metric6));
+  TimelineMetricsCacheValue value=new TimelineMetricsCacheValue(now - 1000,now,metricMap);
+  TimelineMetricsCacheSizeOfEngine customSizeOfEngine=new TimelineMetricsCacheSizeOfEngine();
+  long bytesFromReflectionEngine=reflectionSizeOf.deepSizeOf(1000,false,key).getCalculated() + reflectionSizeOf.deepSizeOf(1000,false,value).getCalculated();
+  long bytesFromCustomSizeOfEngine=customSizeOfEngine.sizeOf(key,value,null).getCalculated();
+  long sampleSizeInMB=bytesFromReflectionEngine / (1024 * 1024);
+  long discrepancyInKB=Math.abs(bytesFromCustomSizeOfEngine - bytesFromReflectionEngine) / 1024;
+  Assert.assertTrue("Sample size is greater that 10 MB",sampleSizeInMB > 10);
+  Assert.assertTrue("Discrepancy in values is less than 10K",discrepancyInKB < 10);
+}

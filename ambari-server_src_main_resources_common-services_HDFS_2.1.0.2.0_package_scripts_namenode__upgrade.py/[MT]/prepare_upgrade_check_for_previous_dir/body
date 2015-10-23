@@ -1,0 +1,18 @@
+def prepare_upgrade_check_for_previous_dir():
+    '\n  During a NonRolling (aka Express Upgrade), preparing the NameNode requires backing up some data.\n  Check that there is no "previous" folder inside the NameNode Name Dir.\n  '
+    import params
+    if params.dfs_ha_enabled:
+        namenode_ha = NamenodeHAState()
+        if namenode_ha.is_active(params.hostname):
+            Logger.info('NameNode High Availability is enabled and this is the Active NameNode.')
+            problematic_previous_namenode_dirs = set()
+            nn_name_dirs = params.dfs_name_dir.split(',')
+            for nn_dir in nn_name_dirs:
+                if os.path.isdir(nn_dir):
+                    previous_dir = os.path.join(nn_dir, 'previous')
+                    if os.path.isdir(previous_dir):
+                        problematic_previous_namenode_dirs.add(previous_dir)
+            if (len(problematic_previous_namenode_dirs) > 0):
+                message = 'WARNING. The following NameNode Name Dir(s) have a "previous" folder from an older version.\nPlease back it up first, and then delete it, OR Finalize (E.g., "hdfs dfsadmin -finalizeUpgrade").\nNameNode Name Dir(s): {0}\n***** Then, retry this step. *****'.format(', '.join(problematic_previous_namenode_dirs))
+                Logger.error(message)
+                raise Fail(message)

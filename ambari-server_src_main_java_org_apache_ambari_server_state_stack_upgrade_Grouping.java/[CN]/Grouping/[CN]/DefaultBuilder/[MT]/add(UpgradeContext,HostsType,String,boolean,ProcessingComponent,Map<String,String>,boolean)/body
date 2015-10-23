@@ -1,0 +1,37 @@
+{
+  boolean forUpgrade=ctx.getDirection().isUpgrade();
+  List<TaskBucket> buckets=buckets(resolveTasks(forUpgrade,true,pc));
+  for (  TaskBucket bucket : buckets) {
+    List<TaskWrapper> preTasks=TaskWrapperBuilder.getTaskList(service,pc.name,hostsType,bucket.tasks,params);
+    Set<String> preTasksEffectiveHosts=TaskWrapperBuilder.getEffectiveHosts(preTasks);
+    if (!preTasksEffectiveHosts.isEmpty()) {
+      StageWrapper stage=new StageWrapper(bucket.type,getStageText("Preparing",ctx.getComponentDisplay(service,pc.name),preTasksEffectiveHosts),params,preTasks);
+      m_stages.add(stage);
+    }
+  }
+  if (null != pc.tasks && 1 == pc.tasks.size()) {
+    Task t=pc.tasks.get(0);
+    if (scheduleInParallel) {
+      StageWrapper stage=new StageWrapper(t.getStageWrapperType(),getStageText(t.getActionVerb(),ctx.getComponentDisplay(service,pc.name),hostsType.hosts),params,new TaskWrapper(service,pc.name,hostsType.hosts,params,t));
+      m_stages.add(stage);
+    }
+ else {
+      for (      String hostName : hostsType.hosts) {
+        StageWrapper stage=new StageWrapper(t.getStageWrapperType(),getStageText(t.getActionVerb(),ctx.getComponentDisplay(service,pc.name),Collections.singleton(hostName)),params,new TaskWrapper(service,pc.name,Collections.singleton(hostName),params,t));
+        m_stages.add(stage);
+      }
+    }
+  }
+  buckets=buckets(resolveTasks(forUpgrade,false,pc));
+  for (  TaskBucket bucket : buckets) {
+    List<TaskWrapper> postTasks=TaskWrapperBuilder.getTaskList(service,pc.name,hostsType,bucket.tasks,params);
+    Set<String> postTasksEffectiveHosts=TaskWrapperBuilder.getEffectiveHosts(postTasks);
+    if (!postTasksEffectiveHosts.isEmpty()) {
+      StageWrapper stage=new StageWrapper(bucket.type,getStageText("Completing",ctx.getComponentDisplay(service,pc.name),postTasksEffectiveHosts),params,postTasks);
+      m_stages.add(stage);
+    }
+  }
+  if (this.m_serviceCheck && !clientOnly) {
+    m_servicesToCheck.add(service);
+  }
+}

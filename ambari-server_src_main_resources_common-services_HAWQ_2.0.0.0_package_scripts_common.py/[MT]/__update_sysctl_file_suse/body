@@ -1,0 +1,19 @@
+def __update_sysctl_file_suse():
+    '\n  Updates /etc/sysctl.conf file with the HAWQ parameters on SUSE.\n  '
+    backup_file_name = constants.sysctl_backup_file.format(str(int(time.time())))
+    try:
+        File(constants.hawq_sysctl_tmp_file, content=__convert_sysctl_dict_to_text(), owner=constants.hawq_user, group=constants.hawq_group)
+        sysctl_file_dict = utils.read_file_to_dict(constants.sysctl_suse_file)
+        sysctl_file_dict_original = sysctl_file_dict.copy()
+        hawq_sysctl_dict = utils.read_file_to_dict(constants.hawq_sysctl_tmp_file)
+        sysctl_file_dict.update(hawq_sysctl_dict)
+        if (sysctl_file_dict_original != sysctl_file_dict):
+            Execute('cp {0} {1}'.format(constants.sysctl_suse_file, backup_file_name), timeout=constants.default_exec_timeout)
+            utils.write_dict_to_file(sysctl_file_dict, constants.sysctl_suse_file)
+            Execute('sysctl -e -p', timeout=constants.default_exec_timeout)
+    except Exception as e:
+        Logger.error(('Error occurred while updating sysctl.conf file, reverting the contents' + str(e)))
+        Execute('cp {0} {1}'.format(constants.sysctl_suse_file, constants.hawq_sysctl_tmp_file))
+        Execute('mv {0} {1}'.format(backup_file_name, constants.sysctl_suse_file), timeout=constants.default_exec_timeout)
+        Logger.error('Please execute `sysctl -e -p` on the command line manually to reload the contents of file {0}'.format(constants.hawq_sysctl_tmp_file))
+        raise Fail('Failed to update sysctl.conf file ')

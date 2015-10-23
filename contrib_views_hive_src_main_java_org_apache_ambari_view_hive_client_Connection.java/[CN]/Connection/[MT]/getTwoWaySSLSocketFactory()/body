@@ -1,0 +1,34 @@
+{
+  SSLSocketFactory socketFactory=null;
+  try {
+    KeyManagerFactory keyManagerFactory=KeyManagerFactory.getInstance(Utils.HiveAuthenticationParams.SUNX509_ALGORITHM_STRING,Utils.HiveAuthenticationParams.SUNJSSE_ALGORITHM_STRING);
+    String keyStorePath=authParams.get(Utils.HiveAuthenticationParams.SSL_KEY_STORE);
+    String keyStorePassword=authParams.get(Utils.HiveAuthenticationParams.SSL_KEY_STORE_PASSWORD);
+    KeyStore sslKeyStore=KeyStore.getInstance(Utils.HiveAuthenticationParams.SSL_KEY_STORE_TYPE);
+    if (keyStorePath == null || keyStorePath.isEmpty()) {
+      throw new IllegalArgumentException(Utils.HiveAuthenticationParams.SSL_KEY_STORE + " Not configured for 2 way SSL connection, keyStorePath param is empty");
+    }
+    try (FileInputStream fis=new FileInputStream(keyStorePath)){
+      sslKeyStore.load(fis,keyStorePassword.toCharArray());
+    }
+     keyManagerFactory.init(sslKeyStore,keyStorePassword.toCharArray());
+    TrustManagerFactory trustManagerFactory=TrustManagerFactory.getInstance(Utils.HiveAuthenticationParams.SUNX509_ALGORITHM_STRING);
+    String trustStorePath=authParams.get(Utils.HiveAuthenticationParams.SSL_TRUST_STORE);
+    String trustStorePassword=authParams.get(Utils.HiveAuthenticationParams.SSL_TRUST_STORE_PASSWORD);
+    KeyStore sslTrustStore=KeyStore.getInstance(Utils.HiveAuthenticationParams.SSL_TRUST_STORE_TYPE);
+    if (trustStorePath == null || trustStorePath.isEmpty()) {
+      throw new IllegalArgumentException(Utils.HiveAuthenticationParams.SSL_TRUST_STORE + " Not configured for 2 way SSL connection");
+    }
+    try (FileInputStream fis=new FileInputStream(trustStorePath)){
+      sslTrustStore.load(fis,trustStorePassword.toCharArray());
+    }
+     trustManagerFactory.init(sslTrustStore);
+    SSLContext context=SSLContext.getInstance("TLS");
+    context.init(keyManagerFactory.getKeyManagers(),trustManagerFactory.getTrustManagers(),new SecureRandom());
+    socketFactory=new SSLSocketFactory(context);
+  }
+ catch (  Exception e) {
+    throw new SQLException("Error while initializing 2 way ssl socket factory ",e);
+  }
+  return socketFactory;
+}

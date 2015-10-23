@@ -3,6 +3,20 @@
     throw new IllegalArgumentException("Invalid Arguments," + " clustername, config type and configs should not" + " be null or empty");
   }
   Cluster cluster=clusters.getCluster(request.getClusterName());
+  Map<String,String> requestProperties=request.getProperties();
+  Map<PropertyInfo.PropertyType,Set<String>> propertiesTypes=cluster.getConfigPropertiesTypes(request.getType());
+  if (propertiesTypes.containsKey(PropertyType.PASSWORD)) {
+    for (    String passwordProperty : propertiesTypes.get(PropertyType.PASSWORD)) {
+      if (requestProperties.containsKey(passwordProperty)) {
+        String passwordPropertyValue=requestProperties.get(passwordProperty);
+        if (!SecretReference.isSecret(passwordPropertyValue))         continue;
+        SecretReference ref=new SecretReference(passwordPropertyValue,passwordProperty,cluster);
+        if (!ref.getClusterName().equals(request.getClusterName()))         throw new AmbariException("Can not reference to different cluster in SECRET");
+        String refValue=ref.getValue();
+        requestProperties.put(passwordProperty,refValue);
+      }
+    }
+  }
   Map<String,Config> configs=cluster.getConfigsByType(request.getType());
   if (null == configs) {
     configs=new HashMap<String,Config>();
@@ -15,6 +29,6 @@
     throw new AmbariException(MessageFormat.format("Configuration with tag ''{0}'' exists for ''{1}''",request.getVersionTag(),request.getType()));
   }
   handleGlobalsBackwardsCompability(request,propertiesAttributes);
-  Config config=createConfig(cluster,request.getType(),request.getProperties(),request.getVersionTag(),propertiesAttributes);
+  Config config=createConfig(cluster,request.getType(),requestProperties,request.getVersionTag(),propertiesAttributes);
   return new ConfigurationResponse(cluster.getClusterName(),config);
 }

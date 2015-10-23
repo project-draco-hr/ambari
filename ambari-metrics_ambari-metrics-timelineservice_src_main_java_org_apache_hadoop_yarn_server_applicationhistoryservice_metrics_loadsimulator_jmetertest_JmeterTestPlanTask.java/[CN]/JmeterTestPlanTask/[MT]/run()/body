@@ -1,0 +1,56 @@
+{
+  if (jmeterEngine != null) {
+    Object[] threadGroups=amsTestPlanTree.getArray(amsTestPlan);
+    for (    Object threadGroupObj : threadGroups) {
+      if (threadGroupObj instanceof ThreadGroup) {
+        ThreadGroup threadGroup=(ThreadGroup)threadGroupObj;
+        threadGroup.stop();
+      }
+    }
+    amsTestPlanTree.clear();
+    jmeterEngine.askThreadsToStop();
+    jmeterEngine.stopTest();
+    JMeterContextService.endTest();
+  }
+  try {
+    jmeterEngine=new StandardJMeterEngine();
+    JMeterContextService.getContext().setEngine(jmeterEngine);
+    JMeterUtils.setJMeterHome("");
+    Field f=new JMeterUtils().getClass().getDeclaredField("appProperties");
+    f.setAccessible(true);
+    f.set(null,AMSJMeterLoadTest.readProperties(JMETER_PROPERTIES_FILE));
+    InputStream inputStream=ClassLoader.getSystemResourceAsStream(SAVESERVICE_PROPERTIES_FILE);
+    if (inputStream == null) {
+      inputStream=new FileInputStream(SAVESERVICE_PROPERTIES_FILE);
+    }
+    String tmpDir=System.getProperty("java.io.tmpdir");
+    OutputStream outputStream=new FileOutputStream(tmpDir + "/saveservice.properties");
+    IOUtils.copy(inputStream,outputStream);
+    outputStream.close();
+    JMeterUtils.setProperty("saveservice_properties",tmpDir + "/saveservice.properties");
+    amsTestPlan.setProperty(TestElement.TEST_CLASS,TestPlan.class.getName());
+    amsTestPlanTree.add("AMS Test plan",amsTestPlan);
+    int currentAppIndex=new Random().nextInt(appGetMetrics.size());
+    createThreadGroupHashTree(currentAppIndex,amsJmeterProperties,amsTestPlanTree,amsTestPlan);
+    Summariser summariser=null;
+    String summariserName=JMeterUtils.getPropDefault("summariser.name","summary");
+    if (summariserName.length() > 0) {
+      summariser=new Summariser(summariserName);
+    }
+    String jmeterLogFile=tmpDir + "/amsJmeterTestResults.jtl";
+    ResultCollector resultCollector=new ResultCollector(summariser);
+    resultCollector.setFilename(jmeterLogFile);
+    amsTestPlanTree.add(amsTestPlanTree.getArray()[0],resultCollector);
+    jmeterEngine.configure(amsTestPlanTree);
+    jmeterEngine.run();
+    LOG.info("AMS Jmeter Test started up successfully");
+  }
+ catch (  Exception ioEx) {
+    amsTestPlanTree.clear();
+    jmeterEngine.askThreadsToStop();
+    jmeterEngine.stopTest();
+    JMeterContextService.endTest();
+    LOG.error("Error occurred while running AMS load test : " + ioEx.getMessage());
+    ioEx.printStackTrace();
+  }
+}

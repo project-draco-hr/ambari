@@ -1,3 +1,12 @@
 def prepare_non_rolling_upgrade(self, env):
-    print 'TODO AMBARI-12698'
-    pass
+    '\n    If in HA, on the Active NameNode only, examine the directory dfs.namenode.name.dir and\n    make sure that there is no "/previous" directory.\n\n    Create a list of all the DataNodes in the cluster.\n    hdfs dfsadmin -report > dfs-old-report-1.log\n\n    hdfs dfsadmin -safemode enter\n    hdfs dfsadmin -saveNamespace\n\n    Copy the checkpoint files located in ${dfs.namenode.name.dir}/current into a backup directory.\n\n    Store the layoutVersion for the NameNode located at ${dfs.namenode.name.dir}/current/VERSION, into a backup directory\n\n    Finalize any prior HDFS upgrade,\n    hdfs dfsadmin -finalizeUpgrade\n    '
+    import params
+    Logger.info('Preparing the NameNodes for a NonRolling (aka Express) Upgrade.')
+    if params.security_enabled:
+        Execute(format('{kinit_path_local} -kt {hdfs_user_keytab} {hdfs_principal_name}'), user=params.hdfs_user)
+    hdfs_binary = self.get_hdfs_binary()
+    namenode_upgrade.prepare_upgrade_check_for_previous_dir()
+    namenode_upgrade.prepare_upgrade_enter_safe_mode(hdfs_binary)
+    namenode_upgrade.prepare_upgrade_save_namespace(hdfs_binary)
+    namenode_upgrade.prepare_upgrade_backup_namenode_dir()
+    namenode_upgrade.prepare_upgrade_finalize_previous_upgrades(hdfs_binary)

@@ -7,14 +7,26 @@ def create_ranger_repository(self, component, repo_name, repo_properties, ambari
     if ((response_code is not None) and (response_code == 200)):
         user_resp_code = self.create_ambari_admin_user(ambari_ranger_admin, ambari_ranger_password, format('{admin_uname}:{admin_password}'))
         if ((user_resp_code is not None) and (user_resp_code == 200)):
-            repo = self.get_repository_by_name_urllib2(repo_name, component, 'true', ambari_username_password_for_ranger)
-            if (repo is not None):
-                Logger.info('{0} Repository {1} exist'.format(component.title(), repo['name']))
-            else:
-                response = self.create_repository_urllib2(repo_data, ambari_username_password_for_ranger)
-                if (response is not None):
-                    Logger.info('{0} Repository created in Ranger admin'.format(component.title()))
+            retryCount = 0
+            while (retryCount <= 5):
+                repo = self.get_repository_by_name_urllib2(repo_name, component, 'true', ambari_username_password_for_ranger)
+                if (repo is not None):
+                    Logger.info('{0} Repository {1} exist'.format(component.title(), repo['name']))
+                    break
                 else:
-                    Logger.error('{0} Repository creation failed in Ranger admin'.format(component.title()))
+                    response = self.create_repository_urllib2(repo_data, ambari_username_password_for_ranger)
+                    if (response is not None):
+                        Logger.info('{0} Repository created in Ranger admin'.format(component.title()))
+                        break
+                    elif (retryCount < 5):
+                        Logger.info('Retry Repository Creation is being called')
+                        time.sleep(30)
+                        retryCount += 1
+                    else:
+                        Logger.error('{0} Repository creation failed in Ranger admin'.format(component.title()))
+                        raise Fail('{0} Repository creation failed in Ranger admin'.format(component.title()))
         else:
             Logger.error('Ambari admin user creation failed')
+            raise Fail('Ambari admin user creation failed')
+    elif (not self.skip_if_rangeradmin_down):
+        raise Fail('Connection failed to Ranger Admin !')

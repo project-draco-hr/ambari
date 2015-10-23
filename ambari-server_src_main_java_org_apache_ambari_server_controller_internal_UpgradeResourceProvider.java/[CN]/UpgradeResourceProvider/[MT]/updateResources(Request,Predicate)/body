@@ -4,42 +4,43 @@
     throw new SystemException("Can only update one upgrade per request.");
   }
   final Map<String,Object> propertyMap=requestMaps.iterator().next();
-  String requestId=(String)propertyMap.get(UPGRADE_REQUEST_ID);
-  if (null == requestId) {
+  String requestIdProperty=(String)propertyMap.get(UPGRADE_REQUEST_ID);
+  if (null == requestIdProperty) {
     throw new IllegalArgumentException(String.format("%s is required",UPGRADE_REQUEST_ID));
   }
+  long requestId=Long.parseLong(requestIdProperty);
+  UpgradeEntity upgradeEntity=s_upgradeDAO.findUpgradeByRequestId(requestId);
+  if (null == upgradeEntity) {
+    String exceptionMessage=MessageFormat.format("The upgrade with request ID {0} was not found",requestIdProperty);
+    throw new NoSuchParentResourceException(exceptionMessage);
+  }
+  List<String> updatableProperties=Lists.newArrayList(UPGRADE_REQUEST_STATUS,UPGRADE_SKIP_FAILURES,UPGRADE_SKIP_SC_FAILURES);
+  boolean isRequiredPropertyInRequest=CollectionUtils.containsAny(updatableProperties,propertyMap.keySet());
+  if (!isRequiredPropertyInRequest) {
+    String exceptionMessage=MessageFormat.format("At least one of the following properties is required in the request: {0}",StringUtils.join(updatableProperties,", "));
+    throw new IllegalArgumentException(exceptionMessage);
+  }
   String requestStatus=(String)propertyMap.get(UPGRADE_REQUEST_STATUS);
-  if (null == requestStatus) {
-    throw new IllegalArgumentException(String.format("%s is required",UPGRADE_REQUEST_STATUS));
+  String skipFailuresRequestProperty=(String)propertyMap.get(UPGRADE_SKIP_FAILURES);
+  String skipServiceCheckFailuresRequestProperty=(String)propertyMap.get(UPGRADE_SKIP_SC_FAILURES);
+  if (null != requestStatus) {
+    HostRoleStatus status=HostRoleStatus.valueOf(requestStatus);
+    setUpgradeRequestStatus(requestIdProperty,status,propertyMap);
   }
-  HostRoleStatus status=HostRoleStatus.valueOf(requestStatus);
-  if (status != HostRoleStatus.ABORTED && status != HostRoleStatus.PENDING) {
-    throw new IllegalArgumentException(String.format("Cannot set status %s, only %s is allowed",status,EnumSet.of(HostRoleStatus.ABORTED,HostRoleStatus.PENDING)));
-  }
-  String reason=(String)propertyMap.get(UPGRADE_ABORT_REASON);
-  if (null == reason) {
-    reason=String.format(DEFAULT_REASON_TEMPLATE,requestId);
-  }
-  ActionManager actionManager=getManagementController().getActionManager();
-  List<org.apache.ambari.server.actionmanager.Request> requests=actionManager.getRequests(Collections.singletonList(Long.valueOf(requestId)));
-  org.apache.ambari.server.actionmanager.Request internalRequest=requests.get(0);
-  HostRoleStatus internalStatus=CalculatedStatus.statusFromStages(internalRequest.getStages()).getStatus();
-  if (HostRoleStatus.PENDING == status && internalStatus != HostRoleStatus.ABORTED) {
-    throw new IllegalArgumentException(String.format("Can only set status to %s when the upgrade is %s (currently %s)",status,HostRoleStatus.ABORTED,internalStatus));
-  }
-  if (HostRoleStatus.ABORTED == status) {
-    if (!internalStatus.isCompletedState()) {
-      actionManager.cancelRequest(internalRequest.getRequestId(),reason);
+  if (StringUtils.isNotEmpty(skipFailuresRequestProperty) || StringUtils.isNotEmpty(skipServiceCheckFailuresRequestProperty)) {
+    boolean skipFailures=upgradeEntity.isComponentFailureAutoSkipped();
+    boolean skipServiceCheckFailures=upgradeEntity.isServiceCheckFailureAutoSkipped();
+    if (null != skipFailuresRequestProperty) {
+      skipFailures=Boolean.parseBoolean(skipFailuresRequestProperty);
+      s_hostRoleCommandDAO.updateAutomaticSkipOnFailure(requestId,skipFailures);
     }
-  }
- else {
-    List<Long> taskIds=new ArrayList<Long>();
-    for (    HostRoleCommand hrc : internalRequest.getCommands()) {
-      if (HostRoleStatus.ABORTED == hrc.getStatus() || HostRoleStatus.TIMEDOUT == hrc.getStatus()) {
-        taskIds.add(hrc.getTaskId());
-      }
+    if (null != skipServiceCheckFailuresRequestProperty) {
+      skipServiceCheckFailures=Boolean.parseBoolean(skipServiceCheckFailuresRequestProperty);
+      s_hostRoleCommandDAO.updateAutomaticSkipServiceCheckFailure(requestId,skipServiceCheckFailures);
     }
-    actionManager.resubmitTasks(taskIds);
+    upgradeEntity.setAutoSkipComponentFailures(skipFailures);
+    upgradeEntity.setAutoSkipServiceCheckFailures(skipServiceCheckFailures);
+    upgradeEntity=s_upgradeDAO.merge(upgradeEntity);
   }
   return getRequestStatus(null);
 }
