@@ -14,8 +14,22 @@
     if (context.getDirection().isDowngrade()) {
       groupHolder.skippable=true;
     }
+    Task.Type functionName=null;
+    boolean scheduleInParallel=false;
     if (upgradePack.getType() == UpgradeType.NON_ROLLING) {
       group.performServiceCheck=false;
+      if (RestartGrouping.class.isInstance(group)) {
+        functionName=((RestartGrouping)group).getFunction();
+        scheduleInParallel=true;
+      }
+      if (StartGrouping.class.isInstance(group)) {
+        functionName=((StartGrouping)group).getFunction();
+        scheduleInParallel=true;
+      }
+      if (StopGrouping.class.isInstance(group)) {
+        functionName=((StopGrouping)group).getFunction();
+        scheduleInParallel=true;
+      }
     }
     StageWrapperBuilder builder=group.getBuilder();
     List<UpgradePack.OrderService> services=group.services;
@@ -29,16 +43,6 @@
     for (    UpgradePack.OrderService service : services) {
       if (upgradePack.getType() == UpgradeType.ROLLING && !allTasks.containsKey(service.serviceName)) {
         continue;
-      }
-      Task.Type functionName=null;
-      if (RestartGrouping.class.isInstance(group)) {
-        functionName=((RestartGrouping)group).getFunction();
-      }
-      if (StartGrouping.class.isInstance(group)) {
-        functionName=((StartGrouping)group).getFunction();
-      }
-      if (StopGrouping.class.isInstance(group)) {
-        functionName=((StopGrouping)group).getFunction();
       }
       for (      String component : service.components) {
         if (upgradePack.getType() == UpgradeType.ROLLING && !allTasks.get(service.serviceName).containsKey(component)) {
@@ -85,7 +89,7 @@ case ROLLING:
               order.add(hostsType.secondary);
               order.add(hostsType.master);
               hostsType.hosts=order;
-              builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc,null);
+              builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc,null,false);
             }
           break;
 case NON_ROLLING:
@@ -103,17 +107,17 @@ case NON_ROLLING:
         ht2.hosts=h2Hosts;
         Map<String,String> h2Params=new HashMap<String,String>();
         h2Params.put("desired_namenode_role","standby");
-        builder.add(context,ht1,service.serviceName,svc.isClientOnlyService(),pc,h1Params);
-        builder.add(context,ht2,service.serviceName,svc.isClientOnlyService(),pc,h2Params);
+        builder.add(context,ht1,service.serviceName,svc.isClientOnlyService(),pc,h1Params,false);
+        builder.add(context,ht2,service.serviceName,svc.isClientOnlyService(),pc,h2Params,false);
       }
  else {
-        builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc,null);
+        builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc,null,false);
       }
     break;
 }
 }
  else {
-builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc,null);
+builder.add(context,hostsType,service.serviceName,svc.isClientOnlyService(),pc,null,scheduleInParallel);
 }
 }
 }
