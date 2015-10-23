@@ -1,0 +1,35 @@
+{
+  final Configuration.DatabaseType databaseType=configuration.getDatabaseType();
+  if (!dbAccessor.tableHasColumn(UPGRADE_TABLE,UPGRADE_PACKAGE_COL)) {
+    LOG.info("Adding upgrade_package column to upgrade table.");
+    dbAccessor.addColumn(UPGRADE_TABLE,new DBColumnInfo(UPGRADE_PACKAGE_COL,String.class,255,null,true));
+  }
+  if (!dbAccessor.tableHasColumn(UPGRADE_TABLE,UPGRADE_TYPE_COL)) {
+    LOG.info("Adding upgrade_type column to upgrade table.");
+    dbAccessor.addColumn(UPGRADE_TABLE,new DBColumnInfo(UPGRADE_TYPE_COL,String.class,32,null,true));
+  }
+  boolean success=populateUpgradeTable();
+  if (!success) {
+    throw new AmbariException("Errors found while populating the upgrade table with values for columns upgrade_type and upgrade_package.");
+  }
+  if (dbAccessor.tableHasColumn(REPO_VERSION_TABLE,UPGRADE_PACKAGE_COL)) {
+    LOG.info("Dropping upgrade_package column from repo_version table.");
+    dbAccessor.dropColumn(REPO_VERSION_TABLE,UPGRADE_PACKAGE_COL);
+    LOG.info("Making upgrade_package column in the upgrade table non-nullable.");
+    if (databaseType == Configuration.DatabaseType.DERBY) {
+      dbAccessor.executeQuery("ALTER TABLE " + UPGRADE_TABLE + " ALTER column "+ UPGRADE_PACKAGE_COL+ " NOT NULL");
+    }
+ else {
+      dbAccessor.alterColumn(UPGRADE_TABLE,new DBColumnInfo(UPGRADE_PACKAGE_COL,String.class,255,null,false));
+    }
+  }
+  if (dbAccessor.tableHasColumn(REPO_VERSION_TABLE,UPGRADE_TYPE_COL)) {
+    LOG.info("Making upgrade_type column in the upgrade table non-nullable.");
+    if (databaseType == Configuration.DatabaseType.DERBY) {
+      dbAccessor.executeQuery("ALTER TABLE " + UPGRADE_TABLE + " ALTER column "+ UPGRADE_TYPE_COL+ " NOT NULL");
+    }
+ else {
+      dbAccessor.alterColumn(UPGRADE_TABLE,new DBColumnInfo(UPGRADE_TYPE_COL,String.class,32,null,false));
+    }
+  }
+}
