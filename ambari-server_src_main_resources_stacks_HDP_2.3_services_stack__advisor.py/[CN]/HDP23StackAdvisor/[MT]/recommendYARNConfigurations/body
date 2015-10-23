@@ -1,6 +1,18 @@
 def recommendYARNConfigurations(self, configurations, clusterData, services, hosts):
     super(HDP23StackAdvisor, self).recommendYARNConfigurations(configurations, clusterData, services, hosts)
+    putYarnSiteProperty = self.putProperty(configurations, 'yarn-site', services)
+    putYarnSitePropertyAttributes = self.putPropertyAttribute(configurations, 'yarn-site')
     if (('ranger-env' in services['configurations']) and ('ranger-yarn-plugin-properties' in services['configurations']) and ('ranger-yarn-plugin-enabled' in services['configurations']['ranger-env']['properties'])):
         putYarnRangerPluginProperty = self.putProperty(configurations, 'ranger-yarn-plugin-properties', services)
         rangerEnvYarnPluginProperty = services['configurations']['ranger-env']['properties']['ranger-yarn-plugin-enabled']
         putYarnRangerPluginProperty('ranger-yarn-plugin-enabled', rangerEnvYarnPluginProperty)
+    rangerPluginEnabled = ''
+    if (('ranger-yarn-plugin-properties' in configurations) and ('ranger-yarn-plugin-enabled' in configurations['ranger-yarn-plugin-properties']['properties'])):
+        rangerPluginEnabled = configurations['ranger-yarn-plugin-properties']['properties']['ranger-yarn-plugin-enabled']
+    elif (('ranger-yarn-plugin-properties' in services['configurations']) and ('ranger-yarn-plugin-enabled' in services['configurations']['ranger-yarn-plugin-properties']['properties'])):
+        rangerPluginEnabled = services['configurations']['ranger-yarn-plugin-properties']['properties']['ranger-yarn-plugin-enabled']
+    if (rangerPluginEnabled and (rangerPluginEnabled.lower() == 'Yes'.lower())):
+        putYarnSiteProperty('yarn.acl.enable', 'true')
+        putYarnSiteProperty('yarn.authorization-provider', 'org.apache.ranger.authorization.yarn.authorizer.RangerYarnAuthorizer')
+    else:
+        putYarnSitePropertyAttributes('yarn.authorization-provider', 'delete', 'true')

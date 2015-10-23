@@ -1,0 +1,25 @@
+def test_recommendStormConfigurations(self):
+    configurations = {}
+    clusterData = {}
+    services = {'services': [{'StackServices': {'service_name': 'STORM', 'service_version': '2.6.0.2.2', }, }], 'Versions': {'stack_version': '2.2', }, 'configurations': {'core-site': {'properties': {}, }, 'storm-site': {'properties': {'nimbus.authorizer': 'backtype.storm.security.auth.authorizer.SimpleACLAuthorizer', }, 'property_attributes': {}, }, 'ranger-storm-plugin-properties': {'properties': {'ranger-storm-plugin-enabled': 'No', }, }, }, }
+    self.stackAdvisor.recommendStormConfigurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations['storm-site']['property_attributes']['nimbus.authorizer'], {'delete': 'true', }, 'Test nimbus.authorizer with Ranger Storm plugin disabled in non-kerberos environment')
+    configurations['storm-site']['properties'] = {}
+    configurations['storm-site']['property_attributes'] = {}
+    services['configurations']['ranger-storm-plugin-properties']['properties']['ranger-storm-plugin-enabled'] = 'Yes'
+    self.stackAdvisor.recommendStormConfigurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations['storm-site']['property_attributes']['nimbus.authorizer'], {'delete': 'true', }, 'Test nimbus.authorizer with Ranger Storm plugin enabled in non-kerberos environment')
+    configurations['storm-site']['properties'] = {}
+    configurations['storm-site']['property_attributes'] = {}
+    services['configurations']['storm-site']['properties']['nimbus.authorizer'] = ''
+    services['configurations']['ranger-storm-plugin-properties']['properties']['ranger-storm-plugin-enabled'] = 'Yes'
+    services['configurations']['core-site']['properties']['hadoop.security.authentication'] = 'kerberos'
+    self.stackAdvisor.recommendStormConfigurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations['storm-site']['properties']['nimbus.authorizer'], 'com.xasecure.authorization.storm.authorizer.XaSecureStormAuthorizer', 'Test nimbus.authorizer with Ranger Storm plugin enabled in kerberos environment')
+    configurations['storm-site']['properties'] = {}
+    configurations['storm-site']['property_attributes'] = {}
+    services['configurations']['ranger-storm-plugin-properties']['properties']['ranger-storm-plugin-enabled'] = 'No'
+    services['configurations']['core-site']['properties']['hadoop.security.authentication'] = 'kerberos'
+    services['configurations']['storm-site']['properties']['nimbus.authorizer'] = 'com.xasecure.authorization.storm.authorizer.XaSecureStormAuthorizer'
+    self.stackAdvisor.recommendStormConfigurations(configurations, clusterData, services, None)
+    self.assertEquals(configurations['storm-site']['properties']['nimbus.authorizer'], 'backtype.storm.security.auth.authorizer.SimpleACLAuthorizer', 'Test nimbus.authorizer with Ranger Storm plugin being disabled in kerberos environment')
