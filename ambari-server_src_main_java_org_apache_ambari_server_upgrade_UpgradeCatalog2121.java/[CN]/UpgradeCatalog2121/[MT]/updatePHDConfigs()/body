@@ -1,0 +1,50 @@
+{
+  Map<String,String> replacements=new LinkedHashMap<String,String>();
+  replacements.put("-Dstack.name=\\{\\{\\s*stack_name\\s*\\}\\}\\s*","");
+  replacements.put("-Dstack.name=\\$\\{stack.name\\}\\s*","");
+  replacements.put("-Dstack.version=\\{\\{\\s*stack_version_buildnum\\s*\\}\\}","-Dhdp.version=\\$HDP_VERSION");
+  replacements.put("-Dstack.version=\\$\\{stack.version\\}","-Dhdp.version=\\$\\{hdp.version\\}");
+  replacements.put("\\{\\{\\s*stack_name\\s*\\}\\}","phd");
+  replacements.put("\\$\\{stack.name\\}","phd");
+  replacements.put("\\$\\{stack.version\\}","\\$\\{hdp.version\\}");
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if ((clusterMap != null) && !clusterMap.isEmpty()) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        StackId currentStackVersion=cluster.getCurrentStackVersion();
+        String currentStackName=currentStackVersion != null ? currentStackVersion.getStackName() : null;
+        if (currentStackName != null && currentStackName.equalsIgnoreCase("PHD")) {
+          Map<String,DesiredConfig> desiredConfigs=cluster.getDesiredConfigs();
+          if (desiredConfigs != null && !desiredConfigs.isEmpty()) {
+            for (            Map.Entry<String,DesiredConfig> dc : desiredConfigs.entrySet()) {
+              String configType=dc.getKey();
+              DesiredConfig desiredConfig=dc.getValue();
+              String configTag=desiredConfig.getTag();
+              Config config=cluster.getConfig(configType,configTag);
+              Map<String,String> properties=config.getProperties();
+              if (properties != null && !properties.isEmpty()) {
+                Map<String,String> updates=new HashMap<String,String>();
+                for (                Map.Entry<String,String> property : properties.entrySet()) {
+                  String propertyKey=property.getKey();
+                  String propertyValue=property.getValue();
+                  String modifiedPropertyValue=propertyValue;
+                  for (                  String regex : replacements.keySet()) {
+                    modifiedPropertyValue=modifiedPropertyValue.replaceAll(regex,replacements.get(regex));
+                  }
+                  if (!modifiedPropertyValue.equals(propertyValue)) {
+                    updates.put(propertyKey,modifiedPropertyValue);
+                  }
+                }
+                if (!updates.isEmpty()) {
+                  updateConfigurationPropertiesForCluster(cluster,configType,updates,true,false);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
