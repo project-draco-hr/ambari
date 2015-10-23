@@ -3,13 +3,26 @@
     return;
   }
   long range=condition.getEndTime() - condition.getStartTime();
-  long rowsPerMetric=TimeUnit.MILLISECONDS.toHours(range) + 1;
+  long rowsPerMetric;
   Precision precision=condition.getPrecision();
-  if (precision != null && precision == Precision.HOURS) {
-    rowsPerMetric=TimeUnit.MILLISECONDS.toHours(range) + 1;
+  if (precision == null) {
+    precision=Precision.getPrecision(condition.getStartTime(),condition.getEndTime());
   }
-  long totalRowsRequested=rowsPerMetric * condition.getMetricNames().size();
-  if (totalRowsRequested > PhoenixHBaseAccessor.RESULTSET_LIMIT) {
-    throw new IllegalArgumentException("The time range query for " + "precision table exceeds row count limit, please query aggregate " + "table instead.");
-  }
+switch (precision) {
+case DAYS:
+    rowsPerMetric=TimeUnit.MILLISECONDS.toDays(range);
+  break;
+case HOURS:
+rowsPerMetric=TimeUnit.MILLISECONDS.toHours(range);
+break;
+case MINUTES:
+rowsPerMetric=TimeUnit.MILLISECONDS.toMinutes(range);
+break;
+default :
+rowsPerMetric=TimeUnit.MILLISECONDS.toSeconds(range) / 10;
+}
+long totalRowsRequested=rowsPerMetric * condition.getMetricNames().size();
+if (totalRowsRequested > PhoenixHBaseAccessor.RESULTSET_LIMIT) {
+throw new IllegalArgumentException("The time range query for " + "precision table exceeds row count limit, please query aggregate " + "table instead.");
+}
 }

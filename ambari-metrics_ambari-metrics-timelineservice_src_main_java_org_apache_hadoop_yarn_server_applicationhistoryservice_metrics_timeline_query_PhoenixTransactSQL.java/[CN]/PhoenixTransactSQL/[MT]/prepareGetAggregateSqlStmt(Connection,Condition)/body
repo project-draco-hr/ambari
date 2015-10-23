@@ -1,33 +1,18 @@
 {
   validateConditionIsNotEmpty(condition);
+  validateRowCountLimit(condition);
   String metricsAggregateTable;
   String queryStmt;
   if (condition.getPrecision() == null) {
     long endTime=condition.getEndTime() == null ? System.currentTimeMillis() : condition.getEndTime();
     long startTime=condition.getStartTime() == null ? 0 : condition.getStartTime();
-    Long timeRange=endTime - startTime;
-    if (timeRange > 30 * DAY) {
-      metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_DAILY_TABLE_NAME;
-      queryStmt=GET_CLUSTER_AGGREGATE_TIME_SQL;
-      condition.setPrecision(Precision.DAYS);
-    }
- else     if (timeRange > DAY) {
-      metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME;
-      queryStmt=GET_CLUSTER_AGGREGATE_TIME_SQL;
-      condition.setPrecision(Precision.HOURS);
-    }
- else {
-      metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_TABLE_NAME;
-      queryStmt=GET_CLUSTER_AGGREGATE_SQL;
-      condition.setPrecision(Precision.SECONDS);
-    }
+    condition.setPrecision(Precision.getPrecision(startTime,endTime));
   }
- else {
 switch (condition.getPrecision()) {
 case DAYS:
-      metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_DAILY_TABLE_NAME;
-    queryStmt=GET_CLUSTER_AGGREGATE_TIME_SQL;
-  break;
+    metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_DAILY_TABLE_NAME;
+  queryStmt=GET_CLUSTER_AGGREGATE_TIME_SQL;
+break;
 case HOURS:
 metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME;
 queryStmt=GET_CLUSTER_AGGREGATE_TIME_SQL;
@@ -35,7 +20,6 @@ break;
 default :
 metricsAggregateTable=METRICS_CLUSTER_AGGREGATE_TABLE_NAME;
 queryStmt=GET_CLUSTER_AGGREGATE_SQL;
-}
 }
 queryStmt=String.format(queryStmt,getNaiveTimeRangeHint(condition.getStartTime(),NATIVE_TIME_RANGE_DELTA),metricsAggregateTable);
 StringBuilder sb=new StringBuilder(queryStmt);
