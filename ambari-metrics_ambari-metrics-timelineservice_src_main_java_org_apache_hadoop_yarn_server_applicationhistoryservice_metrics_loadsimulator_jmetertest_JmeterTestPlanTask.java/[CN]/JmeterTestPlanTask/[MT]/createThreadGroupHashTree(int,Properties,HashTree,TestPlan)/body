@@ -1,0 +1,21 @@
+{
+  AppGetMetric appGetMetric=appGetMetrics.get(appIndex);
+  String app=appGetMetric.getApp();
+  int interval=appGetMetric.getInterval();
+  String[] amsHostPort=amsJmeterProperties.getProperty("ams-host-port").split(":");
+  String amsHost=amsHostPort[0];
+  String amsPath=amsJmeterProperties.getProperty("ams-path");
+  int amsPort=Integer.valueOf(amsHostPort[1]);
+  int numLoops=Integer.valueOf(amsJmeterProperties.getProperty("num-get-calls-per-app"));
+  LoopController loopController=createLoopController(app + " GET loop controller",numLoops,false);
+  for (  GetMetricRequestInfo request : appGetMetric.getMetricRequests()) {
+    ThreadGroup threadGroup=createThreadGroup(app + " GET threadGroup",1,0,loopController);
+    HashTree threadGroupHashTree=amsTestPlanTree.add(amsTestPlan,threadGroup);
+    Map<String,String> parametersMap=getAppSpecificParameters(app,request,amsJmeterProperties);
+    HTTPSampler sampler=createGetSampler("GET " + app + " metrics",amsHost,amsPort,amsPath,null,parametersMap);
+    if (numLoops > 1) {
+      threadGroupHashTree.add(createConstantTimer(interval));
+    }
+    threadGroupHashTree.add(sampler);
+  }
+}
