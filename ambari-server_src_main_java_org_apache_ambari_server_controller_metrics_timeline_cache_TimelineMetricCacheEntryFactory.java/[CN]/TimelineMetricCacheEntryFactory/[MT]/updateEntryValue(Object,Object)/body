@@ -5,21 +5,35 @@
   Long existingSeriesStartTime=existingMetrics.getStartTime();
   Long existingSeriesEndTime=existingMetrics.getEndTime();
   TemporalInfo newTemporalInfo=metricCacheKey.getTemporalInfo();
-  Long requestedStartTime=newTemporalInfo.getStartTime();
-  Long requestedEndTime=newTemporalInfo.getEndTime();
+  Long requestedStartTime=newTemporalInfo.getStartTimeMillis();
+  Long requestedEndTime=newTemporalInfo.getEndTimeMillis();
   URIBuilder uriBuilder=new URIBuilder(metricCacheKey.getSpec());
-  Long newStartTime=getRefreshRequestStartTime(existingSeriesStartTime,existingSeriesEndTime,requestedStartTime);
-  Long newEndTime=getRefreshRequestEndTime(existingSeriesStartTime,existingSeriesEndTime,requestedEndTime);
-  if (newEndTime > newStartTime && !(newStartTime.equals(existingSeriesStartTime) && newEndTime.equals(existingSeriesEndTime))) {
+  Precision requestedPrecision=Precision.getPrecision(requestedStartTime,requestedEndTime);
+  Precision currentPrecision=existingMetrics.getPrecision();
+  Long newStartTime=null;
+  Long newEndTime=null;
+  if (!requestedPrecision.equals(currentPrecision)) {
+    LOG.debug("Precision changed from " + currentPrecision + " to "+ requestedPrecision);
+    newStartTime=requestedStartTime;
+    newEndTime=requestedEndTime;
+  }
+ else {
+    LOG.debug("No change in precision " + currentPrecision);
+    newStartTime=getRefreshRequestStartTime(existingSeriesStartTime,existingSeriesEndTime,requestedStartTime);
+    newEndTime=getRefreshRequestEndTime(existingSeriesStartTime,existingSeriesEndTime,requestedEndTime);
+  }
+  if (newEndTime > newStartTime && !((newStartTime.equals(existingSeriesStartTime) && newEndTime.equals(existingSeriesEndTime)) && requestedPrecision.equals(currentPrecision))) {
     LOG.debug("Existing cached timeseries startTime = " + new Date(getMillisecondsTime(existingSeriesStartTime)) + ", endTime = "+ new Date(getMillisecondsTime(existingSeriesEndTime)));
     LOG.debug("Requested timeseries startTime = " + new Date(getMillisecondsTime(newStartTime)) + ", endTime = "+ new Date(getMillisecondsTime(newEndTime)));
     uriBuilder.setParameter("startTime",String.valueOf(newStartTime));
     uriBuilder.setParameter("endTime",String.valueOf(newEndTime));
+    uriBuilder.setParameter("precision",requestedPrecision.toString());
     try {
       TimelineMetrics newTimeSeries=requestHelperForUpdates.fetchTimelineMetrics(uriBuilder.toString());
-      updateTimelineMetricsInCache(newTimeSeries,existingMetrics,getMillisecondsTime(requestedStartTime),getMillisecondsTime(requestedEndTime));
+      updateTimelineMetricsInCache(newTimeSeries,existingMetrics,getMillisecondsTime(requestedStartTime),getMillisecondsTime(requestedEndTime),!currentPrecision.equals(requestedPrecision));
       existingMetrics.setStartTime(requestedStartTime);
       existingMetrics.setEndTime(requestedEndTime);
+      existingMetrics.setPrecision(requestedPrecision);
     }
  catch (    IOException io) {
       if (LOG.isDebugEnabled()) {

@@ -1,0 +1,29 @@
+{
+  checkInit();
+  if (service.equals(GANGLIA)) {
+    return "80";
+  }
+ else   if (service.equals(TIMELINE_METRICS)) {
+    try {
+      if (clusterMetricServerVipPort == null) {
+        String configType=serviceConfigTypes.get(Service.Type.AMBARI_METRICS);
+        String currentConfigVersion=getDesiredConfigVersion(clusterName,configType);
+        String oldConfigVersion=serviceConfigVersions.get(configType);
+        if (!currentConfigVersion.equals(oldConfigVersion)) {
+          serviceConfigVersions.put(configType,currentConfigVersion);
+          Map<String,String> configProperties=getDesiredConfigMap(clusterName,currentConfigVersion,configType,Collections.singletonMap("METRICS_COLLECTOR",new String[]{"timeline.metrics.service.webapp.address"}));
+          if (!configProperties.isEmpty()) {
+            clusterMetricServerPort=getPortString(configProperties.get("METRICS_COLLECTOR"));
+          }
+ else {
+            clusterMetricServerPort=COLLECTOR_DEFAULT_PORT;
+          }
+        }
+      }
+    }
+ catch (    NoSuchParentResourceException|UnsupportedPropertyException e) {
+      LOG.warn("Failed to retrieve collector port.",e);
+    }
+  }
+  return clusterMetricServerVipPort != null ? clusterMetricServerVipPort : clusterMetricServerPort;
+}
