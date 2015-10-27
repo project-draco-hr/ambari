@@ -23,8 +23,8 @@ def recommendRangerConfigurations(self, configurations, clusterData, services, h
         ranger_admin_host = ranger_admin_hosts[0]
     policymgr_external_url = ('%s://%s:%s' % (protocol, ranger_admin_host, port))
     putRangerAdminProperty('policymgr_external_url', policymgr_external_url)
-    stackVersion = services['Versions']['stack_version']
-    if (stackVersion == '2.2'):
+    rangerServiceVersion = [service['StackServices']['service_version'] for service in services['services'] if (service['StackServices']['service_name'] == 'RANGER')][0]
+    if (rangerServiceVersion == '0.4.0'):
         if (('ambari-server-properties' in services) and ('ambari.ldap.isConfigured' in services['ambari-server-properties']) and (services['ambari-server-properties']['ambari.ldap.isConfigured'].lower() == 'true')):
             putUserSyncProperty = self.putProperty(configurations, 'usersync-properties', services)
             serverProperties = services['ambari-server-properties']
@@ -36,6 +36,11 @@ def recommendRangerConfigurations(self, configurations, clusterData, services, h
                 putUserSyncProperty('SYNC_LDAP_USER_OBJECT_CLASS', serverProperties['authentication.ldap.userObjectClass'])
             if ('authentication.ldap.usernameAttribute' in serverProperties):
                 putUserSyncProperty('SYNC_LDAP_USER_NAME_ATTRIBUTE', serverProperties['authentication.ldap.usernameAttribute'])
+        if (('admin-properties' in services['configurations']) and ('usersync-properties' in services['configurations']) and ('SYNC_SOURCE' in services['configurations']['usersync-properties']['properties'])):
+            rangerUserSyncSource = services['configurations']['usersync-properties']['properties']['SYNC_SOURCE']
+            authenticationMethod = rangerUserSyncSource.upper()
+            if (authenticationMethod != 'FILE'):
+                putRangerAdminProperty('authentication_method', authenticationMethod)
         servicesList = [service['StackServices']['service_name'] for service in services['services']]
         putRangerEnvProperty = self.putProperty(configurations, 'ranger-env', services)
         include_hdfs = ('HDFS' in servicesList)
