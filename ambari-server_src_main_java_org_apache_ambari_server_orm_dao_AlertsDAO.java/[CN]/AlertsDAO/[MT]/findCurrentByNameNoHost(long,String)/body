@@ -1,6 +1,15 @@
 {
-  TypedQuery<AlertCurrentEntity> query=m_entityManagerProvider.get().createNamedQuery("AlertCurrentEntity.findByNameAndNoHost",AlertCurrentEntity.class);
-  query.setParameter("clusterId",Long.valueOf(clusterId));
-  query.setParameter("definitionName",alertName);
-  return m_daoUtils.selectOne(query);
+  if (m_configuration.isAlertCacheEnabled()) {
+    AlertCacheKey key=new AlertCacheKey(clusterId,alertName);
+    try {
+      return m_currentAlertCache.get(key);
+    }
+ catch (    ExecutionException executionException) {
+      Throwable cause=executionException.getCause();
+      if (!(cause instanceof AlertNotYetCreatedException)) {
+        LOG.warn("Unable to retrieve alert for key {} from, the cache",key);
+      }
+    }
+  }
+  return findCurrentByNameNoHostInternalInJPA(clusterId,alertName);
 }

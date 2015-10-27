@@ -1,0 +1,28 @@
+{
+  m_configuration=configuration;
+  if (m_configuration.isAlertCacheEnabled()) {
+    int maximumSize=m_configuration.getAlertCacheSize();
+    LOG.info("Alert caching is enabled (size={}, flushInterval={}m)",maximumSize,m_configuration.getAlertCacheFlushInterval());
+    m_currentAlertCache=CacheBuilder.newBuilder().maximumSize(maximumSize).build(new CacheLoader<AlertCacheKey,AlertCurrentEntity>(){
+      @Override public AlertCurrentEntity load(      AlertCacheKey key) throws Exception {
+        LOG.debug("Cache miss for alert key {}, fetching from JPA",key);
+        final AlertCurrentEntity alertCurrentEntity;
+        long clusterId=key.getClusterId();
+        String alertDefinitionName=key.getAlertDefinitionName();
+        String hostName=key.getHostName();
+        if (StringUtils.isEmpty(hostName)) {
+          alertCurrentEntity=findCurrentByNameNoHostInternalInJPA(clusterId,alertDefinitionName);
+        }
+ else {
+          alertCurrentEntity=findCurrentByHostAndNameInJPA(clusterId,hostName,alertDefinitionName);
+        }
+        if (null == alertCurrentEntity) {
+          LOG.trace("Cache lookup failed for {} because the alert does not yet exist",key);
+          throw new AlertNotYetCreatedException();
+        }
+        return alertCurrentEntity;
+      }
+    }
+);
+  }
+}
