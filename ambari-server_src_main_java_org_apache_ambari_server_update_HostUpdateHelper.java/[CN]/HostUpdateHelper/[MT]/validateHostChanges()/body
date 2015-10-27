@@ -1,0 +1,32 @@
+{
+  if (hostChangesFileMap == null && hostChangesFileMap.isEmpty()) {
+    throw new AmbariException(String.format("File with host names changes is null or empty"));
+  }
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    for (    Map.Entry<String,Map<String,String>> clusterHosts : hostChangesFileMap.entrySet()) {
+      String clusterName=clusterHosts.getKey();
+      Cluster cluster=clusters.getCluster(clusterName);
+      if (cluster != null) {
+        Collection<Host> hosts=cluster.getHosts();
+        List<String> invalidHostNames=new ArrayList<>();
+        List<String> hostNames=new ArrayList<>();
+        for (        Host host : hosts) {
+          hostNames.add(host.getHostName());
+        }
+        for (        Map.Entry<String,String> hostPair : clusterHosts.getValue().entrySet()) {
+          if (!hostNames.contains(hostPair.getKey())) {
+            invalidHostNames.add(hostPair.getKey());
+          }
+        }
+        if (!invalidHostNames.isEmpty()) {
+          throw new AmbariException(String.format("Hostname(s): %s was(were) not found.",StringUtils.join(invalidHostNames,", ")));
+        }
+      }
+ else {
+        throw new AmbariException(String.format("Cluster %s was not found.",clusterName));
+      }
+    }
+  }
+}

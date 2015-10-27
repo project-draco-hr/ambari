@@ -1,0 +1,53 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  TopologyRequestDAO topologyRequestDAO=injector.getInstance(TopologyRequestDAO.class);
+  TopologyHostRequestDAO topologyHostRequestDAO=injector.getInstance(TopologyHostRequestDAO.class);
+  TopologyHostGroupDAO topologyHostGroupDAO=injector.getInstance(TopologyHostGroupDAO.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (clusterMap != null) {
+      for (      Map.Entry<String,Map<String,String>> clusterHosts : hostChangesFileMap.entrySet()) {
+        Long clusterId=clusterMap.get(clusterHosts.getKey()).getClusterId();
+        List<TopologyRequestEntity> topologyRequestEntities=topologyRequestDAO.findByClusterId(clusterId);
+        List<String> currentHostNames=new ArrayList<>();
+        Map<String,String> hostMapping=clusterHosts.getValue();
+        for (        Map.Entry<String,String> hostPair : hostMapping.entrySet()) {
+          currentHostNames.add(hostPair.getKey());
+        }
+        for (        TopologyRequestEntity topologyRequestEntity : topologyRequestEntities) {
+          TopologyLogicalRequestEntity topologyLogicalRequestEntity=topologyRequestEntity.getTopologyLogicalRequestEntity();
+          Collection<TopologyHostGroupEntity> topologyHostGroupEntities=topologyRequestEntity.getTopologyHostGroupEntities();
+          if (topologyHostGroupEntities != null) {
+            for (            TopologyHostGroupEntity topologyHostGroupEntity : topologyHostGroupEntities) {
+              Collection<TopologyHostInfoEntity> topologyHostInfoEntities=topologyHostGroupEntity.getTopologyHostInfoEntities();
+              boolean updatesAvailable=false;
+              if (topologyHostGroupEntities != null) {
+                for (                TopologyHostInfoEntity topologyHostInfoEntity : topologyHostInfoEntities) {
+                  if (currentHostNames.contains(topologyHostInfoEntity.getFqdn())) {
+                    topologyHostInfoEntity.setFqdn(hostMapping.get(topologyHostInfoEntity.getFqdn()));
+                    updatesAvailable=true;
+                  }
+                }
+              }
+              if (updatesAvailable) {
+                topologyHostGroupDAO.merge(topologyHostGroupEntity);
+              }
+            }
+          }
+          if (topologyLogicalRequestEntity != null) {
+            Collection<TopologyHostRequestEntity> topologyHostRequestEntities=topologyLogicalRequestEntity.getTopologyHostRequestEntities();
+            if (topologyHostRequestEntities != null) {
+              for (              TopologyHostRequestEntity topologyHostRequestEntity : topologyHostRequestEntities) {
+                if (currentHostNames.contains(topologyHostRequestEntity.getHostName())) {
+                  topologyHostRequestEntity.setHostName(hostMapping.get(topologyHostRequestEntity.getHostName()));
+                  topologyHostRequestDAO.merge(topologyHostRequestEntity);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

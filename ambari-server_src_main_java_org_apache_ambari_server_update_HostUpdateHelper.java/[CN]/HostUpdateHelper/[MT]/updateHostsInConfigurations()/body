@@ -1,0 +1,39 @@
+{
+  ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  ConfigHelper configHelper=injector.getInstance(ConfigHelper.class);
+  if (clusters != null) {
+    for (    Map.Entry<String,Map<String,String>> clusterHosts : hostChangesFileMap.entrySet()) {
+      String clusterName=clusterHosts.getKey();
+      ClusterEntity clusterEntity=clusterDAO.findByName(clusterName);
+      Cluster cluster=clusters.getCluster(clusterName);
+      Map<String,String> hostMapping=clusterHosts.getValue();
+      List<String> currentHostNames=new ArrayList<>();
+      String updatedPropertyValue;
+      for (      Map.Entry<String,String> hostPair : hostMapping.entrySet()) {
+        currentHostNames.add(hostPair.getKey());
+      }
+      if (clusterEntity != null) {
+        Collection<ClusterConfigEntity> clusterConfigEntities=clusterEntity.getClusterConfigEntities();
+        boolean configUpdated;
+        for (        ClusterConfigEntity clusterConfigEntity : clusterConfigEntities) {
+          ConfigImpl config=new ConfigImpl(cluster,clusterConfigEntity,injector);
+          configUpdated=false;
+          for (          Map.Entry<String,String> property : config.getProperties().entrySet()) {
+            updatedPropertyValue=replaceHosts(property.getValue(),currentHostNames,hostMapping);
+            if (updatedPropertyValue != null) {
+              Map<String,String> propertiesWithUpdates=config.getProperties();
+              propertiesWithUpdates.put(property.getKey(),updatedPropertyValue);
+              config.setProperties(propertiesWithUpdates);
+              configUpdated=true;
+            }
+          }
+          if (configUpdated) {
+            config.persist(false);
+          }
+        }
+      }
+    }
+  }
+}

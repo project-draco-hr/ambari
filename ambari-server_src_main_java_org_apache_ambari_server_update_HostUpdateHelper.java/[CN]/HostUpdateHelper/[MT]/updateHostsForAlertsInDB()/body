@@ -1,0 +1,32 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  AlertsDAO alertsDAO=injector.getInstance(AlertsDAO.class);
+  AlertDefinitionDAO alertDefinitionDAO=injector.getInstance(AlertDefinitionDAO.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (clusterMap != null) {
+      for (      Map.Entry<String,Map<String,String>> clusterHosts : hostChangesFileMap.entrySet()) {
+        List<String> currentHostNames=new ArrayList<>();
+        Map<String,String> hostMapping=clusterHosts.getValue();
+        Long clusterId=clusterMap.get(clusterHosts.getKey()).getClusterId();
+        for (        Map.Entry<String,String> hostPair : hostMapping.entrySet()) {
+          currentHostNames.add(hostPair.getKey());
+        }
+        List<AlertCurrentEntity> currentEntities=alertsDAO.findCurrentByCluster(clusterId);
+        for (        AlertCurrentEntity alertCurrentEntity : currentEntities) {
+          AlertHistoryEntity alertHistoryEntity=alertCurrentEntity.getAlertHistory();
+          if (currentHostNames.contains(alertHistoryEntity.getHostName())) {
+            alertHistoryEntity.setHostName(hostMapping.get(alertHistoryEntity.getHostName()));
+            alertsDAO.merge(alertHistoryEntity);
+          }
+        }
+        List<AlertDefinitionEntity> alertDefinitionEntities=alertDefinitionDAO.findAll(clusterId);
+        for (        AlertDefinitionEntity alertDefinitionEntity : alertDefinitionEntities) {
+          alertDefinitionEntity.setHash(UUID.randomUUID().toString());
+          alertDefinitionDAO.merge(alertDefinitionEntity);
+        }
+      }
+    }
+  }
+}
