@@ -1,0 +1,52 @@
+{
+  final KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
+  final SecurityState desiredSecurityState=handler.getNewServiceSecurityState();
+  List<ServiceComponentHost> schToProcess=getServiceComponentHostsToProcess(cluster,kerberosDescriptor,serviceComponentFilter,hostFilter,identityFilter,new Command<Boolean,ServiceComponentHost>(){
+    @Override public Boolean invoke(    ServiceComponentHost arg) throws AmbariException {
+      return handler.shouldProcess(desiredSecurityState,arg);
+    }
+  }
+);
+  Set<String> hostsWithValidKerberosClient=null;
+  File dataDirectory=null;
+  if (!schToProcess.isEmpty()) {
+    validateKDCCredentials(kerberosDetails,cluster);
+    dataDirectory=createTemporaryDirectory();
+    hostsWithValidKerberosClient=getHostsWithValidKerberosClient(cluster);
+    if (hostsToForceKerberosOperations != null) {
+      hostsWithValidKerberosClient.addAll(hostsToForceKerberosOperations);
+    }
+  }
+  Map<String,Set<String>> clusterHostInfo=StageUtils.getClusterHostInfo(cluster);
+  String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
+  Map<String,String> hostParams=customCommandExecutionHelper.createDefaultHostParams(cluster);
+  String hostParamsJson=StageUtils.getGson().toJson(hostParams);
+  String ambariServerHostname=StageUtils.getHostName();
+  ServiceComponentHostServerActionEvent event=new ServiceComponentHostServerActionEvent("AMBARI_SERVER",ambariServerHostname,System.currentTimeMillis());
+  RoleCommandOrder roleCommandOrder=ambariManagementController.getRoleCommandOrder(cluster);
+  if (requestStageContainer == null) {
+    requestStageContainer=new RequestStageContainer(actionManager.getNextRequestId(),null,requestFactory,actionManager);
+  }
+  handler.createStages(cluster,clusterHostInfoJson,hostParamsJson,event,roleCommandOrder,kerberosDetails,dataDirectory,requestStageContainer,schToProcess,serviceComponentFilter,hostFilter,identityFilter,hostsWithValidKerberosClient);
+  handler.addFinalizeOperationStage(cluster,clusterHostInfoJson,hostParamsJson,event,dataDirectory,roleCommandOrder,requestStageContainer);
+  for (  ServiceComponentHost sch : schToProcess) {
+    SecurityState newSecurityState;
+    newSecurityState=handler.getNewDesiredSCHSecurityState();
+    if (newSecurityState != null) {
+      sch.setDesiredSecurityState(newSecurityState);
+    }
+    newSecurityState=handler.getNewSCHSecurityState();
+    if (newSecurityState != null) {
+      sch.setSecurityState(newSecurityState);
+    }
+  }
+  if (desiredSecurityState != null) {
+    Map<String,Service> services=cluster.getServices();
+    for (    Service service : services.values()) {
+      if ((serviceComponentFilter == null) || serviceComponentFilter.containsKey(service.getName())) {
+        service.setSecurityState(desiredSecurityState);
+      }
+    }
+  }
+  return requestStageContainer;
+}
