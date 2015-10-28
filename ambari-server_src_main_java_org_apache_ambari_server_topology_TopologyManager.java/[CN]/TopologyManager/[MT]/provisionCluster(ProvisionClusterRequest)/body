@@ -1,17 +1,30 @@
 {
   ensureInitialized();
   ClusterTopology topology=new ClusterTopologyImpl(ambariContext,request);
-  String clusterName=request.getClusterName();
+  final String clusterName=request.getClusterName();
   Long provisionId=ambariContext.getNextRequestId();
-  ambariContext.createAmbariResources(topology,clusterName);
+  SecurityConfiguration securityConfiguration=processSecurityConfiguration(request);
+  if (securityConfiguration != null && securityConfiguration.getType() == SecurityType.KERBEROS) {
+    addKerberosClient(topology);
+    ambariContext.createAmbariResources(topology,clusterName,securityConfiguration.getType());
+    submitKerberosDescriptorAsArtifact(clusterName,securityConfiguration.getDescriptor());
+    Credential credential=request.getCredentialsMap().get(KDC_ADMIN_CREDENTIAL);
+    if (credential == null) {
+      throw new InvalidTopologyException(KDC_ADMIN_CREDENTIAL + " is missing from request.");
+    }
+    submitCredential(clusterName,credential);
+  }
+ else {
+    ambariContext.createAmbariResources(topology,clusterName,null);
+  }
   long clusterId=ambariContext.getClusterId(clusterName);
   topology.setClusterId(clusterId);
   request.setClusterId(clusterId);
   PersistedTopologyRequest persistedRequest=persistedState.persistTopologyRequest(request);
   clusterTopologyMap.put(clusterId,topology);
   addClusterConfigRequest(topology,new ClusterConfigurationRequest(ambariContext,topology,true));
+  final Stack stack=topology.getBlueprint().getStack();
   LogicalRequest logicalRequest=processRequest(persistedRequest,topology,provisionId);
-  Stack stack=topology.getBlueprint().getStack();
   ambariContext.persistInstallStateForUI(clusterName,stack.getName(),stack.getVersion());
   return getRequestStatus(logicalRequest.getRequestId());
 }
