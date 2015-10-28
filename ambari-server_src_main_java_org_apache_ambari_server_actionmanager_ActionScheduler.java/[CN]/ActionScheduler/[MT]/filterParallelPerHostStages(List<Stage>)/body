@@ -1,14 +1,47 @@
 {
   List<Stage> retVal=new ArrayList<Stage>();
   Set<String> affectedHosts=new HashSet<String>();
+  Set<Long> affectedRequests=new HashSet<Long>();
   for (  Stage s : stages) {
+    long requestId=s.getRequestId();
+    if (LOG.isTraceEnabled()) {
+      LOG.trace("==> Processing stage: {}/{} ({}) for {}",requestId,s.getStageId(),s.getRequestContext());
+    }
+    boolean addStage=true;
     for (    String host : s.getHosts()) {
-      if (!affectedHosts.contains(host)) {
-        if (!isStageHasBackgroundCommandsOnly(s,host)) {
+      LOG.trace("===> Processing Host {}",host);
+      if (affectedHosts.contains(host)) {
+        if (LOG.isTraceEnabled()) {
+          LOG.trace("===>  Skipping stage since it utilizes at least one host that a previous stage requires: {}/{} ({})",s.getRequestId(),s.getStageId(),s.getRequestContext());
+        }
+        addStage&=false;
+      }
+ else {
+        if (!Stage.INTERNAL_HOSTNAME.equalsIgnoreCase(host) && !isStageHasBackgroundCommandsOnly(s,host)) {
+          LOG.trace("====>  Adding host to affected hosts: {}",host);
           affectedHosts.add(host);
         }
-        retVal.add(s);
+        addStage&=true;
       }
+    }
+    if (affectedRequests.contains(requestId)) {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("===>  Skipping stage since the request it is in has been processed already: {}/{} ({})",s.getRequestId(),s.getStageId(),s.getRequestContext());
+      }
+      addStage=false;
+    }
+ else {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("====>  Adding request to affected requests: {}",requestId);
+      }
+      affectedRequests.add(requestId);
+      addStage&=true;
+    }
+    if (addStage) {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("===>  Adding stage to return value: {}/{} ({})",s.getRequestId(),s.getStageId(),s.getRequestContext());
+      }
+      retVal.add(s);
     }
   }
   return retVal;
