@@ -1,0 +1,37 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  Cluster mockCluster=easyMockSupport.createNiceMock(Cluster.class);
+  Host host1=easyMockSupport.createNiceMock(Host.class);
+  Host host2=easyMockSupport.createNiceMock(Host.class);
+  Map<String,Map<String,String>> clusterHostsToChange=new HashMap<>();
+  Map<String,String> hosts=new HashMap<>();
+  List<Host> clusterHosts=new ArrayList<>();
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+    }
+  }
+);
+  clusterHosts.add(host1);
+  clusterHosts.add(host2);
+  hosts.put("host1","host10");
+  hosts.put("host3","host11");
+  clusterHostsToChange.put("cl1",hosts);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getCluster("cl1")).andReturn(mockCluster).once();
+  expect(mockCluster.getHosts()).andReturn(clusterHosts).once();
+  expect(host1.getHostName()).andReturn("host1");
+  expect(host2.getHostName()).andReturn("host2");
+  HostUpdateHelper hostUpdateHelper=new HostUpdateHelper(null,null,mockInjector);
+  hostUpdateHelper.setHostChangesFileMap(clusterHostsToChange);
+  easyMockSupport.replayAll();
+  try {
+    hostUpdateHelper.validateHostChanges();
+  }
+ catch (  AmbariException e) {
+    assert(e.getMessage().equals("Hostname(s): host3 was(were) not found."));
+  }
+  easyMockSupport.verifyAll();
+}

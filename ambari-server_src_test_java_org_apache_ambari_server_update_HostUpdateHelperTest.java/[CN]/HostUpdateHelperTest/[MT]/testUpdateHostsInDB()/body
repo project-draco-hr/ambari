@@ -1,0 +1,41 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final HostDAO mockHostDAO=easyMockSupport.createNiceMock(HostDAO.class);
+  final ClusterDAO mockClusterDAO=easyMockSupport.createNiceMock(ClusterDAO.class);
+  final EntityManager entityManager=createNiceMock(EntityManager.class);
+  final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
+  ClusterEntity mockClusterEntity=easyMockSupport.createNiceMock(ClusterEntity.class);
+  HostEntity mockHostEntity1=easyMockSupport.createNiceMock(HostEntity.class);
+  HostEntity mockHostEntity2=easyMockSupport.createNiceMock(HostEntity.class);
+  Map<String,Map<String,String>> clusterHostsToChange=new HashMap<>();
+  List<HostEntity> hostEntities=new ArrayList<>();
+  Map<String,String> hosts=new HashMap<>();
+  hosts.put("host1","host10");
+  hosts.put("host2","host11");
+  clusterHostsToChange.put("cl1",hosts);
+  hostEntities.add(mockHostEntity1);
+  hostEntities.add(mockHostEntity2);
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(DBAccessor.class).toInstance(dbAccessor);
+      bind(EntityManager.class).toInstance(entityManager);
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+      bind(ClusterDAO.class).toInstance(mockClusterDAO);
+      bind(HostDAO.class).toInstance(mockHostDAO);
+    }
+  }
+);
+  expect(mockClusterDAO.findByName("cl1")).andReturn(mockClusterEntity).once();
+  expect(mockClusterEntity.getHostEntities()).andReturn(hostEntities).once();
+  expect(mockHostEntity1.getHostName()).andReturn("host1").atLeastOnce();
+  expect(mockHostEntity2.getHostName()).andReturn("host2").atLeastOnce();
+  mockHostEntity1.setHostName("host10");
+  expectLastCall();
+  mockHostEntity2.setHostName("host11");
+  expectLastCall();
+  HostUpdateHelper hostUpdateHelper=new HostUpdateHelper(null,null,mockInjector);
+  hostUpdateHelper.setHostChangesFileMap(clusterHostsToChange);
+  easyMockSupport.replayAll();
+  hostUpdateHelper.updateHostsInDB();
+  easyMockSupport.verifyAll();
+}

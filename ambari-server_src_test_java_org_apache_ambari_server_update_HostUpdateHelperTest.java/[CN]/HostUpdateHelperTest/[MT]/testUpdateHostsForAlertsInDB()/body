@@ -1,0 +1,63 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final AlertsDAO mockAlertsDAO=easyMockSupport.createNiceMock(AlertsDAO.class);
+  final AlertDefinitionDAO mockAlertDefinitionDAO=easyMockSupport.createNiceMock(AlertDefinitionDAO.class);
+  final AlertDispatchDAO mockAlertDispatchDAO=easyMockSupport.createNiceMock(AlertDispatchDAO.class);
+  final EntityManager entityManager=createNiceMock(EntityManager.class);
+  final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
+  final ClusterDAO mockClusterDAO=easyMockSupport.createNiceMock(ClusterDAO.class);
+  final Clusters mockClusters=easyMockSupport.createNiceMock(Clusters.class);
+  Cluster mockCluster=easyMockSupport.createNiceMock(Cluster.class);
+  AlertCurrentEntity mockAlertCurrentEntity1=easyMockSupport.createNiceMock(AlertCurrentEntity.class);
+  AlertCurrentEntity mockAlertCurrentEntity2=easyMockSupport.createNiceMock(AlertCurrentEntity.class);
+  AlertHistoryEntity mockAlertHistoryEntity1=easyMockSupport.createNiceMock(AlertHistoryEntity.class);
+  AlertHistoryEntity mockAlertHistoryEntity2=easyMockSupport.createNiceMock(AlertHistoryEntity.class);
+  AlertDefinitionEntity mockAlertDefinitionEntity=easyMockSupport.createNiceMock(AlertDefinitionEntity.class);
+  Map<String,Map<String,String>> clusterHostsToChange=new HashMap<>();
+  List<AlertCurrentEntity> alertCurrentEntities=new ArrayList<>();
+  List<AlertDefinitionEntity> alertDefinitionEntities=new ArrayList<>();
+  Map<String,Cluster> clusterMap=new HashMap<>();
+  Map<String,String> hosts=new HashMap<>();
+  hosts.put("host1","host10");
+  hosts.put("host2","host11");
+  clusterHostsToChange.put("cl1",hosts);
+  clusterMap.put("cl1",mockCluster);
+  alertCurrentEntities.add(mockAlertCurrentEntity1);
+  alertCurrentEntities.add(mockAlertCurrentEntity2);
+  alertDefinitionEntities.add(mockAlertDefinitionEntity);
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(DBAccessor.class).toInstance(dbAccessor);
+      bind(EntityManager.class).toInstance(entityManager);
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+      bind(ClusterDAO.class).toInstance(mockClusterDAO);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(AlertDispatchDAO.class).toInstance(mockAlertDispatchDAO);
+      bind(AlertsDAO.class).toInstance(mockAlertsDAO);
+      bind(AlertDefinitionDAO.class).toInstance(mockAlertDefinitionDAO);
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(clusterMap).once();
+  expect(mockCluster.getClusterId()).andReturn(1L).once();
+  expect(mockAlertsDAO.findCurrentByCluster(1L)).andReturn(alertCurrentEntities).once();
+  expect(mockAlertCurrentEntity1.getAlertHistory()).andReturn(mockAlertHistoryEntity1).once();
+  expect(mockAlertCurrentEntity2.getAlertHistory()).andReturn(mockAlertHistoryEntity2).once();
+  expect(mockAlertHistoryEntity1.getHostName()).andReturn("host1").atLeastOnce();
+  expect(mockAlertHistoryEntity2.getHostName()).andReturn("host2").atLeastOnce();
+  expect(mockAlertDefinitionDAO.findAll(1L)).andReturn(alertDefinitionEntities).once();
+  mockAlertHistoryEntity1.setHostName("host10");
+  expectLastCall();
+  mockAlertHistoryEntity2.setHostName("host11");
+  expectLastCall();
+  mockAlertDefinitionEntity.setHash(anyString());
+  expectLastCall();
+  HostUpdateHelper hostUpdateHelper=new HostUpdateHelper(null,null,mockInjector);
+  hostUpdateHelper.setHostChangesFileMap(clusterHostsToChange);
+  easyMockSupport.replayAll();
+  hostUpdateHelper.updateHostsForAlertsInDB();
+  easyMockSupport.verifyAll();
+}
