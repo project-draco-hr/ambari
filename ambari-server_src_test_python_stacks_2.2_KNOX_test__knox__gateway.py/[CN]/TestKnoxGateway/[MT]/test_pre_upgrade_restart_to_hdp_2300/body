@@ -2,19 +2,17 @@
 @patch('os.path.exists')
 @patch('os.path.isdir')
 @patch('resource_management.core.shell.call')
-def test_pre_rolling_restart_from_hdp_2300_to_2320(self, call_mock, isdir_mock, path_exists_mock, remove_mock):
-    '\n    In RU from HDP 2.3.0.0 to 2.3.2.0, should backup the data dir used by the source version, which\n    is /var/lib/knox/data\n    '
+def test_pre_upgrade_restart_to_hdp_2300(self, call_mock, isdir_mock, path_exists_mock, remove_mock):
+    '\n    In HDP 2.3.0.0, Knox was using a data dir of /var/lib/knox/data\n    '
     isdir_mock.return_value = True
     config_file = (self.get_src_folder() + '/test/python/stacks/2.2/configs/knox_upgrade.json')
     with open(config_file, 'r') as f:
         json_content = json.load(f)
-    source_version = '2.3.0.0-1234'
-    version = '2.3.2.0-5678'
+    version = '2.3.0.0-1234'
     json_content['commandParams']['version'] = version
-    json_content['hostLevelParams']['current_version'] = source_version
     path_exists_mock.return_value = True
     mocks_dict = {}
-    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/knox_gateway.py'), classname='KnoxGateway', command='pre_rolling_restart', config_dict=json_content, hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES, call_mocks=[(0, None), (0, None)], mocks_dict=mocks_dict)
+    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/knox_gateway.py'), classname='KnoxGateway', command='pre_upgrade_restart', config_dict=json_content, hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES, call_mocks=[(0, None), (0, None)], mocks_dict=mocks_dict)
     self.assertResourceCalled('Execute', ('tar', '-zcvhf', '/tmp/knox-upgrade-backup/knox-conf-backup.tar', '/usr/hdp/current/knox-server/conf/'), sudo=True)
     self.assertResourceCalled('Execute', ('tar', '-zcvhf', '/tmp/knox-upgrade-backup/knox-data-backup.tar', '/var/lib/knox/data'), sudo=True)
     self.assertResourceCalled('Execute', ('ambari-python-wrap', '/usr/bin/hdp-select', 'set', 'knox-server', version), sudo=True)
