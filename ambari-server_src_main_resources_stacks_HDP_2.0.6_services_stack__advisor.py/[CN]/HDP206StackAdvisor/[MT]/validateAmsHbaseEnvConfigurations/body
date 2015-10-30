@@ -4,6 +4,34 @@ def validateAmsHbaseEnvConfigurations(self, properties, recommendedDefaults, con
     ams_env = getSiteProperties(configurations, 'ams-env')
     amsHbaseSite = getSiteProperties(configurations, 'ams-hbase-site')
     logDirItem = self.validatorEqualsPropertyItem(properties, 'hbase_log_dir', ams_env, 'metrics_collector_log_dir')
+    hbase_master_heapsize = to_number(properties['hbase_master_heapsize'])
+    hbase_master_xmn_size = to_number(properties['hbase_master_xmn_size'])
+    hbase_regionserver_heapsize = to_number(properties['hbase_regionserver_heapsize'])
+    hbase_regionserver_xmn_size = to_number(properties['regionserver_xmn_size'])
+    masterXmnItem = None
+    regionServerXmnItem = None
+    hbase_rootdir = amsHbaseSite.get('hbase.rootdir')
+    is_hbase_distributed = hbase_rootdir.startswith('hdfs://')
+    if is_hbase_distributed:
+        minMasterXmn = (0.12 * hbase_master_heapsize)
+        maxMasterXmn = (0.2 * hbase_master_heapsize)
+        if (hbase_master_xmn_size < minMasterXmn):
+            masterXmnItem = self.getWarnItem('Value is lesser than the recommended minimum Xmn size of {0} (12% of hbase_master_heapsize)'.format(int(math.ceil(minMasterXmn))))
+        if (hbase_master_xmn_size > maxMasterXmn):
+            masterXmnItem = self.getWarnItem('Value is greater than the recommended maximum Xmn size of {0} (20% of hbase_master_heapsize)'.format(int(math.floor(maxMasterXmn))))
+        minRegionServerXmn = (0.12 * hbase_regionserver_heapsize)
+        maxRegionServerXmn = (0.2 * hbase_regionserver_heapsize)
+        if (hbase_regionserver_xmn_size < minRegionServerXmn):
+            regionServerXmnItem = self.getWarnItem('Value is lesser than the recommended minimum Xmn size of {0} (12% of hbase_regionserver_heapsize)'.format(int(math.ceil(minRegionServerXmn))))
+        if (hbase_regionserver_xmn_size > maxRegionServerXmn):
+            regionServerXmnItem = self.getWarnItem('Value is greater than the recommended maximum Xmn size of {0} (20% of hbase_regionserver_heapsize)'.format(int(math.floor(maxRegionServerXmn))))
+    else:
+        minMasterXmn = (0.12 * (hbase_master_heapsize + hbase_regionserver_heapsize))
+        maxMasterXmn = (0.2 * (hbase_master_heapsize + hbase_regionserver_heapsize))
+        if (hbase_master_xmn_size < minMasterXmn):
+            masterXmnItem = self.getWarnItem('Value is lesser than the recommended minimum Xmn size of {0} (12% of hbase_master_heapsize + hbase_regionserver_heapsize)'.format(int(math.ceil(minMasterXmn))))
+        if (hbase_master_xmn_size > maxMasterXmn):
+            masterXmnItem = self.getWarnItem('Value is greater than the recommended maximum Xmn size of {0} (20% of hbase_master_heapsize + hbase_regionserver_heapsize)'.format(int(math.floor(maxMasterXmn))))
     validationItems = []
     masterHostItem = None
     if (masterItem is None):
@@ -31,21 +59,16 @@ def validateAmsHbaseEnvConfigurations(self, properties, recommendedDefaults, con
                                 hostComponents.append(component['StackServiceComponents']['component_name'])
                 requiredMemory = getMemorySizeRequired(hostComponents, configurations)
                 unusedMemory = ((host['Hosts']['total_mem'] * 1024) - requiredMemory)
-                hbase_rootdir = amsHbaseSite.get('hbase.rootdir')
                 if (unusedMemory > 4294967296):
                     heapPropertyToIncrease = ('hbase_regionserver_heapsize' if hbase_rootdir.startswith('hdfs://') else 'hbase_master_heapsize')
                     xmnPropertyToIncrease = ('regionserver_xmn_size' if hbase_rootdir.startswith('hdfs://') else 'hbase_master_xmn_size')
                     collector_heapsize = (int(((unusedMemory - 4294967296) / 5)) + (to_number(ams_env.get('metrics_collector_heapsize')) * 1048576))
                     hbase_heapsize = (int((((unusedMemory - 4294967296) * 4) / 5)) + (to_number(properties.get(heapPropertyToIncrease)) * 1048576))
-                    if ((hbase_heapsize / 1048576) > 2048):
-                        xmn_size = '512'
-                    elif ((hbase_heapsize / 1048576) > 1024):
-                        xmn_size = '256'
-                    else:
-                        xmn_size = '128'
+                    hbase_heapsize = min((((32 * 1024) * 1024) * 1024), hbase_heapsize)
+                    xmn_size = round_to_n((0.12 * hbase_heapsize), 128)
                     msg = '{0} MB RAM is unused on the host {1} based on components assigned. Consider allocating  {2} MB to metrics_collector_heapsize in ams-env, {3} MB to {4} in ams-hbase-env and {5} MB to {6} in ams-hbase-env'
                     unusedMemoryHbaseItem = self.getWarnItem(msg.format((unusedMemory / 1048576), collectorHostName, (collector_heapsize / 1048576), (hbase_heapsize / 1048576), heapPropertyToIncrease, xmn_size, xmnPropertyToIncrease))
                     validationItems.extend([{'config-name': heapPropertyToIncrease, 'item': unusedMemoryHbaseItem, }])
         pass
-    validationItems.extend([{'config-name': 'hbase_regionserver_heapsize', 'item': regionServerItem, }, {'config-name': 'hbase_master_heapsize', 'item': masterItem, }, {'config-name': 'hbase_master_heapsize', 'item': masterHostItem, }, {'config-name': 'hbase_log_dir', 'item': logDirItem, }])
+    validationItems.extend([{'config-name': 'hbase_regionserver_heapsize', 'item': regionServerItem, }, {'config-name': 'hbase_master_heapsize', 'item': masterItem, }, {'config-name': 'hbase_master_heapsize', 'item': masterHostItem, }, {'config-name': 'hbase_log_dir', 'item': logDirItem, }, {'config-name': 'hbase_master_xmn_size', 'item': masterXmnItem, }, {'config-name': 'regionserver_xmn_size', 'item': regionServerXmnItem, }])
     return self.toConfigurationValidationProblems(validationItems, 'ams-hbase-env')

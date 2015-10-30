@@ -46,25 +46,21 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
             putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.lowerLimit', 0.25)
             putAmsHbaseSiteProperty('phoenix.query.maxGlobalMemoryPercentage', 20)
             putTimelineServiceProperty('phoenix.query.maxGlobalMemoryPercentage', 30)
-            hbase_xmn_size = '512'
         elif (total_sinks_count >= 500):
             putAmsHbaseSiteProperty('hbase.regionserver.handler.count', 60)
             putAmsHbaseSiteProperty('hbase.regionserver.hlog.blocksize', 134217728)
             putAmsHbaseSiteProperty('hbase.regionserver.maxlogs', 64)
             putAmsHbaseSiteProperty('hbase.hregion.memstore.flush.size', 268435456)
-            hbase_xmn_size = '512'
-        elif (total_sinks_count >= 250):
-            hbase_xmn_size = '256'
-        else:
-            hbase_xmn_size = '128'
         pass
     if rootDir.startswith('hdfs://'):
         putHbaseEnvProperty('hbase_master_heapsize', '512')
+        putHbaseEnvProperty('hbase_master_xmn_size', '102')
         putHbaseEnvProperty('hbase_regionserver_heapsize', hbase_heapsize)
-        putHbaseEnvProperty('regionserver_xmn_size', hbase_xmn_size)
+        putHbaseEnvProperty('regionserver_xmn_size', round_to_n((0.15 * hbase_heapsize), 64))
     else:
+        hbase_rs_heapsize = 512
         putHbaseEnvProperty('hbase_master_heapsize', hbase_heapsize)
-        putHbaseEnvProperty('hbase_master_xmn_size', hbase_xmn_size)
+        putHbaseEnvProperty('hbase_master_xmn_size', round_to_n((0.15 * (hbase_heapsize + hbase_rs_heapsize)), 64))
     if rootDir.startswith('hdfs://'):
         dn_hosts = self.getComponentHostNames(services, 'HDFS', 'DATANODE')
         if set(amsCollectorHosts).intersection(dn_hosts):
