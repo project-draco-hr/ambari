@@ -1,0 +1,39 @@
+{
+  Configuration hbaseConf=new Configuration();
+  hbaseConf.setStrings(ZOOKEEPER_QUORUM,"quorum");
+  Configuration metricsConf=new Configuration();
+  ConnectionProvider connectionProvider=new ConnectionProvider(){
+    @Override public Connection getConnection() throws SQLException {
+      return null;
+    }
+  }
+;
+  PhoenixHBaseAccessor accessor=new PhoenixHBaseAccessor(hbaseConf,metricsConf,connectionProvider);
+  List<String> metricNames=new LinkedList<>();
+  List<String> hostnames=new LinkedList<>();
+  Map<String,List<Function>> metricFunctions=new HashMap<>();
+  PowerMock.mockStatic(PhoenixTransactSQL.class);
+  PreparedStatement preparedStatementMock=EasyMock.createNiceMock(PreparedStatement.class);
+  Condition condition=new DefaultCondition(metricNames,hostnames,"appid","instanceid",null,null,Precision.SECONDS,10,true);
+  EasyMock.expect(PhoenixTransactSQL.prepareGetLatestMetricSqlStmt(null,condition)).andReturn(preparedStatementMock).once();
+  PhoenixTransactSQL.setSortMergeJoinEnabled(true);
+  EasyMock.expectLastCall();
+  ResultSet rsMock=EasyMock.createNiceMock(ResultSet.class);
+  PhoenixIOException pioe1=EasyMock.createNiceMock(PhoenixIOException.class);
+  PhoenixIOException pioe2=EasyMock.createNiceMock(PhoenixIOException.class);
+  DoNotRetryIOException dnrioe=EasyMock.createNiceMock(DoNotRetryIOException.class);
+  EasyMock.expect(preparedStatementMock.executeQuery()).andThrow(pioe1);
+  EasyMock.expect(pioe1.getCause()).andReturn(pioe2).atLeastOnce();
+  EasyMock.expect(pioe2.getCause()).andReturn(dnrioe).atLeastOnce();
+  StackTraceElement stackTrace[]=new StackTraceElement[]{new StackTraceElement("HashJoinRegionScanner","method","file",1)};
+  EasyMock.expect(dnrioe.getStackTrace()).andReturn(stackTrace).atLeastOnce();
+  PowerMock.replayAll();
+  EasyMock.replay(preparedStatementMock,rsMock,pioe1,pioe2,dnrioe);
+  try {
+    TimelineMetrics tml=accessor.getMetricRecords(condition,metricFunctions);
+    fail();
+  }
+ catch (  Exception e) {
+  }
+  PowerMock.verifyAll();
+}

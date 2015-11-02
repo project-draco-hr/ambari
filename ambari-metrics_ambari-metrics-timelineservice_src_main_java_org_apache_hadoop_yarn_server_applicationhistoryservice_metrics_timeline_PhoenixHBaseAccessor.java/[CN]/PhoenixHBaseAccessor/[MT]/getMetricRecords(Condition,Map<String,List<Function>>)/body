@@ -21,7 +21,21 @@
       }
     }
   }
- catch (  RuntimeException ex) {
+ catch (  PhoenixIOException pioe) {
+    Throwable pioe2=pioe.getCause();
+    if (pioe2 instanceof PhoenixIOException && pioe2.getCause() instanceof DoNotRetryIOException) {
+      String className=null;
+      for (      StackTraceElement ste : pioe2.getCause().getStackTrace()) {
+        className=ste.getClassName();
+      }
+      if (className != null && className.equals("HashJoinRegionScanner")) {
+        LOG.error("The cache might have expired and have been removed. Try to" + " increase the cache size by setting bigger value for " + "phoenix.coprocessor.maxMetaDataCacheSize in ams-hbase-site config."+ " Falling back to sort-merge join algorithm.");
+        PhoenixTransactSQL.setSortMergeJoinEnabled(true);
+      }
+    }
+    throw pioe;
+  }
+catch (  RuntimeException ex) {
     Throwable io=ex.getCause();
     String className=null;
     if (io != null) {
