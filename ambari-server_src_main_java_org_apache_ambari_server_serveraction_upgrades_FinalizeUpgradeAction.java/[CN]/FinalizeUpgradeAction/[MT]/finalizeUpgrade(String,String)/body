@@ -52,7 +52,14 @@ String message=String.format("The following %d host(s) have not been upgraded to
 outSB.append(message);
 throw new AmbariException(message);
 }
-checkHostComponentVersions(cluster,version,clusterDesiredStackId);
+List<InfoTuple> errors=checkHostComponentVersions(cluster,version,clusterDesiredStackId);
+if (!errors.isEmpty()) {
+StrBuilder messageBuff=new StrBuilder(String.format("The following %d host component(s) " + "have not been upgraded to version %s. Please install and upgrade " + "the Stack Version on those hosts and try again.\nHost components:\n",errors.size(),version));
+for (InfoTuple error : errors) {
+  messageBuff.append(String.format("%s on host %s\n",error.componentName,error.hostName));
+}
+throw new AmbariException(messageBuff.toString());
+}
 upgradingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,clusterDesiredStackId,version);
 if (RepositoryVersionState.UPGRADING == upgradingClusterVersion.getState()) {
 cluster.transitionClusterVersion(clusterDesiredStackId,version,RepositoryVersionState.UPGRADED);

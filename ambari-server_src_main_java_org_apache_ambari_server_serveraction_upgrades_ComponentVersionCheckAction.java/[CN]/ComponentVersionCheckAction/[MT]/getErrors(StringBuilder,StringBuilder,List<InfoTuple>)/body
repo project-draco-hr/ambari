@@ -1,0 +1,34 @@
+{
+  errSB.append("The following components were found to have version mismatches.  ");
+  errSB.append("Finalize will not complete successfully:\n");
+  Set<String> hosts=new TreeSet<>();
+  Map<String,JsonArray> hostDetails=new HashMap<>();
+  for (  InfoTuple tuple : errors) {
+    errSB.append(tuple.hostName).append(": ");
+    errSB.append(tuple.serviceName).append('/').append(tuple.componentName);
+    errSB.append(" reports ").append(StringUtils.trimToEmpty(tuple.currentVersion));
+    errSB.append('\n');
+    hosts.add(tuple.hostName);
+    if (!hostDetails.containsKey(tuple.hostName)) {
+      hostDetails.put(tuple.hostName,new JsonArray());
+    }
+    JsonObject obj=new JsonObject();
+    obj.addProperty("service",tuple.serviceName);
+    obj.addProperty("component",tuple.componentName);
+    obj.addProperty("version",tuple.currentVersion);
+    hostDetails.get(tuple.hostName).add(obj);
+  }
+  JsonArray hostJson=new JsonArray();
+  for (  String h : hosts) {
+    hostJson.add(new JsonPrimitive(h));
+  }
+  JsonObject valueJson=new JsonObject();
+  for (  Entry<String,JsonArray> entry : hostDetails.entrySet()) {
+    valueJson.add(entry.getKey(),entry.getValue());
+  }
+  outSB.append(String.format("There were errors on the following hosts: %s",StringUtils.join(hosts,", ")));
+  JsonObject obj=new JsonObject();
+  obj.add("hosts",hostJson);
+  obj.add("host_detail",valueJson);
+  return obj.toString();
+}
