@@ -31,8 +31,14 @@
     Map<RepositoryVersionState,Set<String>> stateToHosts=new HashMap<RepositoryVersionState,Set<String>>();
     List<HostVersionEntity> hostVersionEntities=hostVersionDAO.findByClusterStackAndVersion(getClusterName(),stackId,version);
     Set<String> hostsWithState=new HashSet<String>();
+    Set<String> hostsInMaintenanceState=new HashSet<>();
     for (    HostVersionEntity hostVersionEntity : hostVersionEntities) {
       String hostname=hostVersionEntity.getHostEntity().getHostName();
+      Host host=hosts.get(hostname);
+      if (host != null && host.getMaintenanceState(getClusterId()) == MaintenanceState.ON) {
+        hostsInMaintenanceState.add(hostname);
+        continue;
+      }
       hostsWithState.add(hostname);
       RepositoryVersionState hostState=hostVersionEntity.getState();
       if (stateToHosts.containsKey(hostState)) {
@@ -46,6 +52,7 @@
     }
     hostsWithoutHostVersion.addAll(hosts.keySet());
     hostsWithoutHostVersion.removeAll(hostsWithState);
+    hostsWithoutHostVersion.removeAll(hostsInMaintenanceState);
     for (    String hostname : hostsWithoutHostVersion) {
       HostEntity hostEntity=hostDAO.findByName(hostname);
       if (performingInitialBootstrap && hostEntity.getHostStateEntity().getCurrentState() != HostState.HEALTHY) {

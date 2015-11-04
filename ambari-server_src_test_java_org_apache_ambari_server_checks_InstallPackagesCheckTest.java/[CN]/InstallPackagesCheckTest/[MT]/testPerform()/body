@@ -1,0 +1,79 @@
+{
+  PowerMockito.mockStatic(HostComponentSummary.class);
+  final InstallPackagesCheck installPackagesCheck=new InstallPackagesCheck();
+  installPackagesCheck.clustersProvider=new Provider<Clusters>(){
+    @Override public Clusters get(){
+      return clusters;
+    }
+  }
+;
+  installPackagesCheck.ambariMetaInfo=new Provider<AmbariMetaInfo>(){
+    @Override public AmbariMetaInfo get(){
+      return ambariMetaInfo;
+    }
+  }
+;
+  installPackagesCheck.clusterVersionDAOProvider=new Provider<ClusterVersionDAO>(){
+    @Override public ClusterVersionDAO get(){
+      return clusterVersionDAO;
+    }
+  }
+;
+  installPackagesCheck.hostVersionDaoProvider=new Provider<HostVersionDAO>(){
+    @Override public HostVersionDAO get(){
+      return hostVersionDAO;
+    }
+  }
+;
+  final Cluster cluster=Mockito.mock(Cluster.class);
+  Mockito.when(cluster.getClusterName()).thenReturn(clusterName);
+  Mockito.when(cluster.getClusterId()).thenReturn(1L);
+  Mockito.when(cluster.getCurrentStackVersion()).thenReturn(new StackId("HDP","2.2"));
+  Mockito.when(clusters.getCluster(clusterName)).thenReturn(cluster);
+  ClusterVersionEntity clusterVersionEntity=Mockito.mock(ClusterVersionEntity.class);
+  Mockito.when(clusterVersionEntity.getState()).thenReturn(RepositoryVersionState.INSTALLED);
+  Mockito.when(clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,targetStackId,repositoryVersion)).thenReturn(clusterVersionEntity);
+  final List<String> hostNames=new ArrayList<String>();
+  hostNames.add("host1");
+  hostNames.add("host2");
+  hostNames.add("host3");
+  RepositoryVersionEntity rve=Mockito.mock(RepositoryVersionEntity.class);
+  Mockito.when(rve.getVersion()).thenReturn(repositoryVersion);
+  final List<Host> hosts=new ArrayList<Host>();
+  final List<HostVersionEntity> hostVersionEntities=new ArrayList<HostVersionEntity>();
+  for (  String hostName : hostNames) {
+    Host host=Mockito.mock(Host.class);
+    host.setHostName(hostName);
+    Mockito.when(host.getHostName()).thenReturn(hostName);
+    Mockito.when(host.getMaintenanceState(1L)).thenReturn(MaintenanceState.OFF);
+    hosts.add(host);
+    HostVersionEntity hve=Mockito.mock(HostVersionEntity.class);
+    Mockito.when(hve.getRepositoryVersion()).thenReturn(rve);
+    Mockito.when(hve.getState()).thenReturn(RepositoryVersionState.INSTALLED);
+    hostVersionEntities.add(hve);
+    Mockito.when(hostVersionDAO.findByHost(hostName)).thenReturn(Collections.singletonList(hve));
+  }
+  Mockito.when(cluster.getHosts()).thenReturn(hosts);
+  PrereqCheckRequest checkRequest=new PrereqCheckRequest(clusterName);
+  checkRequest.setRepositoryVersion(repositoryVersion);
+  checkRequest.setSourceStackId(sourceStackId);
+  checkRequest.setTargetStackId(targetStackId);
+  PrerequisiteCheck check=new PrerequisiteCheck(null,null);
+  installPackagesCheck.perform(check,checkRequest);
+  Assert.assertEquals(PrereqCheckStatus.PASS,check.getStatus());
+  Mockito.when(hostVersionEntities.get(0).getState()).thenReturn(RepositoryVersionState.INSTALL_FAILED);
+  Mockito.when(clusterVersionEntity.getState()).thenReturn(RepositoryVersionState.INSTALL_FAILED);
+  check=new PrerequisiteCheck(null,null);
+  installPackagesCheck.perform(check,checkRequest);
+  Assert.assertEquals(PrereqCheckStatus.FAIL,check.getStatus());
+  Assert.assertNotNull(check.getFailedOn());
+  Assert.assertTrue(check.getFailedOn().contains("host1"));
+  Mockito.when(hostVersionEntities.get(0).getState()).thenReturn(RepositoryVersionState.INSTALL_FAILED);
+  Mockito.when(hosts.get(0).getMaintenanceState(1L)).thenReturn(MaintenanceState.ON);
+  Mockito.when(clusterVersionEntity.getState()).thenReturn(RepositoryVersionState.INSTALL_FAILED);
+  check=new PrerequisiteCheck(null,null);
+  installPackagesCheck.perform(check,checkRequest);
+  Assert.assertEquals(PrereqCheckStatus.FAIL,check.getStatus());
+  Assert.assertNotNull(check.getFailedOn());
+  Assert.assertTrue(check.getFailedOn().contains(clusterName));
+}

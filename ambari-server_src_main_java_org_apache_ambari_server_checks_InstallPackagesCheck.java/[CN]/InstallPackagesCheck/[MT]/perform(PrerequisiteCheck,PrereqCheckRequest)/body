@@ -1,0 +1,31 @@
+{
+  final String clusterName=request.getClusterName();
+  final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+  final StackId targetStackId=request.getTargetStackId();
+  final String repoVersion=request.getRepositoryVersion();
+  final ClusterVersionEntity clusterVersion=clusterVersionDAOProvider.get().findByClusterAndStackAndVersion(clusterName,targetStackId,repoVersion);
+  final Set<String> failedHosts=new HashSet<String>();
+  for (  Host host : cluster.getHosts()) {
+    if (host.getMaintenanceState(cluster.getClusterId()) != MaintenanceState.ON) {
+      for (      HostVersionEntity hve : hostVersionDaoProvider.get().findByHost(host.getHostName())) {
+        if (hve.getRepositoryVersion().getVersion().equals(request.getRepositoryVersion()) && hve.getState() == RepositoryVersionState.INSTALL_FAILED) {
+          failedHosts.add(host.getHostName());
+        }
+      }
+    }
+  }
+  if (!failedHosts.isEmpty()) {
+    String message=MessageFormat.format("Hosts in cluster [{0},{1},{2},{3}] are in INSTALL_FAILED state because " + "Install Packages had failed. Please re-run Install Packages, if necessary place following hosts " + "in Maintenance mode: {4}",cluster.getClusterName(),targetStackId.getStackName(),targetStackId.getStackVersion(),repoVersion,StringUtils.join(failedHosts,", "));
+    prerequisiteCheck.setFailedOn(new LinkedHashSet<String>(failedHosts));
+    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+    prerequisiteCheck.setFailReason(message);
+  }
+ else   if (clusterVersion.getState() == RepositoryVersionState.INSTALL_FAILED) {
+    String message=MessageFormat.format("Cluster [{0},{1},{2},{3}] is in INSTALL_FAILED state because " + "Install Packages failed. Please re-run Install Packages even if you placed the failed hosts " + "in Maintenance mode.",cluster.getClusterName(),targetStackId.getStackName(),targetStackId.getStackVersion(),repoVersion);
+    LinkedHashSet<String> failedOn=new LinkedHashSet<String>();
+    failedOn.add(cluster.getClusterName());
+    prerequisiteCheck.setFailedOn(failedOn);
+    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+    prerequisiteCheck.setFailReason(message);
+  }
+}

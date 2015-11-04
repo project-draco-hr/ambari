@@ -1,21 +1,25 @@
 {
   final String clusterName=request.getClusterName();
   final Cluster cluster=clustersProvider.get().getCluster(clusterName);
-  List<String> errorMessages=new ArrayList<String>();
   Set<String> failedServiceNames=new HashSet<String>();
   StackId stackId=cluster.getCurrentStackVersion();
   Set<String> installFailedHostComponents=new HashSet<String>();
   for (  Map.Entry<String,Service> serviceEntry : cluster.getServices().entrySet()) {
     final Service service=serviceEntry.getValue();
-    Map<String,ServiceComponent> serviceComponents=service.getServiceComponents();
-    for (    Map.Entry<String,ServiceComponent> component : serviceComponents.entrySet()) {
-      ServiceComponent serviceComponent=component.getValue();
-      if (serviceComponent.isVersionAdvertised()) {
-        List<HostComponentSummary> hostComponentSummaries=HostComponentSummary.getHostComponentSummaries(service.getName(),serviceComponent.getName());
-        for (        HostComponentSummary hcs : hostComponentSummaries) {
-          if (State.INSTALL_FAILED == hcs.getCurrentState()) {
-            failedServiceNames.add(service.getName());
-            installFailedHostComponents.add(MessageFormat.format("[{0}:{1} on {2}]",service.getName(),serviceComponent.getName(),hcs.getHostName()));
+    if (service.getMaintenanceState() != MaintenanceState.ON) {
+      Map<String,ServiceComponent> serviceComponents=service.getServiceComponents();
+      for (      Map.Entry<String,ServiceComponent> component : serviceComponents.entrySet()) {
+        ServiceComponent serviceComponent=component.getValue();
+        if (serviceComponent.isVersionAdvertised()) {
+          List<HostComponentSummary> hostComponentSummaries=HostComponentSummary.getHostComponentSummaries(service.getName(),serviceComponent.getName());
+          for (          HostComponentSummary hcs : hostComponentSummaries) {
+            Host host=clustersProvider.get().getHost(hcs.getHostName());
+            if (host.getMaintenanceState(cluster.getClusterId()) != MaintenanceState.ON) {
+              if (hcs.getCurrentState() == State.INSTALL_FAILED) {
+                failedServiceNames.add(service.getName());
+                installFailedHostComponents.add(MessageFormat.format("[{0}:{1} on {2}]",service.getName(),serviceComponent.getName(),hcs.getHostName()));
+              }
+            }
           }
         }
       }
