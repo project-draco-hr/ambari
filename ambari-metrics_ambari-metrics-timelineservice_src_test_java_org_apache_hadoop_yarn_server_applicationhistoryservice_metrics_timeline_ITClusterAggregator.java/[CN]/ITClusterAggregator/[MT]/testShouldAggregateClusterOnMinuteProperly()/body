@@ -1,0 +1,45 @@
+{
+  TimelineMetricAggregator agg=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorMinute(hdb,getConfigurationForTest(false));
+  long startTime=System.currentTimeMillis();
+  long ctime=startTime;
+  long second=1000;
+  long minute=60 * second;
+  Map<TimelineClusterMetric,MetricClusterAggregate> records=new HashMap<TimelineClusterMetric,MetricClusterAggregate>();
+  records.put(createEmptyTimelineClusterMetric(ctime),new MetricClusterAggregate(4.0,2,0.0,4.0,0.0));
+  records.put(createEmptyTimelineClusterMetric(ctime+=second),new MetricClusterAggregate(4.0,2,0.0,4.0,0.0));
+  records.put(createEmptyTimelineClusterMetric(ctime+=second),new MetricClusterAggregate(4.0,2,0.0,4.0,0.0));
+  records.put(createEmptyTimelineClusterMetric(ctime+=second),new MetricClusterAggregate(4.0,2,0.0,4.0,0.0));
+  hdb.saveClusterAggregateRecords(records);
+  agg.doWork(startTime,ctime + second);
+  long oldCtime=ctime + second;
+  ctime=startTime + minute;
+  records.put(createEmptyTimelineClusterMetric(ctime),new MetricClusterAggregate(4.0,2,0.0,4.0,0.0));
+  records.put(createEmptyTimelineClusterMetric(ctime+=second),new MetricClusterAggregate(4.0,2,0.0,4.0,0.0));
+  records.put(createEmptyTimelineClusterMetric(ctime+=second),new MetricClusterAggregate(4.0,2,0.0,4.0,0.0));
+  records.put(createEmptyTimelineClusterMetric(ctime+=second),new MetricClusterAggregate(4.0,2,0.0,4.0,0.0));
+  hdb.saveClusterAggregateRecords(records);
+  agg.doWork(oldCtime,ctime + second);
+  ResultSet rs=executeQuery("SELECT * FROM METRIC_AGGREGATE_MINUTE");
+  int count=0;
+  long diff=0;
+  while (rs.next()) {
+    assertEquals("METRIC_NAME","disk_used",rs.getString("METRIC_NAME"));
+    assertEquals("APP_ID","test_app",rs.getString("APP_ID"));
+    assertEquals("METRIC_SUM",16.0,rs.getDouble("METRIC_SUM"));
+    assertEquals("METRIC_COUNT",8,rs.getLong("METRIC_COUNT"));
+    assertEquals("METRIC_MAX",4.0,rs.getDouble("METRIC_MAX"));
+    assertEquals("METRIC_MIN",0.0,rs.getDouble("METRIC_MIN"));
+    if (count == 0) {
+      diff+=rs.getLong("SERVER_TIME");
+    }
+ else {
+      diff-=rs.getLong("SERVER_TIME");
+      if (diff < 0) {
+        diff*=-1;
+      }
+      assertTrue(diff == minute);
+    }
+    count++;
+  }
+  assertEquals("One hourly aggregated row expected ",2,count);
+}

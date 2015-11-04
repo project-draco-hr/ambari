@@ -106,32 +106,36 @@ def recommendHBASEConfigurations(self, configurations, clusterData, services, ho
     uniqueCoprocessorRegionClassList = []
     [uniqueCoprocessorRegionClassList.append(i) for i in coprocessorRegionClassList if (not uniqueCoprocessorRegionClassList.count(i))]
     putHbaseSiteProperty('hbase.coprocessor.region.classes', ','.join(set(uniqueCoprocessorRegionClassList)))
-    stackVersion = services['Versions']['stack_version']
-    if (stackVersion == '2.2'):
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    rangerServiceVersion = ''
+    if ('RANGER' in servicesList):
+        rangerServiceVersion = [service['StackServices']['service_version'] for service in services['services'] if (service['StackServices']['service_name'] == 'RANGER')][0]
+    if (rangerServiceVersion and (rangerServiceVersion == '0.4.0')):
         rangerClass = 'com.xasecure.authorization.hbase.XaSecureAuthorizationCoprocessor'
     else:
         rangerClass = 'org.apache.ranger.authorization.hbase.RangerAuthorizationCoprocessor'
     nonRangerClass = 'org.apache.hadoop.hbase.security.access.AccessController'
     hbaseClassConfigs = ['hbase.coprocessor.master.classes', 'hbase.coprocessor.region.classes']
     for item in range(len(hbaseClassConfigs)):
-        if (hbaseClassConfigs[item] in services['configurations']['hbase-site']['properties']):
-            if (('hbase-site' in configurations) and (hbaseClassConfigs[item] in configurations['hbase-site']['properties'])):
-                coprocessorConfig = configurations['hbase-site']['properties'][hbaseClassConfigs[item]]
-            else:
-                coprocessorConfig = services['configurations']['hbase-site']['properties'][hbaseClassConfigs[item]]
-            coprocessorClasses = coprocessorConfig.split(',')
-            coprocessorClasses = filter(None, coprocessorClasses)
-            if (rangerPluginEnabled and (rangerPluginEnabled.lower() == 'Yes'.lower())):
-                if (nonRangerClass in coprocessorClasses):
-                    coprocessorClasses.remove(nonRangerClass)
-                if (not (rangerClass in coprocessorClasses)):
-                    coprocessorClasses.append(rangerClass)
-                putHbaseSiteProperty(hbaseClassConfigs[item], ','.join(coprocessorClasses))
-            elif (rangerPluginEnabled and (rangerPluginEnabled.lower() == 'No'.lower())):
-                if (rangerClass in coprocessorClasses):
-                    coprocessorClasses.remove(rangerClass)
-                    if (not (nonRangerClass in coprocessorClasses)):
-                        coprocessorClasses.append(nonRangerClass)
+        if ('hbase-site' in services['configurations']):
+            if (hbaseClassConfigs[item] in services['configurations']['hbase-site']['properties']):
+                if (('hbase-site' in configurations) and (hbaseClassConfigs[item] in configurations['hbase-site']['properties'])):
+                    coprocessorConfig = configurations['hbase-site']['properties'][hbaseClassConfigs[item]]
+                else:
+                    coprocessorConfig = services['configurations']['hbase-site']['properties'][hbaseClassConfigs[item]]
+                coprocessorClasses = coprocessorConfig.split(',')
+                coprocessorClasses = filter(None, coprocessorClasses)
+                if (rangerPluginEnabled and (rangerPluginEnabled.lower() == 'Yes'.lower())):
+                    if (nonRangerClass in coprocessorClasses):
+                        coprocessorClasses.remove(nonRangerClass)
+                    if (not (rangerClass in coprocessorClasses)):
+                        coprocessorClasses.append(rangerClass)
                     putHbaseSiteProperty(hbaseClassConfigs[item], ','.join(coprocessorClasses))
-        elif (rangerPluginEnabled and (rangerPluginEnabled.lower() == 'Yes'.lower())):
-            putHbaseSiteProperty(hbaseClassConfigs[item], rangerClass)
+                elif (rangerPluginEnabled and (rangerPluginEnabled.lower() == 'No'.lower())):
+                    if (rangerClass in coprocessorClasses):
+                        coprocessorClasses.remove(rangerClass)
+                        if (not (nonRangerClass in coprocessorClasses)):
+                            coprocessorClasses.append(nonRangerClass)
+                        putHbaseSiteProperty(hbaseClassConfigs[item], ','.join(coprocessorClasses))
+            elif (rangerPluginEnabled and (rangerPluginEnabled.lower() == 'Yes'.lower())):
+                putHbaseSiteProperty(hbaseClassConfigs[item], rangerClass)

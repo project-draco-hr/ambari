@@ -1,0 +1,43 @@
+{
+  checkLoaded();
+  Cluster cluster=null;
+  w.lock();
+  try {
+    if (clusters.containsKey(clusterName)) {
+      throw new DuplicateResourceException("Attempted to create a Cluster which already exists" + ", clusterName=" + clusterName);
+    }
+    ResourceTypeEntity resourceTypeEntity=resourceTypeDAO.findById(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE);
+    if (resourceTypeEntity == null) {
+      resourceTypeEntity=new ResourceTypeEntity();
+      resourceTypeEntity.setId(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE);
+      resourceTypeEntity.setName(ResourceTypeEntity.CLUSTER_RESOURCE_TYPE_NAME);
+      resourceTypeEntity=resourceTypeDAO.merge(resourceTypeEntity);
+    }
+    ResourceEntity resourceEntity=new ResourceEntity();
+    resourceEntity.setResourceType(resourceTypeEntity);
+    StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
+    ClusterEntity clusterEntity=new ClusterEntity();
+    clusterEntity.setClusterName(clusterName);
+    clusterEntity.setDesiredStack(stackEntity);
+    clusterEntity.setResource(resourceEntity);
+    if (securityType != null) {
+      clusterEntity.setSecurityType(securityType);
+    }
+    try {
+      clusterDAO.create(clusterEntity);
+      clusterEntity=clusterDAO.merge(clusterEntity);
+    }
+ catch (    RollbackException e) {
+      LOG.warn("Unable to create cluster " + clusterName,e);
+      throw new AmbariException("Unable to create cluster " + clusterName,e);
+    }
+    cluster=clusterFactory.create(clusterEntity);
+    clusters.put(clusterName,cluster);
+    clustersById.put(cluster.getClusterId(),cluster);
+    clusterHostMap.put(clusterName,new HashSet<Host>());
+  }
+  finally {
+    w.unlock();
+  }
+  cluster.setCurrentStackVersion(stackId);
+}

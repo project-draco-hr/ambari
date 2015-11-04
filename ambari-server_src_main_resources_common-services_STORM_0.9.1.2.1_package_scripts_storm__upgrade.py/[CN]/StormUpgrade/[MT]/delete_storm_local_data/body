@@ -21,14 +21,15 @@ def delete_storm_local_data(self, env):
             with open(upgrade_file) as file_pointer:
                 existing_json_map = json.load(file_pointer)
             if (cmp(json_map, existing_json_map) == 0):
-                Logger.info('The storm upgrade has already removed the local directories for {0}-{1} for request {2} and stage {3}'.format(stack_name, stack_version, request_id, stage_id))
+                Logger.info('The storm upgrade has already removed the local directories for {0}-{1} for request {2} and stage {3}. Nothing else to do.'.format(stack_name, stack_version, request_id, stage_id))
                 return
-        except:
-            Logger.error('The upgrade file {0} appears to be corrupt; removing...'.format(upgrade_file))
+        except Exception as e:
+            Logger.error('The upgrade file {0} appears to be corrupt; removing it. Error: {1}'.format(upgrade_file, str(e)))
             File(upgrade_file, action='delete')
     else:
-        File(upgrade_file, action='delete')
-    Directory(storm_local_directory, action='delete', recursive=True)
+        Logger.info('The upgrade file {0} does not exist, so will attempt to delete local Storm directory if it exists.')
+    if os.path.isdir(storm_local_directory):
+        Directory(storm_local_directory, action='delete', recursive=True)
     Directory(storm_local_directory, mode=493, owner=params.storm_user, group=params.user_group, recursive=True)
     with open(upgrade_file, 'w') as file_pointer:
         json.dump(json_map, file_pointer, indent=2)

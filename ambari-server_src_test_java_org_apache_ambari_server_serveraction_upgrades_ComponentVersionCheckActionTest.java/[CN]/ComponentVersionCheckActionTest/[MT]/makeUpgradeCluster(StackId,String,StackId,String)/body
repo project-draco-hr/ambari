@@ -1,0 +1,37 @@
+{
+  String clusterName="c1";
+  String hostName="h1";
+  Clusters clusters=m_injector.getInstance(Clusters.class);
+  clusters.addCluster(clusterName,sourceStack);
+  StackDAO stackDAO=m_injector.getInstance(StackDAO.class);
+  StackEntity stackEntitySource=stackDAO.find(sourceStack.getStackName(),sourceStack.getStackVersion());
+  StackEntity stackEntityTarget=stackDAO.find(targetStack.getStackName(),targetStack.getStackVersion());
+  assertNotNull(stackEntitySource);
+  assertNotNull(stackEntityTarget);
+  Cluster c=clusters.getCluster(clusterName);
+  c.setDesiredStackVersion(sourceStack);
+  clusters.addHost(hostName);
+  Host host=clusters.getHost(hostName);
+  Map<String,String> hostAttributes=new HashMap<String,String>();
+  hostAttributes.put("os_family","redhat");
+  hostAttributes.put("os_release_version","6");
+  host.setHostAttributes(hostAttributes);
+  host.persist();
+  m_helper.getOrCreateRepositoryVersion(sourceStack,sourceRepo);
+  c.createClusterVersion(sourceStack,sourceRepo,"admin",RepositoryVersionState.UPGRADING);
+  c.transitionClusterVersion(sourceStack,sourceRepo,RepositoryVersionState.CURRENT);
+  String urlInfo="[{'repositories':[" + "{'Repositories/base_url':'http://foo1','Repositories/repo_name':'HDP','Repositories/repo_id':'" + targetStack.getStackId() + "'}"+ "], 'OperatingSystems/os_type':'redhat6'}]";
+  repoVersionDAO.create(stackEntityTarget,targetRepo,String.valueOf(System.currentTimeMillis()),urlInfo);
+  c.createClusterVersion(targetStack,targetRepo,"admin",RepositoryVersionState.INSTALLING);
+  c.transitionClusterVersion(targetStack,targetRepo,RepositoryVersionState.INSTALLED);
+  c.transitionClusterVersion(targetStack,targetRepo,RepositoryVersionState.UPGRADING);
+  c.transitionClusterVersion(targetStack,targetRepo,RepositoryVersionState.UPGRADED);
+  c.setCurrentStackVersion(targetStack);
+  c.mapHostVersions(Collections.singleton(hostName),c.getCurrentClusterVersion(),RepositoryVersionState.CURRENT);
+  HostDAO hostDAO=m_injector.getInstance(HostDAO.class);
+  HostVersionEntity entity=new HostVersionEntity();
+  entity.setHostEntity(hostDAO.findByName(hostName));
+  entity.setRepositoryVersion(repoVersionDAO.findByStackAndVersion(targetStack,targetRepo));
+  entity.setState(RepositoryVersionState.UPGRADED);
+  hostVersionDAO.create(entity);
+}

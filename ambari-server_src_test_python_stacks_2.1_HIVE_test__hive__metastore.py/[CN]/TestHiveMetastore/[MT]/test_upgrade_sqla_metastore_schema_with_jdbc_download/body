@@ -3,7 +3,14 @@
 @patch('resource_management.libraries.functions.get_hdp_version')
 def test_upgrade_sqla_metastore_schema_with_jdbc_download(self, get_hdp_version_mock, call_mock, os_path_exists_mock):
     get_hdp_version_mock.return_value = '2.3.0.0-1234'
-    os_path_exists_mock.return_value = False
+
+    def side_effect(path):
+        if (path == '/usr/hdp/2.2.7.0-1234/hive-server2/lib/mysql-connector-java.jar'):
+            return True
+        if ('.j2' in path):
+            return True
+        return False
+    os_path_exists_mock.side_effect = side_effect
     config_file = (self.get_src_folder() + '/test/python/stacks/2.0.6/configs/default.json')
     with open(config_file, 'r') as f:
         json_content = json.load(f)
@@ -14,7 +21,8 @@ def test_upgrade_sqla_metastore_schema_with_jdbc_download(self, get_hdp_version_
     json_content['configurations']['hive-env']['hive_database'] = 'Existing'
     json_content['configurations']['hive-env']['hive_database_type'] = 'sqlanywhere'
     mocks_dict = {}
-    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/hive_metastore.py'), classname='HiveMetastore', command='pre_rolling_restart', config_dict=json_content, hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES, call_mocks=[(0, None), (0, None)], mocks_dict=mocks_dict)
+    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/hive_metastore.py'), classname='HiveMetastore', command='pre_upgrade_restart', config_dict=json_content, hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES, call_mocks=[(0, None), (0, None)], mocks_dict=mocks_dict)
+    self.assertResourceCalledIgnoreEarlier('Directory', '/var/lib/hive', owner='hive', group='hadoop', mode=493, recursive=True, cd_access='a')
     self.assertResourceCalled('Execute', ('rm', '-f', '/usr/hdp/current/hive-server2/lib/ojdbc6.jar'), path=['/bin', '/usr/bin/'], sudo=True)
     self.assertResourceCalled('File', '/tmp/sqla-client-jdbc.tar.gz', content=DownloadSource('http://c6401.ambari.apache.org:8080/resources//sqlanywhere-jdbc-driver.tar.gz'))
     self.assertResourceCalled('Execute', ('tar', '-xvf', '/tmp/sqla-client-jdbc.tar.gz', '-C', '/tmp'), sudo=True)

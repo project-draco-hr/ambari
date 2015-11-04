@@ -1,0 +1,32 @@
+{
+  try {
+    LOG.info("Host names update started.");
+    String hostChangesFile=args[0];
+    if (hostChangesFile == null || hostChangesFile.isEmpty()) {
+      throw new AmbariException("Path to file with host names changes is empty or null.");
+    }
+    Injector injector=Guice.createInjector(new UpdateHelperModule());
+    HostUpdateHelper hostUpdateHelper=injector.getInstance(HostUpdateHelper.class);
+    hostUpdateHelper.setHostChangesFile(hostChangesFile);
+    hostUpdateHelper.initHostChangesFileMap();
+    hostUpdateHelper.startPersistenceService();
+    hostUpdateHelper.validateHostChanges();
+    hostUpdateHelper.checkForSecurity();
+    hostUpdateHelper.updateHostsInDB();
+    hostUpdateHelper.updateHostsForTopologyRequests();
+    hostUpdateHelper.updateHostsForAlertsInDB();
+    hostUpdateHelper.updateHostsInConfigurations();
+    LOG.info("Host names update completed successfully.");
+    hostUpdateHelper.stopPersistenceService();
+  }
+ catch (  Throwable e) {
+    if (e instanceof AmbariException) {
+      LOG.error("Exception occurred during host names update, failed",e);
+      throw (AmbariException)e;
+    }
+ else {
+      LOG.error("Unexpected error, host names update failed",e);
+      throw new Exception("Unexpected error, host names update failed",e);
+    }
+  }
+}

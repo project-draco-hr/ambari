@@ -1,0 +1,39 @@
+{
+  StringBuilder out=new StringBuilder();
+  StringBuilder err=new StringBuilder();
+  try {
+    Cluster cluster=clusters.getCluster(clusterName);
+    StackId currentClusterStackId=cluster.getCurrentStackVersion();
+    out.append(String.format("Params: %s %s %s %s %s %s",clusterName,originalStackId.getStackId(),targetStackId.getStackId(),version,direction.getText(false),upgradePack.getName()));
+    out.append(String.format("Checking if can update the Desired Stack Id to %s. The cluster's current Stack Id is %s\n",targetStackId.getStackId(),currentClusterStackId.getStackId()));
+    StackInfo desiredClusterStackInfo=ambariMetaInfo.getStack(targetStackId.getStackName(),targetStackId.getStackVersion());
+    if (null == desiredClusterStackInfo) {
+      String message=String.format("Parameter %s has an invalid value: %s. That Stack Id does not exist.\n",COMMAND_PARAM_TARGET_STACK,targetStackId.getStackId());
+      err.append(message);
+      out.append(message);
+      return createCommandReport(-1,HostRoleStatus.FAILED,"{}",out.toString(),err.toString());
+    }
+    if (!currentClusterStackId.equals(originalStackId)) {
+      String message=String.format("Parameter %s has invalid value: %s. " + "The cluster is currently on stack %s, " + currentClusterStackId.getStackId() + ", yet the parameter to this function indicates a different value.\n",COMMAND_PARAM_ORIGINAL_STACK,originalStackId.getStackId(),currentClusterStackId.getStackId());
+      err.append(message);
+      out.append(message);
+      return createCommandReport(-1,HostRoleStatus.FAILED,"{}",out.toString(),err.toString());
+    }
+    if (currentClusterStackId.equals(targetStackId)) {
+      String message=String.format("Success! The cluster's Desired Stack Id was already set to %s\n",targetStackId.getStackId());
+      out.append(message);
+      return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",out.toString(),err.toString());
+    }
+    UpgradeResourceProvider upgradeResourceProvider=new UpgradeResourceProvider(AmbariServer.getController());
+    upgradeResourceProvider.applyStackAndProcessConfigurations(targetStackId.getStackName(),cluster,version,direction,upgradePack);
+    String message=String.format("Success! Set cluster's %s Desired Stack Id to %s.\n",clusterName,targetStackId.getStackId());
+    out.append(message);
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",out.toString(),err.toString());
+  }
+ catch (  Exception e) {
+    StringWriter sw=new StringWriter();
+    e.printStackTrace(new PrintWriter(sw));
+    err.append(sw.toString());
+    return createCommandReport(-1,HostRoleStatus.FAILED,"{}",out.toString(),err.toString());
+  }
+}

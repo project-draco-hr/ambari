@@ -1,0 +1,39 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Map<String,String> propertiesOozieSite=new HashMap<String,String>(){
+{
+      put("oozie.authentication.kerberos.name.rules","\n ");
+    }
+  }
+;
+  final Config oozieSiteConf=easyMockSupport.createNiceMock(Config.class);
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(EntityManager.class).toInstance(entityManager);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("oozie-site")).andReturn(oozieSiteConf).atLeastOnce();
+  expect(oozieSiteConf.getProperties()).andReturn(propertiesOozieSite).once();
+  UpgradeCatalog2121 upgradeCatalog2121=createMockBuilder(UpgradeCatalog2121.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,Set.class,boolean.class,boolean.class).createMock();
+  upgradeCatalog2121.updateConfigurationPropertiesForCluster(mockClusterExpected,"oozie-site",new HashMap<String,String>(),Collections.singleton("oozie.authentication.kerberos.name.rules"),true,false);
+  expectLastCall().once();
+  easyMockSupport.replayAll();
+  replay(upgradeCatalog2121);
+  upgradeCatalog2121.updateOozieConfigs();
+  easyMockSupport.verifyAll();
+}

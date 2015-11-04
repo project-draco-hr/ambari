@@ -3,10 +3,30 @@
   if (null == clusterName) {
     throw new AmbariException(String.format("%s is required",UPGRADE_CLUSTER_NAME));
   }
+  UpgradeType upgradeType=UpgradeType.ROLLING;
+  if (requestMap.containsKey(UPGRADE_TYPE)) {
+    try {
+      upgradeType=UpgradeType.valueOf(requestMap.get(UPGRADE_TYPE).toString());
+    }
+ catch (    Exception e) {
+      throw new AmbariException(String.format("Property %s has an incorrect value of %s.",UPGRADE_TYPE,requestMap.get(UPGRADE_TYPE)));
+    }
+  }
   Cluster cluster=getManagementController().getClusters().getCluster(clusterName);
   ConfigHelper configHelper=getManagementController().getConfigHelper();
   final String version=(String)requestMap.get(UPGRADE_VERSION);
-  MasterHostResolver resolver=direction.isUpgrade() ? new MasterHostResolver(configHelper,cluster) : new MasterHostResolver(configHelper,cluster,version);
+  MasterHostResolver resolver=null;
+  if (direction.isUpgrade()) {
+    resolver=new MasterHostResolver(configHelper,cluster);
+  }
+ else {
+    if (upgradeType == UpgradeType.ROLLING) {
+      resolver=new MasterHostResolver(configHelper,cluster,version);
+    }
+ else {
+      resolver=new MasterHostResolver(configHelper,cluster);
+    }
+  }
   StackId sourceStackId=null;
   StackId targetStackId=null;
 switch (direction) {
@@ -83,11 +103,19 @@ itemEntity.setText(wrapper.getText());
 itemEntity.setTasks(wrapper.getTasksJson());
 itemEntity.setHosts(wrapper.getHostsJson());
 itemEntities.add(itemEntity);
-if (UpdateStackGrouping.class.equals(group.groupClass)) {
+if (upgradeType == UpgradeType.NON_ROLLING && UpdateStackGrouping.class.equals(group.groupClass)) {
+if (direction.isUpgrade()) {
+  ctx.setEffectiveStackId(ctx.getTargetStackId());
+}
+ else {
+  ctx.setEffectiveStackId(ctx.getOriginalStackId());
+}
+}
+ else if (UpdateStackGrouping.class.equals(group.groupClass)) {
 ctx.setEffectiveStackId(ctx.getTargetStackId());
 }
 injectVariables(configHelper,cluster,itemEntity);
-makeServerSideStage(ctx,req,itemEntity,(ServerSideActionTask)task,skippable,allowRetry,configUpgradePack);
+makeServerSideStage(ctx,req,itemEntity,(ServerSideActionTask)task,skippable,allowRetry,pack,configUpgradePack);
 }
 }
 }

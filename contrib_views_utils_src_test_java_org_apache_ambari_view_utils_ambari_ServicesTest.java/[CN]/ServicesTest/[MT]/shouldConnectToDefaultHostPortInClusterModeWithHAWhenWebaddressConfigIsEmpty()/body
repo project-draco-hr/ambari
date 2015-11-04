@@ -1,0 +1,21 @@
+{
+  ViewContext viewContext=getViewContext(new HashMap<String,String>());
+  AmbariApi ambariApi=createNiceMock(AmbariApi.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  URLStreamProvider urlStreamProvider=createNiceMock(URLStreamProvider.class);
+  expect(ambariApi.isClusterAssociated()).andReturn(true).anyTimes();
+  setClusterExpectationInHAWithEmptyWebappConfig(cluster,"HTTP_ONLY");
+  expect(ambariApi.getCluster()).andReturn(cluster).anyTimes();
+  Services services=new Services(ambariApi,viewContext);
+  InputStream inputStream=IOUtils.toInputStream("{\"clusterInfo\": {\"haState\": \"ACTIVE\"}}");
+  expect(viewContext.getURLStreamProvider()).andReturn(urlStreamProvider).anyTimes();
+  expect(urlStreamProvider.readFrom(eq("http://" + RM_URL1_HOST + ":8088"+ RM_INFO_API_ENDPOINT),eq("GET"),anyString(),EasyMock.<Map<String,String>>anyObject())).andReturn(inputStream);
+  replayAll();
+  assertEquals("http://" + RM_URL1_HOST + ":8088",services.getRMUrl());
+  reset(cluster,urlStreamProvider);
+  setClusterExpectationInHAWithEmptyWebappConfig(cluster,"HTTPS_ONLY");
+  inputStream=IOUtils.toInputStream("{\"clusterInfo\": {\"haState\": \"ACTIVE\"}}");
+  expect(urlStreamProvider.readFrom(eq("https://" + RM_URL1_HOST + ":8090"+ RM_INFO_API_ENDPOINT),eq("GET"),anyString(),EasyMock.<Map<String,String>>anyObject())).andReturn(inputStream);
+  replay(cluster,urlStreamProvider);
+  assertEquals("https://" + RM_URL1_HOST + ":8090",services.getRMUrl());
+}

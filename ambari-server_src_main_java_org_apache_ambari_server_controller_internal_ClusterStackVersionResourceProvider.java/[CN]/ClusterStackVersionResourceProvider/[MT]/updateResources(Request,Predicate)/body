@@ -28,43 +28,57 @@
     StackId stackId=rve.getStackId();
     Cluster cluster=getManagementController().getClusters().getCluster(clName);
     cluster.setDesiredStackVersion(stackId);
-    Map<String,String> args=new HashMap<String,String>();
-    if (newStateStr.equals(RepositoryVersionState.CURRENT.toString())) {
-      args.put(FinalizeUpgradeAction.UPGRADE_DIRECTION_KEY,"upgrade");
+    String forceCurrent=(String)propertyMap.get(CLUSTER_STACK_VERSION_FORCE);
+    boolean force=false;
+    if (null != forceCurrent) {
+      force=Boolean.parseBoolean(forceCurrent);
     }
- else     if (newStateStr.equals(RepositoryVersionState.INSTALLED.toString())) {
-      args.put(FinalizeUpgradeAction.UPGRADE_DIRECTION_KEY,"downgrade");
+    if (!force) {
+      Map<String,String> args=new HashMap<String,String>();
+      if (newStateStr.equals(RepositoryVersionState.CURRENT.toString())) {
+        args.put(FinalizeUpgradeAction.UPGRADE_DIRECTION_KEY,"upgrade");
+      }
+ else       if (newStateStr.equals(RepositoryVersionState.INSTALLED.toString())) {
+        args.put(FinalizeUpgradeAction.UPGRADE_DIRECTION_KEY,"downgrade");
+      }
+ else {
+        throw new IllegalArgumentException(String.format("Invalid desired state %s. Should be either CURRENT or INSTALLED",newStateStr));
+      }
+      String defaultHostName;
+      ArrayList<Host> hosts=new ArrayList<Host>(cluster.getHosts());
+      if (!hosts.isEmpty()) {
+        Collections.sort(hosts);
+        defaultHostName=hosts.get(0).getHostName();
+      }
+ else {
+        throw new AmbariException("Could not find at least one host to set the command for");
+      }
+      args.put(FinalizeUpgradeAction.VERSION_KEY,desiredRepoVersion);
+      args.put(FinalizeUpgradeAction.CLUSTER_NAME_KEY,clName);
+      ExecutionCommand command=new ExecutionCommand();
+      command.setCommandParams(args);
+      command.setClusterName(clName);
+      finalizeUpgradeAction.setExecutionCommand(command);
+      HostRoleCommand hostRoleCommand=hostRoleCommandFactory.create(defaultHostName,Role.AMBARI_SERVER_ACTION,null,null);
+      finalizeUpgradeAction.setHostRoleCommand(hostRoleCommand);
+      CommandReport report=finalizeUpgradeAction.execute(null);
+      LOG.info("Finalize output:");
+      LOG.info("STDOUT: {}",report.getStdOut());
+      LOG.info("STDERR: {}",report.getStdErr());
+      if (report.getStatus().equals(HostRoleStatus.COMPLETED.toString())) {
+        return getRequestStatus(null);
+      }
+ else {
+        String detailedOutput="Finalization failed. More details: \n" + "STDOUT: " + report.getStdOut() + "\n"+ "STDERR: "+ report.getStdErr();
+        throw new SystemException(detailedOutput);
+      }
     }
  else {
-      throw new IllegalArgumentException(String.format("Invalid desired state %s. Should be either CURRENT or INSTALLED",newStateStr));
-    }
-    String defaultHostName;
-    ArrayList<Host> hosts=new ArrayList<Host>(cluster.getHosts());
-    if (!hosts.isEmpty()) {
-      Collections.sort(hosts);
-      defaultHostName=hosts.get(0).getHostName();
-    }
- else {
-      throw new AmbariException("Could not find at least one host to set the command for");
-    }
-    args.put(FinalizeUpgradeAction.VERSION_KEY,desiredRepoVersion);
-    args.put(FinalizeUpgradeAction.CLUSTER_NAME_KEY,clName);
-    ExecutionCommand command=new ExecutionCommand();
-    command.setCommandParams(args);
-    command.setClusterName(clName);
-    finalizeUpgradeAction.setExecutionCommand(command);
-    HostRoleCommand hostRoleCommand=hostRoleCommandFactory.create(defaultHostName,Role.AMBARI_SERVER_ACTION,null,null);
-    finalizeUpgradeAction.setHostRoleCommand(hostRoleCommand);
-    CommandReport report=finalizeUpgradeAction.execute(null);
-    LOG.info("Finalize output:");
-    LOG.info("STDOUT: {}",report.getStdOut());
-    LOG.info("STDERR: {}",report.getStdErr());
-    if (report.getStatus().equals(HostRoleStatus.COMPLETED.toString())) {
+      ClusterVersionEntity current=cluster.getCurrentClusterVersion();
+      if (!current.getRepositoryVersion().equals(rve)) {
+        updateVersionStates(current.getClusterId(),current.getRepositoryVersion(),rve);
+      }
       return getRequestStatus(null);
-    }
- else {
-      String detailedOutput="Finalization failed. More details: \n" + "STDOUT: " + report.getStdOut() + "\n"+ "STDERR: "+ report.getStdErr();
-      throw new SystemException(detailedOutput);
     }
   }
  catch (  AmbariException e) {

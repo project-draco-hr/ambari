@@ -24,13 +24,10 @@
   metricValues.put(now + 500,2.0);
   metricValues.put(now + 600,3.0);
   timelineMetric2.setMetricValues(metricValues);
-  TimelineMetricsCacheValue existingMetricValue=new TimelineMetricsCacheValue(now - 1000,now + 1000,new HashMap<String,TimelineMetric>(){
-{
-      put("cpu_user",timelineMetric1);
-      put("cpu_nice",timelineMetric2);
-    }
-  }
-,null);
+  TimelineMetrics existingMetrics=new TimelineMetrics();
+  existingMetrics.getMetrics().add(timelineMetric1);
+  existingMetrics.getMetrics().add(timelineMetric2);
+  TimelineMetricsCacheValue existingMetricValue=new TimelineMetricsCacheValue(now - 1000,now + 1000,existingMetrics,null);
   TimelineMetrics newMetrics=new TimelineMetrics();
   TimelineMetric timelineMetric3=new TimelineMetric();
   timelineMetric3.setMetricName("cpu_user");
@@ -41,11 +38,23 @@
   metricValues.put(now + 1600,3.0);
   timelineMetric3.setMetricValues(metricValues);
   newMetrics.getMetrics().add(timelineMetric3);
-  factory.updateTimelineMetricsInCache(newMetrics,existingMetricValue,now,now + 2000,true);
-  Assert.assertEquals(2,existingMetricValue.getTimelineMetrics().size());
-  Assert.assertEquals(3,existingMetricValue.getTimelineMetrics().get("cpu_user").getMetricValues().size());
-  Assert.assertEquals(3,existingMetricValue.getTimelineMetrics().get("cpu_nice").getMetricValues().size());
-  Map<Long,Double> newMetricsMap=existingMetricValue.getTimelineMetrics().get("cpu_user").getMetricValues();
+  factory.updateTimelineMetricsInCache(newMetrics,existingMetricValue,now,now + 2000,false);
+  Assert.assertEquals(2,existingMetricValue.getTimelineMetrics().getMetrics().size());
+  TimelineMetric newMetric1=null;
+  TimelineMetric newMetric2=null;
+  for (  TimelineMetric metric : existingMetricValue.getTimelineMetrics().getMetrics()) {
+    if (metric.getMetricName().equals("cpu_user")) {
+      newMetric1=metric;
+    }
+    if (metric.getMetricName().equals("cpu_nice")) {
+      newMetric2=metric;
+    }
+  }
+  Assert.assertNotNull(newMetric1);
+  Assert.assertNotNull(newMetric2);
+  Assert.assertEquals(3,newMetric1.getMetricValues().size());
+  Assert.assertEquals(3,newMetric2.getMetricValues().size());
+  Map<Long,Double> newMetricsMap=newMetric1.getMetricValues();
   Iterator<Long> metricKeyIterator=newMetricsMap.keySet().iterator();
   Assert.assertEquals(now + 1400,metricKeyIterator.next().longValue());
   Assert.assertEquals(now + 1500,metricKeyIterator.next().longValue());

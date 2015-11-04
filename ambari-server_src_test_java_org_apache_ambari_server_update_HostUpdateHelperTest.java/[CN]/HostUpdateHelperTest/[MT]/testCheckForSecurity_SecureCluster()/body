@@ -1,0 +1,31 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  Cluster mockCluster=easyMockSupport.createNiceMock(Cluster.class);
+  Config mockConfig=easyMockSupport.createNiceMock(Config.class);
+  Map<String,Map<String,String>> clusterHostsToChange=new HashMap<>();
+  Map<String,String> clusterEnvProperties=new HashMap<>();
+  clusterHostsToChange.put("cl1",null);
+  clusterEnvProperties.put("security_enabled","true");
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getCluster("cl1")).andReturn(mockCluster).once();
+  expect(mockCluster.getDesiredConfigByType("cluster-env")).andReturn(mockConfig).once();
+  expect(mockConfig.getProperties()).andReturn(clusterEnvProperties).once();
+  HostUpdateHelper hostUpdateHelper=new HostUpdateHelper(null,null,mockInjector);
+  hostUpdateHelper.setHostChangesFileMap(clusterHostsToChange);
+  easyMockSupport.replayAll();
+  try {
+    hostUpdateHelper.checkForSecurity();
+  }
+ catch (  AmbariException e) {
+    assert(e.getMessage().equals("Cluster(s) cl1 from file, is(are) in secure mode. Please, turn off security mode."));
+  }
+  easyMockSupport.verifyAll();
+}
