@@ -1,5 +1,5 @@
 {
-  String hostName=host.getHostName();
+  final String hostName=host.getHostName();
   try {
     topology.addHostToTopology(response.getHostGroupName(),hostName);
   }
@@ -9,7 +9,19 @@
 catch (  NoSuchHostGroupException e) {
     throw new RuntimeException("An internal error occurred while performing request host registration: " + e,e);
   }
-  persistedState.registerHostName(response.getHostRequestId(),hostName);
+  try {
+    RetryHelper.executeWithRetry(new Callable<Object>(){
+      @Override public Object call() throws Exception {
+        persistedState.registerHostName(response.getHostRequestId(),hostName);
+        return null;
+      }
+    }
+);
+  }
+ catch (  AmbariException e) {
+    LOG.error("Exception ocurred while registering host name",e);
+    throw new RuntimeException(e);
+  }
   LOG.info("TopologyManager.processAcceptedHostOffer: about to execute tasks for host = {}",hostName);
   for (  TopologyTask task : response.getTasks()) {
     LOG.info("Processing accepted host offer for {} which responded {} and task {}",hostName,response.getAnswer(),task.getType());
