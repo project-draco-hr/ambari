@@ -1,0 +1,25 @@
+{
+  Users users=createNiceMock(Users.class);
+  AuthenticationEntryPoint entryPoint=createNiceMock(AuthenticationEntryPoint.class);
+  HttpServletRequest request=createNiceMock(HttpServletRequest.class);
+  HttpServletResponse response=createNiceMock(HttpServletResponse.class);
+  FilterChain chain=createNiceMock(FilterChain.class);
+  AmbariGrantedAuthority authority=createNiceMock(AmbariGrantedAuthority.class);
+  User user=createNiceMock(User.class);
+  SignedJWT signedJWT=getSignedToken();
+  JwtAuthenticationProperties properties=createTestProperties();
+  JwtAuthenticationFilter filter=createMockBuilder(JwtAuthenticationFilter.class).addMockedMethod("getJWTFromCookie").withConstructor(properties,entryPoint,users).createNiceMock();
+  expect(filter.getJWTFromCookie(anyObject(HttpServletRequest.class))).andReturn(signedJWT.serialize());
+  expect(users.getUser(eq("test-user"),eq(UserType.JWT))).andReturn(null).once();
+  expect(users.getUser(eq("test-user"),eq(UserType.JWT))).andReturn(user).anyTimes();
+  users.createUser(eq("test-user"),anyObject(String.class),eq(UserType.JWT),eq(true),eq(false));
+  expectLastCall();
+  expect(users.getUserAuthorities(eq("test-user"),eq(UserType.JWT))).andReturn(Collections.singletonList(authority));
+  expect(user.getUserName()).andReturn("test-user");
+  expect(user.getUserType()).andReturn(UserType.JWT);
+  replay(users,request,response,chain,filter,entryPoint,user,authority);
+  filter.doFilter(request,response,chain);
+  verify(users,request,response,chain,filter,entryPoint,user,authority);
+  Authentication authentication=SecurityContextHolder.getContext().getAuthentication();
+  assertEquals(true,authentication.isAuthenticated());
+}
