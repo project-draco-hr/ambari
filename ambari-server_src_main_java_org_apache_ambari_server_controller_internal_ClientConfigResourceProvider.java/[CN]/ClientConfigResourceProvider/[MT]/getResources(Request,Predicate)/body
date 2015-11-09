@@ -43,6 +43,8 @@
     String packageFolderAbsolute=resourceDirPath + File.separator + packageFolder;
     String commandScriptAbsolute=packageFolderAbsolute + File.separator + commandScript;
     Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
+    Map<String,Long> configVersions=new TreeMap<String,Long>();
+    Map<String,Map<PropertyType,Set<String>>> configPropertiesTypes=new TreeMap<>();
     Map<String,Map<String,Map<String,String>>> configurationAttributes=new TreeMap<String,Map<String,Map<String,String>>>();
     Map<String,DesiredConfig> desiredClusterConfigs=cluster.getDesiredConfigs();
     for (    Map.Entry<String,DesiredConfig> desiredConfigEntry : desiredClusterConfigs.entrySet()) {
@@ -66,6 +68,8 @@
           }
         }
         configurations.put(clusterConfig.getType(),props);
+        configVersions.put(clusterConfig.getType(),clusterConfig.getVersion());
+        configPropertiesTypes.put(clusterConfig.getType(),clusterConfig.getPropertiesTypes());
         Map<String,Map<String,String>> attrs=new TreeMap<String,Map<String,String>>();
         configHelper.cloneAttributesMap(clusterConfig.getPropertiesAttributes(),attrs);
         Map<String,Map<String,Map<String,String>>> attributes=configHelper.getEffectiveConfigAttributes(cluster,configTags);
@@ -77,6 +81,13 @@
     }
     if (configurations.get(Configuration.HIVE_CONFIG_TAG) != null) {
       configurations.get(Configuration.HIVE_CONFIG_TAG).remove(Configuration.HIVE_METASTORE_PASSWORD_PROPERTY);
+    }
+    for (    Map.Entry<String,Map<String,String>> configEntry : configurations.entrySet()) {
+      String configType=configEntry.getKey();
+      Map<String,String> configProperties=configEntry.getValue();
+      Long configVersion=configVersions.get(configType);
+      Map<PropertyType,Set<String>> propertiesTypes=configPropertiesTypes.get(configType);
+      SecretReference.replacePasswordsWithReferences(propertiesTypes,configProperties,configType,configVersion);
     }
     Map<String,Set<String>> clusterHostInfo=null;
     ServiceInfo serviceInfo=null;
