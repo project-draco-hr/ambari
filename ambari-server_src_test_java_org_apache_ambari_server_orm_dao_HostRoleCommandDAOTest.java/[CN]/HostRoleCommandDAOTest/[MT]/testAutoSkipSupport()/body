@@ -1,0 +1,37 @@
+{
+  OrmTestHelper helper=m_injector.getInstance(OrmTestHelper.class);
+  helper.createDefaultData();
+  Long requestId=Long.valueOf(100L);
+  ClusterEntity clusterEntity=m_clusterDAO.findByName("test_cluster1");
+  RequestEntity requestEntity=new RequestEntity();
+  requestEntity.setRequestId(requestId);
+  requestEntity.setClusterId(clusterEntity.getClusterId());
+  requestEntity.setStages(new ArrayList<StageEntity>());
+  m_requestDAO.create(requestEntity);
+  AtomicLong stageId=new AtomicLong(1);
+  HostEntity host=m_hostDAO.findByName("test_host1");
+  host.setHostRoleCommandEntities(new ArrayList<HostRoleCommandEntity>());
+  long stageIdAutoSkipAll=stageId.getAndIncrement();
+  createStage(stageIdAutoSkipAll,3,host,requestEntity,HostRoleStatus.PENDING,true,true,true);
+  List<HostRoleCommandEntity> tasks=m_hostRoleCommandDAO.findByRequest(requestId);
+  for (  HostRoleCommandEntity task : tasks) {
+    Assert.assertTrue(task.isFailureAutoSkipped());
+  }
+  long stageIdSkippableButNoAutoSkip=stageId.getAndIncrement();
+  createStage(stageIdSkippableButNoAutoSkip,3,host,requestEntity,HostRoleStatus.PENDING,true,false,true);
+  tasks=m_hostRoleCommandDAO.findByRequest(requestId);
+  for (  HostRoleCommandEntity task : tasks) {
+    StageEntity stage=task.getStage();
+    if (stage.getStageId() == stageIdAutoSkipAll) {
+      Assert.assertTrue(task.isFailureAutoSkipped());
+    }
+ else     if (stage.getStageId() == stageIdSkippableButNoAutoSkip) {
+      Assert.assertFalse(task.isFailureAutoSkipped());
+    }
+  }
+  m_hostRoleCommandDAO.updateAutomaticSkipOnFailure(requestId,false,false);
+  tasks=m_hostRoleCommandDAO.findByRequest(requestId);
+  for (  HostRoleCommandEntity task : tasks) {
+    Assert.assertFalse(task.isFailureAutoSkipped());
+  }
+}
