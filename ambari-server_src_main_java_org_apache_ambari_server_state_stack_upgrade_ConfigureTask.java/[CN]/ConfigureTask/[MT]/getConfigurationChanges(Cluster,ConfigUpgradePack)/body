@@ -43,7 +43,23 @@
     List<Transfer> allowedTransfers=new ArrayList<>();
     for (    Transfer transfer : transfers) {
       if (transfer.operation == TransferOperation.DELETE) {
-        if (StringUtils.isNotBlank(transfer.ifKey) && StringUtils.isNotBlank(transfer.ifType) && transfer.ifValue != null) {
+        boolean ifKeyIsNotBlank=StringUtils.isNotBlank(transfer.ifKey);
+        boolean ifTypeIsNotBlank=StringUtils.isNotBlank(transfer.ifType);
+        if (ifKeyIsNotBlank && ifTypeIsNotBlank && transfer.ifKeyState == PropertyKeyState.ABSENT) {
+          boolean keyPresent=getDesiredConfigurationKeyPresence(cluster,transfer.ifType,transfer.ifKey);
+          if (keyPresent) {
+            LOG.info("Skipping property delete for {}/{} as the key {} for {} is present",definition.getConfigType(),transfer.deleteKey,transfer.ifKey,transfer.ifType);
+            continue;
+          }
+        }
+        if (ifKeyIsNotBlank && ifTypeIsNotBlank && transfer.ifValue == null && transfer.ifKeyState == PropertyKeyState.PRESENT) {
+          boolean keyPresent=getDesiredConfigurationKeyPresence(cluster,transfer.ifType,transfer.ifKey);
+          if (!keyPresent) {
+            LOG.info("Skipping property delete for {}/{} as the key {} for {} is not present",definition.getConfigType(),transfer.deleteKey,transfer.ifKey,transfer.ifType);
+            continue;
+          }
+        }
+        if (ifKeyIsNotBlank && ifTypeIsNotBlank && transfer.ifValue != null) {
           String ifConfigType=transfer.ifType;
           String ifKey=transfer.ifKey;
           String ifValue=transfer.ifValue;
