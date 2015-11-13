@@ -1,0 +1,33 @@
+{
+  final long startTime=System.currentTimeMillis();
+  final int delay=configuration.getTimelineMetricsServiceWatcherDelay();
+  final int timeout=configuration.getTimelineMetricsServiceWatcherTimeout();
+  TimelineMetric fakeMetric=new TimelineMetric();
+  fakeMetric.setMetricName(FAKE_METRIC_NAME);
+  fakeMetric.setHostName(FAKE_HOSTNAME);
+  fakeMetric.setAppId(FAKE_APP_ID);
+  fakeMetric.setStartTime(startTime);
+  fakeMetric.setTimestamp(startTime);
+  fakeMetric.getMetricValues().put(startTime,0.0);
+  final TimelineMetrics metrics=new TimelineMetrics();
+  metrics.setMetrics(Collections.singletonList(fakeMetric));
+  Callable<TimelineMetric> task=new Callable<TimelineMetric>(){
+    public TimelineMetric call() throws Exception {
+      timelineMetricStore.putMetrics(metrics);
+      return timelineMetricStore.getTimelineMetric(FAKE_METRIC_NAME,Collections.singletonList(FAKE_HOSTNAME),FAKE_APP_ID,null,startTime - delay * 2 * 1000,startTime + delay * 2 * 1000,Precision.SECONDS,1);
+    }
+  }
+;
+  Future<TimelineMetric> future=executor.submit(task);
+  TimelineMetric timelineMetric=null;
+  try {
+    timelineMetric=future.get(timeout,TimeUnit.SECONDS);
+  }
+ catch (  Exception e) {
+    return false;
+  }
+ finally {
+    future.cancel(true);
+  }
+  return timelineMetric != null;
+}
