@@ -3,7 +3,14 @@
   BufferedReader reader=null;
   TimelineMetrics timelineMetrics=null;
   try {
-    reader=new BufferedReader(new InputStreamReader(streamProvider.readFrom(spec)));
+    HttpURLConnection connection=streamProvider.processURL(spec,HttpMethod.GET,(String)null,null);
+    if (connection.getResponseCode() == HttpStatus.SC_BAD_REQUEST) {
+      InputStream errorStream=connection.getErrorStream();
+      reader=new BufferedReader(new InputStreamReader(errorStream));
+      throw new IOException(reader.readLine());
+    }
+    InputStream inputStream=connection.getInputStream();
+    reader=new BufferedReader(new InputStreamReader(inputStream));
     timelineMetrics=timelineObjectReader.readValue(reader);
     if (LOG.isTraceEnabled()) {
       for (      TimelineMetric metric : timelineMetrics.getMetrics()) {
@@ -12,9 +19,10 @@
     }
   }
  catch (  IOException io) {
-    String errorMsg="Error getting timeline metrics.";
+    String errorMsg="Error getting timeline metrics : " + io.getMessage();
+    LOG.error(errorMsg);
     if (LOG.isDebugEnabled()) {
-      LOG.error(errorMsg,io);
+      LOG.debug(errorMsg,io);
     }
     if (io instanceof SocketTimeoutException) {
       errorMsg+=" Can not connect to collector, socket error.";
