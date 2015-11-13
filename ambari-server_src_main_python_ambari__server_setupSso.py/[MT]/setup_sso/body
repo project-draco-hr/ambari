@@ -5,29 +5,34 @@ def setup_sso(args):
     if (not get_silent()):
         properties = get_ambari_properties()
         must_setup_params = False
+        store_new_cert = False
         sso_enabled = (properties.get_property(JWT_AUTH_ENBABLED).lower() in ['true'])
         if sso_enabled:
             if get_YN_input('Do you want to disable SSO authentication [y/n] (n)?', False):
                 properties.process_pair(JWT_AUTH_ENBABLED, 'false')
         elif get_YN_input('Do you want to configure SSO authentication [y/n] (y)?', True):
+            properties.process_pair(JWT_AUTH_ENBABLED, 'true')
             must_setup_params = True
         else:
             return False
         if must_setup_params:
-            provider_url = properties.get_property(JWT_AUTH_PROVIDER_URL)
-            provider_url = get_validated_string_input('Provider URL [URL] ({}):'.format(provider_url), provider_url, REGEX_ANYTHING, 'Invalid provider URL', False)
+            provider_url = get_value_from_properties(properties, JWT_AUTH_PROVIDER_URL, JWT_AUTH_PROVIDER_URL_DEFAULT)
+            provider_url = get_validated_string_input('Provider URL [URL] ({0}):'.format(provider_url), provider_url, REGEX_ANYTHING, 'Invalid provider URL', False)
             properties.process_pair(JWT_AUTH_PROVIDER_URL, provider_url)
-            cert_string = properties.get_property(JWT_PUBLIC_KEY)
-            cert_string = get_validated_string_input('Public Certificate [BASE64] ({}):'.format(('stored' if cert_string else 'empty')), cert_string, REGEX_ANYTHING, 'Invalid public certificae string', False)
+            cert_path = properties.get_property(JWT_PUBLIC_KEY)
+            cert_string = get_multi_line_input('Public Certificate pem ({0})'.format(('stored' if cert_path else 'empty')))
+            if (cert_string is not None):
+                store_new_cert = True
             if get_YN_input('Do you want to configure advanced properties [y/n] (n) ?', False):
                 cookie_name = get_value_from_properties(properties, JWT_COOKIE_NAME, JWT_COOKIE_NAME_DEFAULT)
-                cookie_name = get_validated_string_input('JWT Cookie name ({}):'.format(cookie_name), cookie_name, REGEX_ANYTHING, 'Invalid cookie name', False)
+                cookie_name = get_validated_string_input('JWT Cookie name ({0}):'.format(cookie_name), cookie_name, REGEX_ANYTHING, 'Invalid cookie name', False)
                 properties.process_pair(JWT_COOKIE_NAME, cookie_name)
                 audiences = properties.get_property(JWT_AUDIENCES)
-                audiences = get_validated_string_input('JWT audiences list (comma-separated), empty for any ({}):'.format(audiences), audiences, REGEX_ANYTHING, 'Invalid value', False)
+                audiences = get_validated_string_input('JWT audiences list (comma-separated), empty for any ({0}):'.format(audiences), audiences, REGEX_ANYTHING, 'Invalid value', False)
                 properties.process_pair(JWT_AUDIENCES, audiences)
-            full_cert = ((JWT_PUBLIC_KEY_HEADER + cert_string) + JWT_PUBLIC_KEY_FOOTER)
-            cert_path = store_password_file(full_cert, JWT_PUBLIC_KEY_FILENAME)
+            if store_new_cert:
+                full_cert = ((JWT_PUBLIC_KEY_HEADER + cert_string) + JWT_PUBLIC_KEY_FOOTER)
+                cert_path = store_password_file(full_cert, JWT_PUBLIC_KEY_FILENAME)
             properties.process_pair(JWT_PUBLIC_KEY, cert_path)
         update_properties(properties)
         pass
