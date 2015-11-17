@@ -1,0 +1,48 @@
+{
+  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  Set<Resource> resources=new HashSet<Resource>();
+  ResourceProvider userPrivilegeProvider=clusterController.ensureResourceProvider(Type.UserPrivilege);
+  for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+    String username=(String)propertyMap.get(USERNAME_PROPERTY_ID);
+    Request internalRequest=createUserPrivilegeRequest();
+    Predicate internalPredicate=createUserPrivilegePredicate(username);
+    Set<Resource> internalResources=userPrivilegeProvider.getResources(internalRequest,internalPredicate);
+    if (internalResources != null) {
+      for (      Resource internalResource : internalResources) {
+        String permissionName=(String)internalResource.getPropertyValue(UserPrivilegeResourceProvider.PRIVILEGE_PERMISSION_NAME_PROPERTY_ID);
+        String resourceType=(String)internalResource.getPropertyValue(UserPrivilegeResourceProvider.PRIVILEGE_TYPE_PROPERTY_ID);
+        Collection<RoleAuthorizationEntity> authorizationEntities;
+        ResourceTypeEntity resourceTypeEntity=resourceTypeDAO.findByName(resourceType);
+        if (resourceTypeEntity != null) {
+          PermissionEntity permissionEntity=permissionDAO.findPermissionByNameAndType(permissionName,resourceTypeEntity);
+          if (permissionEntity == null) {
+            authorizationEntities=null;
+          }
+ else {
+            if (permissionName.startsWith("AMBARI")) {
+              authorizationEntities=createAdminAuthorizations();
+            }
+ else             if (permissionName.startsWith("CLUSTER")) {
+              authorizationEntities=createOperatorAuthorizations();
+            }
+ else             if (permissionName.startsWith("VIEW")) {
+              authorizationEntities=createViewUserAuthorizations();
+            }
+ else {
+              authorizationEntities=null;
+            }
+          }
+          if (authorizationEntities != null) {
+            if ("VIEW".equals(resourceType)) {
+              addViewResources(resources,username,resourceType,internalResource,authorizationEntities,requestedIds);
+            }
+ else {
+              addClusterResources(resources,username,resourceType,internalResource,authorizationEntities,requestedIds);
+            }
+          }
+        }
+      }
+    }
+  }
+  return resources;
+}
