@@ -1,0 +1,56 @@
+def execute(configurations={}, parameters={}, host_name=None):
+    '\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  configurations (dictionary): a mapping of configuration key to value\n  parameters (dictionary): a mapping of script parameter key to value\n  host_name (string): the name of this host where the alert is running\n  '
+    if (configurations is None):
+        return ('UNKNOWN', ['There were no configurations supplied to the script.'])
+    ranger_link = None
+    ranger_auth_link = None
+    ranger_get_user = None
+    admin_username = None
+    admin_password = None
+    ranger_admin_username = None
+    ranger_admin_password = None
+    if (RANGER_ADMIN_URL in configurations):
+        ranger_link = configurations[RANGER_ADMIN_URL]
+        if ranger_link.endswith('/'):
+            ranger_link = ranger_link[:(-1)]
+        ranger_auth_link = '{0}/{1}'.format(ranger_link, 'service/public/api/repository/count')
+        ranger_get_user = '{0}/{1}'.format(ranger_link, 'service/xusers/users')
+    if (ADMIN_USERNAME in configurations):
+        admin_username = configurations[ADMIN_USERNAME]
+    if (ADMIN_PASSWORD in configurations):
+        admin_password = configurations[ADMIN_PASSWORD]
+    if (RANGER_ADMIN_USERNAME in configurations):
+        ranger_admin_username = configurations[RANGER_ADMIN_USERNAME]
+    if (RANGER_ADMIN_PASSWORD in configurations):
+        ranger_admin_password = configurations[RANGER_ADMIN_PASSWORD]
+    label = None
+    result_code = 'OK'
+    try:
+        admin_http_code = check_ranger_login(ranger_auth_link, admin_username, admin_password)
+        if (admin_http_code == 200):
+            get_user_code = get_ranger_user(ranger_get_user, admin_username, admin_password, ranger_admin_username)
+            if get_user_code:
+                user_http_code = check_ranger_login(ranger_auth_link, ranger_admin_username, ranger_admin_password)
+                if (user_http_code == 200):
+                    result_code = 'OK'
+                    label = 'Login Successful for users {0} and {1}'.format(admin_username, ranger_admin_username)
+                elif (user_http_code == 401):
+                    result_code = 'CRITICAL'
+                    label = 'User:{0} credentials on Ambari UI are not in sync with Ranger'.format(ranger_admin_username)
+                else:
+                    result_code = 'WARNING'
+                    label = 'Ranger Admin service is not reachable, please restart the service'
+            else:
+                result_code = 'OK'
+                label = 'Login Successful for user: {0}. User:{1} user not yet synced with Ranger'.format(admin_username, ranger_admin_username)
+        elif (admin_http_code == 401):
+            result_code = 'CRITICAL'
+            label = 'User:{0} credentials on Ambari UI are not in sync with Ranger'.format(admin_username)
+        else:
+            result_code = 'WARNING'
+            label = 'Ranger Admin service is not reachable, please restart the service'
+    except Exception as e:
+        label = str(e)
+        result_code = 'UNKNOWN'
+        logger.exception(label)
+    return (result_code, [label])
