@@ -1,7 +1,23 @@
 def select(stack_name, package, version, try_create=True):
-    '\n  Selects a config version for the specified package.  Currently only works if the version is\n  for HDP-2.3 or higher\n  :stack_name: the name of the stack\n  :package: the name of the package, as-used by conf-select\n  :version: the version number to create\n  :try_create: optional argument to attempt to create the directory before setting it\n  '
+    '\n  Selects a config version for the specified package.\n  :stack_name: the name of the stack\n  :package: the name of the package, as-used by conf-select\n  :version: the version number to create\n  :try_create: optional argument to attempt to create the directory before setting it\n  '
     if (not _valid(stack_name, package, version)):
         return
     if try_create:
         create(stack_name, package, version)
     shell.checked_call(get_cmd('set-conf-dir', package, version), logoutput=False, quiet=False, sudo=True)
+    if (package in PACKAGE_DIRS):
+        conf_dirs = PACKAGE_DIRS[package]
+        Logger.info('For package : {0}, DIRS = {1}'.format(package, conf_dirs))
+        for dirInfo in conf_dirs:
+            if (('conf_dir' in dirInfo) and ('current_dir' in dirInfo)):
+                conf_dir = dirInfo['conf_dir']
+                current_dir = dirInfo['current_dir']
+                Logger.info('For package : {0}, Source dir: {1}, Dest dir: {2}'.format(package, conf_dir, current_dir))
+                if os.path.exists(current_dir):
+                    real_path_of_current_dir = os.path.realpath(current_dir)
+                    normalized_conf_dir = os.path.normpath(conf_dir).strip()
+                    normalized_current_dir = os.path.normpath(real_path_of_current_dir).strip()
+                    Logger.info('Normalized Conf Dir : {0}, Normalized Current Dir : {1}'.format(normalized_conf_dir, normalized_current_dir))
+                    if ((not os.path.isdir(normalized_conf_dir)) and os.path.isdir(normalized_current_dir) and (normalized_current_dir != normalized_conf_dir)):
+                        Logger.info('Creating Symlink : {0} -> {1}'.format(normalized_conf_dir, normalized_current_dir))
+                        os.symlink(normalized_current_dir, normalized_conf_dir)
