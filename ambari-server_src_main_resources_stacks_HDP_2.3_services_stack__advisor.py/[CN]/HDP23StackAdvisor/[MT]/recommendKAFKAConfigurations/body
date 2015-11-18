@@ -1,5 +1,6 @@
 def recommendKAFKAConfigurations(self, configurations, clusterData, services, hosts):
-    core_site = services['configurations']['core-site']['properties']
+    kafka_broker = getServicesSiteProperties(services, 'kafka-broker')
+    security_enabled = ((kafka_broker is not None) and ('security.inter.broker.protocol' in kafka_broker) and ('SASL' in kafka_broker['security.inter.broker.protocol']))
     putKafkaBrokerProperty = self.putProperty(configurations, 'kafka-broker', services)
     putKafkaLog4jProperty = self.putProperty(configurations, 'kafka-log4j', services)
     putKafkaBrokerAttributes = self.putPropertyAttribute(configurations, 'kafka-broker')
@@ -25,11 +26,9 @@ def recommendKAFKAConfigurations(self, configurations, clusterData, services, ho
                     if (kafkaLog4jRangerLines[item]['name'] not in kafkaLog4jContent):
                         kafkaLog4jContent += ((('\n' + kafkaLog4jRangerLines[item]['name']) + '=') + kafkaLog4jRangerLines[item]['value'])
                 putKafkaLog4jProperty('content', kafkaLog4jContent)
-        elif (('hadoop.security.authentication' in core_site) and (core_site['hadoop.security.authentication'] == 'kerberos') and (services['configurations']['kafka-broker']['properties']['authorizer.class.name'] == 'org.apache.ranger.authorization.kafka.authorizer.RangerKafkaAuthorizer')):
+        elif (security_enabled and ('kafka-broker' in services['configurations']) and ('authorizer.class.name' in services['configurations']['kafka-broker']['properties']) and (services['configurations']['kafka-broker']['properties']['authorizer.class.name'] == 'org.apache.ranger.authorization.kafka.authorizer.RangerKafkaAuthorizer')):
             putKafkaBrokerProperty('authorizer.class.name', 'kafka.security.auth.SimpleAclAuthorizer')
         else:
             putKafkaBrokerAttributes('authorizer.class.name', 'delete', 'true')
-    elif (('hadoop.security.authentication' not in core_site) or (core_site['hadoop.security.authentication'] != 'kerberos')):
-        putKafkaBrokerAttributes('authorizer.class.name', 'delete', 'true')
-    elif (('hadoop.security.authentication' not in core_site) or (core_site['hadoop.security.authentication'] != 'kerberos')):
+    elif (not security_enabled):
         putKafkaBrokerAttributes('authorizer.class.name', 'delete', 'true')

@@ -6,11 +6,14 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
     amsCollectorHosts = self.getComponentHostNames(services, 'AMBARI_METRICS', 'METRICS_COLLECTOR')
     rootDir = 'file:///var/lib/ambari-metrics-collector/hbase'
     tmpDir = '/var/lib/ambari-metrics-collector/hbase-tmp'
+    hbaseClusterDistributed = False
     if ('ams-hbase-site' in services['configurations']):
         if ('hbase.rootdir' in services['configurations']['ams-hbase-site']['properties']):
             rootDir = services['configurations']['ams-hbase-site']['properties']['hbase.rootdir']
         if ('hbase.tmp.dir' in services['configurations']['ams-hbase-site']['properties']):
             tmpDir = services['configurations']['ams-hbase-site']['properties']['hbase.tmp.dir']
+        if ('hbase.cluster.distributed' in services['configurations']['ams-hbase-site']['properties']):
+            hbaseClusterDistributed = (services['configurations']['ams-hbase-site']['properties']['hbase.cluster.distributed'].lower() == 'true')
     mountpoints = ['/']
     for collectorHostName in amsCollectorHosts:
         for host in hosts['items']:
@@ -56,7 +59,7 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
         else:
             putAmsHbaseSiteProperty('phoenix.coprocessor.maxMetaDataCacheSize', 20480000)
         pass
-    if rootDir.startswith('hdfs://'):
+    if hbaseClusterDistributed:
         putHbaseEnvProperty('hbase_master_heapsize', '512')
         putHbaseEnvProperty('hbase_master_xmn_size', '102')
         putHbaseEnvProperty('hbase_regionserver_heapsize', hbase_heapsize)
@@ -76,7 +79,7 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
     metricsDir = os.path.join(scriptDir, '../../../../common-services/AMBARI_METRICS/0.1.0/package')
     serviceMetricsDir = os.path.join(metricsDir, 'files', 'service-metrics')
     sys.path.append(os.path.join(metricsDir, 'scripts'))
-    mode = ('distributed' if rootDir.startswith('hdfs://') else 'embedded')
+    mode = ('distributed' if hbaseClusterDistributed else 'embedded')
     servicesList = [service['StackServices']['service_name'] for service in services['services']]
     from split_points import FindSplitPointsForAMSRegions
     ams_hbase_site = None

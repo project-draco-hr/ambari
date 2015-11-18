@@ -32,7 +32,11 @@ def recommendRangerConfigurations(self, configurations, clusterData, services, h
         if ('authentication.ldap.managerDn' in serverProperties):
             putRangerUgsyncSite('ranger.usersync.ldap.binddn', serverProperties['authentication.ldap.managerDn'])
         if ('authentication.ldap.primaryUrl' in serverProperties):
-            putRangerUgsyncSite('ranger.usersync.ldap.url', serverProperties['authentication.ldap.primaryUrl'])
+            ldap_protocol = 'ldap://'
+            if (('authentication.ldap.useSSL' in serverProperties) and (serverProperties['authentication.ldap.useSSL'] == 'true')):
+                ldap_protocol = 'ldaps://'
+            ldapUrl = ((ldap_protocol + serverProperties['authentication.ldap.primaryUrl']) if serverProperties['authentication.ldap.primaryUrl'] else serverProperties['authentication.ldap.primaryUrl'])
+            putRangerUgsyncSite('ranger.usersync.ldap.url', ldapUrl)
         if ('authentication.ldap.userObjectClass' in serverProperties):
             putRangerUgsyncSite('ranger.usersync.ldap.user.objectclass', serverProperties['authentication.ldap.userObjectClass'])
         if ('authentication.ldap.usernameAttribute' in serverProperties):
@@ -43,14 +47,26 @@ def recommendRangerConfigurations(self, configurations, clusterData, services, h
         if (rangerUserSyncClass in authMap):
             rangerSqlConnectorProperty = authMap.get(rangerUserSyncClass)
             putRangerAdminProperty('ranger.authentication.method', rangerSqlConnectorProperty)
+    if (('ranger-env' in services['configurations']) and ('is_solrCloud_enabled' in services['configurations']['ranger-env']['properties'])):
+        isSolrCloudEnabled = (services['configurations']['ranger-env']['properties']['is_solrCloud_enabled'] == 'true')
+    else:
+        isSolrCloudEnabled = False
+    if isSolrCloudEnabled:
+        zookeeper_host_port = self.getZKHostPortString(services)
+        if zookeeper_host_port:
+            ranger_audit_zk_port = []
+            zk_hosts = zookeeper_host_port.split(',')
+            for zk_host in zk_hosts:
+                ranger_audit_zk_port.append('{0}/{1}'.format(zk_host, 'ranger_audits'))
+            ranger_audit_zk_port = ','.join(ranger_audit_zk_port)
+            putRangerAdminProperty('ranger.audit.solr.zookeepers', ranger_audit_zk_port)
+    else:
+        putRangerAdminProperty('ranger.audit.solr.zookeepers', 'NONE')
     include_hdfs = ('HDFS' in servicesList)
-    zookeeper_host_port = self.getZKHostPortString(services)
-    if zookeeper_host_port:
-        putRangerAdminProperty('ranger.audit.solr.zookeepers', zookeeper_host_port)
     if include_hdfs:
         if (('core-site' in services['configurations']) and ('fs.defaultFS' in services['configurations']['core-site']['properties'])):
             default_fs = services['configurations']['core-site']['properties']['fs.defaultFS']
-            putRangerEnvProperty('xasecure.audit.destination.hdfs.dir', default_fs)
+            putRangerEnvProperty('xasecure.audit.destination.hdfs.dir', '{0}/{1}/{2}'.format(default_fs, 'ranger', 'audit'))
     ranger_services = [{'service_name': 'HDFS', 'audit_file': 'ranger-hdfs-audit', }, {'service_name': 'YARN', 'audit_file': 'ranger-yarn-audit', }, {'service_name': 'HBASE', 'audit_file': 'ranger-hbase-audit', }, {'service_name': 'HIVE', 'audit_file': 'ranger-hive-audit', }, {'service_name': 'KNOX', 'audit_file': 'ranger-knox-audit', }, {'service_name': 'KAFKA', 'audit_file': 'ranger-kafka-audit', }, {'service_name': 'STORM', 'audit_file': 'ranger-storm-audit', }]
     for item in range(len(ranger_services)):
         if (ranger_services[item]['service_name'] in servicesList):

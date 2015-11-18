@@ -17,6 +17,7 @@
     factory.registerSingleton("ambariLdapDataPopulator",injector.getInstance(AmbariLdapDataPopulator.class));
     factory.registerSingleton("ambariAuthorizationFilter",injector.getInstance(AmbariAuthorizationFilter.class));
     factory.registerSingleton("ambariInternalAuthenticationProvider",injector.getInstance(AmbariInternalAuthenticationProvider.class));
+    factory.registerSingleton("ambariJwtAuthenticationFilter",injector.getInstance(JwtAuthenticationFilter.class));
     String[] contextLocations={SPRING_CONTEXT_LOCATION};
     ClassPathXmlApplicationContext springAppContext=new ClassPathXmlApplicationContext(contextLocations,parentSpringAppContext);
     ServletContextHandler root=new ServletContextHandler(ServletContextHandler.SECURITY | ServletContextHandler.SESSIONS);
@@ -46,37 +47,45 @@
     if (configs.getApiAuthentication()) {
       root.addFilter(new FilterHolder(springSecurityFilter),"/api/*",DISPATCHER_TYPES);
     }
-    SslContextFactory contextFactoryTwoWay=new SslContextFactory();
-    disableInsecureProtocols(contextFactoryTwoWay);
-    SslSelectChannelConnector sslConnectorTwoWay=new SslSelectChannelConnector(contextFactoryTwoWay);
-    sslConnectorTwoWay.setPort(configs.getTwoWayAuthPort());
     Map<String,String> configsMap=configs.getConfigsMap();
-    String keystore=configsMap.get(Configuration.SRVR_KSTR_DIR_KEY) + File.separator + configsMap.get(Configuration.KSTR_NAME_KEY);
-    String truststore=configsMap.get(Configuration.SRVR_KSTR_DIR_KEY) + File.separator + configsMap.get(Configuration.TSTR_NAME_KEY);
-    String srvrCrtPass=configsMap.get(Configuration.SRVR_CRT_PASS_KEY);
-    sslConnectorTwoWay.setKeystore(keystore);
-    sslConnectorTwoWay.setTruststore(truststore);
-    sslConnectorTwoWay.setPassword(srvrCrtPass);
-    sslConnectorTwoWay.setKeyPassword(srvrCrtPass);
-    sslConnectorTwoWay.setTrustPassword(srvrCrtPass);
-    sslConnectorTwoWay.setKeystoreType(configsMap.get(Configuration.KSTR_TYPE_KEY));
-    sslConnectorTwoWay.setTruststoreType(configsMap.get(Configuration.TSTR_TYPE_KEY));
-    sslConnectorTwoWay.setNeedClientAuth(configs.getTwoWaySsl());
-    SslContextFactory contextFactoryOneWay=new SslContextFactory(true);
-    contextFactoryOneWay.setKeyStorePath(keystore);
-    contextFactoryOneWay.setTrustStore(truststore);
-    contextFactoryOneWay.setKeyStorePassword(srvrCrtPass);
-    contextFactoryOneWay.setKeyManagerPassword(srvrCrtPass);
-    contextFactoryOneWay.setTrustStorePassword(srvrCrtPass);
-    contextFactoryOneWay.setKeyStoreType(configsMap.get(Configuration.KSTR_TYPE_KEY));
-    contextFactoryOneWay.setTrustStoreType(configsMap.get(Configuration.TSTR_TYPE_KEY));
-    contextFactoryOneWay.setNeedClientAuth(false);
-    disableInsecureProtocols(contextFactoryOneWay);
-    SslSelectChannelConnector sslConnectorOneWay=new SslSelectChannelConnector(contextFactoryOneWay);
-    sslConnectorOneWay.setPort(configs.getOneWayAuthPort());
-    sslConnectorOneWay.setAcceptors(2);
-    sslConnectorTwoWay.setAcceptors(2);
-    serverForAgent.setConnectors(new Connector[]{sslConnectorOneWay,sslConnectorTwoWay});
+    if (configs.getAgentSSLAuthentication()) {
+      SslContextFactory contextFactoryTwoWay=new SslContextFactory();
+      disableInsecureProtocols(contextFactoryTwoWay);
+      SslSelectChannelConnector sslConnectorTwoWay=new SslSelectChannelConnector(contextFactoryTwoWay);
+      sslConnectorTwoWay.setPort(configs.getTwoWayAuthPort());
+      String keystore=configsMap.get(Configuration.SRVR_KSTR_DIR_KEY) + File.separator + configsMap.get(Configuration.KSTR_NAME_KEY);
+      String truststore=configsMap.get(Configuration.SRVR_KSTR_DIR_KEY) + File.separator + configsMap.get(Configuration.TSTR_NAME_KEY);
+      String srvrCrtPass=configsMap.get(Configuration.SRVR_CRT_PASS_KEY);
+      sslConnectorTwoWay.setKeystore(keystore);
+      sslConnectorTwoWay.setTruststore(truststore);
+      sslConnectorTwoWay.setPassword(srvrCrtPass);
+      sslConnectorTwoWay.setKeyPassword(srvrCrtPass);
+      sslConnectorTwoWay.setTrustPassword(srvrCrtPass);
+      sslConnectorTwoWay.setKeystoreType(configsMap.get(Configuration.KSTR_TYPE_KEY));
+      sslConnectorTwoWay.setTruststoreType(configsMap.get(Configuration.TSTR_TYPE_KEY));
+      sslConnectorTwoWay.setNeedClientAuth(configs.getTwoWaySsl());
+      SslContextFactory contextFactoryOneWay=new SslContextFactory(true);
+      contextFactoryOneWay.setKeyStorePath(keystore);
+      contextFactoryOneWay.setTrustStore(truststore);
+      contextFactoryOneWay.setKeyStorePassword(srvrCrtPass);
+      contextFactoryOneWay.setKeyManagerPassword(srvrCrtPass);
+      contextFactoryOneWay.setTrustStorePassword(srvrCrtPass);
+      contextFactoryOneWay.setKeyStoreType(configsMap.get(Configuration.KSTR_TYPE_KEY));
+      contextFactoryOneWay.setTrustStoreType(configsMap.get(Configuration.TSTR_TYPE_KEY));
+      contextFactoryOneWay.setNeedClientAuth(false);
+      disableInsecureProtocols(contextFactoryOneWay);
+      SslSelectChannelConnector sslConnectorOneWay=new SslSelectChannelConnector(contextFactoryOneWay);
+      sslConnectorOneWay.setPort(configs.getOneWayAuthPort());
+      sslConnectorOneWay.setAcceptors(2);
+      sslConnectorTwoWay.setAcceptors(2);
+      serverForAgent.setConnectors(new Connector[]{sslConnectorOneWay,sslConnectorTwoWay});
+    }
+ else {
+      SelectChannelConnector agentConnector=new SelectChannelConnector();
+      agentConnector.setPort(configs.getOneWayAuthPort());
+      agentConnector.setMaxIdleTime(configs.getConnectionMaxIdleTime());
+      serverForAgent.addConnector(agentConnector);
+    }
     ServletHolder sh=new ServletHolder(ServletContainer.class);
     sh.setInitParameter("com.sun.jersey.config.property.resourceConfigClass","com.sun.jersey.api.core.PackagesResourceConfig");
     sh.setInitParameter("com.sun.jersey.config.property.packages","org.apache.ambari.server.api.rest;" + "org.apache.ambari.server.api.services;" + "org.apache.ambari.eventdb.webservice;"+ "org.apache.ambari.server.api");

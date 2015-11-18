@@ -1,10 +1,10 @@
 {
-  clusterTopologyCapture=new Capture<ClusterTopology>();
-  configRequestPropertiesCapture=new Capture<Map<String,Object>>();
-  configRequestPropertiesCapture2=new Capture<Map<String,Object>>();
-  configRequestPropertiesCapture3=new Capture<Map<String,Object>>();
-  updateClusterConfigRequestCapture=new Capture<ClusterRequest>();
-  updateConfigTaskCapture=new Capture<Runnable>();
+  clusterTopologyCapture=newCapture();
+  configRequestPropertiesCapture=newCapture();
+  configRequestPropertiesCapture2=newCapture();
+  configRequestPropertiesCapture3=newCapture();
+  updateClusterConfigRequestCapture=newCapture();
+  updateConfigTaskCapture=newCapture();
   topoConfiguration.setProperty("service1-site","s1-prop","s1-prop-value");
   topoConfiguration.setProperty("service2-site","s2-prop","s2-prop-value");
   topoConfiguration.setProperty("cluster-env","g-prop","g-prop-value");
@@ -65,6 +65,7 @@
   expect(request.getHostGroupInfo()).andReturn(groupInfoMap).anyTimes();
   expect(request.getTopologyValidators()).andReturn(topologyValidators).anyTimes();
   expect(request.getConfigRecommendationStrategy()).andReturn(ConfigRecommendationStrategy.NEVER_APPLY);
+  expect(request.getSecurityConfiguration()).andReturn(null).anyTimes();
   expect(group1.getBlueprintName()).andReturn(BLUEPRINT_NAME).anyTimes();
   expect(group1.getCardinality()).andReturn("test cardinality").anyTimes();
   expect(group1.containsMasterComponent()).andReturn(true).anyTimes();
@@ -85,7 +86,7 @@
   expect(group2.getName()).andReturn("group2").anyTimes();
   expect(group2.getServices()).andReturn(Arrays.asList("service1","service2")).anyTimes();
   expect(group2.getStack()).andReturn(stack).anyTimes();
-  expect(logicalRequestFactory.createRequest(eq(1L),same(request),capture(clusterTopologyCapture))).andReturn(logicalRequest).anyTimes();
+  expect(logicalRequestFactory.createRequest(eq(1L),(TopologyRequest)anyObject(),capture(clusterTopologyCapture))).andReturn(logicalRequest).anyTimes();
   expect(logicalRequest.getRequestId()).andReturn(1L).anyTimes();
   expect(logicalRequest.getReservedHosts()).andReturn(Collections.singleton("host1")).anyTimes();
   expect(logicalRequest.getRequestStatus()).andReturn(requestStatusResponse).once();
@@ -103,22 +104,16 @@
   expectLastCall().times(3);
   ambariContext.persistInstallStateForUI(CLUSTER_NAME,STACK_NAME,STACK_VERSION);
   expectLastCall().once();
+  expect(clusterController.ensureResourceProvider(anyObject(Resource.Type.class))).andReturn(resourceProvider);
   executor.execute(capture(updateConfigTaskCapture));
   expectLastCall().times(1);
   expect(persistedState.getAllRequests()).andReturn(Collections.<ClusterTopology,List<LogicalRequest>>emptyMap()).once();
   expect(persistedState.persistTopologyRequest(request)).andReturn(persistedTopologyRequest).once();
   persistedState.persistLogicalRequest(logicalRequest,1);
-  replay(blueprint,stack,request,group1,group2,ambariContext,logicalRequestFactory,logicalRequest,configurationRequest,configurationRequest2,configurationRequest3,requestStatusResponse,executor,persistedState);
+  replay(blueprint,stack,request,group1,group2,ambariContext,logicalRequestFactory,logicalRequest,configurationRequest,configurationRequest2,configurationRequest3,requestStatusResponse,executor,persistedState,securityConfigurationFactory,credentialStoreService,clusterController,resourceProvider);
   Class clazz=TopologyManager.class;
-  Field f=clazz.getDeclaredField("logicalRequestFactory");
-  f.setAccessible(true);
-  f.set(null,logicalRequestFactory);
-  f=clazz.getDeclaredField("ambariContext");
-  f.setAccessible(true);
-  f.set(null,ambariContext);
-  f=clazz.getDeclaredField("executor");
+  Field f=clazz.getDeclaredField("executor");
   f.setAccessible(true);
   f.set(topologyManager,executor);
   EasyMockSupport.injectMocks(topologyManager);
-  EasyMock.replay(securityConfigurationFactory);
 }

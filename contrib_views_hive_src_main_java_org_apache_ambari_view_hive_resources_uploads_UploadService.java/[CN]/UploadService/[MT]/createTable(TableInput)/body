@@ -1,0 +1,35 @@
+{
+  String header=tableInput.getHeader();
+  String databaseName=tableInput.getDatabaseName();
+  String tableName=tableInput.getTableName();
+  Boolean isFirstRowHeader=(Boolean)tableInput.getIsFirstRowHeader();
+  Object headerObj=JSONValue.parse(header);
+  JSONArray array=(JSONArray)headerObj;
+  List<ColumnDescription> cdList=new ArrayList<ColumnDescription>(array.size());
+  for (  Object o : array) {
+    JSONObject jo=(JSONObject)o;
+    String name=(String)jo.get("name");
+    String type=(String)jo.get("type");
+    Long p=(Long)jo.get("position");
+    Integer position=p != null ? p.intValue() : 0;
+    ColumnDescriptionImpl cdi=new ColumnDescriptionImpl(name,type,position);
+    cdList.add(cdi);
+  }
+  Map jobInfo=new HashMap<String,String>();
+  jobInfo.put("title","Internal Table Creation");
+  jobInfo.put("forcedContent",generateCreateQuery(databaseName,tableName,cdList));
+  jobInfo.put("dataBase",databaseName);
+  LOG.info("jobInfo : " + jobInfo);
+  Job job=new JobImpl(jobInfo);
+  LOG.info("job : " + job);
+  getResourceManager().create(job);
+  JobController createdJobController=getResourceManager().readController(job.getId());
+  createdJobController.submit();
+  getResourceManager().saveIfModified(createdJobController);
+  String filePath=databaseName + ".db/" + tableName+ "/"+ tableName+ ".csv";
+  JSONObject jobObject=new JSONObject();
+  jobObject.put("jobId",job.getId());
+  jobObject.put("filePath",filePath);
+  LOG.info("Create table query submitted : file should be uploaded at location : {}",filePath);
+  return Response.ok(jobObject).status(201).build();
+}

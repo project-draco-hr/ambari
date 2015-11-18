@@ -7,7 +7,9 @@
   if (securityConfiguration != null && securityConfiguration.getType() == SecurityType.KERBEROS) {
     addKerberosClient(topology);
     ambariContext.createAmbariResources(topology,clusterName,securityConfiguration.getType());
-    submitKerberosDescriptorAsArtifact(clusterName,securityConfiguration.getDescriptor());
+    if (securityConfiguration.getDescriptor() != null) {
+      submitKerberosDescriptorAsArtifact(clusterName,securityConfiguration.getDescriptor());
+    }
     Credential credential=request.getCredentialsMap().get(KDC_ADMIN_CREDENTIAL);
     if (credential == null) {
       throw new InvalidTopologyException(KDC_ADMIN_CREDENTIAL + " is missing from request.");
@@ -21,7 +23,12 @@
   topology.setClusterId(clusterId);
   request.setClusterId(clusterId);
   topology.setConfigRecommendationStrategy(request.getConfigRecommendationStrategy());
-  PersistedTopologyRequest persistedRequest=persistedState.persistTopologyRequest(request);
+  PersistedTopologyRequest persistedRequest=RetryHelper.executeWithRetry(new Callable<PersistedTopologyRequest>(){
+    @Override public PersistedTopologyRequest call() throws Exception {
+      return persistedState.persistTopologyRequest(request);
+    }
+  }
+);
   clusterTopologyMap.put(clusterId,topology);
   final Stack stack=topology.getBlueprint().getStack();
   addClusterConfigRequest(topology,new ClusterConfigurationRequest(ambariContext,topology,true,stackAdvisorBlueprintProcessor));

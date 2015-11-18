@@ -1,0 +1,67 @@
+{
+  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  Set<Resource> resources=new HashSet<Resource>();
+  Set<Map<String,Object>> propertyMaps;
+  if (predicate == null) {
+    propertyMaps=Collections.singleton(Collections.<String,Object>emptyMap());
+  }
+ else {
+    propertyMaps=getPropertyMaps(predicate);
+  }
+  if (propertyMaps != null) {
+    for (    Map<String,Object> propertyMap : propertyMaps) {
+      Object object=propertyMap.get(PERMISSION_ID_PROPERTY_ID);
+      Collection<RoleAuthorizationEntity> authorizationEntities;
+      Integer permissionId;
+      if (object instanceof String) {
+        try {
+          permissionId=Integer.valueOf((String)object);
+        }
+ catch (        NumberFormatException e) {
+          LOG.warn(PERMISSION_ID_PROPERTY_ID + " is not a valid integer value",e);
+          throw new NoSuchResourceException("The requested resource doesn't exist: Authorization not found, " + predicate,e);
+        }
+      }
+ else       if (object instanceof Number) {
+        permissionId=((Number)object).intValue();
+      }
+ else {
+        permissionId=null;
+      }
+      if (permissionId == null) {
+        authorizationEntities=createAdminAuthorizations();
+      }
+ else {
+        PermissionEntity permissionEntity=permissionDAO.findById(permissionId);
+        if (permissionEntity == null)         authorizationEntities=null;
+ else {
+          String permissionName=permissionEntity.getPermissionName();
+          if (permissionName.startsWith("AMBARI")) {
+            authorizationEntities=createAdminAuthorizations();
+          }
+ else           if (permissionName.startsWith("CLUSTER")) {
+            authorizationEntities=createOperatorAuthorizations();
+          }
+ else {
+            authorizationEntities=null;
+          }
+        }
+      }
+      if (authorizationEntities != null) {
+        String authorizationId=(String)propertyMap.get(AUTHORIZATION_ID_PROPERTY_ID);
+        if (!StringUtils.isEmpty(authorizationId)) {
+          Iterator<RoleAuthorizationEntity> iterator=authorizationEntities.iterator();
+          while (iterator.hasNext()) {
+            if (!authorizationId.equals(iterator.next().getAuthorizationId())) {
+              iterator.remove();
+            }
+          }
+        }
+        for (        RoleAuthorizationEntity entity : authorizationEntities) {
+          resources.add(toResource(permissionId,entity,requestedIds));
+        }
+      }
+    }
+  }
+  return resources;
+}

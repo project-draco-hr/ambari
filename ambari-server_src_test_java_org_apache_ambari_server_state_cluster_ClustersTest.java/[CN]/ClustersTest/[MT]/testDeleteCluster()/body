@@ -71,6 +71,20 @@
   Assert.assertEquals(2,injector.getProvider(EntityManager.class).get().createQuery("SELECT config FROM ClusterConfigEntity config").getResultList().size());
   Assert.assertEquals(1,injector.getProvider(EntityManager.class).get().createQuery("SELECT state FROM ClusterStateEntity state").getResultList().size());
   Assert.assertEquals(1,injector.getProvider(EntityManager.class).get().createQuery("SELECT config FROM ClusterConfigMappingEntity config").getResultList().size());
+  Blueprint bp=createNiceMock(Blueprint.class);
+  expect(bp.getName()).andReturn("TestBluePrint").anyTimes();
+  Configuration clusterConfig=new Configuration(Maps.<String,Map<String,String>>newHashMap(),Maps.<String,Map<String,Map<String,String>>>newHashMap());
+  Map<String,HostGroupInfo> hostGroups=Maps.newHashMap();
+  TopologyRequest topologyRequest=createNiceMock(TopologyRequest.class);
+  expect(topologyRequest.getType()).andReturn(TopologyRequest.Type.PROVISION).anyTimes();
+  expect(topologyRequest.getBlueprint()).andReturn(bp).anyTimes();
+  expect(topologyRequest.getClusterId()).andReturn(cluster.getClusterId()).anyTimes();
+  expect(topologyRequest.getConfiguration()).andReturn(clusterConfig).anyTimes();
+  expect(topologyRequest.getDescription()).andReturn("Test description").anyTimes();
+  expect(topologyRequest.getHostGroupInfo()).andReturn(hostGroups).anyTimes();
+  replay(bp,topologyRequest);
+  persistedState.persistTopologyRequest(topologyRequest);
+  Assert.assertEquals(1,topologyRequestDAO.findByClusterId(cluster.getClusterId()).size());
   clusters.deleteCluster(c1);
   Assert.assertEquals(2,hostDAO.findAll().size());
   Assert.assertNull(injector.getInstance(HostComponentStateDAO.class).findByIndex(nameNodeHost.getClusterId(),nameNodeHost.getServiceName(),nameNodeHost.getServiceComponentName(),nameNodeHostEntity.getHostId()));
@@ -78,4 +92,5 @@
   Assert.assertEquals(0,injector.getProvider(EntityManager.class).get().createQuery("SELECT config FROM ClusterConfigEntity config").getResultList().size());
   Assert.assertEquals(0,injector.getProvider(EntityManager.class).get().createQuery("SELECT state FROM ClusterStateEntity state").getResultList().size());
   Assert.assertEquals(0,injector.getProvider(EntityManager.class).get().createQuery("SELECT config FROM ClusterConfigMappingEntity config").getResultList().size());
+  Assert.assertEquals(0,topologyRequestDAO.findByClusterId(cluster.getClusterId()).size());
 }

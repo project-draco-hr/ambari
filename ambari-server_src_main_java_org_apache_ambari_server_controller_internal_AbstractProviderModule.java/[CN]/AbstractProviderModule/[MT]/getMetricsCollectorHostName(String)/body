@@ -4,12 +4,14 @@
     String currentConfigVersion=getDesiredConfigVersion(clusterName,configType);
     String oldConfigVersion=serviceConfigVersions.get(configType);
     if (!currentConfigVersion.equals(oldConfigVersion)) {
+      vipHostConfigPresent=false;
       serviceConfigVersions.put(configType,currentConfigVersion);
       Map<String,String> configProperties=getDesiredConfigMap(clusterName,currentConfigVersion,configType,Collections.singletonMap("METRICS_COLLECTOR",new String[]{"metrics_collector_vip_host"}));
       if (!configProperties.isEmpty()) {
         clusterMetricserverVipHost=configProperties.get("METRICS_COLLECTOR");
         if (clusterMetricserverVipHost != null) {
           clusterMetricCollectorMap.put(clusterName,clusterMetricserverVipHost);
+          vipHostConfigPresent=true;
         }
       }
       configProperties=getDesiredConfigMap(clusterName,currentConfigVersion,configType,Collections.singletonMap("METRICS_COLLECTOR",new String[]{"metrics_collector_vip_port"}));
@@ -20,6 +22,21 @@
   }
  catch (  NoSuchParentResourceException|UnsupportedPropertyException e) {
     LOG.warn("Failed to retrieve collector hostname.",e);
+  }
+  if (!vipHostConfigPresent) {
+    String currentCollectorHost=clusterMetricCollectorMap.get(clusterName);
+    if (!(isHostLive(clusterName,currentCollectorHost) && isHostComponentLive(clusterName,currentCollectorHost,"AMBARI_METRICS",Role.METRICS_COLLECTOR.name()))) {
+      for (      String hostname : metricServerHosts) {
+        if (isHostLive(clusterName,hostname) && isHostComponentLive(clusterName,hostname,"AMBARI_METRICS",Role.METRICS_COLLECTOR.name())) {
+          clusterMetricCollectorMap.put(clusterName,hostname);
+          LOG.debug("New Metrics Collector Host : " + hostname);
+          break;
+        }
+ else {
+          LOG.debug("Metrics Collector Host or host component not live : " + hostname);
+        }
+      }
+    }
   }
   return clusterMetricCollectorMap.get(clusterName);
 }

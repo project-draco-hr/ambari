@@ -15,6 +15,21 @@ catch (  InvalidTopologyException e) {
   Stack stack=topology.getBlueprint().getStack();
   blueprintResource.setProperty("Blueprints/stack_name",stack.getName());
   blueprintResource.setProperty("Blueprints/stack_version",stack.getVersion());
+  if (topology.isClusterKerberosEnabled()) {
+    Map<String,Object> securityConfigMap=new LinkedHashMap<>();
+    securityConfigMap.put(SecurityConfigurationFactory.TYPE_PROPERTY_ID,SecurityType.KERBEROS.name());
+    try {
+      String clusterName=topology.getAmbariContext().getClusterName(topology.getClusterId());
+      Map<String,Object> kerberosDescriptor=getKerberosDescriptor(topology.getAmbariContext().getClusterController(),clusterName);
+      if (kerberosDescriptor != null) {
+        securityConfigMap.put(SecurityConfigurationFactory.KERBEROS_DESCRIPTOR_PROPERTY_ID,kerberosDescriptor);
+      }
+    }
+ catch (    AmbariException e) {
+      LOG.info("Unable to retrieve kerberos_descriptor: ",e.getMessage());
+    }
+    blueprintResource.setProperty(BlueprintResourceProvider.BLUEPRINT_SECURITY_PROPERTY_ID,securityConfigMap);
+  }
   List<Map<String,Object>> groupList=formatGroupsAsList(topology);
   blueprintResource.setProperty("host_groups",groupList);
   blueprintResource.setProperty("configurations",processConfigurations(topology));

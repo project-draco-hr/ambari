@@ -1,0 +1,111 @@
+{
+  String rangerUrl=checkEmpty("admin-properties","policymgr_external_url",check,request);
+  if (null == rangerUrl) {
+    return;
+  }
+  String adminUsername=checkEmpty("ranger-env","admin_username",check,request);
+  if (null == adminUsername) {
+    return;
+  }
+  String adminPassword=checkEmpty("ranger-env","admin_password",check,request);
+  if (null == adminPassword) {
+    return;
+  }
+  String rangerAdminUsername=checkEmpty("ranger-env","ranger_admin_username",check,request);
+  if (null == rangerAdminUsername) {
+    return;
+  }
+  String rangerAdminPassword=checkEmpty("ranger-env","ranger_admin_password",check,request);
+  if (null == rangerAdminPassword) {
+    return;
+  }
+  if (rangerUrl.endsWith("/")) {
+    rangerUrl=rangerUrl.substring(0,rangerUrl.length() - 1);
+  }
+  String rangerAuthUrl=String.format("%s/%s",rangerUrl,"service/public/api/repository/count");
+  String rangerUserUrl=String.format("%s/%s",rangerUrl,"service/xusers/users");
+  List<String> failReasons=new ArrayList<>();
+  List<String> warnReasons=new ArrayList<>();
+  try {
+    int response=checkLogin(rangerAuthUrl,adminUsername,adminPassword);
+switch (response) {
+case 401:
+{
+        String reason=getFailReason(KEY_RANGER_PASSWORD_MISMATCH,check,request);
+        failReasons.add(String.format(reason,adminUsername));
+        break;
+      }
+case 200:
+{
+      break;
+    }
+default :
+{
+    String reason=getFailReason(KEY_RANGER_UNKNOWN_RESPONSE,check,request);
+    warnReasons.add(String.format(reason,adminUsername,response,rangerAuthUrl));
+    break;
+  }
+}
+}
+ catch (IOException e) {
+LOG.warn("Could not access the url {}.  Message: {}",rangerAuthUrl,e.getMessage(),e);
+LOG.debug("Could not access the url {}.  Message: {}",rangerAuthUrl,e.getMessage());
+String reason=getFailReason(KEY_RANGER_COULD_NOT_ACCESS,check,request);
+warnReasons.add(String.format(reason,adminUsername,rangerAuthUrl,e.getMessage()));
+}
+if (!failReasons.isEmpty()) {
+check.setFailReason(StringUtils.join(failReasons,'\n'));
+check.getFailedOn().add("RANGER");
+check.setStatus(PrereqCheckStatus.FAIL);
+return;
+}
+ else if (!warnReasons.isEmpty()) {
+check.setFailReason(StringUtils.join(warnReasons,'\n'));
+check.getFailedOn().add("RANGER");
+check.setStatus(PrereqCheckStatus.WARNING);
+return;
+}
+boolean hasUser=checkRangerUser(rangerUserUrl,adminUsername,adminPassword,rangerAdminUsername,check,request,warnReasons);
+if (hasUser) {
+try {
+int response=checkLogin(rangerAuthUrl,rangerAdminUsername,rangerAdminPassword);
+switch (response) {
+case 401:
+{
+    String reason=getFailReason(KEY_RANGER_PASSWORD_MISMATCH,check,request);
+    failReasons.add(String.format(reason,rangerAdminUsername));
+    break;
+  }
+case 200:
+{
+  break;
+}
+default :
+{
+String reason=getFailReason(KEY_RANGER_UNKNOWN_RESPONSE,check,request);
+warnReasons.add(String.format(reason,rangerAdminUsername,response,rangerAuthUrl));
+break;
+}
+}
+}
+ catch (IOException e) {
+LOG.warn("Could not access the url {}.  Message: {}",rangerAuthUrl,e.getMessage());
+LOG.debug("Could not access the url {}.  Message: {}",rangerAuthUrl,e.getMessage(),e);
+String reason=getFailReason(KEY_RANGER_COULD_NOT_ACCESS,check,request);
+warnReasons.add(String.format(reason,rangerAdminUsername,rangerAuthUrl,e.getMessage()));
+}
+}
+if (!failReasons.isEmpty()) {
+check.setFailReason(StringUtils.join(failReasons,'\n'));
+check.getFailedOn().add("RANGER");
+check.setStatus(PrereqCheckStatus.FAIL);
+}
+ else if (!warnReasons.isEmpty()) {
+check.setFailReason(StringUtils.join(warnReasons,'\n'));
+check.getFailedOn().add("RANGER");
+check.setStatus(PrereqCheckStatus.WARNING);
+}
+ else {
+check.setStatus(PrereqCheckStatus.PASS);
+}
+}

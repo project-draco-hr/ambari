@@ -1,0 +1,56 @@
+{
+  AutoSkipFailedSummaryAction action=new AutoSkipFailedSummaryAction();
+  m_injector.injectMembers(action);
+  ServiceComponentHostEvent event=createNiceMock(ServiceComponentHostEvent.class);
+  final HostRoleCommand hostRoleCommand=new HostRoleCommand("host1",Role.AMBARI_SERVER_ACTION,event,RoleCommand.EXECUTE,hostDAO,executionCommandDAO);
+  hostRoleCommand.setRequestId(1l);
+  hostRoleCommand.setStageId(1l);
+  ExecutionCommand executionCommand=new ExecutionCommand();
+  executionCommand.setClusterName("cc");
+  executionCommand.setRoleCommand(RoleCommand.EXECUTE);
+  executionCommand.setRole("AMBARI_SERVER_ACTION");
+  executionCommand.setServiceName("");
+  executionCommand.setTaskId(1l);
+  ExecutionCommandWrapper wrapper=new ExecutionCommandWrapper(executionCommand);
+  hostRoleCommand.setExecutionCommandWrapper(wrapper);
+  Field f=AbstractServerAction.class.getDeclaredField("hostRoleCommand");
+  f.setAccessible(true);
+  f.set(action,hostRoleCommand);
+  final UpgradeItemEntity upgradeItem1=new UpgradeItemEntity();
+  upgradeItem1.setStageId(5l);
+  final UpgradeItemEntity upgradeItem2=new UpgradeItemEntity();
+  upgradeItem2.setStageId(6l);
+  UpgradeGroupEntity upgradeGroupEntity=new UpgradeGroupEntity();
+  upgradeGroupEntity.setId(11l);
+  List<UpgradeItemEntity> groupUpgradeItems=new ArrayList<UpgradeItemEntity>(){
+{
+      add(upgradeItem1);
+      add(upgradeItem2);
+    }
+  }
+;
+  upgradeGroupEntity.setItems(groupUpgradeItems);
+  UpgradeItemEntity upgradeItemEntity=new UpgradeItemEntity();
+  upgradeItemEntity.setGroupEntity(upgradeGroupEntity);
+  expect(upgradeDAOMock.findUpgradeItemByRequestAndStage(anyLong(),anyLong())).andReturn(upgradeItemEntity).anyTimes();
+  expect(upgradeDAOMock.findUpgradeGroup(anyLong())).andReturn(upgradeGroupEntity).anyTimes();
+  replay(upgradeDAOMock);
+  List<HostRoleCommandEntity> skippedTasks=new ArrayList<HostRoleCommandEntity>(){
+{
+      add(createSkippedTask("DATANODE","DATANODE","host1.vm","RESTART HDFS/DATANODE",RoleCommand.CUSTOM_COMMAND,"RESTART"));
+      add(createSkippedTask("DATANODE","DATANODE","host2.vm","RESTART HDFS/DATANODE",RoleCommand.CUSTOM_COMMAND,"RESTART"));
+      add(createSkippedTask("ZOOKEEPER_QUORUM_SERVICE_CHECK","ZOOKEEPER_CLIENT","host2.vm","SERVICE_CHECK ZOOKEEPER",RoleCommand.SERVICE_CHECK,null));
+    }
+  }
+;
+  expect(hostRoleCommandDAOMock.findByStatusBetweenStages(anyLong(),anyObject(HostRoleStatus.class),anyLong(),anyLong())).andReturn(skippedTasks).anyTimes();
+  replay(hostRoleCommandDAOMock);
+  ConcurrentMap<String,Object> requestSharedDataContext=new ConcurrentHashMap<String,Object>();
+  CommandReport result=action.execute(requestSharedDataContext);
+  assertNotNull(result.getStructuredOut());
+  assertEquals(0,result.getExitCode());
+  assertEquals(HostRoleStatus.HOLDING.toString(),result.getStatus());
+  assertEquals("There were 3 skipped failure(s) that must be addressed " + "before you can proceed. Please resolve each failure before continuing with the upgrade.",result.getStdOut());
+  assertEquals("{\"failures\":" + "{\"service_check\":[\"ZOOKEEPER\"]," + "\"host_component\":{"+ "\"host1.vm\":[{\"component\":\"DATANODE\",\"service\":\"HDFS\"}],"+ "\"host2.vm\":[{\"component\":\"DATANODE\",\"service\":\"HDFS\"}]}},"+ "\"skipped\":[\"service_check\",\"host_component\"]}",result.getStructuredOut());
+  assertEquals("The following steps failed but were automatically skipped:\n" + "DATANODE on host1.vm: RESTART HDFS/DATANODE\n" + "DATANODE on host2.vm: RESTART HDFS/DATANODE\n"+ "ZOOKEEPER_CLIENT on host2.vm: SERVICE_CHECK ZOOKEEPER\n",result.getStdErr());
+}

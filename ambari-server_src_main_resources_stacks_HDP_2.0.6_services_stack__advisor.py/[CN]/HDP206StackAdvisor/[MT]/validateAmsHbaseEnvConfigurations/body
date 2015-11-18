@@ -10,8 +10,7 @@ def validateAmsHbaseEnvConfigurations(self, properties, recommendedDefaults, con
     hbase_regionserver_xmn_size = to_number(properties['regionserver_xmn_size'])
     masterXmnItem = None
     regionServerXmnItem = None
-    hbase_rootdir = amsHbaseSite.get('hbase.rootdir')
-    is_hbase_distributed = hbase_rootdir.startswith('hdfs://')
+    is_hbase_distributed = (amsHbaseSite.get('hbase.cluster.distributed').lower() == 'true')
     if is_hbase_distributed:
         minMasterXmn = (0.12 * hbase_master_heapsize)
         maxMasterXmn = (0.2 * hbase_master_heapsize)
@@ -60,12 +59,12 @@ def validateAmsHbaseEnvConfigurations(self, properties, recommendedDefaults, con
                 requiredMemory = getMemorySizeRequired(hostComponents, configurations)
                 unusedMemory = ((host['Hosts']['total_mem'] * 1024) - requiredMemory)
                 if (unusedMemory > 4294967296):
-                    heapPropertyToIncrease = ('hbase_regionserver_heapsize' if hbase_rootdir.startswith('hdfs://') else 'hbase_master_heapsize')
-                    xmnPropertyToIncrease = ('regionserver_xmn_size' if hbase_rootdir.startswith('hdfs://') else 'hbase_master_xmn_size')
+                    heapPropertyToIncrease = ('hbase_regionserver_heapsize' if is_hbase_distributed else 'hbase_master_heapsize')
+                    xmnPropertyToIncrease = ('regionserver_xmn_size' if is_hbase_distributed else 'hbase_master_xmn_size')
                     collector_heapsize = (int(((unusedMemory - 4294967296) / 5)) + (to_number(ams_env.get('metrics_collector_heapsize')) * 1048576))
                     hbase_heapsize = (int((((unusedMemory - 4294967296) * 4) / 5)) + (to_number(properties.get(heapPropertyToIncrease)) * 1048576))
                     hbase_heapsize = min((((32 * 1024) * 1024) * 1024), hbase_heapsize)
-                    xmn_size = round_to_n((0.12 * hbase_heapsize), 128)
+                    xmn_size = round_to_n(((0.12 * hbase_heapsize) / 1048576), 128)
                     msg = '{0} MB RAM is unused on the host {1} based on components assigned. Consider allocating  {2} MB to metrics_collector_heapsize in ams-env, {3} MB to {4} in ams-hbase-env and {5} MB to {6} in ams-hbase-env'
                     unusedMemoryHbaseItem = self.getWarnItem(msg.format((unusedMemory / 1048576), collectorHostName, (collector_heapsize / 1048576), (hbase_heapsize / 1048576), heapPropertyToIncrease, xmn_size, xmnPropertyToIncrease))
                     validationItems.extend([{'config-name': heapPropertyToIncrease, 'item': unusedMemoryHbaseItem, }])

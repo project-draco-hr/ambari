@@ -1,0 +1,37 @@
+{
+  String url=String.format("%s?name=%s",rangerUserUrl,userToSearch);
+  Map<String,List<String>> headers=getHeaders(username,password);
+  try {
+    HttpURLConnection conn=m_streamProvider.processURL(url,"GET",(InputStream)null,headers);
+    int result=conn.getResponseCode();
+    if (result == 200) {
+      Gson gson=new Gson();
+      Object o=gson.fromJson(new InputStreamReader(conn.getInputStream()),Object.class);
+      Map<?,?> map=(Map<?,?>)o;
+      if (!map.containsKey("vXUsers")) {
+        String reason=getFailReason(KEY_RANGER_USERS_ELEMENT_MISSING,check,request);
+        warnReasons.add(String.format(reason,url));
+        return false;
+      }
+      @SuppressWarnings("unchecked") List<Map<?,?>> list=(List<Map<?,?>>)map.get("vXUsers");
+      for (      Map<?,?> listMap : list) {
+        if (listMap.containsKey("name") && listMap.get("name").equals(userToSearch)) {
+          return true;
+        }
+      }
+    }
+  }
+ catch (  IOException e) {
+    LOG.warn("Could not determine user {}.  Error is {}",userToSearch,e.getMessage());
+    LOG.debug("Could not determine user {}.  Error is {}",userToSearch,e.getMessage(),e);
+    String reason=getFailReason(KEY_RANGER_COULD_NOT_ACCESS,check,request);
+    warnReasons.add(String.format(reason,username,url,e.getMessage()));
+  }
+catch (  Exception e) {
+    LOG.warn("Could not determine user {}.  Error is {}",userToSearch,e.getMessage());
+    LOG.debug("Could not determine user {}.  Error is {}",userToSearch,e.getMessage(),e);
+    String reason=getFailReason(KEY_RANGER_OTHER_ISSUE,check,request);
+    warnReasons.add(String.format(reason,e.getMessage(),url));
+  }
+  return false;
+}

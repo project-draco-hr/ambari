@@ -1,0 +1,23 @@
+{
+  final String configType="core-site";
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> configProperties=new HashMap<String,String>();
+  properties.put(configType,configProperties);
+  configProperties.put("hadoop.security.key.provider.path","kms://http@localhost:9292/kms");
+  Map<String,Map<String,String>> parentProperties=new HashMap<String,Map<String,String>>();
+  Configuration parentClusterConfig=new Configuration(parentProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap(),parentClusterConfig);
+  Collection<String> kmsServerComponents=new HashSet<String>();
+  kmsServerComponents.add("RANGER_KMS_SERVER");
+  Collection<String> hdfsComponents=new HashSet<String>();
+  hdfsComponents.add("NAMENODE");
+  hdfsComponents.add("DATANODE");
+  TestHostGroup group1=new TestHostGroup("group1",kmsServerComponents,Collections.singleton("host1"));
+  group1.components.add("DATANODE");
+  TestHostGroup group2=new TestHostGroup("group2",hdfsComponents,Collections.singleton("host2"));
+  Collection<TestHostGroup> hostGroups=Lists.newArrayList(group1,group2);
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForClusterCreate();
+  assertEquals("kms://http@host1:9292/kms",clusterConfig.getPropertyValue(configType,"hadoop.security.key.provider.path"));
+}

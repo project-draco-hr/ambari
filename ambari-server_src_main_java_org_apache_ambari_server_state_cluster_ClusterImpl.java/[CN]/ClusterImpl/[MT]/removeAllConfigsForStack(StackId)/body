@@ -1,0 +1,40 @@
+{
+  long clusterId=clusterEntity.getClusterId();
+  List<ClusterConfigEntity> removedClusterConfigs=new ArrayList<ClusterConfigEntity>(50);
+  Collection<ClusterConfigEntity> clusterConfigEntities=clusterEntity.getClusterConfigEntities();
+  List<ServiceConfigEntity> serviceConfigs=serviceConfigDAO.getAllServiceConfigsForClusterAndStack(clusterId,stackId);
+  Collection<ServiceConfigEntity> serviceConfigEntities=clusterEntity.getServiceConfigEntities();
+  for (  ServiceConfigEntity serviceConfig : serviceConfigs) {
+    for (    ClusterConfigEntity configEntity : serviceConfig.getClusterConfigEntities()) {
+      clusterConfigEntities.remove(configEntity);
+      clusterDAO.removeConfig(configEntity);
+      removedClusterConfigs.add(configEntity);
+    }
+    serviceConfig.getClusterConfigEntities().clear();
+    serviceConfigDAO.remove(serviceConfig);
+    serviceConfigEntities.remove(serviceConfig);
+  }
+  List<ClusterConfigEntity> clusterConfigs=clusterDAO.getAllConfigurations(clusterId,stackId);
+  for (  ClusterConfigEntity clusterConfig : clusterConfigs) {
+    clusterConfigEntities.remove(clusterConfig);
+    clusterDAO.removeConfig(clusterConfig);
+    removedClusterConfigs.add(clusterConfig);
+  }
+  clusterEntity=clusterDAO.merge(clusterEntity);
+  Collection<ClusterConfigMappingEntity> configMappingEntities=clusterEntity.getConfigMappingEntities();
+  for (  ClusterConfigEntity removedClusterConfig : removedClusterConfigs) {
+    String removedClusterConfigType=removedClusterConfig.getType();
+    String removedClusterConfigTag=removedClusterConfig.getTag();
+    Iterator<ClusterConfigMappingEntity> clusterConfigMappingIterator=configMappingEntities.iterator();
+    while (clusterConfigMappingIterator.hasNext()) {
+      ClusterConfigMappingEntity clusterConfigMapping=clusterConfigMappingIterator.next();
+      String mappingType=clusterConfigMapping.getType();
+      String mappingTag=clusterConfigMapping.getTag();
+      if (removedClusterConfigTag.equals(mappingTag) && removedClusterConfigType.equals(mappingType)) {
+        clusterConfigMappingIterator.remove();
+        clusterDAO.removeConfigMapping(clusterConfigMapping);
+      }
+    }
+  }
+  clusterEntity=clusterDAO.merge(clusterEntity);
+}
