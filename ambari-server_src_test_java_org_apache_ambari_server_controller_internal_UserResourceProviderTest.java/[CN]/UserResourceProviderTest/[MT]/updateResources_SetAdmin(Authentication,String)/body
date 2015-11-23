@@ -1,0 +1,20 @@
+{
+  Injector injector=createInjector();
+  Users users=injector.getInstance(Users.class);
+  expect(users.getAnyUser(requestedUsername)).andReturn(createMockUser(requestedUsername)).once();
+  if ("admin".equals(authentication.getName())) {
+    users.grantAdminPrivilege(requestedUsername.hashCode());
+    expectLastCall().once();
+  }
+  replayAll();
+  AmbariMetaInfo ambariMetaInfo=injector.getInstance(AmbariMetaInfo.class);
+  ambariMetaInfo.init();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  AmbariManagementController managementController=injector.getInstance(AmbariManagementController.class);
+  ResourceProvider provider=getResourceProvider(managementController);
+  Map<String,Object> properties=new LinkedHashMap<String,Object>();
+  properties.put(UserResourceProvider.USER_ADMIN_PROPERTY_ID,"true");
+  Request request=PropertyHelper.getUpdateRequest(properties,null);
+  provider.updateResources(request,createPredicate(requestedUsername));
+  verifyAll();
+}

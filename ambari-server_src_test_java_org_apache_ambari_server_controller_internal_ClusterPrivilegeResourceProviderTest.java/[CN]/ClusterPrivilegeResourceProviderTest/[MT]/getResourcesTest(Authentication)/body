@@ -1,0 +1,38 @@
+{
+  Injector injector=createInjector();
+  ResourceTypeEntity resourceTypeEntity=createMockResourceTypeEntity(ResourceType.CLUSTER);
+  ResourceEntity resourceEntity=createMockResourceEntity(20L,resourceTypeEntity);
+  PrincipalTypeEntity principalTypeEntity=createMockPrincipalTypeEntity("USER");
+  PrincipalEntity principalEntity=createMockPrincipalEntity(20L,principalTypeEntity);
+  PermissionEntity permissionEntity=createMockPermissionEntity("CLUSTER.ADMINISTRATOR","Cluster Administrator",resourceTypeEntity);
+  PrivilegeEntity privilegeEntity=createMockPrivilegeEntity(1,resourceEntity,principalEntity,permissionEntity);
+  ClusterEntity clusterEntity=createMockClusterEntity("c1",resourceEntity);
+  UserEntity userEntity=createMockUserEntity(principalEntity,"joe");
+  List<PrincipalEntity> principalEntities=new LinkedList<PrincipalEntity>();
+  principalEntities.add(principalEntity);
+  List<UserEntity> userEntities=new LinkedList<UserEntity>();
+  userEntities.add(userEntity);
+  List<PrivilegeEntity> privilegeEntities=new LinkedList<PrivilegeEntity>();
+  privilegeEntities.add(privilegeEntity);
+  PrivilegeDAO privilegeDAO=injector.getInstance(PrivilegeDAO.class);
+  expect(privilegeDAO.findAll()).andReturn(privilegeEntities);
+  List<ClusterEntity> clusterEntities=new LinkedList<ClusterEntity>();
+  clusterEntities.add(clusterEntity);
+  ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  expect(clusterDAO.findAll()).andReturn(clusterEntities);
+  UserDAO userDAO=injector.getInstance(UserDAO.class);
+  expect(userDAO.findUsersByPrincipal(principalEntities)).andReturn(userEntities);
+  GroupDAO groupDAO=injector.getInstance(GroupDAO.class);
+  expect(groupDAO.findGroupsByPrincipal(principalEntities)).andReturn(Collections.<GroupEntity>emptyList());
+  replayAll();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=getResourceProvider(injector);
+  Set<Resource> resources=provider.getResources(PropertyHelper.getReadRequest(),null);
+  Assert.assertEquals(1,resources.size());
+  Resource resource=resources.iterator().next();
+  Assert.assertEquals("CLUSTER.ADMINISTRATOR",resource.getPropertyValue(AmbariPrivilegeResourceProvider.PERMISSION_NAME_PROPERTY_ID));
+  Assert.assertEquals("Cluster Administrator",resource.getPropertyValue(AmbariPrivilegeResourceProvider.PERMISSION_LABEL_PROPERTY_ID));
+  Assert.assertEquals("joe",resource.getPropertyValue(AmbariPrivilegeResourceProvider.PRINCIPAL_NAME_PROPERTY_ID));
+  Assert.assertEquals("USER",resource.getPropertyValue(AmbariPrivilegeResourceProvider.PRINCIPAL_TYPE_PROPERTY_ID));
+  verifyAll();
+}

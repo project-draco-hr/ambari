@@ -1,0 +1,37 @@
+{
+  Injector injector=createInjector();
+  Capture<? extends String> widgetLayoutJsonCapture=newCapture();
+  UserEntity userEntity=createMockUserEntity(requestedUsername);
+  userEntity.setActiveWidgetLayouts(capture(widgetLayoutJsonCapture));
+  expectLastCall().once();
+  UserDAO userDAO=injector.getInstance(UserDAO.class);
+  expect(userDAO.findUserByName(requestedUsername)).andReturn(userEntity).atLeastOnce();
+  expect(userDAO.merge(userEntity)).andReturn(userEntity).atLeastOnce();
+  WidgetLayoutDAO widgetLayoutDAO=injector.getInstance(WidgetLayoutDAO.class);
+  expect(widgetLayoutDAO.findById(1L)).andReturn(createMockWidgetLayout(1L,requestedUsername)).atLeastOnce();
+  expect(widgetLayoutDAO.findById(2L)).andReturn(createMockWidgetLayout(2L,requestedUsername)).atLeastOnce();
+  replayAll();
+  AmbariMetaInfo ambariMetaInfo=injector.getInstance(AmbariMetaInfo.class);
+  ambariMetaInfo.init();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  AmbariManagementController managementController=injector.getInstance(AmbariManagementController.class);
+  Set<Map<String,String>> widgetLayouts=new HashSet<Map<String,String>>();
+  HashMap<String,String> layout;
+  layout=new HashMap<String,String>();
+  layout.put("id","1");
+  widgetLayouts.add(layout);
+  layout=new HashMap<String,String>();
+  layout.put("id","2");
+  widgetLayouts.add(layout);
+  HashMap<String,Object> requestProps=new HashMap<String,Object>();
+  requestProps.put(ActiveWidgetLayoutResourceProvider.WIDGETLAYOUT,widgetLayouts);
+  requestProps.put(ActiveWidgetLayoutResourceProvider.WIDGETLAYOUT_USERNAME_PROPERTY_ID,requestedUsername);
+  Request request=PropertyHelper.getUpdateRequest(requestProps,null);
+  ResourceProvider provider=getResourceProvider(injector,managementController);
+  provider.updateResources(request,createPredicate(requestedUsername));
+  verifyAll();
+  String json=widgetLayoutJsonCapture.getValue();
+  Assert.assertNotNull(json);
+  Set capturedWidgetLayouts=new Gson().fromJson(json,widgetLayouts.getClass());
+  Assert.assertEquals(widgetLayouts,capturedWidgetLayouts);
+}

@@ -1,0 +1,37 @@
+{
+  Injector injector=createInjector();
+  ResourceTypeEntity resourceTypeEntity=createMockResourceTypeEntity(ResourceType.CLUSTER);
+  PermissionEntity permissionEntity=createMockPermissionEntity("CLUSTER.ADMINISTRATOR","Cluster Administrator",resourceTypeEntity);
+  PermissionDAO permissionDAO=injector.getInstance(PermissionDAO.class);
+  expect(permissionDAO.findPermissionByNameAndType("CLUSTER.OPERATOR",resourceTypeEntity)).andReturn(permissionEntity);
+  ResourceEntity resourceEntity=createMockResourceEntity(2L,resourceTypeEntity);
+  ClusterEntity clusterEntity=createMockClusterEntity("c1",resourceEntity);
+  List<ClusterEntity> clusterEntities=new LinkedList<ClusterEntity>();
+  clusterEntities.add(clusterEntity);
+  PrincipalTypeEntity principalTypeEntity=createMockPrincipalTypeEntity("USER");
+  PrincipalEntity principalEntity=createMockPrincipalEntity(2L,principalTypeEntity);
+  UserEntity userEntity=createMockUserEntity(principalEntity,requestedUsername);
+  PrivilegeEntity privilegeEntity=createMockPrivilegeEntity(1,resourceEntity,principalEntity,permissionEntity);
+  List<PrivilegeEntity> privilegeEntities=new ArrayList<PrivilegeEntity>();
+  privilegeEntities.add(privilegeEntity);
+  UserDAO userDAO=injector.getInstance(UserDAO.class);
+  expect(userDAO.findUserByName(requestedUsername)).andReturn(userEntity).atLeastOnce();
+  ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  expect(clusterDAO.findAll()).andReturn(clusterEntities);
+  ResourceDAO resourceDAO=injector.getInstance(ResourceDAO.class);
+  expect(resourceDAO.findById(2L)).andReturn(resourceEntity).atLeastOnce();
+  PrincipalDAO principalDAO=injector.getInstance(PrincipalDAO.class);
+  expect(principalDAO.findById(2L)).andReturn(principalEntity).atLeastOnce();
+  PrivilegeDAO privilegeDAO=injector.getInstance(PrivilegeDAO.class);
+  expect(privilegeDAO.findByResourceId(2L)).andReturn(privilegeEntities).atLeastOnce();
+  replayAll();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  Map<String,Object> properties=new LinkedHashMap<String,Object>();
+  properties.put(PrivilegeResourceProvider.PERMISSION_NAME_PROPERTY_ID,"CLUSTER.OPERATOR");
+  properties.put(PrivilegeResourceProvider.PRINCIPAL_NAME_PROPERTY_ID,requestedUsername);
+  properties.put(PrivilegeResourceProvider.PRINCIPAL_TYPE_PROPERTY_ID,"USER");
+  Request request=PropertyHelper.getUpdateRequest(properties,null);
+  ResourceProvider provider=getResourceProvider(injector);
+  provider.updateResources(request,null);
+  verifyAll();
+}

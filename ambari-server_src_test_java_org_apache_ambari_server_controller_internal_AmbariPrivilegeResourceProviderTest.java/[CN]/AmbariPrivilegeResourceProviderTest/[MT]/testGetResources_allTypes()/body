@@ -1,4 +1,5 @@
 {
+  Injector injector=createInjector();
   PrivilegeEntity ambariPrivilegeEntity=createNiceMock(PrivilegeEntity.class);
   ResourceEntity ambariResourceEntity=createNiceMock(ResourceEntity.class);
   ResourceTypeEntity ambariResourceTypeEntity=createNiceMock(ResourceTypeEntity.class);
@@ -85,13 +86,18 @@
   privilegeEntities.add(clusterPrivilegeEntity);
   List<ClusterEntity> clusterEntities=new LinkedList<ClusterEntity>();
   clusterEntities.add(clusterEntity);
-  expect(clusterDAO.findAll()).andReturn(clusterEntities);
-  expect(privilegeDAO.findAll()).andReturn(privilegeEntities);
-  expect(userDAO.findUsersByPrincipal(anyObject(List.class))).andReturn(userEntities).anyTimes();
-  expect(groupDAO.findGroupsByPrincipal(anyObject(List.class))).andReturn(Collections.<GroupEntity>emptyList()).anyTimes();
-  replay(privilegeDAO,userDAO,principalDAO,permissionDAO,groupDAO,resourceDAO,clusterDAO,ambariPrivilegeEntity,ambariResourceEntity,ambariResourceTypeEntity,ambariUserEntity,ambariPrincipalEntity,ambariPermissionEntity,viewPrivilegeEntity,viewResourceEntity,viewResourceTypeEntity,viewUserEntity,viewPrincipalEntity,viewPrincipalTypeEntity,viewPermissionEntity,clusterPrivilegeEntity,clusterResourceEntity,clusterResourceTypeEntity,clusterUserEntity,clusterPrincipalEntity,clusterPermissionEntity,clusterPrincipalTypeEntity,ambariPrincipalTypeEntity,clusterEntity,viewEntity,viewInstanceEntity);
+  ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  expect(clusterDAO.findAll()).andReturn(clusterEntities).atLeastOnce();
+  PrivilegeDAO privilegeDAO=injector.getInstance(PrivilegeDAO.class);
+  expect(privilegeDAO.findAll()).andReturn(privilegeEntities).atLeastOnce();
+  UserDAO userDAO=injector.getInstance(UserDAO.class);
+  expect(userDAO.findUsersByPrincipal(anyObject(List.class))).andReturn(userEntities).atLeastOnce();
+  GroupDAO groupDAO=injector.getInstance(GroupDAO.class);
+  expect(groupDAO.findGroupsByPrincipal(anyObject(List.class))).andReturn(Collections.<GroupEntity>emptyList()).atLeastOnce();
+  replayAll();
+  SecurityContextHolder.getContext().setAuthentication(TestAuthenticationFactory.createAdministrator("admin"));
+  ResourceProvider provider=getResourceProvider(injector);
   ViewRegistry.getInstance().addDefinition(viewEntity);
-  PrivilegeResourceProvider provider=new AmbariPrivilegeResourceProvider();
   Set<Resource> resources=provider.getResources(PropertyHelper.getReadRequest(),null);
   Assert.assertEquals(3,resources.size());
   Map<Object,Resource> resourceMap=new HashMap<Object,Resource>();
@@ -126,5 +132,5 @@
   Assert.assertEquals("1.0.1",resource3.getPropertyValue(ViewPrivilegeResourceProvider.PRIVILEGE_VIEW_VERSION_PROPERTY_ID));
   Assert.assertEquals("inst1",resource3.getPropertyValue(ViewPrivilegeResourceProvider.PRIVILEGE_INSTANCE_NAME_PROPERTY_ID));
   Assert.assertEquals("VIEW",resource3.getPropertyValue(AmbariPrivilegeResourceProvider.PRIVILEGE_TYPE_PROPERTY_ID));
-  verify(privilegeDAO,userDAO,principalDAO,permissionDAO,groupDAO,resourceDAO,clusterDAO,ambariPrivilegeEntity,ambariResourceEntity,ambariResourceTypeEntity,ambariUserEntity,ambariPrincipalEntity,ambariPermissionEntity,viewPrivilegeEntity,viewResourceEntity,viewResourceTypeEntity,viewUserEntity,viewPrincipalEntity,viewPrincipalTypeEntity,viewPermissionEntity,clusterPrivilegeEntity,clusterResourceEntity,clusterResourceTypeEntity,clusterUserEntity,clusterPrincipalEntity,clusterPermissionEntity,clusterPrincipalTypeEntity,ambariPrincipalTypeEntity,clusterEntity,viewEntity,viewInstanceEntity);
+  verifyAll();
 }
