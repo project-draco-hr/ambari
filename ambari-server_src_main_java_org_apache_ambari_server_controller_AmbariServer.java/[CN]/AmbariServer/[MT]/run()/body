@@ -76,14 +76,18 @@
       disableInsecureProtocols(contextFactoryOneWay);
       SslSelectChannelConnector sslConnectorOneWay=new SslSelectChannelConnector(contextFactoryOneWay);
       sslConnectorOneWay.setPort(configs.getOneWayAuthPort());
-      sslConnectorOneWay.setAcceptors(2);
-      sslConnectorTwoWay.setAcceptors(2);
-      serverForAgent.setConnectors(new Connector[]{sslConnectorOneWay,sslConnectorTwoWay});
+      int sslAcceptors=sslConnectorOneWay.getAcceptors();
+      sslConnectorOneWay.setAcceptors(Math.max(2,sslAcceptors / 2));
+      sslConnectorTwoWay.setAcceptors(Math.max(2,sslAcceptors / 2));
+      configureJettyThreadPool(serverForAgent,sslConnectorOneWay.getAcceptors(),"qtp-ambari-agent",configs.getAgentThreadPoolSize());
+      serverForAgent.addConnector(sslConnectorOneWay);
+      serverForAgent.addConnector(sslConnectorTwoWay);
     }
  else {
       SelectChannelConnector agentConnector=new SelectChannelConnector();
       agentConnector.setPort(configs.getOneWayAuthPort());
       agentConnector.setMaxIdleTime(configs.getConnectionMaxIdleTime());
+      configureJettyThreadPool(serverForAgent,agentConnector.getAcceptors(),"qtp-ambari-agent",configs.getAgentThreadPoolSize());
       serverForAgent.addConnector(agentConnector);
     }
     ServletHolder sh=new ServletHolder(ServletContainer.class);
@@ -118,12 +122,6 @@
     if (configs.csrfProtectionEnabled()) {
       sh.setInitParameter("com.sun.jersey.spi.container.ContainerRequestFilters","org.apache.ambari.server.api.AmbariCsrfProtectionFilter");
     }
-    QueuedThreadPool qtp=new QueuedThreadPool(configs.getAgentThreadPoolSize());
-    qtp.setName("qtp-ambari-agent");
-    serverForAgent.setThreadPool(qtp);
-    qtp=new QueuedThreadPool(configs.getClientThreadPoolSize());
-    qtp.setName("qtp-client");
-    server.setThreadPool(qtp);
     SelectChannelConnector apiConnector;
     if (configs.getApiSSLAuthentication()) {
       String httpsKeystore=configsMap.get(Configuration.CLIENT_API_SSL_KSTR_DIR_NAME_KEY) + File.separator + configsMap.get(Configuration.CLIENT_API_SSL_KSTR_NAME_KEY);
@@ -149,6 +147,7 @@
       apiConnector.setPort(configs.getClientApiPort());
       apiConnector.setMaxIdleTime(configs.getConnectionMaxIdleTime());
     }
+    configureJettyThreadPool(server,apiConnector.getAcceptors(),"qtp-ambari-client",configs.getClientThreadPoolSize());
     server.addConnector(apiConnector);
     server.setStopAtShutdown(true);
     serverForAgent.setStopAtShutdown(true);
