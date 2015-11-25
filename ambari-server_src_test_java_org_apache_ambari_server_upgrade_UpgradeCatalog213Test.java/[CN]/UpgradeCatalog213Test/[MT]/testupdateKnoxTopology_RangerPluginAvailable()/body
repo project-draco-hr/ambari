@@ -1,0 +1,56 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Service mockKnoxService=easyMockSupport.createNiceMock(Service.class);
+  final Map<String,String> propertiesTopologyWithoutAuthorizationProvider=new HashMap<String,String>(){
+{
+      put("content","<topology> <gateway>  </gateway> </topology>");
+    }
+  }
+;
+  final Map<String,String> propertiesRangerKnoxPluginProperties=new HashMap<String,String>(){
+{
+      put("ranger-knox-plugin-enabled","Yes");
+    }
+  }
+;
+  final Map<String,String> propertiesTopologyExpected=new HashMap<String,String>(){
+{
+      put("content","<topology> <gateway>  <provider>\n" + "               <role>authorization</role>\n" + "               <name>XASecurePDPKnox</name>\n"+ "               <enabled>true</enabled>\n"+ "          </provider>\n"+ "     </gateway> </topology>\n");
+    }
+  }
+;
+  final Config mockTopologyConf=easyMockSupport.createNiceMock(Config.class);
+  final Config mockRangerKnoxPluginConf=easyMockSupport.createNiceMock(Config.class);
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(EntityManager.class).toInstance(entityManager);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("cl1",mockClusterExpected);
+    }
+  }
+).atLeastOnce();
+  expect(mockClusterExpected.getService("KNOX")).andReturn(mockKnoxService).once();
+  expect(mockClusterExpected.getDesiredConfigByType("topology")).andReturn(mockTopologyConf).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("ranger-knox-plugin-properties")).andReturn(mockRangerKnoxPluginConf).atLeastOnce();
+  expect(mockTopologyConf.getProperties()).andReturn(propertiesTopologyWithoutAuthorizationProvider).once();
+  expect(mockRangerKnoxPluginConf.getProperties()).andReturn(propertiesRangerKnoxPluginProperties).once();
+  UpgradeCatalog213 upgradeCatalog213=createMockBuilder(UpgradeCatalog213.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,boolean.class,boolean.class).createMock();
+  upgradeCatalog213.updateConfigurationPropertiesForCluster(mockClusterExpected,"topology",propertiesTopologyExpected,true,false);
+  expectLastCall().once();
+  easyMockSupport.replayAll();
+  replay(upgradeCatalog213);
+  upgradeCatalog213.updateKnoxTopology();
+  easyMockSupport.verifyAll();
+}
