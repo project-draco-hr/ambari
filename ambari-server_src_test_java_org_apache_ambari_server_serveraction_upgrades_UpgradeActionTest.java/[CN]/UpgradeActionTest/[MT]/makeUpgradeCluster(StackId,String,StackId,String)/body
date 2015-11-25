@@ -17,6 +17,7 @@
   hostAttributes.put("os_release_version","6");
   host.setHostAttributes(hostAttributes);
   host.persist();
+  clusters.mapHostsToCluster(Collections.singleton(hostName),clusterName);
   m_helper.getOrCreateRepositoryVersion(sourceStack,sourceRepo);
   c.createClusterVersion(sourceStack,sourceRepo,"admin",RepositoryVersionState.UPGRADING);
   c.transitionClusterVersion(sourceStack,sourceRepo,RepositoryVersionState.CURRENT);
@@ -29,9 +30,10 @@
   c.setCurrentStackVersion(targetStack);
   c.mapHostVersions(Collections.singleton(hostName),c.getCurrentClusterVersion(),RepositoryVersionState.CURRENT);
   HostDAO hostDAO=m_injector.getInstance(HostDAO.class);
-  HostVersionEntity entity=new HostVersionEntity();
-  entity.setHostEntity(hostDAO.findByName(hostName));
-  entity.setRepositoryVersion(repoVersionDAO.findByStackAndVersion(targetStack,targetRepo));
-  entity.setState(RepositoryVersionState.UPGRADED);
+  RepositoryVersionEntity repositoryVersionEntity=repoVersionDAO.findByStackAndVersion(targetStack,targetRepo);
+  HostVersionEntity entity=new HostVersionEntity(hostDAO.findByName(hostName),repositoryVersionEntity,RepositoryVersionState.UPGRADED);
   hostVersionDAO.create(entity);
+  List<HostVersionEntity> hostVersions=hostVersionDAO.findByClusterStackAndVersion(clusterName,targetStack,targetRepo);
+  assertEquals(1,hostVersions.size());
+  assertEquals(RepositoryVersionState.UPGRADED,hostVersions.get(0).getState());
 }
