@@ -1,0 +1,21 @@
+{
+  String content="{\"queryText\":\"Query Content\"}";
+  String url="http://fileurl/content#queryText";
+  String filepath="jsonpath:" + url;
+  URLStreamProvider urlStreamProvider=createNiceMock(URLStreamProvider.class);
+  InputStream inputStream=IOUtils.toInputStream(content);
+  reset(context);
+  expect(context.getProperties()).andReturn(properties).anyTimes();
+  expect(context.getURLStreamProvider()).andReturn(urlStreamProvider);
+  expect(urlStreamProvider.readFrom(eq(url),eq("GET"),anyString(),EasyMock.<Map<String,String>>anyObject())).andReturn(inputStream);
+  fileService=getService(FileService.class,handler,context);
+  replay(context,urlStreamProvider);
+  Response response=fileService.getFilePage(filepath,0l);
+  ServiceTestUtils.assertHTTPResponseOK(response);
+  JSONObject obj=((JSONObject)response.getEntity());
+  assertFileJsonResponseSanity(obj);
+  FileResource fileResource=(FileResource)obj.get("file");
+  Assert.assertEquals("Query Content",fileResource.getFileContent());
+  Assert.assertEquals(0,fileResource.getPage());
+  Assert.assertFalse(fileResource.isHasNext());
+}
