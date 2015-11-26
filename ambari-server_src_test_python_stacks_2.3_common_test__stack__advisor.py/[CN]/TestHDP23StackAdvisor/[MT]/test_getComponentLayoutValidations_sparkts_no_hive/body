@@ -1,0 +1,14 @@
+@patch('socket.getfqdn', side_effect=fqdn_mock_result)
+def test_getComponentLayoutValidations_sparkts_no_hive(self, socket_mock):
+    ' Test SparkTS is picked when Hive is not installed '
+    hosts = self.load_json('sparkts-host.json')
+    services = self.load_json('services-sparkts.json')
+    componentsListList = [service['components'] for service in services['services']]
+    componentsList = [item for sublist in componentsListList for item in sublist]
+    sparkTS = [component['StackServiceComponents']['hostnames'] for component in componentsList if (component['StackServiceComponents']['component_name'] == 'SPARK_THRIFTSERVER')]
+    hiveMetaStore = [component['StackServiceComponents']['hostnames'] for component in componentsList if (component['StackServiceComponents']['component_name'] == 'HIVE_METASTORE')]
+    self.assertEquals(len(sparkTS), 1)
+    self.assertEquals(len(hiveMetaStore), 0)
+    validations = self.stackAdvisor.getComponentLayoutValidations(services, hosts)
+    expected = {'component-name': 'SPARK_THRIFTSERVER', 'message': 'SPARK_THRIFTSERVER requires HIVE_METASTORE to be selected/deployed.', 'type': 'host-component', 'level': 'ERROR', }
+    self.assertEquals(validations[0], expected)
