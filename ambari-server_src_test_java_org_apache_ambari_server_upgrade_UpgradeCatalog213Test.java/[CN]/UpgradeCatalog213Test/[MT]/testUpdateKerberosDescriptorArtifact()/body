@@ -1,0 +1,34 @@
+{
+  final KerberosDescriptorFactory kerberosDescriptorFactory=new KerberosDescriptorFactory();
+  KerberosServiceDescriptor serviceDescriptor;
+  URL systemResourceURL=ClassLoader.getSystemResource("kerberos/test_kerberos_descriptor_2_1_3.json");
+  assertNotNull(systemResourceURL);
+  final KerberosDescriptor kerberosDescriptorOrig=kerberosDescriptorFactory.createInstance(new File(systemResourceURL.getFile()));
+  assertNotNull(kerberosDescriptorOrig);
+  serviceDescriptor=kerberosDescriptorOrig.getService("HDFS");
+  assertNotNull(serviceDescriptor);
+  assertNotNull(serviceDescriptor.getIdentity("hdfs"));
+  serviceDescriptor=kerberosDescriptorOrig.getService("OOZIE");
+  assertNotNull(serviceDescriptor);
+  assertNotNull(serviceDescriptor.getIdentity("/HDFS/hdfs"));
+  UpgradeCatalog213 upgradeMock=createMockBuilder(UpgradeCatalog213.class).createMock();
+  Capture<Map<String,Object>> updatedData=new Capture<Map<String,Object>>();
+  ArtifactEntity artifactEntity=createNiceMock(ArtifactEntity.class);
+  expect(artifactEntity.getArtifactData()).andReturn(kerberosDescriptorOrig.toMap()).once();
+  artifactEntity.setArtifactData(capture(updatedData));
+  expectLastCall().once();
+  replay(artifactEntity,upgradeMock);
+  upgradeMock.updateKerberosDescriptorArtifact(createNiceMock(ArtifactDAO.class),artifactEntity);
+  verify(artifactEntity,upgradeMock);
+  KerberosDescriptor kerberosDescriptorUpdated=new KerberosDescriptorFactory().createInstance(updatedData.getValue());
+  assertNotNull(kerberosDescriptorUpdated);
+  serviceDescriptor=kerberosDescriptorUpdated.getService("HDFS");
+  assertNotNull(serviceDescriptor);
+  assertNull(serviceDescriptor.getIdentity("hdfs"));
+  KerberosComponentDescriptor namenodeComponent=serviceDescriptor.getComponent("NAMENODE");
+  assertNotNull(namenodeComponent.getIdentity("hdfs"));
+  serviceDescriptor=kerberosDescriptorUpdated.getService("OOZIE");
+  assertNotNull(serviceDescriptor);
+  assertNull(serviceDescriptor.getIdentity("/HDFS/hdfs"));
+  assertNotNull(serviceDescriptor.getIdentity("/HDFS/NAMENODE/hdfs"));
+}
