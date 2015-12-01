@@ -1,0 +1,58 @@
+{
+  StackId sourceStack=HDP_21_STACK;
+  StackId targetStack=HDP_22_STACK;
+  String sourceRepo=HDP_2_1_1_0;
+  String targetRepo=HDP_2_2_0_1;
+  String upgradePackName="upgrade_nonrolling_new_stack";
+  AmbariMetaInfo metaInfo=m_injector.getInstance(AmbariMetaInfo.class);
+  Map<String,UpgradePack> packs=metaInfo.getUpgradePacks(sourceStack.getStackName(),sourceStack.getStackVersion());
+  Assert.assertTrue(packs.containsKey(upgradePackName));
+  makeCrossStackUpgradeCluster(sourceStack,sourceRepo,targetStack,targetRepo);
+  RepositoryVersionEntity targetRve=repoVersionDAO.findByStackNameAndVersion("HDP",targetRepo);
+  Assert.assertNotNull(targetRve);
+  Cluster cluster=clusters.getCluster("c1");
+  Service zk=installService(cluster,"ZOOKEEPER");
+  addServiceComponent(cluster,zk,"ZOOKEEPER_SERVER");
+  addServiceComponent(cluster,zk,"ZOOKEEPER_CLIENT");
+  createNewServiceComponentHost(cluster,"ZOOKEEPER","ZOOKEEPER_SERVER","h1");
+  createNewServiceComponentHost(cluster,"ZOOKEEPER","ZOOKEEPER_CLIENT","h1");
+  Service hdfs=installService(cluster,"HDFS");
+  addServiceComponent(cluster,hdfs,"NAMENODE");
+  addServiceComponent(cluster,hdfs,"DATANODE");
+  createNewServiceComponentHost(cluster,"HDFS","NAMENODE","h1");
+  createNewServiceComponentHost(cluster,"HDFS","DATANODE","h1");
+  createConfigs(cluster);
+  Collection<Config> configs=cluster.getAllConfigs();
+  Assert.assertFalse(configs.isEmpty());
+  Map<String,String> commandParams=new HashMap<String,String>();
+  commandParams.put(UpdateDesiredStackAction.COMMAND_PARAM_ORIGINAL_STACK,sourceStack.getStackId());
+  commandParams.put(UpdateDesiredStackAction.COMMAND_PARAM_TARGET_STACK,targetStack.getStackId());
+  commandParams.put(UpdateDesiredStackAction.COMMAND_PARAM_DIRECTION,Direction.UPGRADE.toString());
+  commandParams.put(UpdateDesiredStackAction.COMMAND_PARAM_VERSION,targetRepo);
+  commandParams.put(UpdateDesiredStackAction.COMMAND_PARAM_UPGRADE_PACK,upgradePackName);
+  ExecutionCommand executionCommand=new ExecutionCommand();
+  executionCommand.setCommandParams(commandParams);
+  Map<String,String> roleParams=new HashMap<>();
+  String userName="admin";
+  roleParams.put(ServerAction.ACTION_USER_NAME,userName);
+  executionCommand.setRoleParams(roleParams);
+  executionCommand.setClusterName("c1");
+  HostRoleCommand hostRoleCommand=hostRoleCommandFactory.create(null,null,null,null);
+  hostRoleCommand.setExecutionCommandWrapper(new ExecutionCommandWrapper(executionCommand));
+  UpdateDesiredStackAction action=m_injector.getInstance(UpdateDesiredStackAction.class);
+  action.setExecutionCommand(executionCommand);
+  action.setHostRoleCommand(hostRoleCommand);
+  CommandReport report=action.execute(null);
+  assertNotNull(report);
+  assertEquals(HostRoleStatus.COMPLETED.name(),report.getStatus());
+  List<ServiceConfigVersionResponse> configVersionsAfter=cluster.getServiceConfigVersions();
+  Assert.assertFalse(configVersionsAfter.isEmpty());
+  boolean atLeastOneCreated=false;
+  for (  ServiceConfigVersionResponse configResponse : configVersionsAfter) {
+    if (configResponse.getIsCurrent() && configResponse.getVersion() > 1L && configResponse.getUserName().equals(userName)) {
+      atLeastOneCreated=true;
+      break;
+    }
+  }
+  Assert.assertTrue(atLeastOneCreated);
+}
