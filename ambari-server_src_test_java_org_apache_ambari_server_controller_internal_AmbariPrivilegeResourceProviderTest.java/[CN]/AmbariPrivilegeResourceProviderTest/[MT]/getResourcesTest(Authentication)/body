@@ -1,0 +1,31 @@
+{
+  Injector injector=createInjector();
+  List<PrivilegeEntity> privilegeEntities=new LinkedList<PrivilegeEntity>();
+  PrincipalEntity principalEntity=createMockPrincipalEntity(1L,createMockPrincipalTypeEntity("USER"));
+  List<PrincipalEntity> principalEntities=new LinkedList<PrincipalEntity>();
+  principalEntities.add(principalEntity);
+  List<UserEntity> userEntities=new LinkedList<UserEntity>();
+  userEntities.add(createMockUserEntity(principalEntity,"User1"));
+  ResourceTypeEntity ambariResourceTypeEntity=createMockResourceTypeEntity(ResourceType.AMBARI);
+  ResourceEntity ambariResourceEntity=createMockResourceEntity(1L,ambariResourceTypeEntity);
+  privilegeEntities.add(createMockPrivilegeEntity(1,ambariResourceEntity,principalEntity,createMockPermissionEntity("AMBARI.ADMINISTRATOR","Administrator",ambariResourceTypeEntity)));
+  PrivilegeDAO privilegeDAO=injector.getInstance(PrivilegeDAO.class);
+  expect(privilegeDAO.findAll()).andReturn(privilegeEntities).atLeastOnce();
+  UserDAO userDAO=injector.getInstance(UserDAO.class);
+  expect(userDAO.findUsersByPrincipal(principalEntities)).andReturn(userEntities).atLeastOnce();
+  ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  expect(clusterDAO.findAll()).andReturn(Collections.<ClusterEntity>emptyList()).atLeastOnce();
+  GroupDAO groupDAO=injector.getInstance(GroupDAO.class);
+  expect(groupDAO.findGroupsByPrincipal(principalEntities)).andReturn(Collections.<GroupEntity>emptyList()).atLeastOnce();
+  replayAll();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=getResourceProvider(injector);
+  Set<Resource> resources=provider.getResources(PropertyHelper.getReadRequest(),null);
+  Assert.assertEquals(1,resources.size());
+  Resource resource=resources.iterator().next();
+  Assert.assertEquals("AMBARI.ADMINISTRATOR",resource.getPropertyValue(AmbariPrivilegeResourceProvider.PERMISSION_NAME_PROPERTY_ID));
+  Assert.assertEquals("Administrator",resource.getPropertyValue(AmbariPrivilegeResourceProvider.PERMISSION_LABEL_PROPERTY_ID));
+  Assert.assertEquals("User1",resource.getPropertyValue(AmbariPrivilegeResourceProvider.PRINCIPAL_NAME_PROPERTY_ID));
+  Assert.assertEquals("USER",resource.getPropertyValue(AmbariPrivilegeResourceProvider.PRINCIPAL_TYPE_PROPERTY_ID));
+  verifyAll();
+}

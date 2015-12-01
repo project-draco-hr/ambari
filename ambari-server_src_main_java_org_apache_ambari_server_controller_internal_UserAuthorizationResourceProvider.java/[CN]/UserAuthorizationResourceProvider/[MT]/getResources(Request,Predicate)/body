@@ -2,8 +2,12 @@
   Set<String> requestedIds=getRequestPropertyIds(request,predicate);
   Set<Resource> resources=new HashSet<Resource>();
   ResourceProvider userPrivilegeProvider=clusterController.ensureResourceProvider(Type.UserPrivilege);
+  boolean isUserAdministrator=AuthorizationHelper.isAuthorized(ResourceType.AMBARI,null,RoleAuthorization.AMBARI_MANAGE_USERS);
   for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
     String username=(String)propertyMap.get(USERNAME_PROPERTY_ID);
+    if (!isUserAdministrator && !AuthorizationHelper.getAuthenticatedName().equalsIgnoreCase(username)) {
+      throw new AuthorizationException();
+    }
     Request internalRequest=createUserPrivilegeRequest();
     Predicate internalPredicate=createUserPrivilegePredicate(username);
     Set<Resource> internalResources=userPrivilegeProvider.getResources(internalRequest,internalPredicate);
@@ -19,18 +23,7 @@
             authorizationEntities=null;
           }
  else {
-            if (permissionName.startsWith("AMBARI")) {
-              authorizationEntities=createAdminAuthorizations();
-            }
- else             if (permissionName.startsWith("CLUSTER")) {
-              authorizationEntities=createOperatorAuthorizations();
-            }
- else             if (permissionName.startsWith("VIEW")) {
-              authorizationEntities=createViewUserAuthorizations();
-            }
- else {
-              authorizationEntities=null;
-            }
+            authorizationEntities=permissionEntity.getAuthorizations();
           }
           if (authorizationEntities != null) {
             if ("VIEW".equals(resourceType)) {

@@ -1,0 +1,50 @@
+{
+  WebResponse response=null;
+  JsonElement jsonResponse;
+  String clusterName="c1";
+  String hostName="host1";
+  String clusterVersion="HDP-2.2.0";
+  if (injector == null) {
+    jsonResponse=RestApiUtils.executeRequest(new RegisterHostWebRequest(serverParams,hostName));
+  }
+ else {
+    Clusters clusters=injector.getInstance(Clusters.class);
+    clusters.addHost(hostName);
+    Host host1=clusters.getHost(hostName);
+    Map<String,String> hostAttributes=new HashMap<String,String>();
+    hostAttributes.put("os_family","redhat");
+    hostAttributes.put("os_release_version","6.3");
+    host1.setHostAttributes(hostAttributes);
+    host1.persist();
+  }
+  jsonResponse=RestApiUtils.executeRequest(new CreateClusterWebRequest(serverParams,clusterName,clusterVersion));
+  jsonResponse=RestApiUtils.executeRequest(new AddHostWebRequest(serverParams,clusterName,hostName));
+  String configType="test-hadoop-env";
+  String configTag="version1";
+  ClusterConfigParams configParams=new ClusterConfigParams();
+  configParams.setClusterName(clusterName);
+  configParams.setConfigType(configType);
+  configParams.setConfigTag(configTag);
+  configParams.setProperties(new HashMap<String,String>(){
+{
+      put("fs.default.name","localhost:9995");
+    }
+  }
+);
+  jsonResponse=RestApiUtils.executeRequest(new CreateConfigurationWebRequest(serverParams,configParams));
+  jsonResponse=RestApiUtils.executeRequest(new AddDesiredConfigurationWebRequest(serverParams,configParams));
+  String serviceName="HDFS";
+  jsonResponse=RestApiUtils.executeRequest(new AddServiceWebRequest(serverParams,clusterName,serviceName));
+  String[] componentNames=new String[]{"NAMENODE","DATANODE","SECONDARY_NAMENODE"};
+  for (  String componentName : componentNames) {
+    jsonResponse=RestApiUtils.executeRequest(new AddServiceComponentWebRequest(serverParams,clusterName,serviceName,componentName));
+  }
+  jsonResponse=RestApiUtils.executeRequest(new InstallServiceWebRequest(serverParams,clusterName,serviceName));
+  jsonResponse=RestApiUtils.executeRequest(new BulkAddServiceComponentHostsWebRequest(serverParams,clusterName,Arrays.asList(hostName),Arrays.asList(componentNames)));
+  jsonResponse=RestApiUtils.executeRequest(new BulkSetServiceComponentHostStateWebRequest(serverParams,clusterName,State.INIT,State.INSTALLED));
+  int requestId=parseRequestId(jsonResponse);
+  RequestStatusPoller.poll(serverParams,clusterName,requestId);
+  jsonResponse=RestApiUtils.executeRequest(new BulkSetServiceComponentHostStateWebRequest(serverParams,clusterName,State.INSTALLED,State.STARTED));
+  requestId=parseRequestId(jsonResponse);
+  RequestStatusPoller.poll(serverParams,clusterName,requestId);
+}

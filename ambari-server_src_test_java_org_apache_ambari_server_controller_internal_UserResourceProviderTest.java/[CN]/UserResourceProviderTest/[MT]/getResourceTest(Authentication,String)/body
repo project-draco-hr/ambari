@@ -1,0 +1,22 @@
+{
+  Injector injector=createInjector();
+  Users users=injector.getInstance(Users.class);
+  expect(users.getAnyUser(requestedUsername)).andReturn(createMockUser(requestedUsername)).atLeastOnce();
+  replayAll();
+  AmbariMetaInfo ambariMetaInfo=injector.getInstance(AmbariMetaInfo.class);
+  ambariMetaInfo.init();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  AmbariManagementController managementController=injector.getInstance(AmbariManagementController.class);
+  ResourceProvider provider=getResourceProvider(managementController);
+  Set<String> propertyIds=new HashSet<String>();
+  propertyIds.add(UserResourceProvider.USER_USERNAME_PROPERTY_ID);
+  propertyIds.add(UserResourceProvider.USER_PASSWORD_PROPERTY_ID);
+  Request request=PropertyHelper.getReadRequest(propertyIds);
+  Set<Resource> resources=provider.getResources(request,createPredicate(requestedUsername));
+  Assert.assertEquals(1,resources.size());
+  for (  Resource resource : resources) {
+    String userName=(String)resource.getPropertyValue(UserResourceProvider.USER_USERNAME_PROPERTY_ID);
+    Assert.assertEquals(requestedUsername,userName);
+  }
+  verifyAll();
+}

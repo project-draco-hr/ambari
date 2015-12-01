@@ -1,8 +1,13 @@
 {
   final Set<Map<String,Object>> propertyMaps=request.getProperties();
   modifyResources(new Command<Void>(){
-    @Override public Void invoke() throws AmbariException {
+    @Override public Void invoke() throws AmbariException, AuthorizationException {
+      boolean isUserAdministrator=AuthorizationHelper.isAuthorized(ResourceType.AMBARI,null,RoleAuthorization.AMBARI_MANAGE_USERS);
       for (      Map<String,Object> propertyMap : propertyMaps) {
+        String userName=propertyMap.get(WIDGETLAYOUT_USERNAME_PROPERTY_ID).toString();
+        if (!isUserAdministrator && !AuthorizationHelper.getAuthenticatedName().equalsIgnoreCase(userName)) {
+          throw new AuthorizationException();
+        }
         Set<HashMap> widgetLayouts=(Set)propertyMap.get(WIDGETLAYOUT);
         for (        HashMap<String,String> widgetLayout : widgetLayouts) {
           final Long layoutId;
@@ -17,7 +22,7 @@
             throw new AmbariException("There is no widget layout with id " + layoutId);
           }
         }
-        UserEntity user=userDAO.findUserByName(propertyMap.get(WIDGETLAYOUT_USERNAME_PROPERTY_ID).toString());
+        UserEntity user=userDAO.findUserByName(userName);
         user.setActiveWidgetLayouts(gson.toJson(propertyMap.get(WIDGETLAYOUT)));
         userDAO.merge(user);
       }

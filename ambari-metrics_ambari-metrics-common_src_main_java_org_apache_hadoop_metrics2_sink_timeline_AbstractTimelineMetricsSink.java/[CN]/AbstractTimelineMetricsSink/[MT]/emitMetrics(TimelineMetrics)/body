@@ -1,11 +1,20 @@
 {
   String connectUrl=getCollectorUri();
+  int timeout=getTimeoutSeconds() * 1000;
   try {
     String jsonData=mapper.writeValueAsString(metrics);
-    StringRequestEntity requestEntity=new StringRequestEntity(jsonData,"application/json","UTF-8");
-    PostMethod postMethod=new PostMethod(connectUrl);
-    postMethod.setRequestEntity(requestEntity);
-    int statusCode=httpClient.executeMethod(postMethod);
+    HttpURLConnection connection=(HttpURLConnection)new URL(connectUrl).openConnection();
+    connection.setRequestMethod("POST");
+    connection.setRequestProperty("Content-Type","application/json");
+    connection.setConnectTimeout(timeout);
+    connection.setReadTimeout(timeout);
+    connection.setDoOutput(true);
+    if (jsonData != null) {
+      try (OutputStream os=connection.getOutputStream()){
+        os.write(jsonData.getBytes("UTF-8"));
+      }
+     }
+    int statusCode=connection.getResponseCode();
     if (statusCode != 200) {
       LOG.info("Unable to POST metrics to collector, " + connectUrl + ", "+ "statusCode = "+ statusCode);
     }
@@ -13,7 +22,7 @@
       LOG.debug("Metrics posted to Collector " + connectUrl);
     }
   }
- catch (  ConnectException e) {
+ catch (  IOException e) {
     throw new UnableToConnectException(e).setConnectUrl(connectUrl);
   }
 }

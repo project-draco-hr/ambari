@@ -41,15 +41,15 @@ def execute(configurations={}, parameters={}, host_name=None):
             (stdout, stderr, time_millis) = curl_krb_request(env.tmp_dir, smokeuser_keytab, smokeuser_principal, query_url, 'webhcat_alert_cc_', kerberos_executable_search_paths, True, 'WebHCat Server Status', smokeuser, connection_timeout=curl_connection_timeout)
             response_code = int(stdout)
             if (response_code == 0):
-                label = CRITICAL_CONNECTION_MESSAGE.format(query_url)
+                label = CRITICAL_CONNECTION_MESSAGE.format(query_url, traceback.format_exc())
                 return (RESULT_CODE_CRITICAL, [label])
             if (response_code != 200):
-                label = CRITICAL_HTTP_MESSAGE.format(response_code, query_url)
+                label = CRITICAL_HTTP_MESSAGE.format(response_code, query_url, traceback.format_exc())
                 return (RESULT_CODE_CRITICAL, [label])
             (stdout, stderr, total_time) = curl_krb_request(env.tmp_dir, smokeuser_keytab, smokeuser_principal, query_url, 'webhcat_alert_cc_', kerberos_executable_search_paths, False, 'WebHCat Server Status', smokeuser, connection_timeout=curl_connection_timeout)
             json_response = json.loads(stdout)
-        except Exception as exception:
-            return (RESULT_CODE_CRITICAL, [str(exception)])
+        except:
+            return (RESULT_CODE_CRITICAL, [traceback.format_exc()])
     else:
         url_response = None
         try:
@@ -59,10 +59,10 @@ def execute(configurations={}, parameters={}, host_name=None):
                 total_time = (time.time() - start_time)
                 json_response = json.loads(url_response.read())
             except urllib2.HTTPError as httpError:
-                label = CRITICAL_HTTP_MESSAGE.format(httpError.code, query_url)
+                label = CRITICAL_HTTP_MESSAGE.format(httpError.code, query_url, traceback.format_exc())
                 return (RESULT_CODE_CRITICAL, [label])
             except:
-                label = CRITICAL_CONNECTION_MESSAGE.format(query_url)
+                label = CRITICAL_CONNECTION_MESSAGE.format(query_url, traceback.format_exc())
                 return (RESULT_CODE_CRITICAL, [label])
         finally:
             if (url_response is not None):
@@ -71,11 +71,11 @@ def execute(configurations={}, parameters={}, host_name=None):
                 except:
                     pass
     if ('status' not in json_response):
-        return (RESULT_CODE_CRITICAL, [CRITICAL_WEBHCAT_UNKNOWN_JSON_MESSAGE])
+        return (RESULT_CODE_CRITICAL, [(CRITICAL_WEBHCAT_UNKNOWN_JSON_MESSAGE + str(json_response))])
     try:
         webhcat_status = json_response['status']
     except:
-        return (RESULT_CODE_CRITICAL, [CRITICAL_WEBHCAT_UNKNOWN_JSON_MESSAGE])
+        return (RESULT_CODE_CRITICAL, [((CRITICAL_WEBHCAT_UNKNOWN_JSON_MESSAGE + '\n') + traceback.format_exc())])
     if (webhcat_status.lower() == WEBHCAT_OK_RESPONSE):
         result_code = RESULT_CODE_OK
         label = OK_MESSAGE.format(total_time, query_url)
