@@ -1,19 +1,16 @@
 def enable_kms_plugin():
     import params
     if params.has_ranger_admin:
-        ranger_adm_obj = Rangeradmin(url=params.policymgr_mgr_url)
-        ambari_username_password_for_ranger = format('{ambari_ranger_admin}:{ambari_ranger_password}')
-        response_code = ranger_adm_obj.check_ranger_login_urllib2(params.policymgr_mgr_url)
-        if ((response_code is not None) and (response_code == 200)):
-            user_resp_code = ranger_adm_obj.create_ambari_admin_user(params.ambari_ranger_admin, params.ambari_ranger_password, params.admin_uname_password)
+        count = 0
+        while (count < 5):
+            ranger_flag = check_ranger_service()
+            if ranger_flag:
+                break
+            else:
+                time.sleep(5)
+                count = (count + 1)
         else:
-            raise Fail('Ranger service is not started on given host')
-        if ((user_resp_code is not None) and (user_resp_code == 200)):
-            get_repo_flag = get_repo(params.policymgr_mgr_url, params.repo_name, ambari_username_password_for_ranger)
-            if (not get_repo_flag):
-                create_repo(params.policymgr_mgr_url, json.dumps(params.kms_ranger_plugin_repo), ambari_username_password_for_ranger)
-        else:
-            raise Fail('Ambari admin user creation failed')
+            Logger.error('Ranger service is not reachable after {0} tries'.format(count))
         current_datetime = datetime.now()
         File(format('{kms_conf_dir}/ranger-security.xml'), owner=params.kms_user, group=params.kms_group, mode=420, content=InlineTemplate(format('<ranger>\n<enabled>{current_datetime}</enabled>\n</ranger>')))
         Directory([os.path.join('/etc', 'ranger', params.repo_name), os.path.join('/etc', 'ranger', params.repo_name, 'policycache')], owner=params.kms_user, group=params.kms_group, mode=509, recursive=True)
