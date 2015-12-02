@@ -1,23 +1,30 @@
-def kafka():
+def kafka(upgrade_type=None):
     import params
     Directory([params.kafka_log_dir, params.kafka_pid_dir, params.conf_dir], mode=493, cd_access='a', owner=params.kafka_user, group=params.user_group, recursive=True)
     kafka_server_config = mutable_config_dict(params.config['configurations']['kafka-broker'])
-    if ((params.hdp_stack_version != '') and (compare_versions(params.hdp_stack_version, '2.2.0.0') >= 0) and (compare_versions(params.hdp_stack_version, '2.3.0.0') < 0)):
-        brokerid = str(sorted(params.kafka_hosts).index(params.hostname))
-        kafka_server_config['broker.id'] = brokerid
-    if ((params.hdp_stack_version != '') and (compare_versions(params.hdp_stack_version, '2.3.0.0') >= 0)):
+    effective_version = (params.hdp_stack_version if (upgrade_type is None) else format_hdp_stack_version(params.version))
+    Logger.info(format('Effective stack version: {effective_version}'))
+    if ((effective_version is not None) and (effective_version != '') and (compare_versions(effective_version, '2.2.0.0') >= 0) and (compare_versions(effective_version, '2.3.0.0') < 0)):
+        if ((len(params.kafka_hosts) > 0) and (params.hostname in params.kafka_hosts)):
+            brokerid = str(sorted(params.kafka_hosts).index(params.hostname))
+            kafka_server_config['broker.id'] = brokerid
+            Logger.info(format('Calculating broker.id as {brokerid}'))
+    if ((effective_version is not None) and (effective_version != '') and (compare_versions(effective_version, '2.3.0.0') >= 0)):
+        listeners = kafka_server_config['listeners'].replace('localhost', params.hostname)
+        Logger.info(format('Kafka listeners: {listeners}'))
         if (params.security_enabled and params.kafka_kerberos_enabled):
-            listeners = kafka_server_config['listeners'].replace('localhost', params.hostname)
+            Logger.info('Kafka kerberos security is enabled.')
             if ('SASL' not in listeners):
                 listeners = listeners.replace('PLAINTEXT', 'PLAINTEXTSASL')
             kafka_server_config['listeners'] = listeners
             kafka_server_config['advertised.listeners'] = listeners
+            Logger.info(format('Kafka advertised listeners: {listeners}'))
         else:
-            listeners = kafka_server_config['listeners'].replace('localhost', params.hostname)
             kafka_server_config['listeners'] = listeners
             if ('advertised.listeners' in kafka_server_config):
                 advertised_listeners = kafka_server_config['advertised.listeners'].replace('localhost', params.hostname)
                 kafka_server_config['advertised.listeners'] = advertised_listeners
+                Logger.info(format('Kafka advertised listeners: {advertised_listeners}'))
     else:
         kafka_server_config['host.name'] = params.hostname
     if params.has_metric_collector:
