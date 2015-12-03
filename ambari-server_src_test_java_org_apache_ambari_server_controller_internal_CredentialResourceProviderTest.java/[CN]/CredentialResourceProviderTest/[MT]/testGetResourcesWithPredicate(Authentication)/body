@@ -1,0 +1,35 @@
+{
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Request request=createMock(Request.class);
+  CredentialResourceProvider credentialResourceProvider=new CredentialResourceProvider(managementController);
+  injector.injectMembers(credentialResourceProvider);
+  expect(request.getProperties()).andReturn(getCredentialTestProperties("c1","alias1","username1","password1",CredentialStoreType.TEMPORARY)).once();
+  expect(request.getProperties()).andReturn(getCredentialTestProperties("c1","alias2","username2","password2",CredentialStoreType.PERSISTED)).once();
+  expect(request.getProperties()).andReturn(getCredentialTestProperties("c1","alias3","username3","password3",CredentialStoreType.TEMPORARY)).once();
+  expect(request.getPropertyIds()).andReturn(null).once();
+  ResourceProviderFactory factory=createMock(ResourceProviderFactory.class);
+  expect(factory.getCredentialResourceProvider(anyObject(AmbariManagementController.class))).andReturn(credentialResourceProvider);
+  replay(request,factory,managementController);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  AbstractControllerResourceProvider.init(factory);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(Resource.Type.Credential,PropertyHelper.getPropertyIds(Resource.Type.Credential),PropertyHelper.getKeyPropertyIds(Resource.Type.Credential),managementController);
+  provider.createResources(request);
+  provider.createResources(request);
+  provider.createResources(request);
+  Predicate predicate1=new PredicateBuilder().property(CredentialResourceProvider.CREDENTIAL_CLUSTER_NAME_PROPERTY_ID).equals("c1").toPredicate();
+  Predicate predicate2=new PredicateBuilder().property(CredentialResourceProvider.CREDENTIAL_ALIAS_PROPERTY_ID).equals("alias1").toPredicate();
+  Predicate predicate=new AndPredicate(predicate1,predicate2);
+  Set<Resource> results=provider.getResources(request,predicate);
+  Assert.assertEquals(1,results.size());
+  for (  Resource result : results) {
+    Object alias=result.getPropertyValue(CredentialResourceProvider.CREDENTIAL_ALIAS_PROPERTY_ID);
+    Object type=result.getPropertyValue(CredentialResourceProvider.CREDENTIAL_TYPE_PROPERTY_ID);
+    if ("alias1".equals(alias)) {
+      Assert.assertEquals(CredentialStoreType.TEMPORARY.name().toLowerCase(),type);
+    }
+ else {
+      Assert.fail("Unexpected alias in list: " + alias.toString());
+    }
+  }
+  verify(request,factory,managementController);
+}
