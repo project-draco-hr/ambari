@@ -22,6 +22,9 @@
     if (LOG.isDebugEnabled()) {
       LOG.debug("Received cluster name change request from " + cluster.getClusterName() + " to "+ request.getClusterName());
     }
+    if (!AuthorizationHelper.isAuthorized(ResourceType.AMBARI,null,EnumSet.of(RoleAuthorization.AMBARI_RENAME_CLUSTER))) {
+      throw new AuthorizationException("The authenticated user does not have authorization to rename the cluster");
+    }
     cluster.setClusterName(request.getClusterName());
   }
   boolean isConfigurationCreationNeeded=false;
@@ -98,6 +101,9 @@
       configs.add(cluster.getConfig(cr.getType(),cr.getVersionTag()));
     }
     if (!configs.isEmpty()) {
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.SERVICE_MODIFY_CONFIGS))) {
+        throw new AuthorizationException("The authenticated user does not have authorization to modify service configurations");
+      }
       String authName=getAuthName();
       serviceConfigVersionResponse=cluster.addDesiredConfig(authName,configs,note);
       if (serviceConfigVersionResponse != null) {
@@ -111,6 +117,9 @@
   StackId currentVersion=cluster.getCurrentStackVersion();
   StackId desiredVersion=cluster.getDesiredStackVersion();
   if (currentVersion == null) {
+    if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.CLUSTER_UPGRADE_DOWNGRADE_STACK))) {
+      throw new AuthorizationException("The authenticated user does not have authorization to modify stack version");
+    }
     cluster.setCurrentStackVersion(desiredVersion);
   }
   boolean requiresHostListUpdate=request.getHostNames() != null && !request.getHostNames().isEmpty();
@@ -134,6 +143,9 @@
     cluster.setProvisioningState(provisioningState);
   }
   if (null != request.getServiceConfigVersionRequest()) {
+    if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.SERVICE_MODIFY_CONFIGS))) {
+      throw new AuthorizationException("The authenticated user does not have authorization to modify service configurations");
+    }
     ServiceConfigVersionRequest serviceConfigVersionRequest=request.getServiceConfigVersionRequest();
     if (StringUtils.isEmpty(serviceConfigVersionRequest.getServiceName()) || null == serviceConfigVersionRequest.getVersion()) {
       String msg="Service name and version should be specified in service config version";
@@ -155,6 +167,9 @@
   SecurityType securityType=request.getSecurityType();
   if (securityType != null) {
     if (kerberosHelper.shouldExecuteCustomOperations(securityType,requestProperties)) {
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.CLUSTER_TOGGLE_KERBEROS))) {
+        throw new AuthorizationException("The authenticated user does not have authorization to perform Kerberos-specific operations");
+      }
       try {
         requestStageContainer=kerberosHelper.executeCustomOperations(cluster,requestProperties,requestStageContainer,kerberosHelper.getManageIdentitiesDirective(requestProperties));
       }
@@ -165,6 +180,9 @@
  else     if (cluster.getSecurityType() != securityType) {
       LOG.info("Received cluster security type change request from {} to {}",cluster.getSecurityType().name(),securityType.name());
       if ((securityType == SecurityType.KERBEROS) || (securityType == SecurityType.NONE)) {
+        if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.CLUSTER_TOGGLE_KERBEROS))) {
+          throw new AuthorizationException("The authenticated user does not have authorization to enable or disable Kerberos");
+        }
         try {
           requestStageContainer=kerberosHelper.toggleKerberos(cluster,securityType,requestStageContainer,kerberosHelper.getManageIdentitiesDirective(requestProperties));
         }

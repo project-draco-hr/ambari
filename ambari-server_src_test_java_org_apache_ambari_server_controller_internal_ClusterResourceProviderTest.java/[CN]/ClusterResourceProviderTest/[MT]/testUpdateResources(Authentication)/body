@@ -1,0 +1,34 @@
+{
+  Resource.Type type=Resource.Type.Cluster;
+  Clusters clusters=createMock(Clusters.class);
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
+  Set<ClusterResponse> nameResponse=new HashSet<ClusterResponse>();
+  nameResponse.add(new ClusterResponse(102L,"Cluster102",State.INIT,SecurityType.NONE,null,null,null,null));
+  Map<String,String> mapRequestProps=new HashMap<String,String>();
+  mapRequestProps.put("context","Called from a test");
+  expect(managementController.getClusters(EasyMock.<Set<ClusterRequest>>anyObject())).andReturn(nameResponse).once();
+  expect(managementController.updateClusters(AbstractResourceProviderTest.Matcher.getClusterRequestSet(102L,"Cluster102",State.INSTALLED.name(),SecurityType.NONE,"HDP-0.1",null),eq(mapRequestProps))).andReturn(response).once();
+  expect(managementController.updateClusters(AbstractResourceProviderTest.Matcher.getClusterRequestSet(103L,null,null,null,"HDP-0.1",null),eq(mapRequestProps))).andReturn(response).once();
+  expect(managementController.getClusterUpdateResults(anyObject(ClusterRequest.class))).andReturn(null).anyTimes();
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  replay(managementController,response,clusters);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  AbstractResourceProviderTest.TestObserver observer=new AbstractResourceProviderTest.TestObserver();
+  ((ObservableResourceProvider)provider).addObserver(observer);
+  Map<String,Object> properties=new LinkedHashMap<String,Object>();
+  properties.put(ClusterResourceProvider.CLUSTER_VERSION_PROPERTY_ID,"HDP-0.1");
+  Request request=PropertyHelper.getUpdateRequest(properties,mapRequestProps);
+  Predicate predicate=new PredicateBuilder().property(ClusterResourceProvider.CLUSTER_NAME_PROPERTY_ID).equals("Cluster102").toPredicate();
+  provider.updateResources(request,predicate);
+  predicate=new PredicateBuilder().property(ClusterResourceProvider.CLUSTER_ID_PROPERTY_ID).equals(103L).toPredicate();
+  provider.updateResources(request,predicate);
+  ResourceProviderEvent lastEvent=observer.getLastEvent();
+  Assert.assertNotNull(lastEvent);
+  Assert.assertEquals(Resource.Type.Cluster,lastEvent.getResourceType());
+  Assert.assertEquals(ResourceProviderEvent.Type.Update,lastEvent.getType());
+  Assert.assertEquals(request,lastEvent.getRequest());
+  Assert.assertEquals(predicate,lastEvent.getPredicate());
+  verify(managementController,response,clusters);
+}
