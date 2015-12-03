@@ -1,0 +1,27 @@
+def __update_yarn_client():
+    '\n  Writes yarn-client.xml on the local filesystem on hawq nodes.\n  If yarn ha is enabled, appends related parameters to yarn-client.xml\n  '
+    import params
+    yarn_client_dict = params.yarn_client.copy()
+    if params.yarn_ha_enabled:
+        rm_ids = [rm_id.strip() for rm_id in params.config['configurations']['yarn-site']['yarn.resourcemanager.ha.rm-ids'].split(',')]
+        rm_id1 = rm_ids[0]
+        rm_id2 = rm_ids[1]
+        rm_host1 = params.config['configurations']['yarn-site']['yarn.resourcemanager.hostname.{0}'.format(rm_id1)]
+        rm_host2 = params.config['configurations']['yarn-site']['yarn.resourcemanager.hostname.{0}'.format(rm_id2)]
+        rm_default_port = 8032
+        rm_scheduler_default_port = 8030
+        rm_address_host1 = params.config['configurations']['yarn-site'].get('yarn.resourcemanager.address.{0}'.format(rm_id1))
+        if (rm_address_host1 is None):
+            rm_address_host1 = '{0}:{1}'.format(rm_host1, rm_default_port)
+        rm_address_host2 = params.config['configurations']['yarn-site'].get('yarn.resourcemanager.address.{0}'.format(rm_id2))
+        if (rm_address_host2 is None):
+            rm_address_host2 = '{0}:{1}'.format(rm_host2, rm_default_port)
+        rm_scheduler_address_host1 = params.config['configurations']['yarn-site'].get('yarn.resourcemanager.scheduler.address.{0}'.format(rm_id1))
+        if (rm_scheduler_address_host1 is None):
+            rm_scheduler_address_host1 = '{0}:{1}'.format(rm_host1, rm_scheduler_default_port)
+        rm_scheduler_address_host2 = params.config['configurations']['yarn-site'].get('yarn.resourcemanager.scheduler.address.{0}'.format(rm_id2))
+        if (rm_scheduler_address_host2 is None):
+            rm_scheduler_address_host2 = '{0}:{1}'.format(rm_host2, rm_scheduler_default_port)
+        yarn_client_dict['yarn.resourcemanager.ha'] = '{0},{1}'.format(rm_address_host1, rm_address_host2)
+        yarn_client_dict['yarn.resourcemanager.scheduler.ha'] = '{0},{1}'.format(rm_scheduler_address_host1, rm_scheduler_address_host2)
+    XmlConfig('yarn-client.xml', conf_dir=constants.hawq_config_dir, configurations=ConfigDictionary(yarn_client_dict), configuration_attributes=params.config['configuration_attributes']['yarn-client'], owner=constants.hawq_user, group=constants.hawq_group, mode=420)
