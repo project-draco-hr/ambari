@@ -1,39 +1,51 @@
 {
-  if (jwtProperties != null && isAuthenticationRequired()) {
-    HttpServletRequest httpServletRequest=(HttpServletRequest)servletRequest;
-    HttpServletResponse httpServletResponse=(HttpServletResponse)servletResponse;
-    String serializedJWT=getJWTFromCookie(httpServletRequest);
-    if (serializedJWT != null) {
-      SignedJWT jwtToken=null;
-      try {
-        jwtToken=SignedJWT.parse(serializedJWT);
-        boolean valid=validateToken(jwtToken);
-        if (valid) {
-          String userName=jwtToken.getJWTClaimsSet().getSubject();
-          User user=users.getUser(userName,UserType.JWT);
-          if (user == null) {
-            users.createUser(userName,null,UserType.JWT,true,false);
-            user=users.getUser(userName,UserType.JWT);
+  if (jwtProperties == null) {
+    filterChain.doFilter(servletRequest,servletResponse);
+    return;
+  }
+  HttpServletRequest httpServletRequest=(HttpServletRequest)servletRequest;
+  HttpServletResponse httpServletResponse=(HttpServletResponse)servletResponse;
+  String serializedJWT=getJWTFromCookie(httpServletRequest);
+  if (serializedJWT != null && isAuthenticationRequired(serializedJWT)) {
+    SignedJWT jwtToken;
+    try {
+      jwtToken=SignedJWT.parse(serializedJWT);
+      boolean valid=validateToken(jwtToken);
+      if (valid) {
+        String userName=jwtToken.getJWTClaimsSet().getSubject();
+        User user=users.getUser(userName,UserType.JWT);
+        if (user == null) {
+          User existingUser=users.getAnyUser(userName);
+          if (existingUser != null && existingUser.getUserType() != UserType.JWT) {
+            LOG.error("Access for JWT user [{}] restricted. Detected conflict with local user ",userName);
+            httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,"Cannot create JWT user: conflict detected");
+            return;
           }
-          Collection<AmbariGrantedAuthority> userAuthorities=users.getUserAuthorities(user.getUserName(),user.getUserType());
-          JwtAuthentication token=new JwtAuthentication(jwtToken,user,userAuthorities);
-          token.setAuthenticated(true);
-          SecurityContextHolder.getContext().setAuthentication(token);
+          users.createUser(userName,null,UserType.JWT,true,false);
+          user=users.getUser(userName,UserType.JWT);
         }
- else {
-          LOG.warn("JWT authentication failed");
-          if (ignoreFailure) {
-            filterChain.doFilter(servletRequest,servletResponse);
-          }
- else {
-            entryPoint.commence(httpServletRequest,httpServletResponse,new BadCredentialsException("Invalid JWT " + "token"));
-          }
-        }
+        Collection<AmbariGrantedAuthority> userAuthorities=users.getUserAuthorities(user.getUserName(),user.getUserType());
+        JwtAuthentication authentication=new JwtAuthentication(serializedJWT,user,userAuthorities);
+        authentication.setAuthenticated(true);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
       }
- catch (      ParseException e) {
-        LOG.warn("Unable to parse the JWT token",e);
+ else {
+        SecurityContextHolder.clearContext();
+        LOG.warn("JWT authentication failed");
+        if (ignoreFailure) {
+          filterChain.doFilter(servletRequest,servletResponse);
+        }
+ else {
+          entryPoint.commence(httpServletRequest,httpServletResponse,new BadCredentialsException("Invalid JWT " + "token"));
+        }
       }
     }
+ catch (    ParseException e) {
+      LOG.warn("Unable to parse the JWT token",e);
+    }
+  }
+ else {
+    LOG.trace("No JWT cookie found, do nothing");
   }
   filterChain.doFilter(servletRequest,servletResponse);
 }
