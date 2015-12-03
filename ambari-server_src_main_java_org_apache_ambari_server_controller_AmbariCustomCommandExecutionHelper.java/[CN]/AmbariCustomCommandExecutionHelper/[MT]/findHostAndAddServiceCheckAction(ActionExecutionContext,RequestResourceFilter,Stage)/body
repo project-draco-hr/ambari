@@ -35,7 +35,7 @@
     candidateHosts=serviceComponent.getServiceComponentHosts().keySet();
   }
   Set<String> ignoredHosts=new HashSet<String>();
-  if (!actionExecutionContext.isIgnoreMaintenance()) {
+  if (!actionExecutionContext.isMaintenanceModeIgnored()) {
     ignoredHosts.addAll(maintenanceStateHelper.filterHostsInMaintenanceState(candidateHosts,new MaintenanceStateHelper.HostPredicate(){
       @Override public boolean shouldHostBeRemoved(      final String hostname) throws AmbariException {
         return !maintenanceStateHelper.isOperationAllowed(cluster,actionExecutionContext.getOperationLevel(),resourceFilter,serviceName,componentName,hostname);
@@ -45,8 +45,8 @@
   }
   String hostName=managementController.getHealthyHost(candidateHosts);
   if (hostName == null) {
-    String msg=String.format("Unable to find a healthy host " + "amongst the provided set of " + "hosts: %s. You may also see this message if "+ "all healthy hosts are not appropriate for service check "+ "due to maintenance state (these hosts are %s). ",candidateHosts,ignoredHosts);
-    LOG.info(msg);
+    String message=MessageFormat.format("While building a service check command for {0}, there were no healthy eligible hosts: unhealthy[{1}], maintenance[{2}]",serviceName,StringUtils.join(candidateHosts,','),StringUtils.join(ignoredHosts,','));
+    throw new AmbariException(message);
   }
   addServiceCheckAction(stage,hostName,smokeTestRole,nowTimestamp,serviceName,componentName,actionParameters,actionExecutionContext.isRetryAllowed(),actionExecutionContext.isFailureAutoSkipped());
 }
