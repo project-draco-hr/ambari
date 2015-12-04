@@ -6,26 +6,15 @@ def select(stack_name, package, version, try_create=True):
         create(stack_name, package, version)
     shell.checked_call(get_cmd('set-conf-dir', package, version), logoutput=False, quiet=False, sudo=True)
     if (package in PACKAGE_DIRS):
-        conf_dirs = PACKAGE_DIRS[package]
-        Logger.info('For package : {0}, DIRS = {1}'.format(package, conf_dirs))
-        for dirInfo in conf_dirs:
-            if (('conf_dir' in dirInfo) and ('current_dir' in dirInfo)):
-                conf_dir = dirInfo['conf_dir']
-                current_dir = dirInfo['current_dir']
-                Logger.info('For package : {0}, Source dir: {1}, Dest dir: {2}'.format(package, conf_dir, current_dir))
-                if os.path.exists(current_dir):
-                    real_path_of_current_dir = os.path.realpath(current_dir)
-                    normalized_conf_dir = os.path.normpath(conf_dir).strip()
-                    normalized_current_dir = os.path.normpath(real_path_of_current_dir).strip()
-                    Logger.info('Normalized Conf Dir : {0}, Normalized Current Dir : {1}'.format(normalized_conf_dir, normalized_current_dir))
-                    if (os.path.isdir(normalized_current_dir) and (normalized_current_dir != normalized_conf_dir)):
-                        if ((not os.path.isdir(normalized_conf_dir)) and (not os.path.islink(normalized_conf_dir))):
-                            Link(normalized_conf_dir, to=normalized_current_dir)
-                            Logger.info("{0} directory doesn't exist. Created Symlink : {1} -> {2}".format(normalized_conf_dir, normalized_conf_dir, normalized_current_dir))
-                            return
-                        if (os.path.islink(normalized_conf_dir) and (os.readlink(normalized_conf_dir) != normalized_current_dir)):
-                            Logger.info('{0} exists and points to incorrect path {1}'.format(normalized_conf_dir, os.readlink(normalized_conf_dir)))
-                            Link(normalized_conf_dir, action='delete')
-                            Logger.info('Removed existing symlink for {0}'.format(normalized_conf_dir))
-                            Link(normalized_conf_dir, to=normalized_current_dir)
-                            Logger.info('Created Symlink : {0} -> {1}'.format(normalized_conf_dir, normalized_current_dir))
+        Logger.info('Ensuring that {0} has the correct symlink structure'.format(package))
+        directory_list = PACKAGE_DIRS[package]
+        for directory_structure in directory_list:
+            conf_dir = directory_structure['conf_dir']
+            current_dir = directory_structure['current_dir']
+            if (not os.path.islink(conf_dir)):
+                if os.path.exists(conf_dir):
+                    parent_directory = os.path.dirname(conf_dir)
+                    conf_install_dir = os.path.join(parent_directory, 'conf.backup')
+                    Execute(('cp', '-R', '-p', conf_dir, conf_install_dir), not_if=format('test -e {conf_install_dir}'), sudo=True)
+                    Directory(conf_dir, action='delete')
+                Link(conf_dir, to=current_dir)

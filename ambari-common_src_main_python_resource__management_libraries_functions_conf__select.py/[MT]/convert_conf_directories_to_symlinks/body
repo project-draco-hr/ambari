@@ -1,0 +1,54 @@
+def convert_conf_directories_to_symlinks(package, version, dirs, skip_existing_links=True, link_to_conf_install=False):
+    '\n  Assumes HDP 2.3+, moves around directories and creates the conf symlink for the given package.\n  If the package does not exist, then no work is performed.\n\n  - Creates a /etc/<component>/conf.backup directory\n  - Copies all configs from /etc/<component>/conf to conf.backup\n  - Removes /etc/<component>/conf\n  - Creates /etc/<component>/<version>/0\n  - Creates /usr/hdp/current/<component>-client/conf -> /etc/<component>/<version>/0\n  - Links /etc/<component>/conf to <something>\n  -- /etc/<component>/conf -> /usr/hdp/current/[component]-client/conf\n  -- /etc/<component>/conf -> /etc/<component>/conf.backup\n\n  :param package: the package to create symlinks for (zookeeper, falcon, etc)\n  :param version: the version number to use with conf-select (2.3.0.0-1234)\n  :param dirs: the directories associated with the package (from PACKAGE_DIRS)\n  :param skip_existing_links: True to not do any work if already a symlink\n  :param link_to_conf_install:\n  '
+    bad_dirs = []
+    for dir_def in dirs:
+        if (not os.path.exists(dir_def['conf_dir'])):
+            bad_dirs.append(dir_def['conf_dir'])
+    if (len(bad_dirs) > 0):
+        Logger.info('Skipping {0} as it does not exist.'.format(','.join(bad_dirs)))
+        return
+    if skip_existing_links:
+        bad_dirs = []
+        for dir_def in dirs:
+            old_conf = dir_def['conf_dir']
+            if os.path.islink(old_conf):
+                Logger.info('{0} is already link to {1}'.format(old_conf, os.path.realpath(old_conf)))
+                bad_dirs.append(old_conf)
+    if (len(bad_dirs) > 0):
+        return
+    for dir_def in dirs:
+        old_conf = dir_def['conf_dir']
+        old_parent = os.path.abspath(os.path.join(old_conf, os.pardir))
+        conf_install_dir = os.path.join(old_parent, 'conf.backup')
+        Execute(('cp', '-R', '-p', old_conf, conf_install_dir), not_if=format('test -e {conf_install_dir}'), sudo=True)
+    versioned_confs = create('HDP', package, version, dry_run=True)
+    Logger.info('New conf directories: {0}'.format(', '.join(versioned_confs)))
+    need_dirs = []
+    for d in versioned_confs:
+        if (not os.path.exists(d)):
+            need_dirs.append(d)
+    if (len(need_dirs) > 0):
+        create('HDP', package, version)
+        if (len(dirs) > 1):
+            for need_dir in need_dirs:
+                for dir_def in dirs:
+                    if (('prefix' in dir_def) and need_dir.startswith(dir_def['prefix'])):
+                        old_conf = dir_def['conf_dir']
+                        versioned_conf = need_dir
+                        Execute(as_sudo(['cp', '-R', '-p', os.path.join(old_conf, '*'), versioned_conf], auto_escape=False), only_if=format('ls {old_conf}/*'))
+        elif ((1 == len(dirs)) and (1 == len(need_dirs))):
+            old_conf = dirs[0]['conf_dir']
+            versioned_conf = need_dirs[0]
+            Execute(as_sudo(['cp', '-R', '-p', os.path.join(old_conf, '*'), versioned_conf], auto_escape=False), only_if=format('ls {old_conf}/*'))
+    try:
+        select('HDP', package, version)
+        for dir_def in dirs:
+            new_symlink = dir_def['conf_dir']
+            if (not os.path.islink(new_symlink)):
+                Directory(new_symlink, action='delete')
+            if link_to_conf_install:
+                Link(new_symlink, to=conf_install_dir)
+            else:
+                Link(new_symlink, to=dir_def['current_dir'])
+    except Exception as e:
+        Logger.warning('Could not select the directory: {0}'.format(e.message))
