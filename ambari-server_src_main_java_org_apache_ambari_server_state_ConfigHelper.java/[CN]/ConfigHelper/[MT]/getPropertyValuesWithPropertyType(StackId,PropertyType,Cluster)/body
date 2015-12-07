@@ -1,13 +1,20 @@
 {
   StackInfo stack=ambariMetaInfo.getStack(stackId.getStackName(),stackId.getStackVersion());
+  Map<String,DesiredConfig> desiredConfigs=cluster.getDesiredConfigs();
+  Map<String,Config> actualConfigs=new HashMap<>();
   Set<String> result=new HashSet<String>();
+  for (  Map.Entry<String,DesiredConfig> desiredConfigEntry : desiredConfigs.entrySet()) {
+    String configType=desiredConfigEntry.getKey();
+    DesiredConfig desiredConfig=desiredConfigEntry.getValue();
+    actualConfigs.put(configType,cluster.getConfig(configType,desiredConfig.getTag()));
+  }
   for (  Service service : cluster.getServices().values()) {
     Set<PropertyInfo> serviceProperties=ambariMetaInfo.getServiceProperties(stack.getName(),stack.getVersion(),service.getName());
     for (    PropertyInfo serviceProperty : serviceProperties) {
       if (serviceProperty.getPropertyTypes().contains(propertyType)) {
         String stackPropertyConfigType=fileNameToConfigType(serviceProperty.getFilename());
         try {
-          result.add(cluster.getDesiredConfigByType(stackPropertyConfigType).getProperties().get(serviceProperty.getName()));
+          result.add(actualConfigs.get(stackPropertyConfigType).getProperties().get(serviceProperty.getName()));
         }
  catch (        Exception ex) {
         }
@@ -18,7 +25,7 @@
   for (  PropertyInfo stackProperty : stackProperties) {
     if (stackProperty.getPropertyTypes().contains(propertyType)) {
       String stackPropertyConfigType=fileNameToConfigType(stackProperty.getFilename());
-      result.add(cluster.getDesiredConfigByType(stackPropertyConfigType).getProperties().get(stackProperty.getName()));
+      result.add(actualConfigs.get(stackPropertyConfigType).getProperties().get(stackProperty.getName()));
     }
   }
   return result;
