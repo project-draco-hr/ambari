@@ -1,0 +1,58 @@
+{
+  Cluster cluster=clusters.getCluster("c1");
+  Service service=cluster.addService("HIVE");
+  service.setDesiredStackVersion(cluster.getDesiredStackVersion());
+  service.persist();
+  ServiceComponent component=service.addServiceComponent("HIVE_SERVER");
+  ServiceComponentHost sch=component.addServiceComponentHost("h1");
+  sch.setVersion("2.1.1.0");
+  Map<String,Object> requestProps=new HashMap<>();
+  requestProps.put(UpgradeResourceProvider.UPGRADE_CLUSTER_NAME,"c1");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_VERSION,"2.2.0.0");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_PACK,"upgrade_nonrolling_new_stack");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_TYPE,"NON_ROLLING");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_SKIP_PREREQUISITE_CHECKS,"true");
+  ResourceProvider upgradeResourceProvider=createProvider(amc);
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  upgradeResourceProvider.createResources(request);
+  List<UpgradeEntity> upgrades=upgradeDao.findUpgrades(cluster.getClusterId());
+  assertEquals(1,upgrades.size());
+  List<UpgradeGroupEntity> groups=upgrades.get(0).getUpgradeGroups();
+  boolean isHiveGroupFound=false;
+  boolean isZKGroupFound=false;
+  for (  UpgradeGroupEntity group : groups) {
+    if (group.getName().equalsIgnoreCase("hive")) {
+      isHiveGroupFound=true;
+    }
+ else     if (group.getName().equalsIgnoreCase("zookeeper")) {
+      isZKGroupFound=true;
+    }
+  }
+  assertTrue(isHiveGroupFound);
+  assertTrue(isZKGroupFound);
+  isHiveGroupFound=false;
+  isZKGroupFound=false;
+  sch.setVersion("2.2.0.0");
+  StackId stackId=new StackId("HDP","2.2.0");
+  cluster.setDesiredStackVersion(stackId,true);
+  requestProps.put(UpgradeResourceProvider.UPGRADE_CLUSTER_NAME,"c1");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_VERSION,"2.1.1.0");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_PACK,"upgrade_nonrolling_new_stack");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_SKIP_PREREQUISITE_CHECKS,"true");
+  requestProps.put(UpgradeResourceProvider.UPGRADE_FROM_VERSION,"2.2.0.0");
+  Map<String,String> requestInfoProperties=new HashMap<>();
+  requestInfoProperties.put(UpgradeResourceDefinition.DOWNGRADE_DIRECTIVE,"true");
+  request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),requestInfoProperties);
+  RequestStatus status=upgradeResourceProvider.createResources(request);
+  UpgradeEntity upgradeEntity=upgradeDao.findUpgradeByRequestId(getRequestId(status));
+  for (  UpgradeGroupEntity group : upgradeEntity.getUpgradeGroups()) {
+    if (group.getName().equalsIgnoreCase("hive")) {
+      isHiveGroupFound=true;
+    }
+ else     if (group.getName().equalsIgnoreCase("zookeeper")) {
+      isZKGroupFound=true;
+    }
+  }
+  assertTrue(isHiveGroupFound);
+  assertFalse(isZKGroupFound);
+}
