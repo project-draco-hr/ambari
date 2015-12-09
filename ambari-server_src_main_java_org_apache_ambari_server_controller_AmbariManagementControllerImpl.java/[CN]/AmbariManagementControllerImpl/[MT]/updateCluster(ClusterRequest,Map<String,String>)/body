@@ -86,30 +86,48 @@
     }
   }
   if (isConfigurationCreationNeeded) {
-    Set<Config> configs=new HashSet<Config>();
-    String note=null;
-    for (    ConfigurationRequest cr : request.getDesiredConfig()) {
-      if (null != cr.getProperties()) {
-        Map<String,Config> all=cluster.getConfigsByType(cr.getType());
-        if (null == all || !all.containsKey(cr.getVersionTag()) || cr.getProperties().size() > 0) {
-          LOG.info(MessageFormat.format("Applying configuration with tag ''{0}'' to cluster ''{1}''  for configuration type {2}",cr.getVersionTag(),request.getClusterName(),cr.getType()));
-          cr.setClusterName(cluster.getClusterName());
-          configurationResponses.add(createConfiguration(cr));
+    List<ConfigurationRequest> desiredConfigs=request.getDesiredConfig();
+    if (!desiredConfigs.isEmpty()) {
+      Set<Config> configs=new HashSet<Config>();
+      String note=null;
+      for (      ConfigurationRequest cr : desiredConfigs) {
+        String configType=cr.getType();
+        String service=null;
+        try {
+          service=cluster.getServiceForConfigTypes(Collections.singleton(configType));
         }
+ catch (        IllegalArgumentException e) {
+        }
+        if (StringUtils.isEmpty(service)) {
+          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.CLUSTER_MODIFY_CONFIGS))) {
+            throw new AuthorizationException("The authenticated user does not have authorization to modify cluster configurations");
+          }
+        }
+ else {
+          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.SERVICE_MODIFY_CONFIGS))) {
+            throw new AuthorizationException("The authenticated user does not have authorization to modify service configurations");
+          }
+        }
+        if (null != cr.getProperties()) {
+          Map<String,Config> all=cluster.getConfigsByType(configType);
+          if (null == all || !all.containsKey(cr.getVersionTag()) || cr.getProperties().size() > 0) {
+            validateAuthorizationToUpdateServiceUsersAndGroups(cluster,cr);
+            LOG.info(MessageFormat.format("Applying configuration with tag ''{0}'' to cluster ''{1}''  for configuration type {2}",cr.getVersionTag(),request.getClusterName(),configType));
+            cr.setClusterName(cluster.getClusterName());
+            configurationResponses.add(createConfiguration(cr));
+          }
+        }
+        note=cr.getServiceConfigVersionNote();
+        configs.add(cluster.getConfig(configType,cr.getVersionTag()));
       }
-      note=cr.getServiceConfigVersionNote();
-      configs.add(cluster.getConfig(cr.getType(),cr.getVersionTag()));
-    }
-    if (!configs.isEmpty()) {
-      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.SERVICE_MODIFY_CONFIGS))) {
-        throw new AuthorizationException("The authenticated user does not have authorization to modify service configurations");
-      }
-      String authName=getAuthName();
-      serviceConfigVersionResponse=cluster.addDesiredConfig(authName,configs,note);
-      if (serviceConfigVersionResponse != null) {
-        Logger logger=LoggerFactory.getLogger("configchange");
-        for (        Config config : configs) {
-          logger.info("cluster '" + request.getClusterName() + "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ config.getType()+ "' "+ "tag='"+ config.getTag()+ "'");
+      if (!configs.isEmpty()) {
+        String authName=getAuthName();
+        serviceConfigVersionResponse=cluster.addDesiredConfig(authName,configs,note);
+        if (serviceConfigVersionResponse != null) {
+          Logger logger=LoggerFactory.getLogger("configchange");
+          for (          Config config : configs) {
+            logger.info("cluster '" + request.getClusterName() + "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ config.getType()+ "' "+ "tag='"+ config.getTag()+ "'");
+          }
         }
       }
     }

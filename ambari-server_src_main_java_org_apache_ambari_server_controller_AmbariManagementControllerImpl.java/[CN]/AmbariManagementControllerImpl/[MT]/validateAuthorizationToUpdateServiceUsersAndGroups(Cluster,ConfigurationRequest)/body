@@ -1,0 +1,31 @@
+{
+  if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),RoleAuthorization.AMBARI_SET_SERVICE_USERS_GROUPS)) {
+    Map<String,String> requestProperties=request.getProperties();
+    if (requestProperties != null) {
+      Map<PropertyInfo.PropertyType,Set<String>> propertyTypes=cluster.getConfigPropertiesTypes(request.getType());
+      Set<String> propertiesToCheck=new HashSet<String>();
+      Set<String> userProperties=propertyTypes.get(PropertyType.USER);
+      if (userProperties != null) {
+        propertiesToCheck.addAll(userProperties);
+      }
+      Set<String> groupProperties=propertyTypes.get(PropertyType.GROUP);
+      if (groupProperties != null) {
+        propertiesToCheck.addAll(groupProperties);
+      }
+      if (!propertiesToCheck.isEmpty()) {
+        Config existingConfig=cluster.getDesiredConfigByType(request.getType());
+        Map<String,String> existingProperties=(existingConfig == null) ? null : existingConfig.getProperties();
+        if (existingProperties == null) {
+          existingProperties=Collections.emptyMap();
+        }
+        for (        String propertyName : propertiesToCheck) {
+          String existingProperty=existingProperties.get(propertyName);
+          String requestProperty=requestProperties.get(propertyName);
+          if ((existingProperty == null) ? (requestProperty != null) : !existingProperty.equals(requestProperty)) {
+            throw new AuthorizationException("The authenticated user is not authorized to set service user and groups");
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,91 @@
+{
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  Service service0=createNiceMock(Service.class);
+  Service service1=createNiceMock(Service.class);
+  Service service2=createNiceMock(Service.class);
+  Service service3=createNiceMock(Service.class);
+  Service service4=createNiceMock(Service.class);
+  ServiceResponse serviceResponse0=createNiceMock(ServiceResponse.class);
+  ServiceResponse serviceResponse1=createNiceMock(ServiceResponse.class);
+  ServiceResponse serviceResponse2=createNiceMock(ServiceResponse.class);
+  ServiceResponse serviceResponse3=createNiceMock(ServiceResponse.class);
+  ServiceResponse serviceResponse4=createNiceMock(ServiceResponse.class);
+  StackId stackId=createNiceMock(StackId.class);
+  ServiceFactory serviceFactory=createNiceMock(ServiceFactory.class);
+  AmbariMetaInfo ambariMetaInfo=createNiceMock(AmbariMetaInfo.class);
+  Map<String,Service> allResponseMap=new HashMap<String,Service>();
+  allResponseMap.put("Service100",service0);
+  allResponseMap.put("Service101",service1);
+  allResponseMap.put("Service102",service2);
+  allResponseMap.put("Service103",service3);
+  allResponseMap.put("Service104",service4);
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
+  expect(managementController.getServiceFactory()).andReturn(serviceFactory).anyTimes();
+  expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject())).andReturn(Collections.<ServiceComponentHostResponse>emptySet()).anyTimes();
+  expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
+  expect(cluster.getServices()).andReturn(allResponseMap).anyTimes();
+  expect(cluster.getService("Service102")).andReturn(service2);
+  expect(service0.convertToResponse()).andReturn(serviceResponse0).anyTimes();
+  expect(service1.convertToResponse()).andReturn(serviceResponse1).anyTimes();
+  expect(service2.convertToResponse()).andReturn(serviceResponse2).anyTimes();
+  expect(service3.convertToResponse()).andReturn(serviceResponse3).anyTimes();
+  expect(service4.convertToResponse()).andReturn(serviceResponse4).anyTimes();
+  expect(service0.getName()).andReturn("Service100").anyTimes();
+  expect(service1.getName()).andReturn("Service101").anyTimes();
+  expect(service2.getName()).andReturn("Service102").anyTimes();
+  expect(service3.getName()).andReturn("Service103").anyTimes();
+  expect(service4.getName()).andReturn("Service104").anyTimes();
+  expect(service0.getDesiredState()).andReturn(State.INIT);
+  expect(service1.getDesiredState()).andReturn(State.INSTALLED);
+  expect(service2.getDesiredState()).andReturn(State.INIT);
+  expect(service3.getDesiredState()).andReturn(State.INSTALLED);
+  expect(service4.getDesiredState()).andReturn(State.INIT);
+  expect(serviceResponse0.getClusterName()).andReturn("Cluster100").anyTimes();
+  expect(serviceResponse0.getServiceName()).andReturn("Service100").anyTimes();
+  expect(serviceResponse1.getClusterName()).andReturn("Cluster100").anyTimes();
+  expect(serviceResponse1.getServiceName()).andReturn("Service101").anyTimes();
+  expect(serviceResponse2.getClusterName()).andReturn("Cluster100").anyTimes();
+  expect(serviceResponse2.getServiceName()).andReturn("Service102").anyTimes();
+  expect(serviceResponse3.getClusterName()).andReturn("Cluster100").anyTimes();
+  expect(serviceResponse3.getServiceName()).andReturn("Service103").anyTimes();
+  expect(serviceResponse4.getClusterName()).andReturn("Cluster100").anyTimes();
+  expect(serviceResponse4.getServiceName()).andReturn("Service104").anyTimes();
+  replay(managementController,clusters,cluster,service0,service1,service2,service3,service4,serviceResponse0,serviceResponse1,serviceResponse2,serviceResponse3,serviceResponse4,ambariMetaInfo,stackId,serviceFactory);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=getServiceProvider(managementController);
+  Set<String> propertyIds=new HashSet<String>();
+  propertyIds.add(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID);
+  propertyIds.add(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID);
+  Predicate predicate=new PredicateBuilder().property(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").toPredicate();
+  Request request=PropertyHelper.getReadRequest("ServiceInfo");
+  Set<Resource> resources=provider.getResources(request,predicate);
+  Assert.assertEquals(5,resources.size());
+  Set<String> names=new HashSet<String>();
+  for (  Resource resource : resources) {
+    String clusterName=(String)resource.getPropertyValue(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID);
+    Assert.assertEquals("Cluster100",clusterName);
+    names.add((String)resource.getPropertyValue(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID));
+  }
+  for (  Service service : allResponseMap.values()) {
+    Assert.assertTrue(names.contains(service.getName()));
+  }
+  predicate=new PredicateBuilder().property(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID).equals("Service102").toPredicate();
+  request=PropertyHelper.getReadRequest("ServiceInfo");
+  resources=provider.getResources(request,predicate);
+  Assert.assertEquals(1,resources.size());
+  Assert.assertEquals("Service102",resources.iterator().next().getPropertyValue(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID));
+  predicate=new PredicateBuilder().property(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ServiceResourceProvider.SERVICE_SERVICE_STATE_PROPERTY_ID).equals("INIT").toPredicate();
+  request=PropertyHelper.getReadRequest(propertyIds);
+  resources=provider.getResources(request,predicate);
+  Assert.assertEquals(3,resources.size());
+  names=new HashSet<String>();
+  for (  Resource resource : resources) {
+    String clusterName=(String)resource.getPropertyValue(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID);
+    Assert.assertEquals("Cluster100",clusterName);
+    names.add((String)resource.getPropertyValue(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID));
+  }
+  verify(managementController,clusters,cluster,service0,service1,service2,service3,service4,serviceResponse0,serviceResponse1,serviceResponse2,serviceResponse3,serviceResponse4,ambariMetaInfo,stackId,serviceFactory);
+}

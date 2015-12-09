@@ -5,7 +5,28 @@
   final ExecuteActionRequest actionRequest=getActionRequest(request);
   final Map<String,String> requestInfoProperties=request.getRequestInfoProperties();
   return getRequestStatus(createResources(new Command<RequestStatusResponse>(){
-    @Override public RequestStatusResponse invoke() throws AmbariException {
+    @Override public RequestStatusResponse invoke() throws AmbariException, AuthorizationException {
+      String clusterName=actionRequest.getClusterName();
+      if (clusterName == null) {
+      }
+ else       if (actionRequest.isCommand()) {
+        if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,getClusterId(clusterName),RoleAuthorization.SERVICE_RUN_CUSTOM_COMMAND)) {
+          throw new AuthorizationException("The authenticated user is not authorized to execute custom service commands.");
+        }
+      }
+ else {
+        String actionName=actionRequest.getActionName();
+        if (actionName.contains("SERVICE_CHECK")) {
+          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,getClusterId(clusterName),RoleAuthorization.SERVICE_RUN_SERVICE_CHECK)) {
+            throw new AuthorizationException("The authenticated user is not authorized to execute service checks.");
+          }
+        }
+ else         if (actionName.equals("DECOMMISSION")) {
+          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,getClusterId(clusterName),RoleAuthorization.SERVICE_DECOMMISSION_RECOMMISSION)) {
+            throw new AuthorizationException("The authenticated user is not authorized to decommission services.");
+          }
+        }
+      }
       return getManagementController().createAction(actionRequest,requestInfoProperties);
     }
   }
