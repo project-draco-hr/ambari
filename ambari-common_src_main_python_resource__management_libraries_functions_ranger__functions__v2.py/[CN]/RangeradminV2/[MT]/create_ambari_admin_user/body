@@ -1,5 +1,6 @@
+@safe_retry(times=5, sleep_time=8, backoff_factor=1.5, err_class=Fail, return_on_fail=None)
 def create_ambari_admin_user(self, ambari_admin_username, ambari_admin_password, usernamepassword):
-    '\n    :param ambari_admin_username: username of user to be created \n    :param ambari_admin_username: user password of user to be created \n    :return: Returns user credentials if user exist otherwise rerutns credentials of  created user.\n    '
+    '\n    :param ambari_admin_username: username of user to be created \n    :param ambari_admin_password: user password of user to be created\n    :param usernamepassword: user credentials using which repository needs to be searched.\n    :return: Returns user credentials if user exist otherwise rerutns credentials of  created user.\n    '
     flag_ambari_admin_present = False
     match = re.match('[a-zA-Z0-9_\\S]+$', ambari_admin_password)
     if (match is None):
@@ -11,7 +12,7 @@ def create_ambari_admin_user(self, ambari_admin_username, ambari_admin_password,
         request.add_header('Content-Type', 'application/json')
         request.add_header('Accept', 'application/json')
         request.add_header('Authorization', 'Basic {0}'.format(base_64_string))
-        result = urllib2.urlopen(request, timeout=20)
+        result = openurl(request, timeout=20)
         response_code = result.getcode()
         response = json.loads(result.read())
         if ((response_code == 200) and (len(response['vXUsers']) >= 0)):
@@ -39,7 +40,7 @@ def create_ambari_admin_user(self, ambari_admin_username, ambari_admin_password,
                 headers = {'Accept': 'application/json', 'Content-Type': 'application/json', }
                 request = urllib2.Request(url, data, headers)
                 request.add_header('Authorization', 'Basic {0}'.format(base_64_string))
-                result = urllib2.urlopen(request, timeout=20)
+                result = openurl(request, timeout=20)
                 response_code = result.getcode()
                 response = json.loads(json.JSONEncoder().encode(result.read()))
                 if ((response_code == 200) and (response is not None)):
@@ -60,3 +61,5 @@ def create_ambari_admin_user(self, ambari_admin_username, ambari_admin_password,
     except httplib.BadStatusLine:
         Logger.error('Ranger Admin service is not reachable, please restart the service and then try again')
         return None
+    except TimeoutError:
+        raise Fail('Connection to Ranger Admin failed. Reason - timeout')
