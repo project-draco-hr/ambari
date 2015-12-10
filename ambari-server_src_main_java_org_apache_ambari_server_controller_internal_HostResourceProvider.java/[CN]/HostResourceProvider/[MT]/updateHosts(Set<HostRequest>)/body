@@ -16,52 +16,81 @@
     }
     Host host=clusters.getHost(request.getHostname());
     String clusterName=request.getClusterName();
+    Cluster cluster=clusters.getCluster(clusterName);
+    Long clusterId=cluster.getClusterId();
     try {
       clusters.mapHostToCluster(request.getHostname(),clusterName);
     }
  catch (    DuplicateResourceException e) {
     }
     if (null != request.getHostAttributes()) {
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,clusterId,RoleAuthorization.HOST_ADD_DELETE_HOSTS)) {
+        throw new AuthorizationException("The authenticated user is not authorized to update host attributes");
+      }
       host.setHostAttributes(request.getHostAttributes());
     }
     String rackInfo=host.getRackInfo();
     String requestRackInfo=request.getRackInfo();
     boolean rackChange=requestRackInfo != null && !requestRackInfo.equals(rackInfo);
     if (rackChange) {
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,clusterId,RoleAuthorization.HOST_ADD_DELETE_HOSTS)) {
+        throw new AuthorizationException("The authenticated user is not authorized to update host rack information");
+      }
       host.setRackInfo(requestRackInfo);
     }
     if (null != request.getPublicHostName()) {
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,clusterId,RoleAuthorization.HOST_ADD_DELETE_HOSTS)) {
+        throw new AuthorizationException("The authenticated user is not authorized to update host attributes");
+      }
       host.setPublicHostName(request.getPublicHostName());
     }
     if (null != clusterName && null != request.getMaintenanceState()) {
-      Cluster c=clusters.getCluster(clusterName);
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,clusterId,RoleAuthorization.HOST_TOGGLE_MAINTENANCE)) {
+        throw new AuthorizationException("The authenticated user is not authorized to update host maintenance state");
+      }
       MaintenanceState newState=MaintenanceState.valueOf(request.getMaintenanceState());
-      MaintenanceState oldState=host.getMaintenanceState(c.getClusterId());
+      MaintenanceState oldState=host.getMaintenanceState(clusterId);
       if (!newState.equals(oldState)) {
         if (newState.equals(MaintenanceState.IMPLIED_FROM_HOST) || newState.equals(MaintenanceState.IMPLIED_FROM_SERVICE)) {
           throw new IllegalArgumentException("Invalid arguments, can only set " + "maintenance state to one of " + EnumSet.of(MaintenanceState.OFF,MaintenanceState.ON));
         }
  else {
-          host.setMaintenanceState(c.getClusterId(),newState);
+          host.setMaintenanceState(clusterId,newState);
         }
       }
     }
     if (null != clusterName && null != request.getDesiredConfigs()) {
-      Cluster c=clusters.getCluster(clusterName);
       if (clusters.getHostsForCluster(clusterName).containsKey(host.getHostName())) {
         for (        ConfigurationRequest cr : request.getDesiredConfigs()) {
+          String configType=cr.getType();
+          String service=null;
+          try {
+            service=cluster.getServiceForConfigTypes(Collections.singleton(configType));
+          }
+ catch (          IllegalArgumentException e) {
+          }
+          if (StringUtils.isEmpty(service)) {
+            if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.CLUSTER_MODIFY_CONFIGS))) {
+              throw new AuthorizationException("The authenticated user does not have authorization to modify cluster configurations");
+            }
+          }
+ else {
+            if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getClusterId(),EnumSet.of(RoleAuthorization.SERVICE_MODIFY_CONFIGS))) {
+              throw new AuthorizationException("The authenticated user does not have authorization to modify service configurations");
+            }
+          }
           if (null != cr.getProperties() && cr.getProperties().size() > 0) {
             LOG.info(MessageFormat.format("Applying configuration with tag ''{0}'' to host ''{1}'' in cluster ''{2}''",cr.getVersionTag(),request.getHostname(),clusterName));
-            cr.setClusterName(c.getClusterName());
+            cr.setClusterName(cluster.getClusterName());
             controller.createConfiguration(cr);
           }
-          Config baseConfig=c.getConfig(cr.getType(),cr.getVersionTag());
+          Config baseConfig=cluster.getConfig(cr.getType(),cr.getVersionTag());
           if (null != baseConfig) {
             String authName=controller.getAuthName();
-            DesiredConfig oldConfig=host.getDesiredConfigs(c.getClusterId()).get(cr.getType());
-            if (host.addDesiredConfig(c.getClusterId(),cr.isSelected(),authName,baseConfig)) {
+            DesiredConfig oldConfig=host.getDesiredConfigs(clusterId).get(cr.getType());
+            if (host.addDesiredConfig(clusterId,cr.isSelected(),authName,baseConfig)) {
               Logger logger=LoggerFactory.getLogger("configchange");
-              logger.info("cluster '" + c.getClusterName() + "', "+ "host '"+ host.getHostName()+ "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ baseConfig.getType()+ "' "+ "version='"+ baseConfig.getVersion()+ "'"+ "tag='"+ baseConfig.getTag()+ "'"+ (null == oldConfig ? "" : ", from='" + oldConfig.getTag() + "'"));
+              logger.info("cluster '" + cluster.getClusterName() + "', "+ "host '"+ host.getHostName()+ "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ baseConfig.getType()+ "' "+ "version='"+ baseConfig.getVersion()+ "'"+ "tag='"+ baseConfig.getTag()+ "'"+ (null == oldConfig ? "" : ", from='" + oldConfig.getTag() + "'"));
             }
           }
         }

@@ -1,0 +1,51 @@
+{
+  Resource.Type type=Resource.Type.Host;
+  Injector injector=createInjector();
+  AmbariManagementController managementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=injector.getInstance(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  Host host100=createMockHost("Host100","Cluster100",null,"HEALTHY","RECOVERABLE",null);
+  Host host101=createMockHost("Host101","Cluster100",null,"HEALTHY","RECOVERABLE",null);
+  Host host102=createMockHost("Host102","Cluster100",null,"HEALTHY","RECOVERABLE",null);
+  HostHealthStatus healthStatus=createNiceMock(HostHealthStatus.class);
+  AmbariMetaInfo ambariMetaInfo=createNiceMock(AmbariMetaInfo.class);
+  ResourceProviderFactory resourceProviderFactory=createNiceMock(ResourceProviderFactory.class);
+  ResourceProvider hostResourceProvider=getHostProvider(injector);
+  AbstractControllerResourceProvider.init(resourceProviderFactory);
+  List<Host> hosts=new LinkedList<Host>();
+  hosts.add(host100);
+  hosts.add(host101);
+  hosts.add(host102);
+  Set<Cluster> clusterSet=new HashSet<Cluster>();
+  clusterSet.add(cluster);
+  expect(host100.getMaintenanceState(2)).andReturn(MaintenanceState.OFF).anyTimes();
+  expect(host101.getMaintenanceState(2)).andReturn(MaintenanceState.OFF).anyTimes();
+  expect(host102.getMaintenanceState(2)).andReturn(MaintenanceState.OFF).anyTimes();
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo).anyTimes();
+  expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject())).andReturn(Collections.<ServiceComponentHostResponse>emptySet()).anyTimes();
+  expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),EasyMock.<Map<Resource.Type,String>>anyObject(),eq(managementController))).andReturn(hostResourceProvider).anyTimes();
+  expect(clusters.getHosts()).andReturn(hosts).anyTimes();
+  expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
+  expect(clusters.getClustersForHost("Host100")).andReturn(clusterSet).anyTimes();
+  expect(clusters.getClustersForHost("Host101")).andReturn(clusterSet).anyTimes();
+  expect(clusters.getClustersForHost("Host102")).andReturn(clusterSet).anyTimes();
+  expect(cluster.getClusterId()).andReturn(2L).anyTimes();
+  expect(healthStatus.getHealthStatus()).andReturn(HostHealthStatus.HealthStatus.HEALTHY).anyTimes();
+  expect(healthStatus.getHealthReport()).andReturn("HEALTHY").anyTimes();
+  Set<String> propertyIds=new HashSet<String>();
+  propertyIds.add(HostResourceProvider.HOST_CLUSTER_NAME_PROPERTY_ID);
+  propertyIds.add(HostResourceProvider.HOST_NAME_PROPERTY_ID);
+  Predicate predicate=new PredicateBuilder().property(HostResourceProvider.HOST_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").toPredicate();
+  Request request=PropertyHelper.getReadRequest(propertyIds);
+  replayAll();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  Set<Resource> resources=provider.getResources(request,predicate);
+  Assert.assertEquals(3,resources.size());
+  for (  Resource resource : resources) {
+    String clusterName=(String)resource.getPropertyValue(HostResourceProvider.HOST_CLUSTER_NAME_PROPERTY_ID);
+    Assert.assertEquals("Cluster100",clusterName);
+  }
+  verifyAll();
+}

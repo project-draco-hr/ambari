@@ -1,0 +1,35 @@
+{
+  Injector injector=createInjector();
+  AmbariManagementController managementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=injector.getInstance(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  Host host1=createNiceMock(Host.class);
+  HostHealthStatus healthStatus=createNiceMock(HostHealthStatus.class);
+  List<Host> hosts=new LinkedList<Host>();
+  hosts.add(host1);
+  Set<Cluster> clusterSet=new HashSet<Cluster>();
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getHosts()).andReturn(hosts).anyTimes();
+  expect(clusters.getHost("Host100")).andReturn(host1).anyTimes();
+  expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
+  expect(clusters.getClustersForHost("Host100")).andReturn(clusterSet).anyTimes();
+  clusters.deleteHost("Host100");
+  expectLastCall().anyTimes();
+  expect(host1.getHostName()).andReturn("Host100").anyTimes();
+  expect(healthStatus.getHealthStatus()).andReturn(HostHealthStatus.HealthStatus.HEALTHY).anyTimes();
+  expect(healthStatus.getHealthReport()).andReturn("HEALTHY").anyTimes();
+  replayAll();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=getHostProvider(injector);
+  AbstractResourceProviderTest.TestObserver observer=new AbstractResourceProviderTest.TestObserver();
+  ((ObservableResourceProvider)provider).addObserver(observer);
+  Predicate predicate=new PredicateBuilder().property(HostResourceProvider.HOST_NAME_PROPERTY_ID).equals("Host100").toPredicate();
+  provider.deleteResources(predicate);
+  ResourceProviderEvent lastEvent=observer.getLastEvent();
+  Assert.assertNotNull(lastEvent);
+  Assert.assertEquals(Resource.Type.Host,lastEvent.getResourceType());
+  Assert.assertEquals(ResourceProviderEvent.Type.Delete,lastEvent.getType());
+  Assert.assertEquals(predicate,lastEvent.getPredicate());
+  Assert.assertNull(lastEvent.getRequest());
+  verifyAll();
+}
