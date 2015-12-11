@@ -1,0 +1,24 @@
+{
+  String clusterName=getExecutionCommand().getClusterName();
+  Cluster cluster=m_clusters.getCluster(clusterName);
+  Config clusterEnv=cluster.getDesiredConfigByType(CLUSTER_ENV_CONFIG_TYPE);
+  if (null == clusterEnv) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("The %s configuration type was not found; unable to determine whether Hive is Kerberized",CLUSTER_ENV_CONFIG_TYPE),"");
+  }
+  Map<String,String> clusterEnvProperties=clusterEnv.getProperties();
+  boolean securityEnabled=Boolean.parseBoolean(clusterEnvProperties.get(CLUSTER_ENV_SECURITY_ENABLED));
+  if (!securityEnabled) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","Hive is not Kerberized, skipping Kerberos-specific configuration properties","");
+  }
+  Config hiveSite=cluster.getDesiredConfigByType(HIVE_SITE_CONFIG_TYPE);
+  if (hiveSite == null) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("The %s configuration type was not found; unable to set Hive configuration properties",CLUSTER_ENV_CONFIG_TYPE),"");
+  }
+  String zookeeperQuorum=ZooKeeperQuorumCalculator.getZooKeeperQuorumString(cluster);
+  Map<String,String> hiveSiteProperties=hiveSite.getProperties();
+  hiveSiteProperties.put(HIVE_SITE_ZK_QUORUM,zookeeperQuorum);
+  hiveSiteProperties.put(HIVE_SITE_ZK_CONNECT_STRING,zookeeperQuorum);
+  hiveSite.setProperties(hiveSiteProperties);
+  hiveSite.persist(false);
+  return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("Successfully set %s and %s in %s",HIVE_SITE_ZK_QUORUM,HIVE_SITE_ZK_CONNECT_STRING,HIVE_SITE_CONFIG_TYPE),"");
+}
