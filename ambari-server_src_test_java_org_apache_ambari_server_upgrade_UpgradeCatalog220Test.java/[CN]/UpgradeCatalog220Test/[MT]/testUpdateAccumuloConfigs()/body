@@ -3,14 +3,14 @@
   final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
   final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
   final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
-  final Map<String,String> propertiesFlumeEnv=new HashMap<String,String>(){
+  final Map<String,String> originalClientProperties=new HashMap<String,String>();
+  final Map<String,String> updatedClientProperties=new HashMap<String,String>(){
 {
-      put("content","test");
+      put("kerberos.server.primary","{{bare_accumulo_principal}}");
     }
   }
 ;
-  final Config mockFlumeEnv=easyMockSupport.createNiceMock(Config.class);
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).once();
+  final Config clientConfig=easyMockSupport.createNiceMock(Config.class);
   final Injector mockInjector=Guice.createInjector(new AbstractModule(){
     @Override protected void configure(){
       bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
@@ -27,10 +27,15 @@
       put("normal",mockClusterExpected);
     }
   }
-).atLeastOnce();
-  expect(mockClusterExpected.getDesiredConfigByType("flume-env")).andReturn(mockFlumeEnv).atLeastOnce();
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).atLeastOnce();
+).once();
+  expect(mockClusterExpected.getSecurityType()).andReturn(SecurityType.KERBEROS).once();
+  expect(mockClusterExpected.getDesiredConfigByType("client")).andReturn(clientConfig).atLeastOnce();
+  expect(clientConfig.getProperties()).andReturn(originalClientProperties).atLeastOnce();
+  UpgradeCatalog220 upgradeCatalog220=createMockBuilder(UpgradeCatalog220.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,boolean.class,boolean.class).createMock();
+  upgradeCatalog220.updateConfigurationPropertiesForCluster(mockClusterExpected,"client",updatedClientProperties,true,false);
+  expectLastCall().once();
   easyMockSupport.replayAll();
-  mockInjector.getInstance(UpgradeCatalog200.class).updateFlumeEnvConfig();
+  replay(upgradeCatalog220);
+  upgradeCatalog220.updateAccumuloConfigs();
   easyMockSupport.verifyAll();
 }

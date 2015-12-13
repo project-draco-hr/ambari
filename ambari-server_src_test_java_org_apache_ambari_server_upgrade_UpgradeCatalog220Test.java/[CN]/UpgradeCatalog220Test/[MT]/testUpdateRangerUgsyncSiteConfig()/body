@@ -3,14 +3,13 @@
   final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
   final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
   final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
-  final Map<String,String> propertiesFlumeEnv=new HashMap<String,String>(){
+  final Map<String,String> propertiesRangerUgsyncSite=new HashMap<String,String>(){
 {
-      put("content","test");
+      put("ranger.usersync.source.impl.class","ldap");
     }
   }
 ;
-  final Config mockFlumeEnv=easyMockSupport.createNiceMock(Config.class);
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).once();
+  final Config mockRangerUgsyncSite=easyMockSupport.createNiceMock(Config.class);
   final Injector mockInjector=Guice.createInjector(new AbstractModule(){
     @Override protected void configure(){
       bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
@@ -28,9 +27,13 @@
     }
   }
 ).atLeastOnce();
-  expect(mockClusterExpected.getDesiredConfigByType("flume-env")).andReturn(mockFlumeEnv).atLeastOnce();
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("ranger-ugsync-site")).andReturn(mockRangerUgsyncSite).atLeastOnce();
+  expect(mockRangerUgsyncSite.getProperties()).andReturn(propertiesRangerUgsyncSite).atLeastOnce();
+  Map<String,String> updates=Collections.singletonMap("ranger.usersync.source.impl.class","org.apache.ranger.ldapusersync.process.LdapUserGroupBuilder");
+  UpgradeCatalog220 upgradeCatalog220=createMockBuilder(UpgradeCatalog220.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,boolean.class,boolean.class).createMock();
+  upgradeCatalog220.updateConfigurationPropertiesForCluster(mockClusterExpected,"ranger-ugsync-site",updates,true,false);
+  expectLastCall().once();
   easyMockSupport.replayAll();
-  mockInjector.getInstance(UpgradeCatalog200.class).updateFlumeEnvConfig();
+  mockInjector.getInstance(UpgradeCatalog220.class).updateRangerUgsyncSiteConfig();
   easyMockSupport.verifyAll();
 }

@@ -1,19 +1,22 @@
 {
   EasyMockSupport easyMockSupport=new EasyMockSupport();
   final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final ConfigHelper mockConfigHelper=easyMockSupport.createMock(ConfigHelper.class);
   final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
   final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
-  final Map<String,String> propertiesFlumeEnv=new HashMap<String,String>(){
+  final Map<String,String> propertiesStormSite=new HashMap<String,String>(){
 {
-      put("content","test");
+      put("nimbus.monitor.freq.secs","10");
+      put("metrics.reporter.register","org.apache.hadoop.metrics2.sink.storm.StormTimelineMetricsReporter");
     }
   }
 ;
-  final Config mockFlumeEnv=easyMockSupport.createNiceMock(Config.class);
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).once();
+  final Config mockStormSite=easyMockSupport.createNiceMock(Config.class);
+  expect(mockStormSite.getProperties()).andReturn(propertiesStormSite).once();
   final Injector mockInjector=Guice.createInjector(new AbstractModule(){
     @Override protected void configure(){
       bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(ConfigHelper.class).toInstance(mockConfigHelper);
       bind(Clusters.class).toInstance(mockClusters);
       bind(EntityManager.class).toInstance(entityManager);
       bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
@@ -27,10 +30,10 @@
       put("normal",mockClusterExpected);
     }
   }
-).atLeastOnce();
-  expect(mockClusterExpected.getDesiredConfigByType("flume-env")).andReturn(mockFlumeEnv).atLeastOnce();
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).atLeastOnce();
+).once();
+  expect(mockClusterExpected.getDesiredConfigByType("storm-site")).andReturn(mockStormSite).atLeastOnce();
+  expect(mockStormSite.getProperties()).andReturn(propertiesStormSite).atLeastOnce();
   easyMockSupport.replayAll();
-  mockInjector.getInstance(UpgradeCatalog200.class).updateFlumeEnvConfig();
+  mockInjector.getInstance(UpgradeCatalog220.class).updateStormConfigs();
   easyMockSupport.verifyAll();
 }

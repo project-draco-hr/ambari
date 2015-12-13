@@ -3,14 +3,13 @@
   final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
   final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
   final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
-  final Map<String,String> propertiesFlumeEnv=new HashMap<String,String>(){
+  final Config oozieSiteConf=easyMockSupport.createNiceMock(Config.class);
+  final Map<String,String> propertiesOozieSite=new HashMap<String,String>(){
 {
-      put("content","test");
+      put("oozie.service.HadoopAccessorService.hadoop.configurations","*=/etc/hadoop/conf");
     }
   }
 ;
-  final Config mockFlumeEnv=easyMockSupport.createNiceMock(Config.class);
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).once();
   final Injector mockInjector=Guice.createInjector(new AbstractModule(){
     @Override protected void configure(){
       bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
@@ -28,9 +27,13 @@
     }
   }
 ).atLeastOnce();
-  expect(mockClusterExpected.getDesiredConfigByType("flume-env")).andReturn(mockFlumeEnv).atLeastOnce();
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("oozie-site")).andReturn(oozieSiteConf).atLeastOnce();
+  expect(oozieSiteConf.getProperties()).andReturn(propertiesOozieSite).once();
+  UpgradeCatalog220 upgradeCatalog220=createMockBuilder(UpgradeCatalog220.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,boolean.class,boolean.class).createMock();
+  upgradeCatalog220.updateConfigurationPropertiesForCluster(mockClusterExpected,"oozie-site",Collections.singletonMap("oozie.service.HadoopAccessorService.hadoop.configurations","*={{hadoop_conf_dir}}"),true,false);
+  expectLastCall().once();
   easyMockSupport.replayAll();
-  mockInjector.getInstance(UpgradeCatalog200.class).updateFlumeEnvConfig();
+  replay(upgradeCatalog220);
+  upgradeCatalog220.updateOozieConfigs();
   easyMockSupport.verifyAll();
 }

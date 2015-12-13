@@ -3,14 +3,13 @@
   final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
   final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
   final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
-  final Map<String,String> propertiesFlumeEnv=new HashMap<String,String>(){
+  final Map<String,String> propertiesTopologyWitAuthorizationProvider=new HashMap<String,String>(){
 {
-      put("content","test");
+      put("content","<topology> <gateway>  <provider>" + "<role>authorization</role>" + "<name>AclsAuthz</name>"+ "<enabled>true</enabled>"+ "</provider>"+ "</gateway> </topology>\n");
     }
   }
 ;
-  final Config mockFlumeEnv=easyMockSupport.createNiceMock(Config.class);
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).once();
+  final Config mockTopologyConf=easyMockSupport.createNiceMock(Config.class);
   final Injector mockInjector=Guice.createInjector(new AbstractModule(){
     @Override protected void configure(){
       bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
@@ -24,13 +23,15 @@
   expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
   expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
 {
-      put("normal",mockClusterExpected);
+      put("cl1",mockClusterExpected);
     }
   }
 ).atLeastOnce();
-  expect(mockClusterExpected.getDesiredConfigByType("flume-env")).andReturn(mockFlumeEnv).atLeastOnce();
-  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("topology")).andReturn(mockTopologyConf).atLeastOnce();
+  expect(mockTopologyConf.getProperties()).andReturn(propertiesTopologyWitAuthorizationProvider).once();
+  UpgradeCatalog220 upgradeCatalog220=createMockBuilder(UpgradeCatalog220.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,boolean.class,boolean.class).createMock();
   easyMockSupport.replayAll();
-  mockInjector.getInstance(UpgradeCatalog200.class).updateFlumeEnvConfig();
+  replay(upgradeCatalog220);
+  upgradeCatalog220.updateKnoxTopology();
   easyMockSupport.verifyAll();
 }
