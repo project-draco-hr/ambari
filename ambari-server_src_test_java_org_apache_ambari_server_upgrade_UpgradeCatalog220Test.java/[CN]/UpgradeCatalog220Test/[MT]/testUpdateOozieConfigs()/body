@@ -1,0 +1,38 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).atLeastOnce();
+  final Config oozieSiteConf=easyMockSupport.createNiceMock(Config.class);
+  final Map<String,String> propertiesOozieSite=new HashMap<String,String>(){
+{
+      put("oozie.service.HadoopAccessorService.hadoop.configurations","*=/etc/hadoop/conf");
+    }
+  }
+;
+  expect(mockClusterExpected.getDesiredConfigByType("oozie-site")).andReturn(oozieSiteConf).atLeastOnce();
+  expect(oozieSiteConf.getProperties()).andReturn(propertiesOozieSite).once();
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  UpgradeCatalog220 upgradeCatalog220=createMockBuilder(UpgradeCatalog220.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,boolean.class,boolean.class).createMock();
+  upgradeCatalog220.updateConfigurationPropertiesForCluster(mockClusterExpected,"oozie-site",Collections.singletonMap("oozie.service.HadoopAccessorService.hadoop.configurations","*={{hadoop_conf_dir}}"),true,false);
+  expectLastCall().once();
+  easyMockSupport.replayAll();
+  replay(upgradeCatalog220);
+  upgradeCatalog220.updateOozieConfigs();
+  easyMockSupport.verifyAll();
+}
