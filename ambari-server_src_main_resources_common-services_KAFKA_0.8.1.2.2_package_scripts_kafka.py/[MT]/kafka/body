@@ -1,6 +1,6 @@
 def kafka(upgrade_type=None):
     import params
-    Directory([params.kafka_log_dir, params.kafka_pid_dir, params.conf_dir], mode=493, cd_access='a', owner=params.kafka_user, group=params.user_group, recursive=True)
+    ensure_base_directories()
     kafka_server_config = mutable_config_dict(params.config['configurations']['kafka-broker'])
     effective_version = (params.hdp_stack_version if (upgrade_type is None) else format_hdp_stack_version(params.version))
     Logger.info(format('Effective stack version: {effective_version}'))
@@ -31,7 +31,9 @@ def kafka(upgrade_type=None):
         kafka_server_config['kafka.timeline.metrics.host'] = params.metric_collector_host
         kafka_server_config['kafka.timeline.metrics.port'] = params.metric_collector_port
     kafka_data_dir = kafka_server_config['log.dirs']
-    Directory(filter(None, kafka_data_dir.split(',')), mode=493, cd_access='a', owner=params.kafka_user, group=params.user_group, recursive=True)
+    kafka_data_dirs = filter(None, kafka_data_dir.split(','))
+    Directory(kafka_data_dirs[:], mode=493, cd_access='a', owner=params.kafka_user, group=params.user_group, recursive=True)
+    set_dir_ownership(kafka_data_dirs)
     PropertiesFile('server.properties', dir=params.conf_dir, properties=kafka_server_config, owner=params.kafka_user, group=params.user_group)
     File(format('{conf_dir}/kafka-env.sh'), owner=params.kafka_user, content=InlineTemplate(params.kafka_env_sh_template))
     if (params.log4j_props != None):
