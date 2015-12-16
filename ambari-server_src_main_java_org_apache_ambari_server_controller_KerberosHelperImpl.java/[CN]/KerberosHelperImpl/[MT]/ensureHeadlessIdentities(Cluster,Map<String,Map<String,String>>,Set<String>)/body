@@ -1,0 +1,34 @@
+{
+  KerberosDetails kerberosDetails=getKerberosDetails(cluster,null);
+  if (kerberosDetails.manageIdentities()) {
+    KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
+    Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
+    Map<String,Map<String,String>> configurations=addAdditionalConfigurations(cluster,deepCopy(existingConfigurations),null,kerberosDescriptorProperties);
+    Map<String,String> kerberosConfiguration=kerberosDetails.getKerberosEnvProperties();
+    KerberosOperationHandler kerberosOperationHandler=kerberosOperationHandlerFactory.getKerberosOperationHandler(kerberosDetails.getKdcType());
+    for (    String serviceName : services) {
+      KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
+      if (serviceDescriptor != null) {
+        Map<String,KerberosComponentDescriptor> componentDescriptors=serviceDescriptor.getComponents();
+        for (        KerberosComponentDescriptor componentDescriptor : componentDescriptors.values()) {
+          if (componentDescriptor != null) {
+            List<KerberosIdentityDescriptor> identityDescriptors;
+            identityDescriptors=serviceDescriptor.getIdentities(true);
+            if (identityDescriptors != null) {
+              for (              KerberosIdentityDescriptor identityDescriptor : identityDescriptors) {
+                createUserIdentity(identityDescriptor,kerberosConfiguration,kerberosOperationHandler,configurations);
+              }
+            }
+            identityDescriptors=componentDescriptor.getIdentities(true);
+            if (identityDescriptors != null) {
+              for (              KerberosIdentityDescriptor identityDescriptor : identityDescriptors) {
+                createUserIdentity(identityDescriptor,kerberosConfiguration,kerberosOperationHandler,configurations);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return true;
+}

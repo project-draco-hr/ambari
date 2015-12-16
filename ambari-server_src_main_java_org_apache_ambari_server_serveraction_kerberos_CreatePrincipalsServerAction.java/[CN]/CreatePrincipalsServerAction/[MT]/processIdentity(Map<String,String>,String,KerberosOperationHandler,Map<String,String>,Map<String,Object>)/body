@@ -6,78 +6,14 @@
     Map<String,Integer> principalKeyNumberMap=getPrincipalKeyNumberMap(requestSharedDataContext);
     String password=principalPasswordMap.get(evaluatedPrincipal);
     if (password == null) {
-      String message=String.format("Creating principal, %s",evaluatedPrincipal);
-      LOG.info(message);
-      actionLog.writeStdOut(message);
-      Integer length;
-      Integer minLowercaseLetters;
-      Integer minUppercaseLetters;
-      Integer minDigits;
-      Integer minPunctuation;
-      Integer minWhitespace;
-      if (kerberosConfiguration == null) {
-        length=null;
-        minLowercaseLetters=null;
-        minUppercaseLetters=null;
-        minDigits=null;
-        minPunctuation=null;
-        minWhitespace=null;
-      }
- else {
-        length=toInt(kerberosConfiguration.get("password_length"));
-        minLowercaseLetters=toInt(kerberosConfiguration.get("password_min_lowercase_letters"));
-        minUppercaseLetters=toInt(kerberosConfiguration.get("password_min_uppercase_letters"));
-        minDigits=toInt(kerberosConfiguration.get("password_min_digits"));
-        minPunctuation=toInt(kerberosConfiguration.get("password_min_punctuation"));
-        minWhitespace=toInt(kerberosConfiguration.get("password_min_whitespace"));
-      }
-      password=securePasswordHelper.createSecurePassword(length,minLowercaseLetters,minUppercaseLetters,minDigits,minPunctuation,minWhitespace);
-      try {
-        boolean servicePrincipal="service".equalsIgnoreCase(identityRecord.get(KerberosIdentityDataFileReader.PRINCIPAL_TYPE));
-        if (operationHandler.principalExists(evaluatedPrincipal)) {
-          message=String.format("Principal, %s, already exists, setting new password",evaluatedPrincipal);
-          LOG.warn(message);
-          actionLog.writeStdOut(message);
-          Integer keyNumber=operationHandler.setPrincipalPassword(evaluatedPrincipal,password);
-          if (keyNumber != null) {
-            principalPasswordMap.put(evaluatedPrincipal,password);
-            principalKeyNumberMap.put(evaluatedPrincipal,keyNumber);
-            message=String.format("Successfully set password for %s",evaluatedPrincipal);
-            LOG.debug(message);
-          }
- else {
-            message=String.format("Failed to set password for %s - unknown reason",evaluatedPrincipal);
-            LOG.error(message);
-            actionLog.writeStdErr(message);
-            commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
-          }
-        }
- else {
-          message=String.format("Creating new principal, %s",evaluatedPrincipal);
-          LOG.debug(message);
-          Integer keyNumber=operationHandler.createPrincipal(evaluatedPrincipal,password,servicePrincipal);
-          if (keyNumber != null) {
-            principalPasswordMap.put(evaluatedPrincipal,password);
-            principalKeyNumberMap.put(evaluatedPrincipal,keyNumber);
-            message=String.format("Successfully created new principal, %s",evaluatedPrincipal);
-            LOG.debug(message);
-          }
- else {
-            message=String.format("Failed to create principal, %s - unknown reason",evaluatedPrincipal);
-            LOG.error(message);
-            actionLog.writeStdErr(message);
-            commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
-          }
-        }
-        if (!kerberosPrincipalDAO.exists(evaluatedPrincipal)) {
-          kerberosPrincipalDAO.create(evaluatedPrincipal,servicePrincipal);
-        }
-      }
- catch (      KerberosOperationException e) {
-        message=String.format("Failed to create principal, %s - %s",evaluatedPrincipal,e.getMessage());
-        LOG.error(message,e);
-        actionLog.writeStdErr(message);
+      boolean servicePrincipal="service".equalsIgnoreCase(identityRecord.get(KerberosIdentityDataFileReader.PRINCIPAL_TYPE));
+      CreatePrincipalResult result=createPrincipal(evaluatedPrincipal,servicePrincipal,kerberosConfiguration,operationHandler,actionLog);
+      if (result == null) {
         commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
+      }
+ else {
+        principalPasswordMap.put(evaluatedPrincipal,result.getPassword());
+        principalKeyNumberMap.put(evaluatedPrincipal,result.getKeyNumber());
       }
     }
   }
