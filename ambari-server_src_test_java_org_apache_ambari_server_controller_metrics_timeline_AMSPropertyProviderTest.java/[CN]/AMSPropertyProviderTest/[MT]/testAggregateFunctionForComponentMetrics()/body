@@ -1,13 +1,15 @@
 {
   AmbariManagementController ams=createNiceMock(AmbariManagementController.class);
   PowerMock.mockStatic(AmbariServer.class);
-  expect(AmbariServer.getController()).andReturn(ams);
+  expect(AmbariServer.getController()).andReturn(ams).anyTimes();
   AmbariMetaInfo ambariMetaInfo=createNiceMock(AmbariMetaInfo.class);
   Clusters clusters=createNiceMock(Clusters.class);
   Cluster cluster=createNiceMock(Cluster.class);
   ComponentInfo componentInfo=createNiceMock(ComponentInfo.class);
   StackId stackId=new StackId("HDP","2.2");
   expect(ams.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getCluster("HostRoles/cluster_name")).andReturn(cluster).anyTimes();
+  expect(cluster.getResourceId()).andReturn(2L).anyTimes();
   try {
     expect(clusters.getCluster(anyObject(String.class))).andReturn(cluster).anyTimes();
   }
@@ -25,9 +27,12 @@
   injectCacheEntryFactoryWithStreamProvider(streamProvider);
   TestMetricHostProvider metricHostProvider=new TestMetricHostProvider();
   ComponentSSLConfiguration sslConfiguration=mock(ComponentSSLConfiguration.class);
+  TimelineMetricCacheProvider cacheProviderMock=EasyMock.createMock(TimelineMetricCacheProvider.class);
+  TimelineMetricCache cacheMock=EasyMock.createMock(TimelineMetricCache.class);
+  expect(cacheProviderMock.getTimelineMetricsCache()).andReturn(cacheMock).anyTimes();
   Map<String,Map<String,PropertyInfo>> propertyIds=PropertyHelper.getMetricPropertyIds(Resource.Type.Component);
   PropertyHelper.updateMetricsWithAggregateFunctionSupport(propertyIds);
-  AMSComponentPropertyProvider propertyProvider=new AMSComponentPropertyProvider(propertyIds,streamProvider,sslConfiguration,cacheProvider,metricHostProvider,CLUSTER_NAME_PROPERTY_ID,COMPONENT_NAME_PROPERTY_ID);
+  AMSComponentPropertyProvider propertyProvider=new AMSComponentPropertyProvider(propertyIds,streamProvider,sslConfiguration,cacheProviderMock,metricHostProvider,CLUSTER_NAME_PROPERTY_ID,COMPONENT_NAME_PROPERTY_ID);
   String propertyId=PropertyHelper.getPropertyId("metrics/rpc","NumOpenConnections._sum");
   Resource resource=new ResourceImpl(Resource.Type.Component);
   resource.setProperty(CLUSTER_NAME_PROPERTY_ID,"c1");
