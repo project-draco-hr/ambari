@@ -1,13 +1,14 @@
 {
   clusterGlobalLock.writeLock().lock();
   try {
-    Collection<ClusterConfigMappingEntity> configMappingEntities=clusterDAO.getClusterConfigMappingEntitiesByCluster(getClusterId());
+    ClusterEntity clusterEntity=getClusterEntity();
+    Collection<ClusterConfigMappingEntity> configMappingEntities=clusterEntity.getConfigMappingEntities();
     for (    ClusterConfigMappingEntity e : configMappingEntities) {
       LOG.debug("{} with tag {} is unselected",e.getType(),e.getTag());
       e.setSelected(0);
     }
-    List<ClusterConfigMappingEntity> clusterConfigMappingEntities=clusterDAO.getClusterConfigMappingsByStack(clusterEntity.getClusterId(),stackId);
-    Collection<ClusterConfigMappingEntity> latestConfigMappingByStack=getLatestConfigMapping(clusterConfigMappingEntities);
+    List<ClusterConfigMappingEntity> clusterConfigMappingsForStack=clusterDAO.getClusterConfigMappingsByStack(clusterEntity.getClusterId(),stackId);
+    Collection<ClusterConfigMappingEntity> latestConfigMappingByStack=getLatestConfigMapping(clusterConfigMappingsForStack);
     for (    ClusterConfigMappingEntity e : configMappingEntities) {
       String type=e.getType();
       String tag=e.getTag();
@@ -20,7 +21,9 @@
         }
       }
     }
-    clusterDAO.mergeConfigMappings(clusterConfigMappingEntities);
+    clusterEntity.setConfigMappingEntities(configMappingEntities);
+    clusterEntity=clusterDAO.merge(clusterEntity);
+    clusterDAO.mergeConfigMappings(configMappingEntities);
     refresh();
     cacheConfigurations();
   }
