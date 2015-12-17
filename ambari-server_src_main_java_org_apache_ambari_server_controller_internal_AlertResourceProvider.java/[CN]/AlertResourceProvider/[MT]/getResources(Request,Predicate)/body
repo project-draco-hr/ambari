@@ -10,10 +10,33 @@
     if (null != id) {
       AlertCurrentEntity entity=alertsDAO.findCurrentById(Long.parseLong(id));
       if (null != entity) {
+        AlertResourceProviderUtils.verifyViewAuthorization(entity);
         results.add(toResource(false,clusterName,entity,requestPropertyIds));
       }
     }
  else {
+      try {
+        Long clusterId=(StringUtils.isEmpty(clusterName)) ? null : getClusterId(clusterName);
+        String definitionName=(String)propertyMap.get(ALERT_DEFINITION_NAME);
+        String definitionId=(String)propertyMap.get(ALERT_DEFINITION_ID);
+        if (clusterId == null) {
+          AlertResourceProviderUtils.verifyViewAuthorization("",-1L);
+        }
+ else         if (!StringUtils.isEmpty(definitionName)) {
+          AlertDefinitionEntity alertDefinition=alertDefinitionDAO.findByName(clusterId,definitionName);
+          AlertResourceProviderUtils.verifyViewAuthorization(alertDefinition);
+        }
+ else         if (StringUtils.isNumeric(definitionId)) {
+          AlertDefinitionEntity alertDefinition=alertDefinitionDAO.findById(Long.valueOf(definitionId));
+          AlertResourceProviderUtils.verifyViewAuthorization(alertDefinition);
+        }
+ else {
+          AlertResourceProviderUtils.verifyViewAuthorization("",getClusterResourceId(clusterName));
+        }
+      }
+ catch (      AmbariException e) {
+        throw new SystemException(e.getMessage(),e);
+      }
       List<AlertCurrentEntity> entities=null;
       AlertCurrentRequest alertCurrentRequest=new AlertCurrentRequest();
       alertCurrentRequest.Predicate=predicate;

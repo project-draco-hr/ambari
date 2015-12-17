@@ -1,0 +1,31 @@
+{
+  Capture<List<AlertGroupEntity>> listCapture=new Capture<List<AlertGroupEntity>>();
+  List<Long> definitionIds=new ArrayList<Long>();
+  definitionIds.add(ALERT_DEF_ID);
+  List<Long> targetIds=new ArrayList<Long>();
+  targetIds.add(ALERT_TARGET_ID);
+  List<AlertDefinitionEntity> definitionEntities=new ArrayList<AlertDefinitionEntity>();
+  definitionEntities.addAll(getMockDefinitions());
+  List<AlertTargetEntity> targetEntities=new ArrayList<AlertTargetEntity>();
+  targetEntities.addAll(getMockTargets());
+  m_dao.createGroups(capture(listCapture));
+  expectLastCall().once();
+  expect(m_dao.findTargetsById(EasyMock.eq(targetIds))).andReturn(targetEntities).times(1);
+  expect(m_definitionDao.findByIds(definitionIds)).andReturn(definitionEntities).times(1);
+  replay(m_amc,m_clusters,m_cluster,m_dao,m_definitionDao);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  AlertGroupResourceProvider provider=createProvider(m_amc);
+  Map<String,Object> requestProps=new HashMap<String,Object>();
+  requestProps.put(AlertGroupResourceProvider.ALERT_GROUP_NAME,ALERT_GROUP_NAME);
+  requestProps.put(AlertGroupResourceProvider.ALERT_GROUP_CLUSTER_NAME,ALERT_GROUP_CLUSTER_NAME);
+  requestProps.put(AlertGroupResourceProvider.ALERT_GROUP_DEFINITIONS,definitionIds);
+  requestProps.put(AlertGroupResourceProvider.ALERT_GROUP_TARGETS,targetIds);
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  provider.createResources(request);
+  assertTrue(listCapture.hasCaptured());
+  AlertGroupEntity entity=listCapture.getValue().get(0);
+  assertNotNull(entity);
+  assertEquals(ALERT_GROUP_NAME,entity.getGroupName());
+  assertEquals(ALERT_GROUP_CLUSTER_ID,entity.getClusterId().longValue());
+  verify(m_amc,m_clusters,m_cluster,m_dao,m_definitionDao);
+}

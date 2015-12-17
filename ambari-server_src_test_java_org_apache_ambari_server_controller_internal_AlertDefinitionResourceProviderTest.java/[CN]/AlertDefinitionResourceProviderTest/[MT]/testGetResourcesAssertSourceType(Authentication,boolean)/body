@@ -1,0 +1,33 @@
+{
+  Request request=PropertyHelper.getReadRequest(AlertDefinitionResourceProvider.ALERT_DEF_CLUSTER_NAME,AlertDefinitionResourceProvider.ALERT_DEF_ID,AlertDefinitionResourceProvider.ALERT_DEF_NAME,AlertDefinitionResourceProvider.ALERT_DEF_LABEL,AlertDefinitionResourceProvider.ALERT_DEF_DESCRIPTION,AlertDefinitionResourceProvider.ALERT_DEF_SOURCE_TYPE);
+  AmbariManagementController amc=createMock(AmbariManagementController.class);
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  expect(amc.getClusters()).andReturn(clusters).atLeastOnce();
+  expect(clusters.getCluster((String)anyObject())).andReturn(cluster).atLeastOnce();
+  expect(cluster.getClusterId()).andReturn(1L).anyTimes();
+  expect(cluster.getResourceId()).andReturn(4L).anyTimes();
+  Predicate predicate=new PredicateBuilder().property(AlertDefinitionResourceProvider.ALERT_DEF_CLUSTER_NAME).equals("c1").toPredicate();
+  expect(dao.findAll(1L)).andReturn(getMockEntities()).atLeastOnce();
+  replay(amc,clusters,cluster,dao);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  AlertDefinitionResourceProvider provider=createProvider(amc);
+  Set<Resource> results=provider.getResources(request,predicate);
+  assertEquals(expectResults ? 1 : 0,results.size());
+  if (expectResults) {
+    Resource resource=results.iterator().next();
+    Assert.assertEquals("my_def",resource.getPropertyValue(AlertDefinitionResourceProvider.ALERT_DEF_NAME));
+    Map<String,String> reporting=(Map<String,String>)resource.getPropertyValue("AlertDefinition/source/reporting");
+    Assert.assertTrue(reporting.containsKey("ok"));
+    Assert.assertTrue(reporting.containsKey("critical"));
+  }
+  verify(amc,clusters,cluster,dao);
+  request=PropertyHelper.getReadRequest(AlertDefinitionResourceProvider.ALERT_DEF_CLUSTER_NAME,AlertDefinitionResourceProvider.ALERT_DEF_ID,AlertDefinitionResourceProvider.ALERT_DEF_NAME);
+  results=provider.getResources(request,predicate);
+  if (!results.isEmpty()) {
+    Resource resource=results.iterator().next();
+    Assert.assertEquals("my_def",resource.getPropertyValue(AlertDefinitionResourceProvider.ALERT_DEF_NAME));
+    Map<String,String> reporting=(Map<String,String>)resource.getPropertyValue("AlertDefinition/source/reporting");
+    Assert.assertNull(reporting);
+  }
+}

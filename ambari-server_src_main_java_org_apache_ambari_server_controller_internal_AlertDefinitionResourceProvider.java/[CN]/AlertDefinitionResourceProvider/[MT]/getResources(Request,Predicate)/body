@@ -10,6 +10,7 @@
     if (null != id) {
       AlertDefinitionEntity entity=alertDefinitionDAO.findById(Long.parseLong(id));
       if (null != entity) {
+        AlertResourceProviderUtils.verifyViewAuthorization(entity);
         results.add(toResource(clusterName,entity,requestPropertyIds));
       }
     }
@@ -22,8 +23,13 @@
         throw new NoSuchResourceException("Parent Cluster resource doesn't exist",e);
       }
       List<AlertDefinitionEntity> entities=alertDefinitionDAO.findAll(cluster.getClusterId());
+      boolean serviceLevelAuthorization=AlertResourceProviderUtils.hasViewAuthorization("_SERVICE_NAME_",cluster.getResourceId());
+      boolean clusterLevelAuthorization=AlertResourceProviderUtils.hasViewAuthorization("",cluster.getResourceId());
       for (      AlertDefinitionEntity entity : entities) {
-        results.add(toResource(clusterName,entity,requestPropertyIds));
+        String serviceName=entity.getServiceName();
+        if ((StringUtils.isEmpty(serviceName) || "AMBARI".equals(serviceName)) ? clusterLevelAuthorization : serviceLevelAuthorization) {
+          results.add(toResource(clusterName,entity,requestPropertyIds));
+        }
       }
     }
   }

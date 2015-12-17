@@ -1,13 +1,21 @@
 {
   Set<Resource> resources=getResources(new RequestImpl(null,null,null,null),predicate);
-  Set<Long> groupIds=new HashSet<Long>();
+  Map<Long,AlertGroupEntity> entities=new HashMap<Long,AlertGroupEntity>();
   for (  final Resource resource : resources) {
     Long id=(Long)resource.getPropertyValue(ALERT_GROUP_ID);
-    groupIds.add(id);
+    if (!entities.containsKey(id)) {
+      AlertGroupEntity entity=s_dao.findGroupById(id);
+      try {
+        AlertResourceProviderUtils.verifyManageAuthorization(entity,getClusterResourceId(entity.getClusterId()));
+        entities.put(id,entity);
+      }
+ catch (      AmbariException e) {
+        LOG.warn("The default alert group for {} cannot be removed",entity.getServiceName(),e);
+      }
+    }
   }
-  for (  Long groupId : groupIds) {
-    LOG.info("Deleting alert target {}",groupId);
-    final AlertGroupEntity entity=s_dao.findGroupById(groupId.longValue());
+  for (  final AlertGroupEntity entity : entities.values()) {
+    LOG.info("Deleting alert group {}",entity.getGroupId());
     if (entity.isDefault()) {
       LOG.warn("The default alert group for {} cannot be removed",entity.getServiceName());
       continue;
