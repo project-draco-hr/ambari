@@ -1,0 +1,53 @@
+{
+  Resource.Type type=Resource.Type.Request;
+  Capture<ExecuteActionRequest> actionRequest=new Capture<ExecuteActionRequest>();
+  Capture<HashMap<String,String>> propertyMap=new Capture<HashMap<String,String>>();
+  Capture<Request> requestCapture=new Capture<>();
+  Capture<Predicate> predicateCapture=new Capture<>();
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  RequestStatusResponse response=createNiceMock(RequestStatusResponse.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  expect(managementController.createAction(capture(actionRequest),capture(propertyMap))).andReturn(response).anyTimes();
+  expect(response.getMessage()).andReturn("Message").anyTimes();
+  expect(managementController.getClusters()).andReturn(clusters);
+  ClusterControllerImpl controller=createNiceMock(ClusterControllerImpl.class);
+  HostComponentProcessResourceProvider hostComponentProcessResourceProvider=createNiceMock(HostComponentProcessResourceProvider.class);
+  PowerMock.mockStatic(ClusterControllerHelper.class);
+  Resource resource=createNiceMock(Resource.class);
+  expect(ClusterControllerHelper.getClusterController()).andReturn(controller);
+  expect(controller.ensureResourceProvider(Resource.Type.HostComponent)).andReturn(hostComponentProcessResourceProvider);
+  expect(hostComponentProcessResourceProvider.getResources(capture(requestCapture),capture(predicateCapture))).andReturn(Collections.singleton(resource));
+  replay(managementController,response,controller,hostComponentProcessResourceProvider,resource,clusters);
+  PowerMock.replayAll();
+  SecurityContextHolder.getContext().setAuthentication(TestAuthenticationFactory.createAdministrator());
+  Set<Map<String,Object>> propertySet=new LinkedHashSet<Map<String,Object>>();
+  Map<String,Object> properties=new LinkedHashMap<String,Object>();
+  properties.put(RequestResourceProvider.REQUEST_CLUSTER_NAME_PROPERTY_ID,"c1");
+  Set<Map<String,Object>> filterSet=new HashSet<Map<String,Object>>();
+  String predicateProperty=HOST_COMPONENT_STALE_CONFIGS_PROPERTY_ID + "=true";
+  Map<String,Object> filterMap=new HashMap<String,Object>();
+  filterMap.put(RequestResourceProvider.HOSTS_PREDICATE,predicateProperty);
+  filterSet.add(filterMap);
+  properties.put(RequestResourceProvider.REQUEST_RESOURCE_FILTER_ID,filterSet);
+  propertySet.add(properties);
+  Map<String,String> requestInfoProperties=new HashMap<String,String>();
+  requestInfoProperties.put(RequestResourceProvider.COMMAND_ID,"RESTART");
+  requestInfoProperties.put(RequestResourceProvider.REQUEST_CONTEXT_ID,"Restart All with Stale Configs");
+  Request request=PropertyHelper.getCreateRequest(propertySet,requestInfoProperties);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  provider.createResources(request);
+  ExecuteActionRequest capturedRequest=actionRequest.getValue();
+  Assert.assertTrue(requestCapture.hasCaptured());
+  Assert.assertTrue(predicateCapture.hasCaptured());
+  Map<String,Object> predicateProperties=PredicateHelper.getProperties(predicateCapture.getValue());
+  String propertyIdToAssert=null;
+  Object propertyValueToAssert=null;
+  for (  Map.Entry<String,Object> predicateEntry : predicateProperties.entrySet()) {
+    if (predicateEntry.getKey().equals(HOST_COMPONENT_STALE_CONFIGS_PROPERTY_ID)) {
+      propertyIdToAssert=predicateEntry.getKey();
+      propertyValueToAssert=predicateEntry.getValue();
+    }
+  }
+  Assert.assertNotNull(propertyIdToAssert);
+  Assert.assertEquals("true",(String)propertyValueToAssert);
+}
