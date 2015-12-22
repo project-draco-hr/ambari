@@ -1,0 +1,36 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  Clusters clusters=easyMockSupport.createNiceMock(Clusters.class);
+  final Cluster cluster=easyMockSupport.createNiceMock(Cluster.class);
+  expect(clusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",cluster);
+    }
+  }
+).once();
+  Config mockAmsHbaseSite=easyMockSupport.createNiceMock(Config.class);
+  expect(cluster.getDesiredConfigByType("ams-hbase-site")).andReturn(mockAmsHbaseSite).atLeastOnce();
+  expect(mockAmsHbaseSite.getProperties()).andReturn(oldPropertiesAmsHbaseSite).times(2);
+  Config mockAmsHbaseSecuritySite=easyMockSupport.createNiceMock(Config.class);
+  expect(cluster.getDesiredConfigByType("ams-hbase-security-site")).andReturn(mockAmsHbaseSecuritySite).anyTimes();
+  expect(mockAmsHbaseSecuritySite.getProperties()).andReturn(amsHbaseSecuritySiteProperties).anyTimes();
+  Config clusterEnv=easyMockSupport.createNiceMock(Config.class);
+  expect(cluster.getDesiredConfigByType("cluster-env")).andReturn(clusterEnv).anyTimes();
+  expect(clusterEnv.getProperties()).andReturn(clusterEnvProperties).anyTimes();
+  Injector injector=easyMockSupport.createNiceMock(Injector.class);
+  expect(injector.getInstance(Gson.class)).andReturn(null).anyTimes();
+  expect(injector.getInstance(MaintenanceStateHelper.class)).andReturn(null).anyTimes();
+  expect(injector.getInstance(KerberosHelper.class)).andReturn(createNiceMock(KerberosHelper.class)).anyTimes();
+  replay(injector,clusters,mockAmsHbaseSite,mockAmsHbaseSecuritySite,clusterEnv,cluster);
+  AmbariManagementControllerImpl controller=createMockBuilder(AmbariManagementControllerImpl.class).addMockedMethod("createConfiguration").addMockedMethod("getClusters",new Class[]{}).addMockedMethod("createConfig").withConstructor(createNiceMock(ActionManager.class),clusters,injector).createNiceMock();
+  Injector injector2=easyMockSupport.createNiceMock(Injector.class);
+  Capture<Map> propertiesCapture=EasyMock.newCapture();
+  expect(injector2.getInstance(AmbariManagementController.class)).andReturn(controller).anyTimes();
+  expect(controller.getClusters()).andReturn(clusters).anyTimes();
+  expect(controller.createConfig(anyObject(Cluster.class),anyString(),capture(propertiesCapture),anyString(),anyObject(Map.class))).andReturn(createNiceMock(Config.class)).anyTimes();
+  replay(controller,injector2);
+  new UpgradeCatalog221(injector2).updateAMSConfigs();
+  easyMockSupport.verifyAll();
+  Map<String,String> updatedProperties=propertiesCapture.getValue();
+  assertTrue(Maps.difference(newPropertiesAmsHbaseSite,updatedProperties).areEqual());
+}

@@ -23,7 +23,14 @@ def validateAmsHbaseSiteConfigurations(self, properties, recommendedDefaults, co
     distributed = properties.get('hbase.cluster.distributed')
     if (hbase_rootdir and hbase_rootdir.startswith('hdfs://') and (not (distributed.lower() == 'true'))):
         distributed_item = self.getErrorItem('Distributed property should be set to true if hbase.rootdir points to HDFS.')
-    validationItems.extend([{'config-name': 'hbase.rootdir', 'item': rootdir_item, }, {'config-name': 'hbase.cluster.distributed', 'item': distributed_item, }])
+    hbase_zk_client_port = properties.get('hbase.zookeeper.property.clientPort')
+    zkPort = self.getZKPort(services)
+    hbase_zk_client_port_item = None
+    if ((distributed.lower() == 'true') and (op_mode == 'distributed') and (hbase_zk_client_port != zkPort)):
+        hbase_zk_client_port_item = self.getErrorItem('In AMS distributed mode, hbase.zookeeper.property.clientPort should be the cluster zookeeper server port : {0}'.format(zkPort))
+    if ((distributed.lower() == 'false') and (op_mode == 'embedded') and (hbase_zk_client_port == zkPort)):
+        hbase_zk_client_port_item = self.getErrorItem('In AMS embedded mode, hbase.zookeeper.property.clientPort should be a different port than cluster zookeeper port.(default:61181)')
+    validationItems.extend([{'config-name': 'hbase.rootdir', 'item': rootdir_item, }, {'config-name': 'hbase.cluster.distributed', 'item': distributed_item, }, {'config-name': 'hbase.zookeeper.property.clientPort', 'item': hbase_zk_client_port_item, }])
     for collectorHostName in amsCollectorHosts:
         for host in hosts['items']:
             if (host['Hosts']['host_name'] == collectorHostName):
