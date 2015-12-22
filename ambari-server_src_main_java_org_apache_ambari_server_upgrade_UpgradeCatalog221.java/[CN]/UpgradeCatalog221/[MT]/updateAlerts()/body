@@ -1,0 +1,22 @@
+{
+  LOG.info("Updating alert definitions.");
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  AlertDefinitionDAO alertDefinitionDAO=injector.getInstance(AlertDefinitionDAO.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  Map<String,Cluster> clusterMap=getCheckedClusterMap(clusters);
+  for (  final Cluster cluster : clusterMap.values()) {
+    long clusterID=cluster.getClusterId();
+    final AlertDefinitionEntity hiveMetastoreProcessAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"hive_metastore_process");
+    final AlertDefinitionEntity hiveServerProcessAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"hive_server_process");
+    List<AlertDefinitionEntity> hiveAlertDefinitions=new ArrayList();
+    hiveAlertDefinitions.add(hiveMetastoreProcessAlertDefinitionEntity);
+    hiveAlertDefinitions.add(hiveServerProcessAlertDefinitionEntity);
+    for (    AlertDefinitionEntity alertDefinition : hiveAlertDefinitions) {
+      String source=alertDefinition.getSource();
+      alertDefinition.setScheduleInterval(3);
+      alertDefinition.setSource(addCheckCommandTimeoutParam(source));
+      alertDefinition.setHash(UUID.randomUUID().toString());
+      alertDefinitionDAO.merge(alertDefinition);
+    }
+  }
+}
