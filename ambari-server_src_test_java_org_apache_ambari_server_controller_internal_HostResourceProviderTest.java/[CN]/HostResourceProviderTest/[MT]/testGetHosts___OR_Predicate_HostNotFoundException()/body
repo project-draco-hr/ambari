@@ -1,9 +1,8 @@
 {
-  Injector injector=createStrictMock(Injector.class);
-  Capture<AmbariManagementController> controllerCapture=new Capture<AmbariManagementController>();
-  Clusters clusters=createNiceMock(Clusters.class);
-  MaintenanceStateHelper maintHelper=createNiceMock(MaintenanceStateHelper.class);
-  Cluster cluster=createNiceMock(Cluster.class);
+  Injector injector=createInjector();
+  AmbariManagementController managementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=injector.getInstance(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
   Host host1=createNiceMock(Host.class);
   Host host2=createNiceMock(Host.class);
   HostResponse response=createNiceMock(HostResponse.class);
@@ -17,10 +16,7 @@
   setRequests.add(request2);
   setRequests.add(request3);
   setRequests.add(request4);
-  injector.injectMembers(capture(controllerCapture));
-  expect(injector.getInstance(Gson.class)).andReturn(null);
-  expect(injector.getInstance(MaintenanceStateHelper.class)).andReturn(maintHelper);
-  expect(injector.getInstance(KerberosHelper.class)).andReturn(createNiceMock(KerberosHelper.class));
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
   expect(clusters.getCluster("cluster1")).andReturn(cluster).times(4);
   expect(clusters.getHost("host1")).andReturn(host1);
   expect(host1.getHostName()).andReturn("host1").anyTimes();
@@ -34,12 +30,12 @@
   response2.setClusterName("cluster1");
   expect(clusters.getHost("host3")).andThrow(new HostNotFoundException("host3"));
   expect(clusters.getHost("host4")).andThrow(new HostNotFoundException("host4"));
-  replay(maintHelper,injector,clusters,cluster,host1,host2,response,response2);
-  AmbariManagementController controller=new AmbariManagementControllerImpl(null,clusters,injector);
-  Set<HostResponse> setResponses=getHosts(controller,setRequests);
-  assertSame(controller,controllerCapture.getValue());
+  expect(cluster.getClusterId()).andReturn(2L).anyTimes();
+  replayAll();
+  SecurityContextHolder.getContext().setAuthentication(TestAuthenticationFactory.createAdministrator());
+  Set<HostResponse> setResponses=getHosts(managementController,setRequests);
   assertEquals(2,setResponses.size());
   assertTrue(setResponses.contains(response));
   assertTrue(setResponses.contains(response2));
-  verify(injector,clusters,cluster,host1,host2,response,response2);
+  verifyAll();
 }

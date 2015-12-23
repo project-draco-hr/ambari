@@ -3,10 +3,14 @@
   ClusterTopology topology=new ClusterTopologyImpl(ambariContext,request);
   final String clusterName=request.getClusterName();
   Long provisionId=ambariContext.getNextRequestId();
+  final Stack stack=topology.getBlueprint().getStack();
+  boolean configureSecurity=false;
   SecurityConfiguration securityConfiguration=processSecurityConfiguration(request);
   if (securityConfiguration != null && securityConfiguration.getType() == SecurityType.KERBEROS) {
+    configureSecurity=true;
     addKerberosClient(topology);
-    ambariContext.createAmbariResources(topology,clusterName,securityConfiguration.getType());
+    topology.getBlueprint().getConfiguration().setParentConfiguration(stack.getConfiguration(topology.getBlueprint().getServices()));
+    ambariContext.createAmbariResources(topology,clusterName,SecurityType.KERBEROS);
     if (securityConfiguration.getDescriptor() != null) {
       submitKerberosDescriptorAsArtifact(clusterName,securityConfiguration.getDescriptor());
     }
@@ -23,6 +27,7 @@
   topology.setClusterId(clusterId);
   request.setClusterId(clusterId);
   topology.setConfigRecommendationStrategy(request.getConfigRecommendationStrategy());
+  topology.setProvisionAction(request.getProvisionAction());
   PersistedTopologyRequest persistedRequest=RetryHelper.executeWithRetry(new Callable<PersistedTopologyRequest>(){
     @Override public PersistedTopologyRequest call() throws Exception {
       return persistedState.persistTopologyRequest(request);
@@ -30,8 +35,7 @@
   }
 );
   clusterTopologyMap.put(clusterId,topology);
-  final Stack stack=topology.getBlueprint().getStack();
-  addClusterConfigRequest(topology,new ClusterConfigurationRequest(ambariContext,topology,true,stackAdvisorBlueprintProcessor));
+  addClusterConfigRequest(topology,new ClusterConfigurationRequest(ambariContext,topology,true,stackAdvisorBlueprintProcessor,configureSecurity));
   LogicalRequest logicalRequest=processRequest(persistedRequest,topology,provisionId);
   ambariContext.persistInstallStateForUI(clusterName,stack.getName(),stack.getVersion());
   return getRequestStatus(logicalRequest.getRequestId());

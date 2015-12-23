@@ -1,0 +1,28 @@
+{
+  Request request=PropertyHelper.getReadRequest();
+  AmbariManagementController amc=createMock(AmbariManagementController.class);
+  Predicate predicate=new PredicateBuilder().property(AlertGroupResourceProvider.ALERT_GROUP_CLUSTER_NAME).equals(ALERT_GROUP_CLUSTER_NAME).and().property(AlertGroupResourceProvider.ALERT_GROUP_ID).equals(ALERT_GROUP_ID.toString()).toPredicate();
+  expect(m_dao.findGroupById(ALERT_GROUP_ID.longValue())).andReturn(getMockEntities().get(0));
+  expect(amc.getClusters()).andReturn(m_clusters).atLeastOnce();
+  replay(amc,m_dao,m_clusters,m_cluster);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  AlertGroupResourceProvider provider=createProvider(amc);
+  Set<Resource> results=provider.getResources(request,predicate);
+  assertEquals(expectResults ? 1 : 0,results.size());
+  if (expectResults) {
+    Resource r=results.iterator().next();
+    assertEquals(ALERT_GROUP_NAME,r.getPropertyValue(AlertGroupResourceProvider.ALERT_GROUP_NAME));
+    assertEquals(ALERT_GROUP_ID,r.getPropertyValue(AlertGroupResourceProvider.ALERT_GROUP_ID));
+    assertEquals(ALERT_GROUP_CLUSTER_NAME,r.getPropertyValue(AlertGroupResourceProvider.ALERT_GROUP_CLUSTER_NAME));
+    List<AlertDefinitionResponse> definitions=(List<AlertDefinitionResponse>)r.getPropertyValue(AlertGroupResourceProvider.ALERT_GROUP_DEFINITIONS);
+    List<AlertTarget> targets=(List<AlertTarget>)r.getPropertyValue(AlertGroupResourceProvider.ALERT_GROUP_TARGETS);
+    assertNotNull(definitions);
+    assertNotNull(targets);
+    assertEquals(1,definitions.size());
+    assertEquals(ALERT_DEF_NAME,definitions.get(0).getName());
+    assertEquals(SourceType.METRIC,definitions.get(0).getSourceType());
+    assertEquals(1,targets.size());
+    assertEquals(ALERT_TARGET_NAME,targets.get(0).getName());
+  }
+  verify(amc,m_dao);
+}

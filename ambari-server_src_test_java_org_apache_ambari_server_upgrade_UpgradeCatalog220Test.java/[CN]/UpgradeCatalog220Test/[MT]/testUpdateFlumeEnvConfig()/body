@@ -1,0 +1,36 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Map<String,String> propertiesFlumeEnv=new HashMap<String,String>(){
+{
+      put("content","test");
+    }
+  }
+;
+  final Config mockFlumeEnv=easyMockSupport.createNiceMock(Config.class);
+  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).once();
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(EntityManager.class).toInstance(entityManager);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("flume-env")).andReturn(mockFlumeEnv).atLeastOnce();
+  expect(mockFlumeEnv.getProperties()).andReturn(propertiesFlumeEnv).atLeastOnce();
+  easyMockSupport.replayAll();
+  mockInjector.getInstance(UpgradeCatalog220.class).updateFlumeEnvConfig();
+  easyMockSupport.verifyAll();
+}

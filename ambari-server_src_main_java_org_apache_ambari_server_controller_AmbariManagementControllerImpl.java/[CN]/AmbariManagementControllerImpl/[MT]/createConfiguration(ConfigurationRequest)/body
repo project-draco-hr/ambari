@@ -3,6 +3,23 @@
     throw new IllegalArgumentException("Invalid Arguments," + " clustername, config type and configs should not" + " be null or empty");
   }
   Cluster cluster=clusters.getCluster(request.getClusterName());
+  String configType=request.getType();
+  String service=null;
+  try {
+    service=cluster.getServiceForConfigTypes(Collections.singleton(configType));
+  }
+ catch (  IllegalArgumentException e) {
+  }
+  if (StringUtils.isEmpty(service)) {
+    if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.CLUSTER_MODIFY_CONFIGS))) {
+      throw new AuthorizationException("The authenticated user does not have authorization " + "to create cluster configurations");
+    }
+  }
+ else {
+    if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.SERVICE_MODIFY_CONFIGS))) {
+      throw new AuthorizationException("The authenticated user does not have authorization " + "to create service configurations");
+    }
+  }
   Map<String,String> requestProperties=request.getProperties();
   Map<PropertyInfo.PropertyType,Set<String>> propertiesTypes=cluster.getConfigPropertiesTypes(request.getType());
   if (propertiesTypes.containsKey(PropertyType.PASSWORD)) {

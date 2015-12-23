@@ -1,0 +1,28 @@
+def perform_merge(self):
+    result_configurations = {}
+    has_conflicts = False
+    for (filename, paths) in self.config_files_map.iteritems():
+        filepath_to_configurations = {}
+        configuration_type = os.path.splitext(filename)[0]
+        for path in paths:
+            logger.debug('Read xml data from {0}'.format(path))
+            filepath_to_configurations[path] = self.read_xml_data_to_map(path)
+        (merged_configurations, property_name_to_value_to_filepaths) = ConfigMerge.merge_configurations(filepath_to_configurations)
+        conflicts_output = ConfigMerge.format_conflicts_output(property_name_to_value_to_filepaths)
+        if conflicts_output:
+            has_conflicts = True
+            conflict_filename = os.path.join(self.OUTPUT_DIR, (configuration_type + '-conflicts.txt'))
+            logger.warn('You have configurations conflicts for {0}. Please check {1}'.format(configuration_type, conflict_filename))
+            with open(conflict_filename, 'w') as fp:
+                fp.write(conflicts_output)
+        result_configurations[configuration_type] = merged_configurations
+    result_json_file = os.path.join(self.OUTPUT_DIR, 'blueprint.json')
+    logger.info("Using '{0}' file as output for blueprint template".format(result_json_file))
+    with open(result_json_file, 'w') as outfile:
+        outfile.write(json.dumps(ConfigMerge.format_for_blueprint(result_configurations), sort_keys=True, indent=4, separators=(',', ': ')))
+    if has_conflicts:
+        logger.info('Script finished with configurations conflicts, please resolve them before using the blueprint')
+        return 1
+    else:
+        logger.info('Script successfully finished')
+        return 0

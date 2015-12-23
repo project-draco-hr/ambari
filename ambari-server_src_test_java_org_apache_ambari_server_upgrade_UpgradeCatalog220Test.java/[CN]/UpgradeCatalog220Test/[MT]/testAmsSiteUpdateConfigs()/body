@@ -1,0 +1,53 @@
+{
+  Map<String,String> oldPropertiesAmsSite=new HashMap<String,String>(){
+{
+      put("timeline.metrics.service.default.result.limit",String.valueOf(5760));
+      put("timeline.metrics.cluster.aggregator.minute.interval",String.valueOf(1000));
+      put("timeline.metrics.host.aggregator.minute.interval",String.valueOf(1000));
+      put("timeline.metrics.cluster.aggregator.minute.ttl",String.valueOf(1000));
+    }
+  }
+;
+  Map<String,String> newPropertiesAmsSite=new HashMap<String,String>(){
+{
+      put("timeline.metrics.service.default.result.limit",String.valueOf(15840));
+      put("timeline.metrics.cluster.aggregator.second.interval",String.valueOf(120));
+      put("timeline.metrics.cluster.aggregator.minute.interval",String.valueOf(300));
+      put("timeline.metrics.host.aggregator.minute.interval",String.valueOf(300));
+      put("timeline.metrics.cluster.aggregator.second.ttl",String.valueOf(2592000));
+      put("timeline.metrics.cluster.aggregator.minute.ttl",String.valueOf(7776000));
+      put("timeline.metrics.cluster.aggregator.second.checkpointCutOffMultiplier",String.valueOf(2));
+      put("timeline.metrics.cluster.aggregator.second.disabled",String.valueOf(false));
+      put("timeline.metrics.hbase.fifo.compaction.enabled",String.valueOf(true));
+    }
+  }
+;
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  Clusters clusters=easyMockSupport.createNiceMock(Clusters.class);
+  final Cluster cluster=easyMockSupport.createNiceMock(Cluster.class);
+  Config mockAmsSite=easyMockSupport.createNiceMock(Config.class);
+  expect(clusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",cluster);
+    }
+  }
+).once();
+  expect(cluster.getDesiredConfigByType("ams-site")).andReturn(mockAmsSite).atLeastOnce();
+  expect(mockAmsSite.getProperties()).andReturn(oldPropertiesAmsSite).times(2);
+  Injector injector=easyMockSupport.createNiceMock(Injector.class);
+  expect(injector.getInstance(Gson.class)).andReturn(null).anyTimes();
+  expect(injector.getInstance(MaintenanceStateHelper.class)).andReturn(null).anyTimes();
+  expect(injector.getInstance(KerberosHelper.class)).andReturn(createNiceMock(KerberosHelper.class)).anyTimes();
+  replay(injector,clusters,mockAmsSite,cluster);
+  AmbariManagementControllerImpl controller=createMockBuilder(AmbariManagementControllerImpl.class).addMockedMethod("createConfiguration").addMockedMethod("getClusters",new Class[]{}).addMockedMethod("createConfig").withConstructor(createNiceMock(ActionManager.class),clusters,injector).createNiceMock();
+  Injector injector2=easyMockSupport.createNiceMock(Injector.class);
+  Capture<Map> propertiesCapture=EasyMock.newCapture();
+  expect(injector2.getInstance(AmbariManagementController.class)).andReturn(controller).anyTimes();
+  expect(controller.getClusters()).andReturn(clusters).anyTimes();
+  expect(controller.createConfig(anyObject(Cluster.class),anyString(),capture(propertiesCapture),anyString(),anyObject(Map.class))).andReturn(createNiceMock(Config.class)).once();
+  replay(controller,injector2);
+  new UpgradeCatalog220(injector2).updateAMSConfigs();
+  easyMockSupport.verifyAll();
+  Map<String,String> updatedProperties=propertiesCapture.getValue();
+  assertTrue(Maps.difference(newPropertiesAmsSite,updatedProperties).areEqual());
+}

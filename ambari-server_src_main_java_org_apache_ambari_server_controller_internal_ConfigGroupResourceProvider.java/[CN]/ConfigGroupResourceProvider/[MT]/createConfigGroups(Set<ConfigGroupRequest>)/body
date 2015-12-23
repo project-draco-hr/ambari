@@ -35,11 +35,25 @@
       }
     }
     verifyHostList(cluster,hosts,request);
-    ConfigGroup configGroup=configGroupFactory.createNew(cluster,request.getGroupName(),request.getTag(),request.getDescription(),request.getConfigs(),hosts);
     String serviceName=null;
     if (request.getConfigs() != null && !request.getConfigs().isEmpty()) {
-      serviceName=cluster.getServiceForConfigTypes(request.getConfigs().keySet());
+      try {
+        serviceName=cluster.getServiceForConfigTypes(request.getConfigs().keySet());
+      }
+ catch (      IllegalArgumentException e) {
+      }
     }
+    if (StringUtils.isEmpty(serviceName)) {
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),RoleAuthorization.CLUSTER_MANAGE_CONFIG_GROUPS)) {
+        throw new AuthorizationException("The authenticated user is not authorized to create config groups");
+      }
+    }
+ else {
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),RoleAuthorization.SERVICE_MANAGE_CONFIG_GROUPS)) {
+        throw new AuthorizationException("The authenticated user is not authorized to create config groups");
+      }
+    }
+    ConfigGroup configGroup=configGroupFactory.createNew(cluster,request.getGroupName(),request.getTag(),request.getDescription(),request.getConfigs(),hosts);
     configGroup.setServiceName(serviceName);
     configLogger.info("Persisting new Config group" + ", clusterName = " + cluster.getClusterName() + ", name = "+ configGroup.getName()+ ", tag = "+ configGroup.getTag()+ ", user = "+ getManagementController().getAuthName());
     configGroup.persist();

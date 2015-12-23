@@ -1,0 +1,49 @@
+{
+  Keytab keytab=null;
+  if (checkCache) {
+    KerberosPrincipalEntity principalEntity=kerberosPrincipalDAO.find(principal);
+    String cachedKeytabPath=(principalEntity == null) ? null : principalEntity.getCachedKeytabPath();
+    if (cachedKeytabPath != null) {
+      try {
+        keytab=Keytab.read(new File(cachedKeytabPath));
+      }
+ catch (      IOException e) {
+        String message=String.format("Failed to read the cached keytab for %s, recreating if possible - %s",principal,e.getMessage());
+        if (LOG.isDebugEnabled()) {
+          LOG.warn(message,e);
+        }
+ else {
+          LOG.warn(message,e);
+        }
+      }
+    }
+  }
+  if (keytab == null) {
+    try {
+      keytab=operationHandler.createKeytab(principal,password,keyNumber);
+      KerberosPrincipalEntity principalEntity=kerberosPrincipalDAO.find(principal);
+      if (principalEntity != null) {
+        if (!principalEntity.isService() && canCache) {
+          File cachedKeytabFile=cacheKeytab(principal,keytab);
+          String previousCachedFilePath=principalEntity.getCachedKeytabPath();
+          String cachedKeytabFilePath=((cachedKeytabFile == null) || !cachedKeytabFile.exists()) ? null : cachedKeytabFile.getAbsolutePath();
+          principalEntity.setCachedKeytabPath(cachedKeytabFilePath);
+          kerberosPrincipalDAO.merge(principalEntity);
+          if (previousCachedFilePath != null) {
+            if (!new File(previousCachedFilePath).delete()) {
+              LOG.debug(String.format("Failed to remove orphaned cache file %s",previousCachedFilePath));
+            }
+          }
+        }
+      }
+    }
+ catch (    KerberosOperationException e) {
+      String message=String.format("Failed to create keytab file for %s - %s",principal,e.getMessage());
+      if (actionLog != null) {
+        actionLog.writeStdErr(message);
+      }
+      LOG.error(message,e);
+    }
+  }
+  return keytab;
+}

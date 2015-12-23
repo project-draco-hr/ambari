@@ -1,0 +1,36 @@
+{
+  Map<String,Map<String,String>> existingConfig=new HashMap<String,Map<String,String>>();
+  Configuration stackConfig=new Configuration(existingConfig,new HashMap<String,Map<String,Map<String,String>>>());
+  PowerMock.mockStatic(AmbariContext.class);
+  AmbariContext.getController();
+  expectLastCall().andReturn(controller).anyTimes();
+  expect(controller.getClusters()).andReturn(clusters).anyTimes();
+  expect(controller.getKerberosHelper()).andReturn(kerberosHelper).times(2);
+  expect(clusters.getCluster("testCluster")).andReturn(cluster).anyTimes();
+  expect(blueprint.getStack()).andReturn(stack).anyTimes();
+  expect(stack.getAllConfigurationTypes(anyString())).andReturn(Collections.<String>singletonList("testConfigType")).anyTimes();
+  expect(stack.getExcludedConfigurationTypes(anyString())).andReturn(Collections.<String>emptySet()).anyTimes();
+  expect(stack.getConfigurationPropertiesWithMetadata(anyString(),anyString())).andReturn(Collections.<String,Stack.ConfigProperty>emptyMap()).anyTimes();
+  Set<String> services=new HashSet<>();
+  services.add("HDFS");
+  services.add("KERBEROS");
+  services.add("ZOOKEPER");
+  expect(blueprint.getServices()).andReturn(services).anyTimes();
+  expect(topology.getConfigRecommendationStrategy()).andReturn(ConfigRecommendationStrategy.NEVER_APPLY).anyTimes();
+  expect(topology.getBlueprint()).andReturn(blueprint).anyTimes();
+  expect(topology.getConfiguration()).andReturn(stackConfig).anyTimes();
+  expect(topology.getHostGroupInfo()).andReturn(Collections.<String,HostGroupInfo>emptyMap());
+  expect(topology.getClusterId()).andReturn(Long.valueOf(1)).anyTimes();
+  expect(ambariContext.getClusterName(Long.valueOf(1))).andReturn("testCluster").anyTimes();
+  expect(ambariContext.createConfigurationRequests(anyObject(Map.class))).andReturn(Collections.<ConfigurationRequest>emptyList()).anyTimes();
+  Map<String,Map<String,String>> kerberosConfig=new HashMap<String,Map<String,String>>();
+  Map<String,String> properties=new HashMap<>();
+  properties.put("testPorperty","testValue");
+  kerberosConfig.put("testConfigType",properties);
+  expect(kerberosHelper.ensureHeadlessIdentities(anyObject(Cluster.class),anyObject(Map.class),anyObject(Set.class))).andReturn(true).once();
+  expect(kerberosHelper.getServiceConfigurationUpdates(anyObject(Cluster.class),anyObject(Map.class),anyObject(Set.class))).andReturn(kerberosConfig).once();
+  PowerMock.replay(stack,blueprint,topology,controller,clusters,kerberosHelper,ambariContext,AmbariContext.class);
+  ClusterConfigurationRequest clusterConfigurationRequest=new ClusterConfigurationRequest(ambariContext,topology,false,stackAdvisorBlueprintProcessor,true);
+  clusterConfigurationRequest.process();
+  verify(blueprint,topology,ambariContext,controller,kerberosHelper);
+}

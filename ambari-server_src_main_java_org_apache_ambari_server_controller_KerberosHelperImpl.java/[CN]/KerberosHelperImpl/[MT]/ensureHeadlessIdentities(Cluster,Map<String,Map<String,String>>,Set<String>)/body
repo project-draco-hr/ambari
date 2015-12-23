@@ -1,0 +1,48 @@
+{
+  KerberosDetails kerberosDetails=getKerberosDetails(cluster,null);
+  if (kerberosDetails.manageIdentities()) {
+    KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
+    Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
+    Map<String,Map<String,String>> configurations=addAdditionalConfigurations(cluster,deepCopy(existingConfigurations),null,kerberosDescriptorProperties);
+    Map<String,String> kerberosConfiguration=kerberosDetails.getKerberosEnvProperties();
+    KerberosOperationHandler kerberosOperationHandler=kerberosOperationHandlerFactory.getKerberosOperationHandler(kerberosDetails.getKdcType());
+    PrincipalKeyCredential administratorCredential=getKDCAdministratorCredentials(cluster.getClusterName());
+    try {
+      kerberosOperationHandler.open(administratorCredential,kerberosDetails.getDefaultRealm(),kerberosConfiguration);
+    }
+ catch (    KerberosOperationException e) {
+      String message=String.format("Failed to process the identities, could not properly open the KDC operation handler: %s",e.getMessage());
+      LOG.error(message);
+      throw new AmbariException(message,e);
+    }
+    for (    String serviceName : services) {
+      KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
+      if (serviceDescriptor != null) {
+        Map<String,KerberosComponentDescriptor> componentDescriptors=serviceDescriptor.getComponents();
+        for (        KerberosComponentDescriptor componentDescriptor : componentDescriptors.values()) {
+          if (componentDescriptor != null) {
+            List<KerberosIdentityDescriptor> identityDescriptors;
+            identityDescriptors=serviceDescriptor.getIdentities(true);
+            if (identityDescriptors != null) {
+              for (              KerberosIdentityDescriptor identityDescriptor : identityDescriptors) {
+                createUserIdentity(identityDescriptor,kerberosConfiguration,kerberosOperationHandler,configurations);
+              }
+            }
+            identityDescriptors=componentDescriptor.getIdentities(true);
+            if (identityDescriptors != null) {
+              for (              KerberosIdentityDescriptor identityDescriptor : identityDescriptors) {
+                createUserIdentity(identityDescriptor,kerberosConfiguration,kerberosOperationHandler,configurations);
+              }
+            }
+          }
+        }
+      }
+    }
+    try {
+      kerberosOperationHandler.close();
+    }
+ catch (    KerberosOperationException e) {
+    }
+  }
+  return true;
+}

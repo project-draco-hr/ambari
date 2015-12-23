@@ -1,0 +1,99 @@
+{
+  Cluster clusterMock=createNiceMock(Cluster.class);
+  expect(clustersMock.getCluster(anyString())).andReturn(clusterMock);
+  expect(clusterMock.getCurrentStackVersion()).andReturn(currentStackId);
+  expect(clusterMock.getServices()).andReturn(new HashMap<String,Service>(){
+{
+      put("HDFS",createNiceMock(Service.class));
+      put("ZK",createNiceMock(Service.class));
+    }
+  }
+);
+  Set<PropertyInfo> currentHDFSProperties=new HashSet<PropertyInfo>(){
+{
+      add(createPropertyInfo("hdfs-env.xml","equal.key","equal-value"));
+    }
+  }
+;
+  Set<PropertyInfo> currentZKProperties=new HashSet<PropertyInfo>(){
+{
+      add(createPropertyInfo("zk-env.xml","different.key","different-value-1"));
+    }
+  }
+;
+  Set<PropertyInfo> currentStackProperties=new HashSet<PropertyInfo>(){
+{
+      add(createPropertyInfo("hadoop-env.xml","equal.key","modified.value"));
+    }
+  }
+;
+  expect(ambariMetaInfoMock.getServiceProperties(currentStackId.getStackName(),currentStackId.getStackVersion(),"HDFS")).andReturn(currentHDFSProperties);
+  expect(ambariMetaInfoMock.getServiceProperties(currentStackId.getStackName(),currentStackId.getStackVersion(),"ZK")).andReturn(currentZKProperties);
+  expect(ambariMetaInfoMock.getStackProperties(currentStackId.getStackName(),currentStackId.getStackVersion())).andReturn(currentStackProperties);
+  Set<PropertyInfo> newHDFSProperties=new HashSet<PropertyInfo>(){
+{
+      add(createPropertyInfo("hdfs-env.xml","equal.key","equal-value"));
+      add(createPropertyInfo("new-hdfs-config.xml","equal.key","equal-value"));
+    }
+  }
+;
+  Set<PropertyInfo> newZKProperties=new HashSet<PropertyInfo>(){
+{
+      add(createPropertyInfo("zk-env.xml","equal.key","different-value-2"));
+      add(createPropertyInfo("zk-env.xml","new.key","new-value-2"));
+    }
+  }
+;
+  Set<PropertyInfo> newStackProperties=new HashSet<PropertyInfo>(){
+{
+      add(createPropertyInfo("hadoop-env.xml","equal.key","another.value"));
+    }
+  }
+;
+  expect(ambariMetaInfoMock.getServiceProperties(newStackId.getStackName(),newStackId.getStackVersion(),"HDFS")).andReturn(newHDFSProperties);
+  expect(ambariMetaInfoMock.getServiceProperties(newStackId.getStackName(),newStackId.getStackVersion(),"ZK")).andReturn(newZKProperties);
+  expect(ambariMetaInfoMock.getStackProperties(newStackId.getStackName(),newStackId.getStackVersion())).andReturn(newStackProperties);
+  Map<String,String> desiredHdfsEnvProperties=new HashMap<String,String>(){
+{
+    }
+  }
+;
+  expect(clusterMock.getDesiredConfigByType("hdfs-env.xml")).andReturn(createConfigMock(desiredHdfsEnvProperties));
+  Map<String,String> desiredZkEnvProperties=new HashMap<String,String>(){
+{
+    }
+  }
+;
+  expect(clusterMock.getDesiredConfigByType("hdfs-env.xml")).andReturn(createConfigMock(desiredZkEnvProperties));
+  Map<String,String> desiredHadoopEnvProperties=new HashMap<String,String>(){
+{
+    }
+  }
+;
+  expect(clusterMock.getDesiredConfigByType("hadoop-env.xml")).andReturn(createConfigMock(desiredHadoopEnvProperties));
+  replay(clusterMock,clustersMock,ambariMetaInfoMock);
+  ConfigMergeHelper configMergeHelper=injector.getInstance(ConfigMergeHelper.class);
+  Map<String,Map<String,ThreeWayValue>> conflicts=configMergeHelper.getConflicts("clustername",newStackId);
+  assertNotNull(conflicts);
+  assertEquals(2,conflicts.size());
+  for (  String key : conflicts.keySet()) {
+    if (key.equals("hdfs-env")) {
+      Map<String,ThreeWayValue> stringThreeWayValueMap=conflicts.get(key);
+      assertEquals(1,stringThreeWayValueMap.size());
+      assertEquals("equal-value",stringThreeWayValueMap.get("equal.key").oldStackValue);
+      assertEquals("equal-value",stringThreeWayValueMap.get("equal.key").newStackValue);
+      assertEquals("",stringThreeWayValueMap.get("equal.key").savedValue);
+    }
+ else     if (key.equals("hadoop-env")) {
+      Map<String,ThreeWayValue> stringThreeWayValueMap=conflicts.get(key);
+      assertEquals(1,stringThreeWayValueMap.size());
+      assertEquals("modified.value",stringThreeWayValueMap.get("equal.key").oldStackValue);
+      assertEquals("another.value",stringThreeWayValueMap.get("equal.key").newStackValue);
+      assertEquals("",stringThreeWayValueMap.get("equal.key").savedValue);
+    }
+ else {
+      fail("Unexpected key");
+    }
+  }
+  assertEquals(2,conflicts.size());
+}

@@ -1,0 +1,17 @@
+{
+  String clusterName=getExecutionCommand().getClusterName();
+  Cluster cluster=clusters.getCluster(clusterName);
+  Config yarnSiteConfig=cluster.getDesiredConfigByType(YARN_SITE_CONFIG_TYPE);
+  if (yarnSiteConfig == null) {
+    return createCommandReport(0,HostRoleStatus.FAILED,"{}",String.format("Source type %s not found",YARN_SITE_CONFIG_TYPE),"");
+  }
+  Map<String,String> yarnSiteProperties=yarnSiteConfig.getProperties();
+  String oldRmZkAddress=yarnSiteProperties.get(YARN_RM_ZK_ADDRESS_PROPERTY_NAME);
+  String oldHadoopRegistryZKQuorum=yarnSiteProperties.get(HADOOP_REGISTRY_ZK_QUORUM_PROPERTY_NAME);
+  String zkServersStr=ZooKeeperQuorumCalculator.getZooKeeperQuorumString(cluster);
+  yarnSiteProperties.put(YARN_RM_ZK_ADDRESS_PROPERTY_NAME,zkServersStr);
+  yarnSiteProperties.put(HADOOP_REGISTRY_ZK_QUORUM_PROPERTY_NAME,zkServersStr);
+  yarnSiteConfig.setProperties(yarnSiteProperties);
+  yarnSiteConfig.persist(false);
+  return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("%s was set from %s to %s. %s was set from %s to %s",YARN_RM_ZK_ADDRESS_PROPERTY_NAME,oldRmZkAddress,zkServersStr,HADOOP_REGISTRY_ZK_QUORUM_PROPERTY_NAME,oldHadoopRegistryZKQuorum,zkServersStr),"");
+}

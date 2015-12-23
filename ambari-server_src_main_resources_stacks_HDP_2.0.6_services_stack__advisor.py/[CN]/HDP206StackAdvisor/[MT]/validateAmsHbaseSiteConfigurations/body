@@ -16,20 +16,28 @@ def validateAmsHbaseSiteConfigurations(self, properties, recommendedDefaults, co
     op_mode = ams_site.get('timeline.metrics.service.operation.mode')
     hbase_rootdir = properties.get('hbase.rootdir')
     hbase_tmpdir = properties.get('hbase.tmp.dir')
-    if ((op_mode == 'distributed') and (not hbase_rootdir.startswith('hdfs://'))):
+    if ((op_mode == 'distributed') and hbase_rootdir.startswith('file://')):
         rootdir_item = self.getWarnItem('In distributed mode hbase.rootdir should point to HDFS.')
         pass
     distributed_item = None
     distributed = properties.get('hbase.cluster.distributed')
     if (hbase_rootdir and hbase_rootdir.startswith('hdfs://') and (not (distributed.lower() == 'true'))):
         distributed_item = self.getErrorItem('Distributed property should be set to true if hbase.rootdir points to HDFS.')
-    validationItems.extend([{'config-name': 'hbase.rootdir', 'item': rootdir_item, }, {'config-name': 'hbase.cluster.distributed', 'item': distributed_item, }])
+    hbase_zk_client_port = properties.get('hbase.zookeeper.property.clientPort')
+    zkPort = self.getZKPort(services)
+    hbase_zk_client_port_item = None
+    if ((distributed.lower() == 'true') and (op_mode == 'distributed') and (hbase_zk_client_port != zkPort)):
+        hbase_zk_client_port_item = self.getErrorItem('In AMS distributed mode, hbase.zookeeper.property.clientPort should be the cluster zookeeper server port : {0}'.format(zkPort))
+    if ((distributed.lower() == 'false') and (op_mode == 'embedded') and (hbase_zk_client_port == zkPort)):
+        hbase_zk_client_port_item = self.getErrorItem('In AMS embedded mode, hbase.zookeeper.property.clientPort should be a different port than cluster zookeeper port.(default:61181)')
+    validationItems.extend([{'config-name': 'hbase.rootdir', 'item': rootdir_item, }, {'config-name': 'hbase.cluster.distributed', 'item': distributed_item, }, {'config-name': 'hbase.zookeeper.property.clientPort', 'item': hbase_zk_client_port_item, }])
     for collectorHostName in amsCollectorHosts:
         for host in hosts['items']:
             if (host['Hosts']['host_name'] == collectorHostName):
-                validationItems.extend([{'config-name': 'hbase.rootdir', 'item': self.validatorEnoughDiskSpace(properties, 'hbase.rootdir', host['Hosts'], recommendedDiskSpace), }])
-                validationItems.extend([{'config-name': 'hbase.rootdir', 'item': self.validatorNotRootFs(properties, recommendedDefaults, 'hbase.rootdir', host['Hosts']), }])
-                validationItems.extend([{'config-name': 'hbase.tmp.dir', 'item': self.validatorNotRootFs(properties, recommendedDefaults, 'hbase.tmp.dir', host['Hosts']), }])
+                if (op_mode == 'embedded'):
+                    validationItems.extend([{'config-name': 'hbase.rootdir', 'item': self.validatorEnoughDiskSpace(properties, 'hbase.rootdir', host['Hosts'], recommendedDiskSpace), }])
+                    validationItems.extend([{'config-name': 'hbase.rootdir', 'item': self.validatorNotRootFs(properties, recommendedDefaults, 'hbase.rootdir', host['Hosts']), }])
+                    validationItems.extend([{'config-name': 'hbase.tmp.dir', 'item': self.validatorNotRootFs(properties, recommendedDefaults, 'hbase.tmp.dir', host['Hosts']), }])
                 dn_hosts = self.getComponentHostNames(services, 'HDFS', 'DATANODE')
                 if (not hbase_rootdir.startswith('hdfs')):
                     mountPoints = []

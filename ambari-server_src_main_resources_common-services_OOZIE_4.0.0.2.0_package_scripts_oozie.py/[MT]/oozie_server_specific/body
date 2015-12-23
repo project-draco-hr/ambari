@@ -3,8 +3,8 @@ def oozie_server_specific():
     no_op_test = as_user(format('ls {pid_file} >/dev/null 2>&1 && ps -p `cat {pid_file}` >/dev/null 2>&1'), user=params.oozie_user)
     File(params.pid_file, action='delete', not_if=no_op_test)
     oozie_server_directories = [format('{oozie_home}/{oozie_tmp_dir}'), params.oozie_pid_dir, params.oozie_log_dir, params.oozie_tmp_dir, params.oozie_data_dir, params.oozie_lib_dir, params.oozie_webapps_dir, params.oozie_webapps_conf_dir, params.oozie_server_dir]
-    Directory(oozie_server_directories, owner=params.oozie_user, group=params.user_group, mode=493, recursive=True, cd_access='a')
-    Directory(params.oozie_libext_dir, recursive=True)
+    Directory(oozie_server_directories, owner=params.oozie_user, group=params.user_group, mode=493, create_parents=True, cd_access='a')
+    Directory(params.oozie_libext_dir, create_parents=True)
     hashcode_file = format('{oozie_home}/.hashcode')
     hashcode = hashlib.md5(format('{oozie_home}/oozie-sharelib.tar.gz')).hexdigest()
     skip_recreate_sharelib = format("test -f {hashcode_file} && test -d {oozie_home}/share && [[ `cat {hashcode_file}` == '{hashcode}' ]]")
@@ -13,8 +13,8 @@ def oozie_server_specific():
     configure_cmds = []
     configure_cmds.append(('cp', params.ext_js_path, params.oozie_libext_dir))
     configure_cmds.append(('chown', format('{oozie_user}:{user_group}'), format('{oozie_libext_dir}/{ext_js_file}')))
-    configure_cmds.append(('chown', '-RL', format('{oozie_user}:{user_group}'), params.oozie_webapps_conf_dir))
     Execute(configure_cmds, not_if=no_op_test, sudo=True)
+    Directory(params.oozie_webapps_conf_dir, owner=params.oozie_user, group=params.user_group, recursive_ownership=True, recursion_follow_links=True)
     download_database_library_if_needed()
     if params.has_falcon_host:
         Execute(format('{sudo} cp {falcon_home}/oozie/ext/falcon-oozie-el-extension-*.jar {oozie_libext_dir}'), not_if=no_op_test)
@@ -29,9 +29,9 @@ def oozie_server_specific():
     File(hashcode_file, content=hashcode, mode=420)
     File(prepare_war_cmd_file, content=prepare_war_cmd, mode=420)
     if ((params.hdp_stack_version != '') and (compare_versions(params.hdp_stack_version, '2.2') >= 0)):
-        Directory(params.hive_conf_dir, recursive=True, owner=params.oozie_user, group=params.user_group)
+        Directory(params.hive_conf_dir, create_parents=True, owner=params.oozie_user, group=params.user_group)
         if ('hive-site' in params.config['configurations']):
             XmlConfig('hive-site.xml', conf_dir=params.hive_conf_dir, configurations=params.config['configurations']['hive-site'], configuration_attributes=params.config['configuration_attributes']['hive-site'], owner=params.oozie_user, group=params.user_group, mode=420)
         if ('tez-site' in params.config['configurations']):
             XmlConfig('tez-site.xml', conf_dir=params.hive_conf_dir, configurations=params.config['configurations']['tez-site'], configuration_attributes=params.config['configuration_attributes']['tez-site'], owner=params.oozie_user, group=params.user_group, mode=436)
-    Execute(('chown', '-R', format('{oozie_user}:{user_group}'), params.oozie_server_dir), sudo=True)
+    Directory(params.oozie_server_dir, owner=params.oozie_user, group=params.user_group, recursive_ownership=True)

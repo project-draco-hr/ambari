@@ -1,0 +1,56 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (clusterMap != null && !clusterMap.isEmpty()) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        Config amsEnv=cluster.getDesiredConfigByType(AMS_ENV);
+        if (amsEnv != null) {
+          Map<String,String> amsEnvProperties=amsEnv.getProperties();
+          String content=amsEnvProperties.get("content");
+          Map<String,String> newProperties=new HashMap<>();
+          newProperties.put("content",updateAmsEnvContent(content));
+          updateConfigurationPropertiesForCluster(cluster,AMS_ENV,newProperties,true,true);
+        }
+        String znodeParent=null;
+        Config amsHbaseSecuritySite=cluster.getDesiredConfigByType(AMS_HBASE_SECURITY_SITE);
+        if (amsHbaseSecuritySite != null) {
+          Map<String,String> amsHbaseSecuritySiteProperties=amsHbaseSecuritySite.getProperties();
+          znodeParent=amsHbaseSecuritySiteProperties.get(ZK_ZNODE_PARENT);
+          LOG.info("Removing config zookeeper.znode.parent from ams-hbase-security-site");
+          removeConfigurationPropertiesFromCluster(cluster,AMS_HBASE_SECURITY_SITE,Collections.singleton(ZK_ZNODE_PARENT));
+        }
+        Config amsHbaseSite=cluster.getDesiredConfigByType(AMS_HBASE_SITE);
+        if (amsHbaseSite != null) {
+          Map<String,String> amsHbaseSiteProperties=amsHbaseSite.getProperties();
+          Map<String,String> newProperties=new HashMap<>();
+          if (!amsHbaseSiteProperties.containsKey(ZK_ZNODE_PARENT)) {
+            if (StringUtils.isEmpty(znodeParent) || "/hbase".equals(znodeParent)) {
+              boolean isSecurityEnabled=false;
+              Config clusterEnv=cluster.getDesiredConfigByType(CLUSTER_ENV);
+              if (clusterEnv != null) {
+                Map<String,String> clusterEnvProperties=clusterEnv.getProperties();
+                if (clusterEnvProperties.containsKey(SECURITY_ENABLED)) {
+                  isSecurityEnabled=Boolean.valueOf(clusterEnvProperties.get(SECURITY_ENABLED));
+                }
+              }
+              znodeParent="/ams-hbase-" + (isSecurityEnabled ? "secure" : "unsecure");
+            }
+            LOG.info("Adding config zookeeper.znode.parent=" + znodeParent + " to ams-hbase-site");
+            newProperties.put(ZK_ZNODE_PARENT,znodeParent);
+          }
+          updateConfigurationPropertiesForCluster(cluster,AMS_HBASE_SITE,newProperties,true,true);
+        }
+        Config amsHbaseEnv=cluster.getDesiredConfigByType(AMS_HBASE_ENV);
+        if (amsHbaseEnv != null) {
+          Map<String,String> amsHbaseEnvProperties=amsHbaseEnv.getProperties();
+          String content=amsHbaseEnvProperties.get("content");
+          Map<String,String> newProperties=new HashMap<>();
+          newProperties.put("content",updateAmsHbaseEnvContent(content));
+          updateConfigurationPropertiesForCluster(cluster,AMS_HBASE_ENV,newProperties,true,true);
+        }
+      }
+    }
+  }
+}

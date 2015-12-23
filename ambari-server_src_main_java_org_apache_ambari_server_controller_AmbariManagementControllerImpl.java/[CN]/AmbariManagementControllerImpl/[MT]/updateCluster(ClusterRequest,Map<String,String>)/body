@@ -11,6 +11,7 @@
  else {
     cluster=clusters.getClusterById(request.getClusterId());
   }
+  AuthorizationHelper.verifyAuthorization(ResourceType.CLUSTER,cluster.getResourceId(),RoleAuthorization.AUTHORIZATIONS_UPDATE_CLUSTER);
   List<ConfigurationResponse> configurationResponses=new LinkedList<ConfigurationResponse>();
   ServiceConfigVersionResponse serviceConfigVersionResponse=null;
   if (request.getDesiredConfig() != null && request.getServiceConfigVersionRequest() != null) {
@@ -21,6 +22,9 @@
   if (!cluster.getClusterName().equals(request.getClusterName())) {
     if (LOG.isDebugEnabled()) {
       LOG.debug("Received cluster name change request from " + cluster.getClusterName() + " to "+ request.getClusterName());
+    }
+    if (!AuthorizationHelper.isAuthorized(ResourceType.AMBARI,null,EnumSet.of(RoleAuthorization.AMBARI_RENAME_CLUSTER))) {
+      throw new AuthorizationException("The authenticated user does not have authorization to rename the cluster");
     }
     cluster.setClusterName(request.getClusterName());
   }
@@ -83,27 +87,48 @@
     }
   }
   if (isConfigurationCreationNeeded) {
-    Set<Config> configs=new HashSet<Config>();
-    String note=null;
-    for (    ConfigurationRequest cr : request.getDesiredConfig()) {
-      if (null != cr.getProperties()) {
-        Map<String,Config> all=cluster.getConfigsByType(cr.getType());
-        if (null == all || !all.containsKey(cr.getVersionTag()) || cr.getProperties().size() > 0) {
-          LOG.info(MessageFormat.format("Applying configuration with tag ''{0}'' to cluster ''{1}''  for configuration type {2}",cr.getVersionTag(),request.getClusterName(),cr.getType()));
-          cr.setClusterName(cluster.getClusterName());
-          configurationResponses.add(createConfiguration(cr));
+    List<ConfigurationRequest> desiredConfigs=request.getDesiredConfig();
+    if (!desiredConfigs.isEmpty()) {
+      Set<Config> configs=new HashSet<Config>();
+      String note=null;
+      for (      ConfigurationRequest cr : desiredConfigs) {
+        String configType=cr.getType();
+        String service=null;
+        try {
+          service=cluster.getServiceForConfigTypes(Collections.singleton(configType));
         }
+ catch (        IllegalArgumentException e) {
+        }
+        if (StringUtils.isEmpty(service)) {
+          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.CLUSTER_MODIFY_CONFIGS))) {
+            throw new AuthorizationException("The authenticated user does not have authorization to modify cluster configurations");
+          }
+        }
+ else {
+          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.SERVICE_MODIFY_CONFIGS))) {
+            throw new AuthorizationException("The authenticated user does not have authorization to modify service configurations");
+          }
+        }
+        if (null != cr.getProperties()) {
+          Map<String,Config> all=cluster.getConfigsByType(configType);
+          if (null == all || !all.containsKey(cr.getVersionTag()) || cr.getProperties().size() > 0) {
+            validateAuthorizationToUpdateServiceUsersAndGroups(cluster,cr);
+            LOG.info(MessageFormat.format("Applying configuration with tag ''{0}'' to cluster ''{1}''  for configuration type {2}",cr.getVersionTag(),request.getClusterName(),configType));
+            cr.setClusterName(cluster.getClusterName());
+            configurationResponses.add(createConfiguration(cr));
+          }
+        }
+        note=cr.getServiceConfigVersionNote();
+        configs.add(cluster.getConfig(configType,cr.getVersionTag()));
       }
-      note=cr.getServiceConfigVersionNote();
-      configs.add(cluster.getConfig(cr.getType(),cr.getVersionTag()));
-    }
-    if (!configs.isEmpty()) {
-      String authName=getAuthName();
-      serviceConfigVersionResponse=cluster.addDesiredConfig(authName,configs,note);
-      if (serviceConfigVersionResponse != null) {
-        Logger logger=LoggerFactory.getLogger("configchange");
-        for (        Config config : configs) {
-          logger.info("cluster '" + request.getClusterName() + "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ config.getType()+ "' "+ "tag='"+ config.getTag()+ "'");
+      if (!configs.isEmpty()) {
+        String authName=getAuthName();
+        serviceConfigVersionResponse=cluster.addDesiredConfig(authName,configs,note);
+        if (serviceConfigVersionResponse != null) {
+          Logger logger=LoggerFactory.getLogger("configchange");
+          for (          Config config : configs) {
+            logger.info("cluster '" + request.getClusterName() + "' "+ "changed by: '"+ authName+ "'; "+ "type='"+ config.getType()+ "' "+ "tag='"+ config.getTag()+ "'");
+          }
         }
       }
     }
@@ -111,6 +136,9 @@
   StackId currentVersion=cluster.getCurrentStackVersion();
   StackId desiredVersion=cluster.getDesiredStackVersion();
   if (currentVersion == null) {
+    if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.CLUSTER_UPGRADE_DOWNGRADE_STACK))) {
+      throw new AuthorizationException("The authenticated user does not have authorization to modify stack version");
+    }
     cluster.setCurrentStackVersion(desiredVersion);
   }
   boolean requiresHostListUpdate=request.getHostNames() != null && !request.getHostNames().isEmpty();
@@ -134,6 +162,9 @@
     cluster.setProvisioningState(provisioningState);
   }
   if (null != request.getServiceConfigVersionRequest()) {
+    if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.SERVICE_MODIFY_CONFIGS))) {
+      throw new AuthorizationException("The authenticated user does not have authorization to modify service configurations");
+    }
     ServiceConfigVersionRequest serviceConfigVersionRequest=request.getServiceConfigVersionRequest();
     if (StringUtils.isEmpty(serviceConfigVersionRequest.getServiceName()) || null == serviceConfigVersionRequest.getVersion()) {
       String msg="Service name and version should be specified in service config version";
@@ -155,6 +186,9 @@
   SecurityType securityType=request.getSecurityType();
   if (securityType != null) {
     if (kerberosHelper.shouldExecuteCustomOperations(securityType,requestProperties)) {
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.CLUSTER_TOGGLE_KERBEROS))) {
+        throw new AuthorizationException("The authenticated user does not have authorization to perform Kerberos-specific operations");
+      }
       try {
         requestStageContainer=kerberosHelper.executeCustomOperations(cluster,requestProperties,requestStageContainer,kerberosHelper.getManageIdentitiesDirective(requestProperties));
       }
@@ -165,6 +199,9 @@
  else     if (cluster.getSecurityType() != securityType) {
       LOG.info("Received cluster security type change request from {} to {}",cluster.getSecurityType().name(),securityType.name());
       if ((securityType == SecurityType.KERBEROS) || (securityType == SecurityType.NONE)) {
+        if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.CLUSTER_TOGGLE_KERBEROS))) {
+          throw new AuthorizationException("The authenticated user does not have authorization to enable or disable Kerberos");
+        }
         try {
           requestStageContainer=kerberosHelper.toggleKerberos(cluster,securityType,requestStageContainer,kerberosHelper.getManageIdentitiesDirective(requestProperties));
         }

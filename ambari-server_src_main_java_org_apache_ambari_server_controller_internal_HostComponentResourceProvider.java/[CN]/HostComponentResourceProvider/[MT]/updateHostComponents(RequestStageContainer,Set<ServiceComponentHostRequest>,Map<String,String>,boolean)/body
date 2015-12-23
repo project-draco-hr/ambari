@@ -13,6 +13,11 @@
   for (  ServiceComponentHostRequest request : requests) {
     validateServiceComponentHostRequest(request);
     Cluster cluster=clusters.getCluster(request.getClusterName());
+    if (runSmokeTest) {
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),RoleAuthorization.SERVICE_RUN_SERVICE_CHECK)) {
+        throw new AuthorizationException("The authenticated user is not authorized to run service checks");
+      }
+    }
     if (StringUtils.isEmpty(request.getServiceName())) {
       request.setServiceName(getManagementController().findServiceName(cluster,request.getComponentName()));
     }
@@ -70,6 +75,9 @@
     if (newState == null) {
       logComponentInfo("Nothing to do for new updateServiceComponentHost",request,oldState,null);
       continue;
+    }
+    if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.SERVICE_START_STOP,RoleAuthorization.SERVICE_ADD_DELETE_SERVICES,RoleAuthorization.HOST_ADD_DELETE_COMPONENTS,RoleAuthorization.HOST_ADD_DELETE_HOSTS))) {
+      throw new AuthorizationException("The authenticated user is not authorized to change the state of service components");
     }
     if (sc.isClientComponent() && newState == State.STARTED && !requestProperties.containsKey(sch.getServiceComponentName().toLowerCase())) {
       ignoredScHosts.add(sch);

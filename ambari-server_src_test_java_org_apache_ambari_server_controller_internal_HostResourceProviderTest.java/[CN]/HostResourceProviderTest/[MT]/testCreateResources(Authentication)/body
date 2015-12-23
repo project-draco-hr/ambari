@@ -1,0 +1,30 @@
+{
+  Resource.Type type=Resource.Type.Host;
+  Injector injector=createInjector();
+  AmbariManagementController managementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=injector.getInstance(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  ResourceProviderFactory resourceProviderFactory=createNiceMock(ResourceProviderFactory.class);
+  ResourceProvider hostResourceProvider=getHostProvider(injector);
+  AbstractControllerResourceProvider.init(resourceProviderFactory);
+  expect(cluster.getClusterId()).andReturn(2L).anyTimes();
+  cluster.recalculateAllClusterVersionStates();
+  EasyMock.expectLastCall().once();
+  expect(clusters.getCluster("Cluster100")).andReturn(cluster).atLeastOnce();
+  expect(clusters.getHost("Host100")).andReturn(null).atLeastOnce();
+  clusters.updateHostWithClusterAndAttributes(EasyMock.<Map<String,Set<String>>>anyObject(),EasyMock.<Map<String,Map<String,String>>>anyObject());
+  EasyMock.expectLastCall().once();
+  expect(managementController.getClusters()).andReturn(clusters).atLeastOnce();
+  expect(resourceProviderFactory.getHostResourceProvider(EasyMock.<Set<String>>anyObject(),EasyMock.<Map<Resource.Type,String>>anyObject(),eq(managementController))).andReturn(hostResourceProvider).anyTimes();
+  replayAll();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  Set<Map<String,Object>> propertySet=new LinkedHashSet<Map<String,Object>>();
+  Map<String,Object> properties=new LinkedHashMap<String,Object>();
+  properties.put(HostResourceProvider.HOST_CLUSTER_NAME_PROPERTY_ID,"Cluster100");
+  properties.put(HostResourceProvider.HOST_NAME_PROPERTY_ID,"Host100");
+  propertySet.add(properties);
+  Request request=PropertyHelper.getCreateRequest(propertySet,null);
+  provider.createResources(request);
+  verifyAll();
+}

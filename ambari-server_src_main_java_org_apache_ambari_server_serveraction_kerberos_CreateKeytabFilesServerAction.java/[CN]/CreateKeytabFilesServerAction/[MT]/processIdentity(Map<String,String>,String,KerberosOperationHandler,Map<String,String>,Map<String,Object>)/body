@@ -24,6 +24,7 @@
         String visitationKey=String.format("%s|%s",hostName,keytabFilePath);
         if ((visitedPrincipalKeys == null) || !visitedPrincipalKeys.contains(visitationKey)) {
           String password=principalPasswordMap.get(evaluatedPrincipal);
+          Integer keyNumber=principalKeyNumberMap.get(evaluatedPrincipal);
           message=String.format("Creating keytab file for %s on host %s",evaluatedPrincipal,hostName);
           LOG.info(message);
           actionLog.writeStdOut(message);
@@ -69,52 +70,8 @@
               }
             }
  else {
-              Keytab keytab=null;
-              if (visitedPrincipalKeys != null) {
-                KerberosPrincipalEntity principalEntity=kerberosPrincipalDAO.find(evaluatedPrincipal);
-                String cachedKeytabPath=(principalEntity == null) ? null : principalEntity.getCachedKeytabPath();
-                if (cachedKeytabPath != null) {
-                  try {
-                    keytab=Keytab.read(new File(cachedKeytabPath));
-                  }
- catch (                  IOException e) {
-                    message=String.format("Failed to read the cached keytab for %s, recreating if possible - %s",evaluatedPrincipal,e.getMessage());
-                    if (LOG.isDebugEnabled()) {
-                      LOG.warn(message,e);
-                    }
- else {
-                      LOG.warn(message,e);
-                    }
-                  }
-                }
-              }
-              if (keytab == null) {
-                Integer keyNumber=principalKeyNumberMap.get(evaluatedPrincipal);
-                try {
-                  keytab=operationHandler.createKeytab(evaluatedPrincipal,password,keyNumber);
-                  KerberosPrincipalEntity principalEntity=kerberosPrincipalDAO.find(evaluatedPrincipal);
-                  if (principalEntity != null) {
-                    if (!principalEntity.isService() && ("true".equalsIgnoreCase(identityRecord.get(KerberosIdentityDataFileReader.KEYTAB_FILE_IS_CACHABLE)))) {
-                      File cachedKeytabFile=cacheKeytab(evaluatedPrincipal,keytab);
-                      String previousCachedFilePath=principalEntity.getCachedKeytabPath();
-                      String cachedKeytabFilePath=((cachedKeytabFile == null) || !cachedKeytabFile.exists()) ? null : cachedKeytabFile.getAbsolutePath();
-                      principalEntity.setCachedKeytabPath(cachedKeytabFilePath);
-                      kerberosPrincipalDAO.merge(principalEntity);
-                      if (previousCachedFilePath != null) {
-                        if (!new File(previousCachedFilePath).delete()) {
-                          LOG.debug(String.format("Failed to remove orphaned cache file %s",previousCachedFilePath));
-                        }
-                      }
-                    }
-                  }
-                }
- catch (                KerberosOperationException e) {
-                  message=String.format("Failed to create keytab file for %s - %s",evaluatedPrincipal,e.getMessage());
-                  actionLog.writeStdErr(message);
-                  LOG.error(message,e);
-                  commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
-                }
-              }
+              boolean canCache=("true".equalsIgnoreCase(identityRecord.get(KerberosIdentityDataFileReader.KEYTAB_FILE_IS_CACHABLE)));
+              Keytab keytab=createKeytab(evaluatedPrincipal,password,keyNumber,operationHandler,visitedPrincipalKeys != null,canCache,actionLog);
               if (keytab != null) {
                 try {
                   if (operationHandler.createKeytabFile(keytab,destinationKeytabFile)) {
@@ -136,6 +93,14 @@
                   commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
                 }
               }
+ else {
+                commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
+              }
+              if (visitedPrincipalKeys == null) {
+                visitedPrincipalKeys=new HashSet<String>();
+                visitedIdentities.put(evaluatedPrincipal,visitedPrincipalKeys);
+              }
+              visitedPrincipalKeys.add(visitationKey);
             }
           }
  else {
@@ -144,11 +109,6 @@
             LOG.error(message);
             commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
           }
-          if (visitedPrincipalKeys == null) {
-            visitedPrincipalKeys=new HashSet<String>();
-            visitedIdentities.put(evaluatedPrincipal,visitedPrincipalKeys);
-          }
-          visitedPrincipalKeys.add(visitationKey);
         }
  else {
           LOG.debug(String.format("Skipping previously processed keytab for %s on host %s",evaluatedPrincipal,hostName));

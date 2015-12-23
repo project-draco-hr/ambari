@@ -2,21 +2,34 @@
   Set<Resource> results=new LinkedHashSet<Resource>();
   Set<String> requestedIds=getRequestPropertyIds(request,predicate);
   List<HostRoleCommandEntity> entities=s_dao.findAll(request,predicate);
-  LOG.debug("Retrieved {} commands for request {}",entities.size(),request);
   String clusterName=null;
+  Long requestId=null;
   for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
     clusterName=(String)propertyMap.get(TASK_CLUSTER_NAME_PROPERTY_ID);
+    String requestIdStr=(String)propertyMap.get(TASK_REQUEST_ID_PROPERTY_ID);
+    requestId=Long.parseLong(requestIdStr);
   }
-  for (  HostRoleCommandEntity entity : entities) {
+  Collection<HostRoleCommand> commands=new ArrayList<>(100);
+  if (!entities.isEmpty()) {
+    for (    HostRoleCommandEntity entity : entities) {
+      commands.add(s_hostRoleCommandFactory.createExisting(entity));
+    }
+  }
+ else {
+    if (requestId != null) {
+      commands.addAll(s_topologyManager.getTasks(requestId));
+    }
+  }
+  LOG.debug("Retrieved {} commands for request {}",commands.size(),request);
+  for (  HostRoleCommand hostRoleCommand : commands) {
     Resource resource=new ResourceImpl(Resource.Type.Task);
     if (null != clusterName) {
       setResourceProperty(resource,TASK_CLUSTER_NAME_PROPERTY_ID,clusterName,requestedIds);
     }
-    HostRoleCommand hostRoleCommand=s_hostRoleCommandFactory.createExisting(entity);
     setResourceProperty(resource,TASK_REQUEST_ID_PROPERTY_ID,hostRoleCommand.getRequestId(),requestedIds);
     setResourceProperty(resource,TASK_ID_PROPERTY_ID,hostRoleCommand.getTaskId(),requestedIds);
     setResourceProperty(resource,TASK_STAGE_ID_PROPERTY_ID,hostRoleCommand.getStageId(),requestedIds);
-    setResourceProperty(resource,TASK_HOST_NAME_PROPERTY_ID,hostRoleCommand.getHostName(),requestedIds);
+    setResourceProperty(resource,TASK_HOST_NAME_PROPERTY_ID,ensureHostname(hostRoleCommand.getHostName()),requestedIds);
     setResourceProperty(resource,TASK_ROLE_PROPERTY_ID,hostRoleCommand.getRole().toString(),requestedIds);
     setResourceProperty(resource,TASK_COMMAND_PROPERTY_ID,hostRoleCommand.getRoleCommand(),requestedIds);
     setResourceProperty(resource,TASK_STATUS_PROPERTY_ID,hostRoleCommand.getStatus(),requestedIds);

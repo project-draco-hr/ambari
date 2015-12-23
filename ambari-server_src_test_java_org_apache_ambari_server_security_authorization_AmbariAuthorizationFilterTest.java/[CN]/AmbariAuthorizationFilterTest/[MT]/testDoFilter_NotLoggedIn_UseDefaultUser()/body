@@ -1,0 +1,35 @@
+{
+  final FilterChain chain=EasyMock.createStrictMock(FilterChain.class);
+  final HttpServletResponse response=createNiceMock(HttpServletResponse.class);
+  final HttpServletRequest request=createNiceMock(HttpServletRequest.class);
+  expect(request.getRequestURI()).andReturn("/uri").anyTimes();
+  expect(request.getQueryString()).andReturn(null).anyTimes();
+  expect(request.getMethod()).andReturn("GET").anyTimes();
+  chain.doFilter(EasyMock.<ServletRequest>anyObject(),EasyMock.<ServletResponse>anyObject());
+  EasyMock.expectLastCall().once();
+  final Configuration configuration=EasyMock.createMock(Configuration.class);
+  expect(configuration.getDefaultApiAuthenticatedUser()).andReturn("user1").once();
+  User user=EasyMock.createMock(User.class);
+  expect(user.getUserName()).andReturn("user1").anyTimes();
+  expect(user.getUserType()).andReturn(UserType.LOCAL).anyTimes();
+  final Users users=EasyMock.createMock(Users.class);
+  expect(users.getUser("user1",UserType.LOCAL)).andReturn(user).once();
+  expect(users.getUserAuthorities("user1",UserType.LOCAL)).andReturn(Collections.<AmbariGrantedAuthority>emptyList()).once();
+  replay(request,response,chain,configuration,users,user);
+  Injector injector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(Configuration.class).toInstance(configuration);
+      bind(Users.class).toInstance(users);
+      bind(EntityManager.class).toInstance(EasyMock.createMock(EntityManager.class));
+      bind(UserDAO.class).toInstance(EasyMock.createMock(UserDAO.class));
+      bind(DBAccessor.class).toInstance(EasyMock.createMock(DBAccessor.class));
+      bind(PasswordEncoder.class).toInstance(EasyMock.createMock(PasswordEncoder.class));
+      bind(OsFamily.class).toInstance(EasyMock.createMock(OsFamily.class));
+    }
+  }
+);
+  AmbariAuthorizationFilter filter=new AmbariAuthorizationFilter();
+  injector.injectMembers(filter);
+  filter.doFilter(request,response,chain);
+  Assert.assertEquals("user1",SecurityContextHolder.getContext().getAuthentication().getName());
+}

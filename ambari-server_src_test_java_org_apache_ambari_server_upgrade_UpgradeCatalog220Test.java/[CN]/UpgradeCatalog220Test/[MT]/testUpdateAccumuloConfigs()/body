@@ -1,0 +1,41 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Map<String,String> originalClientProperties=new HashMap<String,String>();
+  final Map<String,String> updatedClientProperties=new HashMap<String,String>(){
+{
+      put("kerberos.server.primary","{{bare_accumulo_principal}}");
+    }
+  }
+;
+  final Config clientConfig=easyMockSupport.createNiceMock(Config.class);
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(EntityManager.class).toInstance(entityManager);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).once();
+  expect(mockClusterExpected.getSecurityType()).andReturn(SecurityType.KERBEROS).once();
+  expect(mockClusterExpected.getDesiredConfigByType("client")).andReturn(clientConfig).atLeastOnce();
+  expect(clientConfig.getProperties()).andReturn(originalClientProperties).atLeastOnce();
+  UpgradeCatalog220 upgradeCatalog220=createMockBuilder(UpgradeCatalog220.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,boolean.class,boolean.class).createMock();
+  upgradeCatalog220.updateConfigurationPropertiesForCluster(mockClusterExpected,"client",updatedClientProperties,true,false);
+  expectLastCall().once();
+  easyMockSupport.replayAll();
+  replay(upgradeCatalog220);
+  upgradeCatalog220.updateAccumuloConfigs();
+  easyMockSupport.verifyAll();
+}

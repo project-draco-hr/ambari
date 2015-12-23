@@ -1,0 +1,25 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  for (  final Cluster cluster : getCheckedClusterMap(ambariManagementController.getClusters()).values()) {
+    Config stormSiteProps=cluster.getDesiredConfigByType(STORM_SITE);
+    if (stormSiteProps != null) {
+      Map<String,String> updates=new HashMap<>();
+      String nimbusMonitorFreqSecs=stormSiteProps.getProperties().get(NIMBS_MONITOR_FREQ_SECS_PROPERTY);
+      if (nimbusMonitorFreqSecs != null && nimbusMonitorFreqSecs.equals("10")) {
+        updates.put(NIMBS_MONITOR_FREQ_SECS_PROPERTY,"120");
+      }
+      Service amsService=null;
+      try {
+        amsService=cluster.getService("AMBARI_METRICS");
+      }
+ catch (      AmbariException ambariException) {
+        LOG.info("AMBARI_METRICS service not found in cluster while updating storm-site properties");
+      }
+      String metricsReporter=stormSiteProps.getProperties().get(STORM_METRICS_REPORTER);
+      if (amsService != null && StringUtils.isEmpty(metricsReporter)) {
+        updates.put(STORM_METRICS_REPORTER,"org.apache.hadoop.metrics2.sink.storm.StormTimelineMetricsReporter");
+      }
+      updateConfigurationPropertiesForCluster(cluster,STORM_SITE,updates,true,false);
+    }
+  }
+}

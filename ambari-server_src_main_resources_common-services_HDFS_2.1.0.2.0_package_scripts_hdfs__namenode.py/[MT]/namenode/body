@@ -11,7 +11,7 @@ def namenode(action=None, hdfs_binary=None, do_format=True, upgrade_type=None, e
         Logger.info('Called service {0} with upgrade_type: {1}'.format(action, str(upgrade_type)))
         setup_ranger_hdfs(upgrade_type=upgrade_type)
         import params
-        if do_format:
+        if (do_format and (not params.hdfs_namenode_format_disabled)):
             format_namenode()
             pass
         File(params.exclude_file_path, content=Template('exclude_hosts_list.j2'), owner=params.hdfs_user, group=params.user_group)
@@ -38,7 +38,8 @@ def namenode(action=None, hdfs_binary=None, do_format=True, upgrade_type=None, e
         service(action='start', name='namenode', user=params.hdfs_user, options=options, create_pid_dir=True, create_log_dir=True)
         if params.security_enabled:
             Execute(format('{kinit_path_local} -kt {hdfs_user_keytab} {hdfs_principal_name}'), user=params.hdfs_user)
-        is_namenode_safe_mode_off = format("{hdfs_binary} dfsadmin -fs {namenode_address} -safemode get | grep 'Safe mode is OFF'")
+        dfsadmin_base_command = get_dfsadmin_base_command(hdfs_binary, use_specific_namenode=True)
+        is_namenode_safe_mode_off = (dfsadmin_base_command + " -safemode get | grep 'Safe mode is OFF'")
         if params.dfs_ha_enabled:
             is_active_namenode_cmd = as_user(format('{hdfs_binary} --config {hadoop_conf_dir} haadmin -getServiceState {namenode_id} | grep active'), params.hdfs_user, env={'PATH': params.hadoop_bin_dir, })
         else:
@@ -70,7 +71,7 @@ def namenode(action=None, hdfs_binary=None, do_format=True, upgrade_type=None, e
             if (not stay_in_safe_mode):
                 Logger.info('Wait to leafe safemode since must transition from ON to OFF.')
                 try:
-                    Execute(is_namenode_safe_mode_off, tries=180, try_sleep=10, user=params.hdfs_user, logoutput=True)
+                    Execute(is_namenode_safe_mode_off, tries=65, try_sleep=10, user=params.hdfs_user, logoutput=True)
                 except Fail:
                     Logger.error('NameNode is still in safemode, please be careful with commands that need safemode OFF.')
         create_hdfs_directories(is_active_namenode_cmd)

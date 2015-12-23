@@ -1,0 +1,20 @@
+{
+  String clusterName=ambariContext.getClusterName(clusterTopology.getClusterId());
+  Cluster cluster=AmbariContext.getController().getClusters().getCluster(clusterName);
+  Blueprint blueprint=clusterTopology.getBlueprint();
+  Configuration clusterConfiguration=clusterTopology.getConfiguration();
+  try {
+    AmbariContext.getController().getKerberosHelper().ensureHeadlessIdentities(cluster,clusterConfiguration.getFullProperties(),new HashSet<String>(blueprint.getServices()));
+    Map<String,Map<String,String>> updatedConfigs=AmbariContext.getController().getKerberosHelper().getServiceConfigurationUpdates(cluster,clusterConfiguration.getFullProperties(),new HashSet<String>(blueprint.getServices()));
+    for (    String configType : updatedConfigs.keySet()) {
+      Map<String,String> propertyMap=updatedConfigs.get(configType);
+      for (      String property : propertyMap.keySet()) {
+        LOG.debug("Update Kerberos related config property: {} {} {}",configType,property,propertyMap.get(property));
+        clusterConfiguration.setProperty(configType,property,propertyMap.get(property));
+      }
+    }
+  }
+ catch (  KerberosInvalidConfigurationException e) {
+    LOG.error("An exception occurred while doing Kerberos related configuration update: " + e,e);
+  }
+}

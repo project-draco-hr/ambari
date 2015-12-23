@@ -15,6 +15,7 @@
       Map<String,Service> installedServices=cluster.getServices();
       for (      KerberosServiceDescriptor service : services.values()) {
         if (installedServices.containsKey(service.getName())) {
+          Service svc=installedServices.get(service.getName());
           addIdentities(authToLocalBuilder,service.getIdentities(true),null,existingConfigurations);
           authToLocalProperties=service.getAuthToLocalProperties();
           if (authToLocalProperties != null) {
@@ -22,11 +23,30 @@
           }
           Map<String,KerberosComponentDescriptor> components=service.getComponents();
           if (components != null) {
+            Map<String,ServiceComponent> serviceComponents=svc.getServiceComponents();
             for (            KerberosComponentDescriptor component : components.values()) {
-              addIdentities(authToLocalBuilder,component.getIdentities(true),null,existingConfigurations);
-              authToLocalProperties=component.getAuthToLocalProperties();
-              if (authToLocalProperties != null) {
-                authToLocalPropertiesToSet.addAll(authToLocalProperties);
+              ServiceComponent svcComp=null;
+              if (!serviceComponents.containsKey(component.getName()))               continue;
+              svcComp=serviceComponents.get(component.getName());
+              boolean addSvcCompIdentities=false;
+              if (cluster.isBluePrintDeployed()) {
+                if (svcComp.getDesiredState() == State.INSTALLED || svcComp.getDesiredState() == State.STARTED)                 addSvcCompIdentities=true;
+              }
+ else {
+                for (                ServiceComponentHost svcCompHost : svcComp.getServiceComponentHosts().values()) {
+                  if (svcCompHost.getDesiredState() != State.UNKNOWN && svcCompHost.getDesiredState() != State.UNINSTALLING && svcCompHost.getDesiredState() != State.UNINSTALLED && svcCompHost.getDesiredState() != State.INSTALL_FAILED && svcCompHost.getDesiredState() != State.WIPING_OUT) {
+                    addSvcCompIdentities=true;
+                    break;
+                  }
+                }
+              }
+              if (addSvcCompIdentities) {
+                LOG.info("Adding identity for " + component.getName() + " to auth to local mapping");
+                addIdentities(authToLocalBuilder,component.getIdentities(true),null,existingConfigurations);
+                authToLocalProperties=component.getAuthToLocalProperties();
+                if (authToLocalProperties != null) {
+                  authToLocalPropertiesToSet.addAll(authToLocalProperties);
+                }
               }
             }
           }

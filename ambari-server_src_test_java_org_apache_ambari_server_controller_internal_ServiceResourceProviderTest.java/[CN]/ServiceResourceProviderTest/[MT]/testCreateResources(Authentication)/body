@@ -1,0 +1,30 @@
+{
+  AmbariManagementController managementController=createNiceMock(AmbariManagementController.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  Service service=createNiceMock(Service.class);
+  StackId stackId=createNiceMock(StackId.class);
+  ServiceFactory serviceFactory=createNiceMock(ServiceFactory.class);
+  AmbariMetaInfo ambariMetaInfo=createNiceMock(AmbariMetaInfo.class);
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo);
+  expect(managementController.getServiceFactory()).andReturn(serviceFactory);
+  expect(serviceFactory.createNew(cluster,"Service100")).andReturn(service);
+  expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
+  expect(cluster.getService("Service100")).andReturn(null);
+  expect(cluster.getDesiredStackVersion()).andReturn(stackId);
+  expect(cluster.getClusterId()).andReturn(2L).anyTimes();
+  expect(ambariMetaInfo.isValidService((String)anyObject(),(String)anyObject(),(String)anyObject())).andReturn(true);
+  replay(managementController,clusters,cluster,service,ambariMetaInfo,stackId,serviceFactory);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=getServiceProvider(managementController);
+  Set<Map<String,Object>> propertySet=new LinkedHashSet<Map<String,Object>>();
+  Map<String,Object> properties=new LinkedHashMap<String,Object>();
+  properties.put(ServiceResourceProvider.SERVICE_CLUSTER_NAME_PROPERTY_ID,"Cluster100");
+  properties.put(ServiceResourceProvider.SERVICE_SERVICE_NAME_PROPERTY_ID,"Service100");
+  properties.put(ServiceResourceProvider.SERVICE_SERVICE_STATE_PROPERTY_ID,"INIT");
+  propertySet.add(properties);
+  Request request=PropertyHelper.getCreateRequest(propertySet,null);
+  provider.createResources(request);
+  verify(managementController,clusters,cluster,service,ambariMetaInfo,stackId,serviceFactory);
+}

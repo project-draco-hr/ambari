@@ -1,0 +1,47 @@
+{
+  final SecurityContext securityContext=createNiceMock(SecurityContext.class);
+  final FilterConfig filterConfig=createNiceMock(FilterConfig.class);
+  final AmbariAuthorizationFilter filter=createMockBuilder(AmbariAuthorizationFilter.class).addMockedMethod("getSecurityContext").addMockedMethod("getViewRegistry").withConstructor().createMock();
+  final ViewRegistry viewRegistry=createNiceMock(ViewRegistry.class);
+  expect(filterConfig.getInitParameter("realm")).andReturn("AuthFilter").anyTimes();
+  expect(filter.getSecurityContext()).andReturn(securityContext).anyTimes();
+  expect(filter.getViewRegistry()).andReturn(viewRegistry).anyTimes();
+  expect(securityContext.getAuthentication()).andReturn(authentication).anyTimes();
+  expect(viewRegistry.checkPermission(EasyMock.eq("DeniedView"),EasyMock.<String>anyObject(),EasyMock.<String>anyObject(),EasyMock.anyBoolean())).andReturn(false).anyTimes();
+  replay(filterConfig,filter,securityContext,viewRegistry);
+  for (  final Cell<String,String,Boolean> urlTest : urlTests.cellSet()) {
+    final FilterChain chain=EasyMock.createStrictMock(FilterChain.class);
+    final HttpServletRequest request=createNiceMock(HttpServletRequest.class);
+    final HttpServletResponse response=createNiceMock(HttpServletResponse.class);
+    String URI=urlTest.getRowKey();
+    String[] URIParts=URI.split("\\?");
+    expect(request.getRequestURI()).andReturn(URIParts[0]).anyTimes();
+    expect(request.getQueryString()).andReturn(URIParts.length == 2 ? URIParts[1] : null).anyTimes();
+    expect(request.getMethod()).andReturn(urlTest.getColumnKey()).anyTimes();
+    if (expectRedirect) {
+      String redirectURL=AmbariAuthorizationFilter.LOGIN_REDIRECT_BASE + urlTest.getRowKey();
+      expect(response.encodeRedirectURL(redirectURL)).andReturn(redirectURL);
+      response.sendRedirect(redirectURL);
+    }
+    if (urlTest.getValue()) {
+      chain.doFilter(EasyMock.<ServletRequest>anyObject(),EasyMock.<ServletResponse>anyObject());
+      EasyMock.expectLastCall().once();
+    }
+    replay(request,response,chain);
+    try {
+      filter.doFilter(request,response,chain);
+    }
+ catch (    AssertionError error) {
+      throw new Exception("doFilter() should not be chained on " + urlTest.getColumnKey() + " "+ urlTest.getRowKey(),error);
+    }
+    try {
+      verify(chain);
+      if (expectRedirect) {
+        verify(response);
+      }
+    }
+ catch (    AssertionError error) {
+      throw new Exception("verify( failed on " + urlTest.getColumnKey() + " "+ urlTest.getRowKey(),error);
+    }
+  }
+}

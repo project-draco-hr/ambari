@@ -1,0 +1,27 @@
+{
+  Request request=PropertyHelper.getReadRequest(AlertDefinitionResourceProvider.ALERT_DEF_CLUSTER_NAME,AlertDefinitionResourceProvider.ALERT_DEF_ID,AlertDefinitionResourceProvider.ALERT_DEF_NAME,AlertDefinitionResourceProvider.ALERT_DEF_LABEL,AlertDefinitionResourceProvider.ALERT_DEF_DESCRIPTION,AlertDefinitionResourceProvider.ALERT_DEF_IGNORE_HOST,AlertDefinitionResourceProvider.ALERT_DEF_SOURCE,AlertDefinitionResourceProvider.ALERT_DEF_SOURCE_TYPE);
+  AmbariManagementController amc=createMock(AmbariManagementController.class);
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  expect(amc.getClusters()).andReturn(clusters).atLeastOnce();
+  expect(clusters.getCluster((String)anyObject())).andReturn(cluster).atLeastOnce();
+  expect(cluster.getClusterId()).andReturn(Long.valueOf(1)).anyTimes();
+  Predicate predicate=new PredicateBuilder().property(AlertDefinitionResourceProvider.ALERT_DEF_CLUSTER_NAME).equals("c1").and().property(AlertDefinitionResourceProvider.ALERT_DEF_ID).equals("1").toPredicate();
+  expect(dao.findById(1L)).andReturn(getMockEntities().get(0));
+  replay(amc,clusters,cluster,dao);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  AlertDefinitionResourceProvider provider=createProvider(amc);
+  Set<Resource> results=provider.getResources(request,predicate);
+  assertEquals(1,results.size());
+  Resource r=results.iterator().next();
+  Assert.assertEquals("my_def",r.getPropertyValue(AlertDefinitionResourceProvider.ALERT_DEF_NAME));
+  Assert.assertEquals(SourceType.METRIC.name(),r.getPropertyValue(AlertDefinitionResourceProvider.ALERT_DEF_SOURCE_TYPE));
+  Source source=getMockSource();
+  String okJson=source.getReporting().getOk().getText();
+  Object reporting=r.getPropertyValue("AlertDefinition/source/reporting");
+  Assert.assertTrue(reporting.toString().contains(okJson));
+  Assert.assertEquals("Mock Label",r.getPropertyValue(AlertDefinitionResourceProvider.ALERT_DEF_LABEL));
+  Assert.assertEquals("Mock Description",r.getPropertyValue(AlertDefinitionResourceProvider.ALERT_DEF_DESCRIPTION));
+  Assert.assertEquals(Boolean.FALSE,r.getPropertyValue(AlertDefinitionResourceProvider.ALERT_DEF_IGNORE_HOST));
+  Assert.assertNotNull(r.getPropertyValue("AlertDefinition/source/type"));
+}

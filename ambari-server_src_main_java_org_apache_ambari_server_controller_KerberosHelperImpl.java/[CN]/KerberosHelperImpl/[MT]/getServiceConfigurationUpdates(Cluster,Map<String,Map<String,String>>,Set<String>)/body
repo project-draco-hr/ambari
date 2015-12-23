@@ -1,0 +1,36 @@
+{
+  Map<String,Map<String,String>> kerberosConfigurations=new HashMap<String,Map<String,String>>();
+  KerberosDetails kerberosDetails=getKerberosDetails(cluster,null);
+  KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
+  Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
+  Map<String,Map<String,String>> configurations=addAdditionalConfigurations(cluster,deepCopy(existingConfigurations),null,kerberosDescriptorProperties);
+  for (  String serviceName : services) {
+    KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
+    if (serviceDescriptor != null) {
+      Map<String,KerberosComponentDescriptor> componentDescriptors=serviceDescriptor.getComponents();
+      for (      KerberosComponentDescriptor componentDescriptor : componentDescriptors.values()) {
+        if (componentDescriptor != null) {
+          Map<String,Map<String,String>> identityConfigurations;
+          List<KerberosIdentityDescriptor> identities;
+          identities=serviceDescriptor.getIdentities(true);
+          identityConfigurations=getConfigurations(identities);
+          if (identityConfigurations != null) {
+            for (            Map.Entry<String,Map<String,String>> entry : identityConfigurations.entrySet()) {
+              mergeConfigurations(kerberosConfigurations,entry.getKey(),entry.getValue(),configurations);
+            }
+          }
+          identities=componentDescriptor.getIdentities(true);
+          identityConfigurations=getConfigurations(identities);
+          if (identityConfigurations != null) {
+            for (            Map.Entry<String,Map<String,String>> entry : identityConfigurations.entrySet()) {
+              mergeConfigurations(kerberosConfigurations,entry.getKey(),entry.getValue(),configurations);
+            }
+          }
+          mergeConfigurations(kerberosConfigurations,componentDescriptor.getConfigurations(true),configurations);
+        }
+      }
+    }
+  }
+  setAuthToLocalRules(kerberosDescriptor,cluster,kerberosDetails.getDefaultRealm(),configurations,kerberosConfigurations);
+  return kerberosConfigurations;
+}

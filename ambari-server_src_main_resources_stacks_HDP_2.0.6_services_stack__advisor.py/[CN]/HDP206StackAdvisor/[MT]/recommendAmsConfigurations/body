@@ -1,7 +1,7 @@
 def recommendAmsConfigurations(self, configurations, clusterData, services, hosts):
     putAmsEnvProperty = self.putProperty(configurations, 'ams-env', services)
     putAmsHbaseSiteProperty = self.putProperty(configurations, 'ams-hbase-site', services)
-    putTimelineServiceProperty = self.putProperty(configurations, 'ams-site', services)
+    putAmsSiteProperty = self.putProperty(configurations, 'ams-site', services)
     putHbaseEnvProperty = self.putProperty(configurations, 'ams-hbase-env', services)
     amsCollectorHosts = self.getComponentHostNames(services, 'AMBARI_METRICS', 'METRICS_COLLECTOR')
     rootDir = 'file:///var/lib/ambari-metrics-collector/hbase'
@@ -14,17 +14,23 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
             tmpDir = services['configurations']['ams-hbase-site']['properties']['hbase.tmp.dir']
         if ('hbase.cluster.distributed' in services['configurations']['ams-hbase-site']['properties']):
             hbaseClusterDistributed = (services['configurations']['ams-hbase-site']['properties']['hbase.cluster.distributed'].lower() == 'true')
+    if hbaseClusterDistributed:
+        zkPort = self.getZKPort(services)
+        putAmsHbaseSiteProperty('hbase.zookeeper.property.clientPort', zkPort)
+    else:
+        putAmsHbaseSiteProperty('hbase.zookeeper.property.clientPort', '61181')
     mountpoints = ['/']
     for collectorHostName in amsCollectorHosts:
         for host in hosts['items']:
             if (host['Hosts']['host_name'] == collectorHostName):
                 mountpoints = self.getPreferredMountPoints(host['Hosts'])
                 break
-    if (not rootDir.startswith('hdfs://')):
+    isLocalRootDir = rootDir.startswith('file://')
+    if isLocalRootDir:
         rootDir = re.sub('^file:///|/', '', rootDir, count=1)
         rootDir = ('file://' + os.path.join(mountpoints[0], rootDir))
     tmpDir = re.sub('^file:///|/', '', tmpDir, count=1)
-    if ((len(mountpoints) > 1) and (not rootDir.startswith('hdfs://'))):
+    if ((len(mountpoints) > 1) and isLocalRootDir):
         tmpDir = os.path.join(mountpoints[1], tmpDir)
     else:
         tmpDir = os.path.join(mountpoints[0], tmpDir)
@@ -36,7 +42,7 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
     putAmsHbaseSiteProperty('hbase.hregion.memstore.flush.size', 134217728)
     putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.upperLimit', 0.35)
     putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.lowerLimit', 0.3)
-    putTimelineServiceProperty('timeline.metrics.host.aggregator.ttl', 86400)
+    putAmsSiteProperty('timeline.metrics.host.aggregator.ttl', 86400)
     if (len(amsCollectorHosts) > 1):
         pass
     else:
@@ -48,7 +54,7 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
             putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.upperLimit', 0.3)
             putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.lowerLimit', 0.25)
             putAmsHbaseSiteProperty('phoenix.query.maxGlobalMemoryPercentage', 20)
-            putTimelineServiceProperty('phoenix.query.maxGlobalMemoryPercentage', 30)
+            putAmsSiteProperty('phoenix.query.maxGlobalMemoryPercentage', 30)
             putAmsHbaseSiteProperty('phoenix.coprocessor.maxMetaDataCacheSize', 81920000)
         elif (total_sinks_count >= 500):
             putAmsHbaseSiteProperty('hbase.regionserver.handler.count', 60)
@@ -100,6 +106,6 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
         precision_splits = result.precision
     if result.aggregate:
         aggregate_splits = result.aggregate
-    putTimelineServiceProperty('timeline.metrics.host.aggregate.splitpoints', ','.join(precision_splits))
-    putTimelineServiceProperty('timeline.metrics.cluster.aggregate.splitpoints', ','.join(aggregate_splits))
+    putAmsSiteProperty('timeline.metrics.host.aggregate.splitpoints', ','.join(precision_splits))
+    putAmsSiteProperty('timeline.metrics.cluster.aggregate.splitpoints', ','.join(aggregate_splits))
     pass

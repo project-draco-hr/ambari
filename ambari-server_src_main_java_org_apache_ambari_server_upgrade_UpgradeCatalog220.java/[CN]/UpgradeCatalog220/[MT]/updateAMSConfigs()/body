@@ -1,0 +1,67 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (clusterMap != null && !clusterMap.isEmpty()) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        Config amsHbaseEnv=cluster.getDesiredConfigByType(AMS_HBASE_ENV);
+        if (amsHbaseEnv != null) {
+          Map<String,String> amsHbaseEnvProperties=amsHbaseEnv.getProperties();
+          String content=amsHbaseEnvProperties.get("content");
+          Map<String,String> newProperties=new HashMap<>();
+          newProperties.put("content",updateAmsHbaseEnvContent(content));
+          updateConfigurationPropertiesForCluster(cluster,AMS_HBASE_ENV,newProperties,true,true);
+        }
+        Config amsEnv=cluster.getDesiredConfigByType(AMS_ENV);
+        if (amsEnv != null) {
+          Map<String,String> amsEnvProperties=amsEnv.getProperties();
+          String content=amsEnvProperties.get("content");
+          Map<String,String> newProperties=new HashMap<>();
+          newProperties.put("content",updateAmsEnvContent(content));
+          updateConfigurationPropertiesForCluster(cluster,AMS_ENV,newProperties,true,true);
+        }
+        Config amsSite=cluster.getDesiredConfigByType(AMS_SITE);
+        if (amsSite != null) {
+          Map<String,String> currentAmsSiteProperties=amsSite.getProperties();
+          Map<String,String> newProperties=new HashMap<>();
+          if (currentAmsSiteProperties.containsKey("timeline.metrics.service.default.result.limit") && currentAmsSiteProperties.get("timeline.metrics.service.default.result.limit").equals(String.valueOf(5760))) {
+            LOG.info("Updating timeline.metrics.service.default.result.limit to 15840");
+            newProperties.put("timeline.metrics.service.default.result.limit",String.valueOf(15840));
+          }
+          newProperties.put("timeline.metrics.cluster.aggregator.second.interval",String.valueOf(120));
+          newProperties.put("timeline.metrics.cluster.aggregator.minute.interval",String.valueOf(300));
+          newProperties.put("timeline.metrics.host.aggregator.minute.interval",String.valueOf(300));
+          newProperties.put("timeline.metrics.cluster.aggregator.second.ttl",String.valueOf(2592000));
+          newProperties.put("timeline.metrics.cluster.aggregator.minute.ttl",String.valueOf(7776000));
+          newProperties.put("timeline.metrics.cluster.aggregator.second.checkpointCutOffMultiplier",String.valueOf(2));
+          newProperties.put("timeline.metrics.cluster.aggregator.second.disabled",String.valueOf(false));
+          newProperties.put(TIMELINE_METRICS_HBASE_FIFO_COMPACTION_ENABLED,String.valueOf(true));
+          updateConfigurationPropertiesForCluster(cluster,AMS_SITE,newProperties,true,true);
+        }
+        Config amsHbaseSite=cluster.getDesiredConfigByType(AMS_HBASE_SITE);
+        if (amsHbaseSite != null) {
+          Map<String,String> amsHbaseSiteProperties=amsHbaseSite.getProperties();
+          Map<String,String> newProperties=new HashMap<>();
+          String zkTimeout=amsHbaseSiteProperties.get(AMS_HBASE_SITE_ZK_TIMEOUT_PROPERTY);
+          if ("20000".equals(zkTimeout)) {
+            newProperties.put(AMS_HBASE_SITE_ZK_TIMEOUT_PROPERTY,"120000");
+          }
+          if (!amsHbaseSiteProperties.containsKey(AMS_HBASE_SITE_NORMALIZER_ENABLED_PROPERTY)) {
+            LOG.info("Enabling " + AMS_HBASE_SITE_NORMALIZER_ENABLED_PROPERTY);
+            newProperties.put(AMS_HBASE_SITE_NORMALIZER_ENABLED_PROPERTY,String.valueOf(true));
+          }
+          if (!amsHbaseSiteProperties.containsKey(AMS_HBASE_SITE_NORMALIZER_PERIOD_PROPERTY)) {
+            LOG.info("Updating " + AMS_HBASE_SITE_NORMALIZER_PERIOD_PROPERTY);
+            newProperties.put(AMS_HBASE_SITE_NORMALIZER_PERIOD_PROPERTY,String.valueOf(600000));
+          }
+          if (!amsHbaseSiteProperties.containsKey(AMS_HBASE_SITE_NORMALIZER_CLASS_PROPERTY)) {
+            LOG.info("Updating " + AMS_HBASE_SITE_NORMALIZER_CLASS_PROPERTY);
+            newProperties.put(AMS_HBASE_SITE_NORMALIZER_CLASS_PROPERTY,"org.apache.hadoop.hbase.master.normalizer.SimpleRegionNormalizer");
+          }
+          updateConfigurationPropertiesForCluster(cluster,AMS_HBASE_SITE,newProperties,true,true);
+        }
+      }
+    }
+  }
+}

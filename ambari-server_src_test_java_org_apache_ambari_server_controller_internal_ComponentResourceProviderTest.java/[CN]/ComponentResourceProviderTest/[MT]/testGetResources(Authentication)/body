@@ -1,0 +1,54 @@
+{
+  Resource.Type type=Resource.Type.Component;
+  MaintenanceStateHelper maintenanceStateHelper=createNiceMock(MaintenanceStateHelper.class);
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  AmbariMetaInfo ambariMetaInfo=createNiceMock(AmbariMetaInfo.class);
+  Service service=createNiceMock(Service.class);
+  ServiceComponent serviceComponent1=createNiceMock(ServiceComponent.class);
+  ServiceComponent serviceComponent2=createNiceMock(ServiceComponent.class);
+  ServiceComponent serviceComponent3=createNiceMock(ServiceComponent.class);
+  StackId stackId=createNiceMock(StackId.class);
+  final ComponentInfo componentInfo1=createNiceMock(ComponentInfo.class);
+  final ComponentInfo componentInfo2=createNiceMock(ComponentInfo.class);
+  Map<String,ServiceComponent> serviceComponentMap=new HashMap<String,ServiceComponent>();
+  serviceComponentMap.put("Component101",serviceComponent1);
+  serviceComponentMap.put("Component102",serviceComponent2);
+  serviceComponentMap.put("Component103",serviceComponent3);
+  expect(managementController.getClusters()).andReturn(clusters);
+  expect(managementController.getAmbariMetaInfo()).andReturn(ambariMetaInfo);
+  expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
+  expect(cluster.getDesiredStackVersion()).andReturn(stackId);
+  expect(cluster.getServices()).andReturn(Collections.singletonMap("Service100",service)).anyTimes();
+  expect(service.getServiceComponents()).andReturn(serviceComponentMap).anyTimes();
+  expect(serviceComponent1.convertToResponse()).andReturn(new ServiceComponentResponse(100L,"Cluster100","Service100","Component100",null,"",1,1,0));
+  expect(serviceComponent2.convertToResponse()).andReturn(new ServiceComponentResponse(100L,"Cluster100","Service100","Component101",null,"",1,1,0));
+  expect(serviceComponent3.convertToResponse()).andReturn(new ServiceComponentResponse(100L,"Cluster100","Service100","Component102",null,"",1,1,0));
+  expect(ambariMetaInfo.getComponent((String)anyObject(),(String)anyObject(),(String)anyObject(),(String)anyObject())).andReturn(componentInfo1).times(2).andReturn(componentInfo2);
+  expect(componentInfo1.getCategory()).andReturn("MASTER").anyTimes();
+  expect(componentInfo2.getCategory()).andReturn("SLAVE").anyTimes();
+  replay(managementController,clusters,cluster,ambariMetaInfo,service,serviceComponent1,serviceComponent2,serviceComponent3,stackId,componentInfo1,componentInfo2);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=new ComponentResourceProvider(PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController,maintenanceStateHelper);
+  Set<String> propertyIds=new HashSet<String>();
+  propertyIds.add(ComponentResourceProvider.COMPONENT_CLUSTER_NAME_PROPERTY_ID);
+  propertyIds.add(ComponentResourceProvider.COMPONENT_COMPONENT_NAME_PROPERTY_ID);
+  propertyIds.add(ComponentResourceProvider.COMPONENT_CATEGORY_PROPERTY_ID);
+  propertyIds.add(ComponentResourceProvider.COMPONENT_TOTAL_COUNT_PROPERTY_ID);
+  propertyIds.add(ComponentResourceProvider.COMPONENT_STARTED_COUNT_PROPERTY_ID);
+  propertyIds.add(ComponentResourceProvider.COMPONENT_INSTALLED_COUNT_PROPERTY_ID);
+  Predicate predicate=new PredicateBuilder().property(ComponentResourceProvider.COMPONENT_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ComponentResourceProvider.COMPONENT_CATEGORY_PROPERTY_ID).equals("MASTER").toPredicate();
+  Request request=PropertyHelper.getReadRequest(propertyIds);
+  Set<Resource> resources=provider.getResources(request,predicate);
+  Assert.assertEquals(2,resources.size());
+  for (  Resource resource : resources) {
+    String clusterName=(String)resource.getPropertyValue(ComponentResourceProvider.COMPONENT_CLUSTER_NAME_PROPERTY_ID);
+    Assert.assertEquals("Cluster100",clusterName);
+    Assert.assertEquals("MASTER",resource.getPropertyValue(ComponentResourceProvider.COMPONENT_CATEGORY_PROPERTY_ID));
+    Assert.assertEquals(1,resource.getPropertyValue(ComponentResourceProvider.COMPONENT_TOTAL_COUNT_PROPERTY_ID));
+    Assert.assertEquals(1,resource.getPropertyValue(ComponentResourceProvider.COMPONENT_STARTED_COUNT_PROPERTY_ID));
+    Assert.assertEquals(0,resource.getPropertyValue(ComponentResourceProvider.COMPONENT_INSTALLED_COUNT_PROPERTY_ID));
+  }
+  verify(managementController,clusters,cluster,ambariMetaInfo,service,serviceComponent1,serviceComponent2,serviceComponent3,stackId,componentInfo1,componentInfo2);
+}

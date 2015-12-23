@@ -1,37 +1,9 @@
 {
-  KerberosDetails kerberosDetails=getKerberosDetails(cluster,null);
   String serviceName=serviceComponentHost.getServiceName();
-  KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
-  KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
-  if (serviceDescriptor != null) {
-    Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
-    Map<String,Map<String,String>> kerberosConfigurations=new HashMap<String,Map<String,String>>();
-    Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,serviceComponentHost.getHostName(),kerberosDescriptorProperties);
-    Map<String,KerberosComponentDescriptor> componentDescriptors=serviceDescriptor.getComponents();
-    for (    KerberosComponentDescriptor componentDescriptor : componentDescriptors.values()) {
-      if (componentDescriptor != null) {
-        Map<String,Map<String,String>> identityConfigurations;
-        List<KerberosIdentityDescriptor> identities;
-        identities=serviceDescriptor.getIdentities(true);
-        identityConfigurations=getConfigurations(identities);
-        if (identityConfigurations != null) {
-          for (          Map.Entry<String,Map<String,String>> entry : identityConfigurations.entrySet()) {
-            mergeConfigurations(kerberosConfigurations,entry.getKey(),entry.getValue(),configurations);
-          }
-        }
-        identities=componentDescriptor.getIdentities(true);
-        identityConfigurations=getConfigurations(identities);
-        if (identityConfigurations != null) {
-          for (          Map.Entry<String,Map<String,String>> entry : identityConfigurations.entrySet()) {
-            mergeConfigurations(kerberosConfigurations,entry.getKey(),entry.getValue(),configurations);
-          }
-        }
-        mergeConfigurations(kerberosConfigurations,componentDescriptor.getConfigurations(true),configurations);
-      }
-    }
-    setAuthToLocalRules(kerberosDescriptor,cluster,kerberosDetails.getDefaultRealm(),configurations,kerberosConfigurations);
-    for (    Map.Entry<String,Map<String,String>> entry : kerberosConfigurations.entrySet()) {
-      configHelper.updateConfigType(cluster,ambariManagementController,entry.getKey(),entry.getValue(),null,ambariManagementController.getAuthName(),String.format("Enabling Kerberos for %s",serviceName));
-    }
+  String hostName=serviceComponentHost.getHostName();
+  Map<String,Map<String,String>> existingConfigurations=calculateExistingConfigurations(cluster,hostName);
+  Map<String,Map<String,String>> updates=getServiceConfigurationUpdates(cluster,existingConfigurations,Collections.singleton(serviceName));
+  for (  Map.Entry<String,Map<String,String>> entry : updates.entrySet()) {
+    configHelper.updateConfigType(cluster,ambariManagementController,entry.getKey(),entry.getValue(),null,ambariManagementController.getAuthName(),String.format("Enabling Kerberos for %s",serviceName));
   }
 }
