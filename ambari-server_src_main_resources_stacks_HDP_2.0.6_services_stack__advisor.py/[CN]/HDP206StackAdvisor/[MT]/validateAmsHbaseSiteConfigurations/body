@@ -1,6 +1,7 @@
 def validateAmsHbaseSiteConfigurations(self, properties, recommendedDefaults, configurations, services, hosts):
     amsCollectorHosts = self.getComponentHostNames(services, 'AMBARI_METRICS', 'METRICS_COLLECTOR')
     ams_site = getSiteProperties(configurations, 'ams-site')
+    core_site = getSiteProperties(configurations, 'core-site')
     (collector_heapsize, hbase_heapsize, total_sinks_count) = self.getAmsMemoryRecommendation(services, hosts)
     recommendedDiskSpace = 10485760
     if (len(amsCollectorHosts) > 1):
@@ -14,10 +15,14 @@ def validateAmsHbaseSiteConfigurations(self, properties, recommendedDefaults, co
     validationItems = []
     rootdir_item = None
     op_mode = ams_site.get('timeline.metrics.service.operation.mode')
+    default_fs = (core_site.get('fs.defaultFS') if core_site else 'file:///')
     hbase_rootdir = properties.get('hbase.rootdir')
     hbase_tmpdir = properties.get('hbase.tmp.dir')
-    if ((op_mode == 'distributed') and hbase_rootdir.startswith('file://')):
+    is_local_root_dir = (hbase_rootdir.startswith('file://') or (default_fs.startswith('file://') and hbase_rootdir.startswith('/')))
+    if ((op_mode == 'distributed') and is_local_root_dir):
         rootdir_item = self.getWarnItem('In distributed mode hbase.rootdir should point to HDFS.')
+    elif ((op_mode == 'embedded') and hbase_rootdir.startswith('/')):
+        rootdir_item = self.getWarnItem('In embedded mode schemaless values are not supported for hbase.rootdir')
         pass
     distributed_item = None
     distributed = properties.get('hbase.cluster.distributed')
@@ -34,12 +39,12 @@ def validateAmsHbaseSiteConfigurations(self, properties, recommendedDefaults, co
     for collectorHostName in amsCollectorHosts:
         for host in hosts['items']:
             if (host['Hosts']['host_name'] == collectorHostName):
-                if (op_mode == 'embedded'):
+                if ((op_mode == 'embedded') or is_local_root_dir):
                     validationItems.extend([{'config-name': 'hbase.rootdir', 'item': self.validatorEnoughDiskSpace(properties, 'hbase.rootdir', host['Hosts'], recommendedDiskSpace), }])
                     validationItems.extend([{'config-name': 'hbase.rootdir', 'item': self.validatorNotRootFs(properties, recommendedDefaults, 'hbase.rootdir', host['Hosts']), }])
                     validationItems.extend([{'config-name': 'hbase.tmp.dir', 'item': self.validatorNotRootFs(properties, recommendedDefaults, 'hbase.tmp.dir', host['Hosts']), }])
                 dn_hosts = self.getComponentHostNames(services, 'HDFS', 'DATANODE')
-                if (not hbase_rootdir.startswith('hdfs')):
+                if is_local_root_dir:
                     mountPoints = []
                     for mountPoint in host['Hosts']['disk_info']:
                         mountPoints.append(mountPoint['mountpoint'])

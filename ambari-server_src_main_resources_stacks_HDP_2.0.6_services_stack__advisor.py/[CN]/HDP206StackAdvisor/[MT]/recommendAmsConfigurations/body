@@ -4,6 +4,9 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
     putAmsSiteProperty = self.putProperty(configurations, 'ams-site', services)
     putHbaseEnvProperty = self.putProperty(configurations, 'ams-hbase-env', services)
     amsCollectorHosts = self.getComponentHostNames(services, 'AMBARI_METRICS', 'METRICS_COLLECTOR')
+    defaultFs = 'file:///'
+    if (('core-site' in services['configurations']) and ('fs.defaultFS' in services['configurations']['core-site']['properties'])):
+        defaultFs = services['configurations']['core-site']['properties']['fs.defaultFS']
     rootDir = 'file:///var/lib/ambari-metrics-collector/hbase'
     tmpDir = '/var/lib/ambari-metrics-collector/hbase-tmp'
     hbaseClusterDistributed = False
@@ -25,7 +28,7 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
             if (host['Hosts']['host_name'] == collectorHostName):
                 mountpoints = self.getPreferredMountPoints(host['Hosts'])
                 break
-    isLocalRootDir = rootDir.startswith('file://')
+    isLocalRootDir = (rootDir.startswith('file://') or (defaultFs.startswith('file://') and rootDir.startswith('/')))
     if isLocalRootDir:
         rootDir = re.sub('^file:///|/', '', rootDir, count=1)
         rootDir = ('file://' + os.path.join(mountpoints[0], rootDir))
@@ -74,7 +77,7 @@ def recommendAmsConfigurations(self, configurations, clusterData, services, host
         hbase_rs_heapsize = 512
         putHbaseEnvProperty('hbase_master_heapsize', hbase_heapsize)
         putHbaseEnvProperty('hbase_master_xmn_size', round_to_n((0.15 * (hbase_heapsize + hbase_rs_heapsize)), 64))
-    if rootDir.startswith('hdfs://'):
+    if (rootDir.startswith('hdfs://') or (defaultFs.startswith('hdfs://') and rootDir.startswith('/'))):
         dn_hosts = self.getComponentHostNames(services, 'HDFS', 'DATANODE')
         if set(amsCollectorHosts).intersection(dn_hosts):
             collector_cohosted_with_dn = 'true'
