@@ -15,4 +15,21 @@ def recommendHDFSConfigurations(self, configurations, clusterData, services, hos
         namenodes = hdfsSiteProperties[('dfs.ha.namenodes.%s' % nameServices)]
         if (len(namenodes.split(',')) > 1):
             putHDFSSitePropertyAttributes('dfs.namenode.rpc-address', 'delete', 'true')
+    if ((not hdfsSiteProperties) or ('dfs.datanode.data.dir' not in hdfsSiteProperties)):
+        putHDFSSiteProperty('dfs.datanode.data.dir', '/hadoop/hdfs/data')
+    mountPoints = []
+    mountPointDiskAvailableSpace = []
+    for host in hosts['items']:
+        for diskInfo in host['Hosts']['disk_info']:
+            mountPoints.append(diskInfo['mountpoint'])
+            mountPointDiskAvailableSpace.append(long(diskInfo['size']))
+    maxFreeVolumeSize = 0L
+    dataDirs = hdfsSiteProperties['dfs.datanode.data.dir'].split(',')
+    for dataDir in dataDirs:
+        mp = getMountPointForDir(dataDir, mountPoints)
+        for i in range(len(mountPoints)):
+            if (mp == mountPoints[i]):
+                if (mountPointDiskAvailableSpace[i] > maxFreeVolumeSize):
+                    maxFreeVolumeSize = mountPointDiskAvailableSpace[i]
+    putHDFSSiteProperty('dfs.datanode.du.reserved', ((maxFreeVolumeSize * 1024) / 8))
     self.recommendHadoopProxyUsers(configurations, services, hosts)
