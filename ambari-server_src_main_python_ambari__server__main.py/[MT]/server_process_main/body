@@ -20,6 +20,11 @@ def server_process_main(options, scmStatus=None):
         err = ('No JDK found, please run the "ambari-server setup" command to install a JDK automatically or install any JDK manually to ' + configDefaults.JDK_INSTALL_DIR)
         raise FatalException(1, err)
     properties = get_ambari_properties()
+    if (not options.skip_properties_validation):
+        missing_properties = get_missing_properties(properties)
+        if missing_properties:
+            err = (('Required properties are not found: ' + str(missing_properties)) + '. To skip properties validation use "--skip-properties-validation"')
+            raise FatalException(1, err)
     if is_root():
         print configDefaults.MESSAGE_SERVER_RUNNING_AS_ROOT
     ensure_jdbc_driver_is_installed(options, properties)
@@ -38,6 +43,9 @@ def server_process_main(options, scmStatus=None):
     debug_start = ((debug_mode & 1) or SERVER_START_DEBUG)
     suspend_start = ((debug_mode & 2) or SUSPEND_START_MODE)
     suspend_mode = ('y' if suspend_start else 'n')
+    if options.skip_database_validation:
+        global jvm_args
+        jvm_args += ' -DskipDatabaseConsistencyValidation'
     param_list = generate_child_process_param_list(ambari_user, java_exe, serverClassPath.get_full_ambari_classpath_escaped_for_shell(), debug_start, suspend_mode)
     environ = generate_env(options, ambari_user, current_user)
     if (not os.path.exists(configDefaults.PID_DIR)):

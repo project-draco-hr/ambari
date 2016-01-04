@@ -1,0 +1,70 @@
+{
+  LOG.info("Checking DB configs consistency");
+  boolean checkPassed=true;
+  if (ambariMetaInfo == null) {
+    ambariMetaInfo=injector.getInstance(AmbariMetaInfo.class);
+  }
+  ClusterDAO clusterDAO=injector.getInstance(ClusterDAO.class);
+  List<ClusterEntity> clusters=clusterDAO.findAll();
+  if (clusters != null) {
+    for (    ClusterEntity clusterEntity : clusters) {
+      Collection<ClusterConfigMappingEntity> configMappingEntities=clusterEntity.getConfigMappingEntities();
+      Collection<ClusterConfigEntity> clusterConfigEntities=clusterEntity.getClusterConfigEntities();
+      if (configMappingEntities != null) {
+        Map<String,Integer> selectedCountForType=new HashMap<>();
+        for (        ClusterConfigMappingEntity clusterConfigMappingEntity : configMappingEntities) {
+          String typeName=clusterConfigMappingEntity.getType();
+          if (clusterConfigMappingEntity.isSelected() > 0) {
+            int selectedCount=selectedCountForType.get(typeName) != null ? selectedCountForType.get(typeName) : 0;
+            selectedCountForType.put(typeName,selectedCount + 1);
+            if (!clusterConfigsContainTypeAndTag(clusterConfigEntities,typeName,clusterConfigMappingEntity.getTag())) {
+              checkPassed=false;
+              LOG.error("ClusterConfig does not contain mapping for type_name=" + typeName + " tag="+ clusterConfigMappingEntity.getTag());
+            }
+          }
+ else {
+            if (!selectedCountForType.containsKey(typeName)) {
+              selectedCountForType.put(typeName,0);
+            }
+          }
+        }
+        Collection<ClusterServiceEntity> clusterServiceEntities=clusterEntity.getClusterServiceEntities();
+        ClusterStateEntity clusterStateEntity=clusterEntity.getClusterStateEntity();
+        if (clusterStateEntity != null) {
+          StackEntity currentStack=clusterStateEntity.getCurrentStack();
+          StackInfo stack=ambariMetaInfo.getStack(currentStack.getStackName(),currentStack.getStackVersion());
+          for (          ClusterServiceEntity clusterServiceEntity : clusterServiceEntities) {
+            if (!State.INIT.equals(clusterServiceEntity.getServiceDesiredStateEntity().getDesiredState())) {
+              String serviceName=clusterServiceEntity.getServiceName();
+              ServiceInfo serviceInfo=ambariMetaInfo.getService(stack.getName(),stack.getVersion(),serviceName);
+              for (              String configTypeName : serviceInfo.getConfigTypeAttributes().keySet()) {
+                if (selectedCountForType.get(configTypeName) == null) {
+                  checkPassed=false;
+                  LOG.error("ClusterConfigMapping does not contain mapping for service=" + serviceName + " type_name="+ configTypeName);
+                }
+ else {
+                  if (selectedCountForType.get(configTypeName) == 0) {
+                    checkPassed=false;
+                    LOG.error("ClusterConfigMapping selected count is 0 for service=" + serviceName + " type_name="+ configTypeName);
+                  }
+ else                   if (selectedCountForType.get(configTypeName) > 1) {
+                    checkPassed=false;
+                    LOG.error("ClusterConfigMapping selected count is more than 1 for service=" + serviceName + " type_name="+ configTypeName);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if (checkPassed) {
+    LOG.info("DB configs consistency check passed.");
+  }
+ else {
+    String errorMessage="DB configs consistency check failed. Run \"ambari-server start --skip-database-validation\" to skip validation.";
+    LOG.error(errorMessage);
+    throw new AmbariException(errorMessage);
+  }
+}

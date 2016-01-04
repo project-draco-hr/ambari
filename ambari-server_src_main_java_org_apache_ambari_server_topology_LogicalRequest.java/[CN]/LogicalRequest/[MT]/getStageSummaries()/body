@@ -1,6 +1,25 @@
 {
   Map<Long,HostRoleCommandStatusSummaryDTO> summaryMap=new HashMap<Long,HostRoleCommandStatusSummaryDTO>();
-  for (  StageEntity stage : getStageEntities()) {
+  Map<Long,Collection<HostRoleCommand>> stageTasksMap=new HashMap<>();
+  Map<Long,Long> taskToStageMap=new HashMap<>();
+  for (  HostRequest hostRequest : getHostRequests()) {
+    Map<Long,Long> physicalTaskMapping=hostRequest.getPhysicalTaskMapping();
+    Collection<Long> stageTasks=physicalTaskMapping.values();
+    for (    Long stageTask : stageTasks) {
+      taskToStageMap.put(stageTask,hostRequest.getStageId());
+    }
+  }
+  Collection<HostRoleCommand> physicalTasks=topology.getAmbariContext().getPhysicalTasks(taskToStageMap.keySet());
+  for (  HostRoleCommand physicalTask : physicalTasks) {
+    Long stageId=taskToStageMap.get(physicalTask.getTaskId());
+    Collection<HostRoleCommand> stageTasks=stageTasksMap.get(stageId);
+    if (stageTasks == null) {
+      stageTasks=new ArrayList<>();
+      stageTasksMap.put(stageId,stageTasks);
+    }
+    stageTasks.add(physicalTask);
+  }
+  for (  Long stageId : stageTasksMap.keySet()) {
     int aborted=0;
     int completed=0;
     int failed=0;
@@ -12,7 +31,7 @@
     int queued=0;
     int timedout=0;
     int skippedFailed=0;
-    for (    HostRoleCommandEntity task : stage.getHostRoleCommands()) {
+    for (    HostRoleCommand task : stageTasksMap.get(stageId)) {
       HostRoleStatus taskStatus=task.getStatus();
 switch (taskStatus) {
 case ABORTED:
@@ -52,8 +71,8 @@ default :
 System.out.println("Unexpected status when creating stage summaries: " + taskStatus);
 }
 }
-HostRoleCommandStatusSummaryDTO stageSummary=new HostRoleCommandStatusSummaryDTO(stage.isSkippable() ? 1 : 0,0,0,stage.getStageId(),aborted,completed,failed,holding,holdingFailed,holdingTimedout,inProgress,pending,queued,timedout,skippedFailed);
-summaryMap.put(stage.getStageId(),stageSummary);
+HostRoleCommandStatusSummaryDTO stageSummary=new HostRoleCommandStatusSummaryDTO(0,0,0,stageId,aborted,completed,failed,holding,holdingFailed,holdingTimedout,inProgress,pending,queued,timedout,skippedFailed);
+summaryMap.put(stageId,stageSummary);
 }
 return summaryMap;
 }

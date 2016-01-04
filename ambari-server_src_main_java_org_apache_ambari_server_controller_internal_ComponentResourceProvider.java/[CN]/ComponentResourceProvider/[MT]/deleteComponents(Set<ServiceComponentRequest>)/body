@@ -1,49 +1,15 @@
 {
-  AmbariManagementController controller=getManagementController();
-  Clusters clusters=controller.getClusters();
-  AmbariMetaInfo ambariMetaInfo=controller.getAmbariMetaInfo();
+  Clusters clusters=getManagementController().getClusters();
+  AmbariMetaInfo ambariMetaInfo=getManagementController().getAmbariMetaInfo();
   for (  ServiceComponentRequest request : requests) {
-    if (request.getClusterName() == null || request.getClusterName().isEmpty() || request.getComponentName() == null || request.getComponentName().isEmpty()) {
-      throw new IllegalArgumentException("Invalid arguments" + ", clustername and componentname should be" + " non-null and non-empty when trying to create a"+ " component");
-    }
-    Cluster cluster;
-    try {
-      cluster=clusters.getCluster(request.getClusterName());
-    }
- catch (    ClusterNotFoundException e) {
-      throw new ParentObjectNotFoundException("Attempted to add a component to a cluster which doesn't exist:",e);
-    }
-    if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),RoleAuthorization.SERVICE_ADD_DELETE_SERVICES)) {
-      throw new AuthorizationException("The user is not authorized to delete components");
-    }
-    if (request.getServiceName() == null || request.getServiceName().isEmpty()) {
-      StackId stackId=cluster.getDesiredStackVersion();
-      String serviceName=ambariMetaInfo.getComponentToService(stackId.getStackName(),stackId.getStackVersion(),request.getComponentName());
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Looking up service name for component" + ", componentName=" + request.getComponentName() + ", serviceName="+ serviceName);
-      }
-      if (serviceName == null || serviceName.isEmpty()) {
-        throw new AmbariException("Could not find service for component" + ", componentName=" + request.getComponentName() + ", clusterName="+ cluster.getClusterName()+ ", stackInfo="+ stackId.getStackId());
-      }
-      request.setServiceName(serviceName);
-    }
-    Service s;
-    try {
-      s=cluster.getService(request.getServiceName());
-    }
- catch (    ServiceNotFoundException e) {
-      throw new ParentObjectNotFoundException("Attempted to add a component to a service which doesn't exist:",e);
-    }
+    Validate.notEmpty(request.getComponentName(),"component name should be non-empty");
+    Cluster cluster=getClusterForRequest(request,clusters);
+    setServiceNameIfAbsent(request,cluster,ambariMetaInfo);
+    Service s=getServiceFromCluster(request,cluster);
     ServiceComponent sc=s.getServiceComponent(request.getComponentName());
     if (sc != null) {
-      if (!sc.getDesiredState().isRemovableState()) {
-        throw new AmbariException("Could not delete service component from cluster. To remove service component," + " it must be in DISABLED/INIT/INSTALLED/INSTALL_FAILED/UNKNOWN/UNINSTALLED/INSTALLING state." + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", current state="+ sc.getDesiredState()+ ".");
-      }
-      for (      ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
-        if (!sch.getDesiredState().isRemovableState()) {
-          throw new AmbariException("Found non removable host component when trying to delete service component." + " To remove host component, it must be in DISABLED/INIT/INSTALLED/INSTALL_FAILED/UNKNOWN" + "/UNINSTALLED/INSTALLING state."+ ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", current state="+ sc.getDesiredState()+ ".");
-        }
-      }
+      deleteHostComponentsForServiceComponent(sc,request);
+      sc.setDesiredState(State.DISABLED);
       s.deleteServiceComponent(request.getComponentName());
     }
   }
