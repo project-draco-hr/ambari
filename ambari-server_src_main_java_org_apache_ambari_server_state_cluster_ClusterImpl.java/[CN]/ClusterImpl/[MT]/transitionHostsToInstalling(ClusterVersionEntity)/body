@@ -19,7 +19,22 @@
       existingHostStackVersions.put(hostName,entity);
     }
     Sets.SetView<String> hostsMissingRepoVersion=Sets.difference(hosts.keySet(),existingHostsWithClusterStackAndVersion);
-    createOrUpdateHostVersionToState(sourceClusterVersion,hosts,existingHostStackVersions,hostsMissingRepoVersion,RepositoryVersionState.INSTALLING);
+    for (    String hostname : hosts.keySet()) {
+      Host host=hosts.get(hostname);
+      if (host.getMaintenanceState(getClusterId()) != MaintenanceState.OFF) {
+        continue;
+      }
+      if (hostsMissingRepoVersion.contains(hostname)) {
+        HostEntity hostEntity=hostDAO.findByName(hostname);
+        HostVersionEntity hostVersionEntity=new HostVersionEntity(hostEntity,sourceClusterVersion.getRepositoryVersion(),RepositoryVersionState.INSTALLING);
+        hostVersionDAO.create(hostVersionEntity);
+      }
+ else {
+        HostVersionEntity hostVersionEntity=existingHostStackVersions.get(hostname);
+        hostVersionEntity.setState(RepositoryVersionState.INSTALLING);
+        hostVersionDAO.merge(hostVersionEntity);
+      }
+    }
   }
   finally {
     clusterGlobalLock.writeLock().unlock();
