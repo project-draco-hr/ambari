@@ -85,9 +85,10 @@
   for (  OperatingSystemEntity operatingSystem : operatingSystems) {
     perOsRepos.put(operatingSystem.getOsType(),operatingSystem.getRepositories());
   }
-  final List<RepositoryEntity> repoInfo=perOsRepos.get(host.getOsFamily());
+  String osFamily=host.getOsFamily();
+  final List<RepositoryEntity> repoInfo=perOsRepos.get(osFamily);
   if (repoInfo == null) {
-    throw new SystemException(String.format("Repositories for os type %s are " + "not defined. Repo version=%s, stackId=%s",host.getOsFamily(),desiredRepoVersion,stackId));
+    throw new SystemException(String.format("Repositories for os type %s are " + "not defined. Repo version=%s, stackId=%s",osFamily,desiredRepoVersion,stackId));
   }
   List<ServiceOsSpecific.Package> packages=new ArrayList<ServiceOsSpecific.Package>();
   Set<String> servicesOnHost=new HashSet<String>();
@@ -104,7 +105,7 @@
  catch (    AmbariException e) {
       throw new SystemException("Can not enumerate services",e);
     }
-    List<ServiceOsSpecific.Package> packagesForService=managementController.getPackagesForServiceHost(info,new HashMap<String,String>(),host.getOsFamily());
+    List<ServiceOsSpecific.Package> packagesForService=managementController.getPackagesForServiceHost(info,new HashMap<String,String>(),osFamily);
     for (    ServiceOsSpecific.Package aPackage : packagesForService) {
       if (!aPackage.getSkipUpgrade()) {
         boolean blacklisted=false;
@@ -138,7 +139,14 @@
   RequestStageContainer req=createRequest(caption);
   Map<String,String> hostLevelParams=new HashMap<String,String>();
   hostLevelParams.put(JDK_LOCATION,getManagementController().getJdkResourceUrl());
-  Stage stage=stageFactory.createNew(req.getId(),"/tmp/ambari",cluster.getClusterName(),cluster.getClusterId(),caption,"{}","{}",StageUtils.getGson().toJson(hostLevelParams));
+  String clusterHostInfoJson;
+  try {
+    clusterHostInfoJson=StageUtils.getGson().toJson(StageUtils.getClusterHostInfo(cluster));
+  }
+ catch (  AmbariException e) {
+    throw new SystemException("Could not build cluster topology",e);
+  }
+  Stage stage=stageFactory.createNew(req.getId(),"/tmp/ambari",cluster.getClusterName(),cluster.getClusterId(),caption,clusterHostInfoJson,"{}",StageUtils.getGson().toJson(hostLevelParams));
   long stageId=req.getLastStageId() + 1;
   if (0L == stageId) {
     stageId=1L;
