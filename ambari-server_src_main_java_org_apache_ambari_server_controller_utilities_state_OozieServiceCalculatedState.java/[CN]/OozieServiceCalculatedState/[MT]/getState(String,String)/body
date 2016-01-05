@@ -1,0 +1,42 @@
+{
+  try {
+    Cluster cluster=getCluster(clusterName);
+    if (cluster != null && managementControllerProvider != null) {
+      AmbariMetaInfo ambariMetaInfo=managementControllerProvider.get().getAmbariMetaInfo();
+      StackId stackId=cluster.getDesiredStackVersion();
+      ServiceComponentHostRequest request=new ServiceComponentHostRequest(clusterName,serviceName,null,null,null);
+      Set<ServiceComponentHostResponse> hostComponentResponses=managementControllerProvider.get().getHostComponents(Collections.singleton(request));
+      int oozieServerActiveCount=0;
+      State nonStartedState=null;
+      for (      ServiceComponentHostResponse hostComponentResponse : hostComponentResponses) {
+        try {
+          ComponentInfo componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),hostComponentResponse.getServiceName(),hostComponentResponse.getComponentName());
+          if (componentInfo.isMaster()) {
+            State state=getHostComponentState(hostComponentResponse);
+switch (state) {
+case STARTED:
+case DISABLED:
+              String componentName=hostComponentResponse.getComponentName();
+            if (componentName.equals("OOZIE_SERVER")) {
+              ++oozieServerActiveCount;
+            }
+          break;
+default :
+        nonStartedState=state;
+    }
+  }
+}
+ catch (ObjectNotFoundException e) {
+}
+}
+if (oozieServerActiveCount > 0) {
+return State.STARTED;
+}
+return nonStartedState == null ? State.INSTALLED : nonStartedState;
+}
+}
+ catch (AmbariException e) {
+LOG.error("Can't determine service state.",e);
+}
+return State.UNKNOWN;
+}
