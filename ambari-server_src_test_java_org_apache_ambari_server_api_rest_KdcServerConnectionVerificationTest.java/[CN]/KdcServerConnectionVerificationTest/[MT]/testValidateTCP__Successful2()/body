@@ -1,7 +1,12 @@
 {
+  KrbError error=createNiceMock(KrbError.class);
+  expect(error.getErrorCode()).andReturn(ErrorType.KDC_ERR_C_PRINCIPAL_UNKNOWN).once();
+  expect(error.getMessageType()).andReturn(KerberosMessageType.KRB_ERROR).once();
+  KerberosException exception=createNiceMock(KerberosException.class);
+  expect(exception.getError()).andReturn(error).once();
   KdcConnection connection=createStrictMock(KdcConnection.class);
-  expect(connection.getTgt("noUser@noRealm","noPassword")).andThrow(new KerberosException(ErrorType.KDC_ERR_C_PRINCIPAL_UNKNOWN));
-  replay(connection);
+  expect(connection.getTgt("noUser@noRealm","noPassword")).andThrow(exception);
+  replay(connection,exception,error);
   TestKdcServerConnectionVerification kdcConnVerifier=new TestKdcServerConnectionVerification(configuration,connection);
   boolean result=kdcConnVerifier.isKdcReachable("test-host",11111,TCP);
   assertTrue(result);
@@ -10,5 +15,5 @@
   assertEquals("test-host",kdcConfig.getHostName());
   assertEquals(11111,kdcConfig.getKdcPort());
   assertEquals(10 * 1000,kdcConfig.getTimeout());
-  verify(connection);
+  verify(connection,exception,error);
 }

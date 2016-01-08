@@ -8,6 +8,7 @@
       }
       long now=System.currentTimeMillis();
       Set<String> staleAlerts=new HashSet<String>();
+      Map<String,Set<String>> staleHostAlerts=new HashMap<>();
       Set<String> hostsWithStaleAlerts=new HashSet<String>();
       List<AlertCurrentEntity> currentAlerts=m_alertsDao.findCurrentByCluster(cluster.getClusterId());
       for (      AlertCurrentEntity current : currentAlerts) {
@@ -28,11 +29,22 @@
         long intervalInMillis=definition.getScheduleInterval() * MINUTE_TO_MS_CONVERSION;
         long timeDifference=now - current.getLatestTimestamp();
         if (timeDifference >= 2 * intervalInMillis) {
-          staleAlerts.add(definition.getLabel());
+          String label=definition.getLabel();
           if (null != history.getHostName()) {
-            hostsWithStaleAlerts.add(history.getHostName());
+            String hostName=history.getHostName();
+            hostsWithStaleAlerts.add(hostName);
+            if (!staleHostAlerts.containsKey(hostName)) {
+              staleHostAlerts.put(hostName,new HashSet<String>());
+            }
+            staleHostAlerts.get(hostName).add(MessageFormat.format(TIMED_LABEL_MSG,label,millisToHumanReadableStr(timeDifference)));
+          }
+ else {
+            staleAlerts.add(label);
           }
         }
+      }
+      for (      String host : staleHostAlerts.keySet()) {
+        staleAlerts.add(MessageFormat.format(HOST_LABEL_MSG,host,StringUtils.join(staleHostAlerts.get(host),", ")));
       }
       AlertState alertState=AlertState.OK;
       String alertText=ALL_ALERTS_CURRENT_MSG;
