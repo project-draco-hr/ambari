@@ -1,0 +1,31 @@
+{
+  String clusterName=getExecutionCommand().getClusterName();
+  Cluster cluster=clusters.getCluster(clusterName);
+  Config yarnSiteConfig=cluster.getDesiredConfigByType(YARN_SITE_CONFIG_TYPE);
+  if (yarnSiteConfig == null) {
+    return createCommandReport(0,HostRoleStatus.FAILED,"{}",String.format("Source type %s not found",YARN_SITE_CONFIG_TYPE),"");
+  }
+  try {
+    cluster.getService("SPARK");
+    Map<String,String> yarnSiteProperties=yarnSiteConfig.getProperties();
+    final List<String> auxSevices;
+    final String oldAuxServices=yarnSiteProperties.get(YARN_NODEMANAGER_AUX_SERVICES);
+    final String newAuxServices;
+    if (yarnSiteProperties.containsKey(YARN_NODEMANAGER_AUX_SERVICES)) {
+      auxSevices=Arrays.asList(oldAuxServices.split(",",-1));
+    }
+ else {
+      auxSevices=new ArrayList<>();
+    }
+    auxSevices.add(SPARK_SHUFFLE_AUX_STR);
+    newAuxServices=StringUtils.join(auxSevices,",");
+    yarnSiteProperties.put(YARN_NODEMANAGER_AUX_SERVICES,newAuxServices);
+    yarnSiteProperties.put(YARN_NODEMANAGER_AUX_SERVICES_SPARK_SHUFFLE_CLASS,YARN_NODEMANAGER_AUX_SERVICES_SPARK_SHUFFLE_CLASS_VALUE);
+    yarnSiteConfig.setProperties(yarnSiteProperties);
+    yarnSiteConfig.persist(false);
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("%s was set from %s to %s. %s was set to %s",YARN_NODEMANAGER_AUX_SERVICES,oldAuxServices,newAuxServices,YARN_NODEMANAGER_AUX_SERVICES_SPARK_SHUFFLE_CLASS_VALUE,YARN_NODEMANAGER_AUX_SERVICES_SPARK_SHUFFLE_CLASS_VALUE),"");
+  }
+ catch (  ServiceNotFoundException e) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("%s not updated as no SPARK service present on the cluster",YARN_NODEMANAGER_AUX_SERVICES),"");
+  }
+}

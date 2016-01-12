@@ -1,0 +1,15 @@
+def validateYARNConfigurations(self, properties, recommendedDefaults, configurations, services, hosts):
+    yarn_site = properties
+    validationItems = []
+    services_list = [service['StackServices']['service_name'] for service in services['services']]
+    if (('SPARK' in services_list) and ('YARN' in services_list)):
+        if (('yarn.nodemanager.aux-services' in yarn_site) and ('spark_shuffle' in yarn_site['yarn.nodemanager.aux-services'].lower()) and ('yarn.nodemanager.aux-services.spark_shuffle.class' not in yarn_site)):
+            validationItems.append({'config-name': 'yarn.nodemanager.aux-services.spark_shuffle.class', 'item': self.getErrorItem(('If spark_shuffle is listed in the aux-services, property value for ' + 'yarn.nodemanager.aux-services.spark_shuffle.class need to be set')), })
+        spark_aux_service_warning = False
+        if (('yarn.nodemanager.aux-services' in yarn_site) and ('spark_shuffle' not in yarn_site['yarn.nodemanager.aux-services'].lower()) and ('yarn.nodemanager.aux-services.spark_shuffle.class' in yarn_site)):
+            spark_aux_service_warning = True
+        if (('yarn.nodemanager.aux-services' not in yarn_site) and ('yarn.nodemanager.aux-services.spark_shuffle.class' in yarn_site)):
+            spark_aux_service_warning = True
+        if spark_aux_service_warning:
+            validationItems.append({'config-name': 'yarn.nodemanager.aux-services', 'item': self.getWarnItem(('If yarn.nodemanager.aux-services.spark_shuffle.class is set, probably ' + 'aux-services property need to be updated to enable spark_shuffle')), })
+    return self.toConfigurationValidationProblems(validationItems, 'yarn-site')
