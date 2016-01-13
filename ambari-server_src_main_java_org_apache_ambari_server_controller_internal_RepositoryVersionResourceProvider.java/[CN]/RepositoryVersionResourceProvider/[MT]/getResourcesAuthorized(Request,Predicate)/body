@@ -33,15 +33,26 @@
     setResourceProperty(resource,REPOSITORY_VERSION_DISPLAY_NAME_PROPERTY_ID,entity.getDisplayName(),requestedIds);
     setResourceProperty(resource,REPOSITORY_VERSION_REPOSITORY_VERSION_PROPERTY_ID,entity.getVersion(),requestedIds);
     setResourceProperty(resource,REPOSITORY_VERSION_TYPE_PROPERTY_ID,entity.getType(),requestedIds);
-    if (isPropertyRequested(REPOSITORY_VERSION_COMPONENTS,requestedIds)) {
-      Map<String,List<String>> map=new HashMap<>();
-      for (      RepositoryVersionEntity.Component comp : entity.getComponents()) {
-        if (!map.containsKey(comp.getService())) {
-          map.put(comp.getService(),new ArrayList<String>());
-        }
-        map.get(comp.getService()).add(comp.getComponent());
+    if (null != entity.getVersionXsd()) {
+      final VersionDefinitionXml xml;
+      final StackInfo stack;
+      try {
+        xml=VersionDefinitionXml.load(entity.getVersionXml());
       }
-      setResourceProperty(resource,REPOSITORY_VERSION_COMPONENTS,map,requestedIds);
+ catch (      Exception e) {
+        throw new SystemException(String.format("Could not load xml for Repository %s",entity.getId()),e);
+      }
+      try {
+        stack=ambariMetaInfo.getStack(entity.getStackName(),entity.getStackVersion());
+      }
+ catch (      AmbariException e) {
+        throw new SystemException(String.format("Could not load stack %s for Repository %s",entity.getStackId().toString(),entity.getId()));
+      }
+      setResourceProperty(resource,REPOSITORY_VERSION_RELEASE_VERSION,xml.release.version,requestedIds);
+      setResourceProperty(resource,REPOSITORY_VERSION_RELEASE_BUILD,xml.release.build,requestedIds);
+      setResourceProperty(resource,REPOSITORY_VERSION_RELEASE_COMPATIBLE_WITH,xml.release.compatibleWith,requestedIds);
+      setResourceProperty(resource,REPOSITORY_VERSION_RELEASE_NOTES,xml.release.releaseNotes,requestedIds);
+      setResourceProperty(resource,REPOSITORY_VERSION_AVAILABLE_SERVICES,xml.getAvailableServices(stack),requestedIds);
     }
     resources.add(resource);
   }
