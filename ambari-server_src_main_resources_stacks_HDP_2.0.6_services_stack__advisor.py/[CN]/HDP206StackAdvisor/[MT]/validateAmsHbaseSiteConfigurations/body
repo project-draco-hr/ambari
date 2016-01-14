@@ -18,16 +18,19 @@ def validateAmsHbaseSiteConfigurations(self, properties, recommendedDefaults, co
     default_fs = (core_site.get('fs.defaultFS') if core_site else 'file:///')
     hbase_rootdir = properties.get('hbase.rootdir')
     hbase_tmpdir = properties.get('hbase.tmp.dir')
+    distributed = properties.get('hbase.cluster.distributed')
     is_local_root_dir = (hbase_rootdir.startswith('file://') or (default_fs.startswith('file://') and hbase_rootdir.startswith('/')))
     if ((op_mode == 'distributed') and is_local_root_dir):
         rootdir_item = self.getWarnItem('In distributed mode hbase.rootdir should point to HDFS.')
-    elif ((op_mode == 'embedded') and hbase_rootdir.startswith('/')):
-        rootdir_item = self.getWarnItem('In embedded mode schemaless values are not supported for hbase.rootdir')
+    elif (op_mode == 'embedded'):
+        if (((distributed.lower() == 'false') and hbase_rootdir.startswith('/')) or hbase_rootdir.startswith('hdfs://')):
+            rootdir_item = self.getWarnItem('In embedded mode hbase.rootdir cannot point to schemaless values or HDFS, Example - file:// for localFS')
         pass
     distributed_item = None
-    distributed = properties.get('hbase.cluster.distributed')
-    if (hbase_rootdir and hbase_rootdir.startswith('hdfs://') and (not (distributed.lower() == 'true'))):
-        distributed_item = self.getErrorItem('Distributed property should be set to true if hbase.rootdir points to HDFS.')
+    if ((op_mode == 'distributed') and (not (distributed.lower() == 'true'))):
+        distributed_item = self.getErrorItem('hbase.cluster.distributed property should be set to true for distributed mode')
+    if ((op_mode == 'embedded') and (distributed.lower() == 'true')):
+        distributed_item = self.getErrorItem('hbase.cluster.distributed property should be set to false for embedded mode')
     hbase_zk_client_port = properties.get('hbase.zookeeper.property.clientPort')
     zkPort = self.getZKPort(services)
     hbase_zk_client_port_item = None
