@@ -1,0 +1,24 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  for (  final Cluster cluster : getCheckedClusterMap(ambariManagementController.getClusters()).values()) {
+    Config tezSiteProps=cluster.getDesiredConfigByType(TEZ_SITE);
+    if (tezSiteProps != null) {
+      String tezCountersMaxProperty=tezSiteProps.getProperties().get(TEZ_COUNTERS_MAX);
+      String tezCountersMaxGroupesProperty=tezSiteProps.getProperties().get(TEZ_COUNTERS_MAX_GROUPS);
+      StackId stackId=cluster.getCurrentStackVersion();
+      boolean isStackNotLess23=(stackId != null && stackId.getStackName().equals("HDP") && VersionUtils.compareVersions(stackId.getStackVersion(),"2.3") >= 0);
+      if (isStackNotLess23) {
+        Map<String,String> updates=new HashMap<String,String>();
+        if (tezCountersMaxProperty != null && tezCountersMaxProperty.equals("2000")) {
+          updates.put(TEZ_COUNTERS_MAX,"10000");
+        }
+        if (tezCountersMaxGroupesProperty != null && tezCountersMaxGroupesProperty.equals("1000")) {
+          updates.put(TEZ_COUNTERS_MAX_GROUPS,"3000");
+        }
+        if (!updates.isEmpty()) {
+          updateConfigurationPropertiesForCluster(cluster,TEZ_SITE,updates,true,false);
+        }
+      }
+    }
+  }
+}
