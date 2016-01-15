@@ -1,0 +1,26 @@
+{
+  SparkShufflePropertyConfig action=new SparkShufflePropertyConfig();
+  Map<String,String> commandParams=new HashMap<>();
+  ExecutionCommand executionCommand=new ExecutionCommand();
+  HostRoleCommand hrc=EasyMock.createMock(HostRoleCommand.class);
+  ServiceNotFoundException notFoundException=new ServiceNotFoundException("c1","SPARK");
+  commandParams.put("clusterName","c1");
+  executionCommand.setCommandParams(commandParams);
+  executionCommand.setClusterName("c1");
+  expect(cluster.getService("SPARK")).andThrow(notFoundException).atLeastOnce();
+  expect(hrc.getRequestId()).andReturn(1L).anyTimes();
+  expect(hrc.getStageId()).andReturn(2L).anyTimes();
+  expect(hrc.getExecutionCommandWrapper()).andReturn(new ExecutionCommandWrapper(executionCommand)).anyTimes();
+  replay(cluster,hrc);
+  clusterField.set(action,m_clusters);
+  action.setExecutionCommand(executionCommand);
+  action.setHostRoleCommand(hrc);
+  CommandReport report=action.execute(null);
+  assertNotNull(report);
+  Cluster c=m_clusters.getCluster("c1");
+  Config config=c.getDesiredConfigByType("yarn-site");
+  Map<String,String> map=config.getProperties();
+  assertTrue(map.containsKey("yarn.nodemanager.aux-services"));
+  assertFalse(map.containsKey("yarn.nodemanager.aux-services.spark_shuffle.class"));
+  assertEquals("some_service",map.get("yarn.nodemanager.aux-services"));
+}

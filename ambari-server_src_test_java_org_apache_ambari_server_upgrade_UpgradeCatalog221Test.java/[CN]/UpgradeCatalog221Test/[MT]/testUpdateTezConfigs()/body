@@ -1,0 +1,41 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Config tezSiteConf=easyMockSupport.createNiceMock(Config.class);
+  final Map<String,String> propertiesTezSite=new HashMap<String,String>(){
+{
+      put("tez.counters.max","2000");
+      put("tez.counters.max.groups","1000");
+    }
+  }
+;
+  StackId stackId=new StackId("HDP","2.3");
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(EntityManager.class).toInstance(entityManager);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("tez-site")).andReturn(tezSiteConf).atLeastOnce();
+  expect(tezSiteConf.getProperties()).andReturn(propertiesTezSite).once();
+  expect(mockClusterExpected.getCurrentStackVersion()).andReturn(stackId).once();
+  UpgradeCatalog221 upgradeCatalog221=createMockBuilder(UpgradeCatalog221.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,boolean.class,boolean.class).createMock();
+  Map<String,String> updates=new HashMap<String,String>();
+  updates.put("tez.counters.max","10000");
+  updates.put("tez.counters.max.groups","3000");
+  upgradeCatalog221.updateConfigurationPropertiesForCluster(mockClusterExpected,"tez-site",updates,true,false);
+  expectLastCall().once();
+}

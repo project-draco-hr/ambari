@@ -1,0 +1,35 @@
+{
+  Collection<String> requiredHostGroups=new HashSet<String>();
+  try {
+    Cluster cluster=getCluster();
+    Blueprint blueprint=clusterTopology.getBlueprint();
+    Configuration clusterConfiguration=clusterTopology.getConfiguration();
+    Map<String,Map<String,String>> existingConfigurations=clusterConfiguration.getFullProperties();
+    existingConfigurations.put(CLUSTER_HOST_INFO,new HashMap<String,String>());
+    Map<String,Map<String,String>> updatedConfigs=AmbariContext.getController().getKerberosHelper().getServiceConfigurationUpdates(cluster,existingConfigurations,new HashSet<String>(blueprint.getServices()),false);
+    for (    String configType : updatedConfigs.keySet()) {
+      Map<String,String> propertyMap=updatedConfigs.get(configType);
+      for (      String property : propertyMap.keySet()) {
+        String propertyValue=propertyMap.get(property);
+        Matcher matcher=CLUSTER_HOST_INFO_PATTERN_VARIABLE.matcher(propertyValue);
+        while (matcher.find()) {
+          String component=matcher.group(1).toUpperCase();
+          Collection<String> hostGroups=clusterTopology.getHostGroupsForComponent(component);
+          if (hostGroups.isEmpty()) {
+            LOG.warn("No matching hostgroup found for component: {} specified in Kerberos config type: {} property:" + " " + "{}",component,configType,property);
+          }
+ else {
+            requiredHostGroups.addAll(hostGroups);
+          }
+        }
+      }
+    }
+  }
+ catch (  KerberosInvalidConfigurationException e) {
+    LOG.error("An exception occurred while doing Kerberos related configuration update: " + e,e);
+  }
+catch (  AmbariException e) {
+    LOG.error("An exception occurred while doing Kerberos related configuration update: " + e,e);
+  }
+  return requiredHostGroups;
+}
