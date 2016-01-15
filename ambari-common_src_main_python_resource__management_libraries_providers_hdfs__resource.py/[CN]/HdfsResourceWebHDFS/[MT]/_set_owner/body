@@ -6,10 +6,11 @@ def _set_owner(self, file_status=None):
     self.util.run_command(self.main_resource.resource.target, 'SETOWNER', method='PUT', owner=owner, group=group, assertable_result=False)
     results = []
     if self.main_resource.resource.recursive_chown:
-        self._fill_directories_list(self.main_resource.resource.target, results)
-        if (len(results) > HdfsResourceWebHDFS.MAX_FILES_FOR_RECURSIVE_ACTION_VIA_WEBHDFS):
+        content_summary = self.util.run_command(self.main_resource.resource.target, 'GETCONTENTSUMMARY', method='GET', assertable_result=False)
+        if ((content_summary['ContentSummary']['fileCount'] <= HdfsResourceWebHDFS.MAX_FILES_FOR_RECURSIVE_ACTION_VIA_WEBHDFS) and (content_summary['ContentSummary']['directoryCount'] <= HdfsResourceWebHDFS.MAX_DIRECTORIES_FOR_RECURSIVE_ACTION_VIA_WEBHDFS)):
+            self._fill_directories_list(self.main_resource.resource.target, results)
+        else:
             shell.checked_call(['hadoop', 'fs', '-chown', '-R', format('{owner}:{group}'), self.main_resource.resource.target], user=self.main_resource.resource.user)
-            results = []
     if self.main_resource.resource.change_permissions_for_parents:
         self._fill_in_parent_directories(self.main_resource.resource.target, results)
     for path in results:
