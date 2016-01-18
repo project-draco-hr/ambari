@@ -3,36 +3,22 @@
   List<TaskBucket> buckets=buckets(resolveTasks(forUpgrade,true,pc));
   for (  TaskBucket bucket : buckets) {
     List<TaskWrapper> preTasks=TaskWrapperBuilder.getTaskList(service,pc.name,hostsType,bucket.tasks,params);
-    Set<String> preTasksEffectiveHosts=TaskWrapperBuilder.getEffectiveHosts(preTasks);
-    if (!preTasksEffectiveHosts.isEmpty()) {
-      StageWrapper stage=new StageWrapper(bucket.type,getStageText("Preparing",ctx.getComponentDisplay(service,pc.name),preTasksEffectiveHosts),params,preTasks);
-      m_stages.add(stage);
+    List<List<TaskWrapper>> organizedTasks=organizeTaskWrappersBySyncRules(preTasks);
+    for (    List<TaskWrapper> tasks : organizedTasks) {
+      addTasksToStageInBatches(tasks,"Preparing",ctx,service,pc,params);
     }
   }
   if (null != pc.tasks && 1 == pc.tasks.size()) {
     Task t=pc.tasks.get(0);
-    if (m_grouping.parallelScheduler != null) {
-      List<Set<String>> hostSets=SetUtils.split(hostsType.hosts,m_grouping.parallelScheduler.maxDegreeOfParallelism);
-      int batchNum=1;
-      for (      Set<String> hosts : hostSets) {
-        StageWrapper stage=new StageWrapper(t.getStageWrapperType(),getStageText(t.getActionVerb(),ctx.getComponentDisplay(service,pc.name),hosts,batchNum++,hostSets.size()),params,new TaskWrapper(service,pc.name,hosts,params,t));
-        m_stages.add(stage);
-      }
-    }
- else {
-      for (      String hostName : hostsType.hosts) {
-        StageWrapper stage=new StageWrapper(t.getStageWrapperType(),getStageText(t.getActionVerb(),ctx.getComponentDisplay(service,pc.name),Collections.singleton(hostName)),params,new TaskWrapper(service,pc.name,Collections.singleton(hostName),params,t));
-        m_stages.add(stage);
-      }
-    }
+    TaskWrapper tw=new TaskWrapper(service,pc.name,hostsType.hosts,params,Collections.singletonList(t));
+    addTasksToStageInBatches(Collections.singletonList(tw),t.getActionVerb(),ctx,service,pc,params);
   }
   buckets=buckets(resolveTasks(forUpgrade,false,pc));
   for (  TaskBucket bucket : buckets) {
     List<TaskWrapper> postTasks=TaskWrapperBuilder.getTaskList(service,pc.name,hostsType,bucket.tasks,params);
-    Set<String> postTasksEffectiveHosts=TaskWrapperBuilder.getEffectiveHosts(postTasks);
-    if (!postTasksEffectiveHosts.isEmpty()) {
-      StageWrapper stage=new StageWrapper(bucket.type,getStageText("Completing",ctx.getComponentDisplay(service,pc.name),postTasksEffectiveHosts),params,postTasks);
-      m_stages.add(stage);
+    List<List<TaskWrapper>> organizedTasks=organizeTaskWrappersBySyncRules(postTasks);
+    for (    List<TaskWrapper> tasks : organizedTasks) {
+      addTasksToStageInBatches(tasks,"Completing",ctx,service,pc,params);
     }
   }
   if (m_serviceCheck && !clientOnly) {

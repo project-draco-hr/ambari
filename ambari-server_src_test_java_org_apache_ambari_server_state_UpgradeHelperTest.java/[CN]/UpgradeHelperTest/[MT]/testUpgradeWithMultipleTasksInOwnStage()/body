@@ -1,0 +1,49 @@
+{
+  Map<String,UpgradePack> upgrades=ambariMetaInfo.getUpgradePacks("HDP","2.1.1");
+  assertTrue(upgrades.containsKey("upgrade_test"));
+  UpgradePack upgrade=upgrades.get("upgrade_test");
+  assertNotNull(upgrade);
+  assertTrue(upgrade.getType() == UpgradeType.ROLLING);
+  List<Grouping> upgradePackGroups=upgrade.getGroups(Direction.UPGRADE);
+  boolean foundService=false;
+  for (  Grouping group : upgradePackGroups) {
+    if (group.title.equals("Oozie")) {
+      foundService=true;
+    }
+  }
+  assertTrue(foundService);
+  makeCluster();
+  UpgradeContext context=new UpgradeContext(m_masterHostResolver,HDP_21,HDP_21,UPGRADE_VERSION,Direction.UPGRADE,UpgradeType.ROLLING);
+  List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgrade,context);
+  int numPrepareStages=0;
+  for (  UpgradeGroupHolder group : groups) {
+    if (group.name.equals("OOZIE")) {
+      assertTrue(group.items.size() > 0);
+      for (      StageWrapper sw : group.items) {
+        if (sw.getText().equalsIgnoreCase("Preparing Oozie Server on h2 (Batch 1 of 2)") || sw.getText().equalsIgnoreCase("Preparing Oozie Server on h3 (Batch 2 of 2)")) {
+          numPrepareStages++;
+          List<TaskWrapper> taskWrappers=sw.getTasks();
+          assertEquals(1,taskWrappers.size());
+          List<Task> tasks=taskWrappers.get(0).getTasks();
+          assertEquals(1,taskWrappers.get(0).getHosts().size());
+          assertEquals(1,tasks.size());
+          ExecuteTask task=(ExecuteTask)tasks.get(0);
+          assertTrue("scripts/oozie_server.py".equalsIgnoreCase(task.script));
+          assertTrue("stop".equalsIgnoreCase(task.function));
+        }
+        if (sw.getText().equalsIgnoreCase("Preparing Oozie Server on h2")) {
+          numPrepareStages++;
+          List<TaskWrapper> taskWrappers=sw.getTasks();
+          assertEquals(1,taskWrappers.size());
+          List<Task> tasks=taskWrappers.get(0).getTasks();
+          assertEquals(1,taskWrappers.get(0).getHosts().size());
+          assertEquals(1,tasks.size());
+          ExecuteTask task=(ExecuteTask)tasks.get(0);
+          assertTrue("scripts/oozie_server_upgrade.py".equalsIgnoreCase(task.script));
+          assertTrue("upgrade_oozie_database_and_sharelib".equalsIgnoreCase(task.function));
+        }
+      }
+    }
+  }
+  assertEquals(3,numPrepareStages);
+}
