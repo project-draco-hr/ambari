@@ -1,0 +1,54 @@
+{
+  Map<String,Map<String,String>> kerberosConfigurations=new HashMap<String,Map<String,String>>();
+  KerberosDetails kerberosDetails=getKerberosDetails(cluster,null);
+  KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
+  Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
+  Map<String,Map<String,String>> configurations=addAdditionalConfigurations(cluster,deepCopy(existingConfigurations),null,kerberosDescriptorProperties);
+  Map<String,Set<String>> propertiesToIgnore=new HashMap<String,Set<String>>();
+  for (  String serviceName : services) {
+    KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
+    if (serviceDescriptor != null) {
+      Map<String,KerberosComponentDescriptor> componentDescriptors=serviceDescriptor.getComponents();
+      for (      KerberosComponentDescriptor componentDescriptor : componentDescriptors.values()) {
+        if (componentDescriptor != null) {
+          Map<String,Map<String,String>> identityConfigurations;
+          identityConfigurations=getIdentityConfigurations(serviceDescriptor.getIdentities(true));
+          if (identityConfigurations != null) {
+            for (            Map.Entry<String,Map<String,String>> entry : identityConfigurations.entrySet()) {
+              String configType=entry.getKey();
+              Map<String,String> properties=entry.getValue();
+              mergeConfigurations(kerberosConfigurations,configType,entry.getValue(),configurations);
+              if ((properties != null) && !properties.isEmpty()) {
+                Set<String> propertyNames=propertiesToIgnore.get(configType);
+                if (propertyNames == null) {
+                  propertyNames=new HashSet<String>();
+                  propertiesToIgnore.put(configType,propertyNames);
+                }
+                propertyNames.addAll(properties.keySet());
+              }
+            }
+          }
+          identityConfigurations=getIdentityConfigurations(componentDescriptor.getIdentities(true));
+          if (identityConfigurations != null) {
+            for (            Map.Entry<String,Map<String,String>> entry : identityConfigurations.entrySet()) {
+              String configType=entry.getKey();
+              Map<String,String> properties=entry.getValue();
+              mergeConfigurations(kerberosConfigurations,configType,entry.getValue(),configurations);
+              if ((properties != null) && !properties.isEmpty()) {
+                Set<String> propertyNames=propertiesToIgnore.get(configType);
+                if (propertyNames == null) {
+                  propertyNames=new HashSet<String>();
+                  propertiesToIgnore.put(configType,propertyNames);
+                }
+                propertyNames.addAll(properties.keySet());
+              }
+            }
+          }
+          mergeConfigurations(kerberosConfigurations,componentDescriptor.getConfigurations(!serviceAlreadyExists),configurations);
+        }
+      }
+    }
+  }
+  setAuthToLocalRules(kerberosDescriptor,cluster,kerberosDetails.getDefaultRealm(),configurations,kerberosConfigurations);
+  return (applyStackAdvisorUpdates) ? applyStackAdvisorUpdates(cluster,services,configurations,kerberosConfigurations,propertiesToIgnore,kerberosEnabled) : kerberosConfigurations;
+}

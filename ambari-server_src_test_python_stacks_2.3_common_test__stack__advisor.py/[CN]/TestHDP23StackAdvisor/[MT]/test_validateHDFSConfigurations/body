@@ -1,0 +1,30 @@
+def test_validateHDFSConfigurations(self):
+    properties = {}
+    recommendedDefaults = {}
+    configurations = {'core-site': {'properties': {}, }, }
+    services = self.load_json('services-hawq-3-hosts.json')
+    services['configurations']['hdfs-site'] = {}
+    services['configurations']['hdfs-site']['properties'] = {}
+    hosts = {}
+    expected_warning = {'config-type': 'hdfs-site', 'message': 'HAWQ requires dfs.allow.truncate in hdfs-site.xml set to True.', 'type': 'configuration', 'config-name': 'dfs.allow.truncate', 'level': 'WARN', }
+    problems = self.stackAdvisor.validateHDFSConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 1)
+    self.assertEqual(problems[0], expected_warning)
+    services['configurations']['hdfs-site']['properties']['dfs.allow.truncate'] = 'True'
+    problems = self.stackAdvisor.validateHDFSConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 0)
+    services['configurations']['hdfs-site']['properties']['dfs.allow.truncate'] = 'false'
+    problems = self.stackAdvisor.validateHDFSConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 1)
+    self.assertEqual(problems[0], expected_warning)
+    del services['configurations']['hdfs-site']['properties']['dfs.allow.truncate']
+    servicesElementWithoutHAWQ = [service for service in services['services'] if (service['StackServices']['service_name'] != 'HAWQ')]
+    services['services'] = servicesElementWithoutHAWQ
+    problems = self.stackAdvisor.validateHDFSConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 0)
+    services['configurations']['hdfs-site']['properties']['dfs.allow.truncate'] = 'True'
+    problems = self.stackAdvisor.validateHDFSConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 0)
+    services['configurations']['hdfs-site']['properties']['dfs.allow.truncate'] = 'false'
+    problems = self.stackAdvisor.validateHDFSConfigurations(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 0)
