@@ -1,0 +1,49 @@
+{
+  final String clusterName=request.getClusterName();
+  final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+  String errorMessage=null;
+  List<UpgradeEntity> upgrades=upgradeDaoProvider.get().findAll();
+  if (upgrades != null) {
+    Long lastStartTime=0L;
+    UpgradeEntity mostRecentUpgrade=null;
+    UpgradeEntity correspondingDowngrade=null;
+    for (    UpgradeEntity upgrade : upgrades) {
+      if (upgrade.getClusterId() == cluster.getClusterId() && upgrade.getDirection() == Direction.UPGRADE) {
+        Long requestId=upgrade.getRequestId();
+        RequestEntity upgradeRequest=requestDaoProvider.get().findByPK(requestId);
+        if (upgradeRequest != null && upgradeRequest.getStartTime() > lastStartTime) {
+          mostRecentUpgrade=upgrade;
+          lastStartTime=upgradeRequest.getStartTime();
+        }
+      }
+    }
+    if (mostRecentUpgrade != null) {
+      for (      UpgradeEntity downgrade : upgrades) {
+        if (downgrade.getClusterId() == cluster.getClusterId() && downgrade.getDirection() == Direction.DOWNGRADE && downgrade.getFromVersion().equals(mostRecentUpgrade.getToVersion())) {
+          correspondingDowngrade=downgrade;
+          break;
+        }
+      }
+    }
+    if (correspondingDowngrade == null) {
+      List<HostRoleCommandEntity> finalizeCommandList=hostRoleCommandDaoProvider.get().findSortedCommandsByRequestIdAndCustomCommandName(mostRecentUpgrade.getRequestId(),FINALIZE_ACTION_CLASS_NAME);
+      if (finalizeCommandList != null) {
+        for (        HostRoleCommandEntity command : finalizeCommandList) {
+          if (command.getStatus() != HostRoleStatus.COMPLETED) {
+            errorMessage=MessageFormat.format("Upgrade attempt (id: {0}, request id: {1}, from version: {2}, " + "to version: {3}) did not complete task with id {4} since its state is {5} instead of COMPLETED.",mostRecentUpgrade.getId(),mostRecentUpgrade.getRequestId(),mostRecentUpgrade.getFromVersion(),mostRecentUpgrade.getToVersion(),command.getTaskId(),command.getStatus());
+            errorMessage+=" Please ensure that you called:\n" + SET_CURRENT_COMMAND;
+            errorMessage+=MessageFormat.format("\nFurther, change the status of host_role_command with " + "id {0} to COMPLETED",mostRecentUpgrade.getId());
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (null != errorMessage) {
+    LinkedHashSet<String> failedOn=new LinkedHashSet<String>();
+    failedOn.add(cluster.getClusterName());
+    prerequisiteCheck.setFailedOn(failedOn);
+    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+    prerequisiteCheck.setFailReason(errorMessage);
+  }
+}
