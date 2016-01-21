@@ -1,0 +1,34 @@
+{
+  LOG.info("Updating alert definitions.");
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  AlertDefinitionDAO alertDefinitionDAO=injector.getInstance(AlertDefinitionDAO.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  Map<String,Cluster> clusterMap=getCheckedClusterMap(clusters);
+  for (  final Cluster cluster : clusterMap.values()) {
+    long clusterID=cluster.getClusterId();
+    final AlertDefinitionEntity namenodeLastCheckpointAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"namenode_last_checkpoint");
+    final AlertDefinitionEntity namenodeHAHealthAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"namenode_ha_health");
+    final AlertDefinitionEntity nodemanagerHealthAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"yarn_nodemanager_health");
+    final AlertDefinitionEntity nodemanagerHealthSummaryAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"nodemanager_health_summary");
+    final AlertDefinitionEntity hiveMetastoreProcessAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"hive_metastore_process");
+    final AlertDefinitionEntity hiveServerProcessAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"hive_server_process");
+    final AlertDefinitionEntity hiveWebhcatServerStatusAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"hive_webhcat_server_status");
+    final AlertDefinitionEntity flumeAgentStatusAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"flume_agent_status");
+    Map<AlertDefinitionEntity,List<String>> alertDefinitionParams=new HashMap<>();
+    alertDefinitionParams.put(namenodeLastCheckpointAlertDefinitionEntity,new ArrayList<String>(Arrays.asList("connection.timeout","checkpoint.time.warning.threshold","checkpoint.time.critical.threshold")));
+    alertDefinitionParams.put(namenodeHAHealthAlertDefinitionEntity,new ArrayList<String>(Arrays.asList("connection.timeout")));
+    alertDefinitionParams.put(nodemanagerHealthAlertDefinitionEntity,new ArrayList<String>(Arrays.asList("connection.timeout")));
+    alertDefinitionParams.put(nodemanagerHealthSummaryAlertDefinitionEntity,new ArrayList<String>(Arrays.asList("connection.timeout")));
+    alertDefinitionParams.put(hiveMetastoreProcessAlertDefinitionEntity,new ArrayList<String>(Arrays.asList("default.smoke.user","default.smoke.principal","default.smoke.keytab")));
+    alertDefinitionParams.put(hiveServerProcessAlertDefinitionEntity,new ArrayList<String>(Arrays.asList("default.smoke.user","default.smoke.principal","default.smoke.keytab")));
+    alertDefinitionParams.put(hiveWebhcatServerStatusAlertDefinitionEntity,new ArrayList<String>(Arrays.asList("default.smoke.user","connection.timeout")));
+    alertDefinitionParams.put(flumeAgentStatusAlertDefinitionEntity,new ArrayList<String>(Arrays.asList("run.directory")));
+    for (    Map.Entry<AlertDefinitionEntity,List<String>> entry : alertDefinitionParams.entrySet()) {
+      AlertDefinitionEntity alertDefinition=entry.getKey();
+      String source=alertDefinition.getSource();
+      alertDefinition.setSource(addParam(source,entry.getValue()));
+      alertDefinition.setHash(UUID.randomUUID().toString());
+      alertDefinitionDAO.merge(alertDefinition);
+    }
+  }
+}
