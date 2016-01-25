@@ -8,9 +8,21 @@
   UpgradeEntity entity=createResources(new Command<UpgradeEntity>(){
     @Override public UpgradeEntity invoke() throws AmbariException, AuthorizationException {
       String forceDowngrade=requestInfoProps.get(UpgradeResourceDefinition.DOWNGRADE_DIRECTIVE);
+      String clusterName=(String)requestMap.get(UPGRADE_CLUSTER_NAME);
+      if (null == clusterName) {
+        throw new AmbariException(String.format("%s is required",UPGRADE_CLUSTER_NAME));
+      }
+      Cluster cluster=getManagementController().getClusters().getCluster(clusterName);
       Direction direction=Boolean.parseBoolean(forceDowngrade) ? Direction.DOWNGRADE : Direction.UPGRADE;
       UpgradePack up=validateRequest(direction,requestMap);
-      return createUpgrade(direction,up,requestMap);
+      try {
+        return createUpgrade(cluster,direction,up,requestMap);
+      }
+ catch (      Exception e) {
+        LOG.error("Error appears during upgrade task submitting",e);
+        cluster.invalidateData();
+        throw e;
+      }
     }
   }
 );
