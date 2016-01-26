@@ -1,4 +1,8 @@
 def recommendOozieConfigurations(self, configurations, clusterData, services, hosts):
+    oozieSiteProperties = getSiteProperties(services['configurations'], 'oozie-site')
+    oozieEnvProperties = getSiteProperties(services['configurations'], 'oozie-env')
+    putOozieProperty = self.putProperty(configurations, 'oozie-site', services)
+    putOozieEnvProperty = self.putProperty(configurations, 'oozie-env', services)
     if ('FALCON_SERVER' in clusterData['components']):
         putOozieSiteProperty = self.putProperty(configurations, 'oozie-site', services)
         falconUser = None
@@ -21,3 +25,10 @@ def recommendOozieConfigurations(self, configurations, clusterData, services, ho
                     services['forced-configurations'].append({'type': 'oozie-site', 'name': 'oozie.service.ProxyUserService.proxyuser.{0}.groups'.format(falconUser), })
         putMapredProperty = self.putProperty(configurations, 'oozie-site')
         putMapredProperty('oozie.services.ext', (('org.apache.oozie.service.JMSAccessorService,' + 'org.apache.oozie.service.PartitionDependencyManagerService,') + 'org.apache.oozie.service.HCatAccessorService'))
+    if (oozieEnvProperties and oozieSiteProperties and self.checkSiteProperties(oozieSiteProperties, 'oozie.service.JPAService.jdbc.driver') and self.checkSiteProperties(oozieEnvProperties, 'oozie_database')):
+        putOozieProperty('oozie.service.JPAService.jdbc.driver', self.getDBDriver(oozieEnvProperties['oozie_database']))
+    if (oozieSiteProperties and oozieEnvProperties and self.checkSiteProperties(oozieSiteProperties, 'oozie.db.schema.name', 'oozie.service.JPAService.jdbc.url') and self.checkSiteProperties(oozieEnvProperties, 'oozie_database')):
+        oozieServerHost = self.getHostWithComponent('OOZIE', 'OOZIE_SERVER', services, hosts)
+        if (oozieServerHost is not None):
+            dbConnection = self.getDBConnectionString(oozieEnvProperties['oozie_database']).format(oozieServerHost['Hosts']['host_name'], oozieSiteProperties['oozie.db.schema.name'])
+            putOozieProperty('oozie.service.JPAService.jdbc.url', dbConnection)

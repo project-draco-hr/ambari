@@ -1,0 +1,13 @@
+def recommendOozieConfigurations(self, configurations, clusterData, services, hosts):
+    super(HDPWIN23StackAdvisor, self).recommendOozieConfigurations(configurations, clusterData, services, hosts)
+    oozieSiteProperties = getSiteProperties(services['configurations'], 'oozie-site')
+    oozieEnvProperties = getSiteProperties(services['configurations'], 'oozie-env')
+    putOozieProperty = self.putProperty(configurations, 'oozie-site', services)
+    putOozieEnvProperty = self.putProperty(configurations, 'oozie-env', services)
+    if (oozieEnvProperties and oozieSiteProperties and self.checkSiteProperties(oozieSiteProperties, 'oozie.service.JPAService.jdbc.driver') and self.checkSiteProperties(oozieEnvProperties, 'oozie_database')):
+        putOozieProperty('oozie.service.JPAService.jdbc.driver', self.getDBDriver(oozieEnvProperties['oozie_database']))
+    if (oozieSiteProperties and oozieEnvProperties and self.checkSiteProperties(oozieSiteProperties, 'oozie.db.schema.name', 'oozie.service.JPAService.jdbc.url') and self.checkSiteProperties(oozieEnvProperties, 'oozie_database')):
+        oozieServerHost = self.getHostWithComponent('OOZIE', 'OOZIE_SERVER', services, hosts)
+        if (oozieServerHost is not None):
+            dbConnection = self.getDBConnectionString(oozieEnvProperties['oozie_database']).format(oozieServerHost['Hosts']['host_name'], oozieSiteProperties['oozie.db.schema.name'])
+            putOozieProperty('oozie.service.JPAService.jdbc.url', dbConnection)
