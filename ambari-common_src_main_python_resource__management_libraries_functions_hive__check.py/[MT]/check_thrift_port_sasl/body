@@ -14,6 +14,11 @@ def check_thrift_port_sasl(address, port, hive_auth='NOSASL', key=None, kinitcmd
         beeline_url.extend(['ssl={ssl_str}', 'sslTrustStore={ssl_keystore}', 'trustStorePassword={ssl_password!p}'])
     if kinitcmd:
         beeline_url.append('principal={key}')
-        Execute(kinitcmd, user=smokeuser)
+        kinit_lock = global_lock.get_lock(global_lock.LOCK_TYPE_KERBEROS)
+        kinit_lock.acquire()
+        try:
+            Execute(kinitcmd, user=smokeuser)
+        finally:
+            kinit_lock.release()
     cmd = ("! beeline -u '%s' -e '' 2>&1| awk '{print}'|grep -i -e 'Connection refused' -e 'Invalid URL'" % format(';'.join(beeline_url)))
     Execute(cmd, user=smokeuser, path=['/bin/', '/usr/bin/', '/usr/lib/hive/bin/', '/usr/sbin/'], timeout=check_command_timeout)
