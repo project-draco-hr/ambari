@@ -1,0 +1,44 @@
+{
+  if (configProperties == null) {
+    configProperties=getConfigProperties(clusterName,versionTag,configType);
+  }
+  Map<String,String> mConfigs=new HashMap<String,String>();
+  if (!configProperties.isEmpty()) {
+    Map<String,String> evaluatedProperties=null;
+    for (    Entry<String,String[]> entry : keys.entrySet()) {
+      String propName=null;
+      String value=null;
+      for (      String pname : entry.getValue()) {
+        propName=pname;
+        for (        Map.Entry<String,Object> propertyEntry : configProperties.entrySet()) {
+          if (propertyEntry.getKey().startsWith(pname)) {
+            value=(String)propertyEntry.getValue();
+            break;
+          }
+        }
+        if (null != value) {
+          break;
+        }
+      }
+      if (value != null && value.contains("${")) {
+        if (evaluatedProperties == null) {
+          evaluatedProperties=new HashMap<String,String>();
+          for (          Map.Entry<String,Object> subentry : configProperties.entrySet()) {
+            String keyString=subentry.getKey();
+            Object object=subentry.getValue();
+            String valueString;
+            if (object != null && object instanceof String) {
+              valueString=(String)object;
+              evaluatedProperties.put(keyString,valueString);
+              postProcessPropertyValue(keyString,valueString,evaluatedProperties,null);
+            }
+          }
+        }
+      }
+      value=postProcessPropertyValue(propName,value,evaluatedProperties,null);
+      LOG.debug("PROPERTY -> key: " + propName + ", "+ "value: "+ value);
+      mConfigs.put(entry.getKey(),value);
+    }
+  }
+  return mConfigs;
+}
