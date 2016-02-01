@@ -1,17 +1,19 @@
 {
   Set<Map<String,Object>> requestProperties=request.getProperties();
   if (requestProperties.size() > 1) {
-    throw new SystemException("Cannot process more than one file per request");
+    throw new IllegalArgumentException("Cannot process more than one file per request");
   }
   final Map<String,Object> properties=requestProperties.iterator().next();
   if (!properties.containsKey(VERSION_DEF_DEFINITION_URL)) {
-    throw new SystemException(String.format("%s is required",VERSION_DEF_DEFINITION_URL));
+    throw new IllegalArgumentException(String.format("%s is required",VERSION_DEF_DEFINITION_URL));
   }
   RepositoryVersionEntity entity=createResources(new Command<RepositoryVersionEntity>(){
     @Override public RepositoryVersionEntity invoke() throws AmbariException {
       String definitionUrl=(String)properties.get(VERSION_DEF_DEFINITION_URL);
-      RepositoryVersionEntity entity=toRepositoryVersionEntity(definitionUrl);
+      XmlHolder holder=loadXml(definitionUrl);
+      RepositoryVersionEntity entity=toRepositoryVersionEntity(holder);
       RepositoryVersionResourceProvider.validateRepositoryVersion(s_repoVersionDAO,s_metaInfo.get(),entity);
+      checkForParent(holder,entity);
       s_repoVersionDAO.create(entity);
       return entity;
     }
