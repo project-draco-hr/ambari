@@ -1,0 +1,49 @@
+{
+  if (metricMetadata.isEmpty()) {
+    LOG.info("No metadata records to save.");
+    return;
+  }
+  Connection conn=getConnection();
+  PreparedStatement stmt=null;
+  try {
+    stmt=conn.prepareStatement(UPSERT_METADATA_SQL);
+    int rowCount=0;
+    for (    TimelineMetricMetadata metadata : metricMetadata) {
+      if (LOG.isTraceEnabled()) {
+        LOG.trace("TimelineMetricMetadata: metricName = " + metadata.getMetricName() + ", appId = "+ metadata.getAppId()+ ", seriesStartTime = "+ metadata.getSeriesStartTime());
+      }
+      stmt.clearParameters();
+      stmt.setString(1,metadata.getMetricName());
+      stmt.setString(2,metadata.getAppId());
+      stmt.setString(3,metadata.getUnits());
+      stmt.setString(4,metadata.getType().name());
+      stmt.setLong(5,metadata.getSeriesStartTime());
+      stmt.setBoolean(6,metadata.isSupportsAggregates());
+      try {
+        stmt.executeUpdate();
+        rowCount++;
+      }
+ catch (      SQLException sql) {
+        LOG.error("Error saving metadata.",sql);
+      }
+    }
+    conn.commit();
+    LOG.info("Saved " + rowCount + " metadata records.");
+  }
+  finally {
+    if (stmt != null) {
+      try {
+        stmt.close();
+      }
+ catch (      SQLException e) {
+      }
+    }
+    if (conn != null) {
+      try {
+        conn.close();
+      }
+ catch (      SQLException sql) {
+      }
+    }
+  }
+}
