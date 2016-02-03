@@ -1,9 +1,12 @@
 {
-  if (condition.getPrecision() == Precision.HOURS || condition.getPrecision() == Precision.MINUTES || condition.getPrecision() == Precision.DAYS) {
-    String metricName=rs.getString("METRIC_NAME");
-    List<Function> functions=metricFunctions.get(metricName);
+  String metricName=rs.getString("METRIC_NAME");
+  List<Function> functions=metricFunctions.get(metricName);
+  if (functions != null && !functions.isEmpty()) {
+    if (functions.size() > 1) {
+      throw new IllegalArgumentException("Multiple aggregate functions not supported.");
+    }
     for (    Function f : functions) {
-      SingleValuedTimelineMetric metric=getAggregatedTimelineMetricFromResultSet(rs,f);
+      SingleValuedTimelineMetric metric=TIMELINE_METRIC_READ_HELPER.getAggregatedTimelineMetricFromResultSet(rs,f);
       if (condition.isGrouped()) {
         metrics.addOrMergeTimelineMetric(metric);
       }
@@ -13,12 +16,23 @@
     }
   }
  else {
-    TimelineMetric metric=TIMELINE_METRIC_READ_HELPER.getTimelineMetricFromResultSet(rs);
-    if (condition.isGrouped()) {
-      metrics.addOrMergeTimelineMetric(metric);
+    if (condition.getPrecision().equals(Precision.SECONDS)) {
+      TimelineMetric metric=TIMELINE_METRIC_READ_HELPER.getTimelineMetricFromResultSet(rs);
+      if (condition.isGrouped()) {
+        metrics.addOrMergeTimelineMetric(metric);
+      }
+ else {
+        metrics.getMetrics().add(metric);
+      }
     }
  else {
-      metrics.getMetrics().add(metric);
+      SingleValuedTimelineMetric metric=TIMELINE_METRIC_READ_HELPER.getAggregatedTimelineMetricFromResultSet(rs,Function.DEFAULT_VALUE_FUNCTION);
+      if (condition.isGrouped()) {
+        metrics.addOrMergeTimelineMetric(metric);
+      }
+ else {
+        metrics.getMetrics().add(metric.getTimelineMetric());
+      }
     }
   }
 }
