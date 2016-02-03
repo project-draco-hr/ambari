@@ -1,15 +1,14 @@
 {
   StackId sourceStack=HDP_21_STACK;
+  StackId midStack=HDP_22_STACK;
   StackId targetStack=HDP_22_STACK;
   String sourceRepo=HDP_2_1_1_0;
-  String targetRepo=HDP_2_2_0_1;
-  makeCrossStackUpgradeCluster(sourceStack,sourceRepo,targetStack,targetRepo);
-  Cluster cluster=clusters.getCluster(clusterName);
-  cluster.setCurrentStackVersion(sourceStack);
-  cluster.setDesiredStackVersion(targetStack);
+  String midRepo=HDP_2_2_0_1;
+  String targetRepo=HDP_2_2_0_2;
+  makeTwoUpgradesWhereLastDidNotComplete(sourceStack,sourceRepo,midStack,midRepo,targetStack,targetRepo);
   Map<String,String> commandParams=new HashMap<String,String>();
-  commandParams.put(FinalizeUpgradeAction.UPGRADE_DIRECTION_KEY,"upgrade");
-  commandParams.put(FinalizeUpgradeAction.VERSION_KEY,targetRepo);
+  commandParams.put(FinalizeUpgradeAction.UPGRADE_DIRECTION_KEY,"downgrade");
+  commandParams.put(FinalizeUpgradeAction.VERSION_KEY,midRepo);
   commandParams.put(FinalizeUpgradeAction.ORIGINAL_STACK_KEY,sourceStack.getStackId());
   commandParams.put(FinalizeUpgradeAction.TARGET_STACK_KEY,targetStack.getStackId());
   ExecutionCommand executionCommand=new ExecutionCommand();
@@ -22,10 +21,6 @@
   action.setHostRoleCommand(hostRoleCommand);
   CommandReport report=action.execute(null);
   assertNotNull(report);
-  assertEquals(HostRoleStatus.COMPLETED.name(),report.getStatus());
-  StackId currentStackId=cluster.getCurrentStackVersion();
-  StackId desiredStackId=cluster.getDesiredStackVersion();
-  assertEquals(desiredStackId,currentStackId);
-  assertEquals(targetStack,currentStackId);
-  assertEquals(targetStack,desiredStackId);
+  assertEquals(HostRoleStatus.FAILED.name(),report.getStatus());
+  assertTrue(report.getStdErr().contains(FinalizeUpgradeAction.PREVIOUS_UPGRADE_NOT_COMPLETED_MSG));
 }
