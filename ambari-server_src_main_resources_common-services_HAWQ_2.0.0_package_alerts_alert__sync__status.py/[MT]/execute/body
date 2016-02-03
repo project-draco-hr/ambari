@@ -1,0 +1,16 @@
+def execute(configurations={}, parameters={}, host_name=None):
+    '\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  configurations (dictionary): a mapping of configuration key to value\n  parameters (dictionary): a mapping of script parameter key to value\n  host_name (string): the name of this host where the alert is running\n  '
+    if (configurations is None):
+        return (RESULT_STATE_UNKNOWN, ['There were no configurations supplied to the script.'])
+    if (HAWQSTANDBY_ADDRESS not in configurations):
+        return (RESULT_STATE_SKIPPED, ['HAWQSTANDBY is not installed.'])
+    try:
+        sync_status = get_sync_status(configurations[HAWQMASTER_PORT])
+        if (sync_status in ('Synchronized', 'Synchronizing')):
+            return (RESULT_STATE_OK, ['HAWQSTANDBY is in sync with HAWQMASTER.'])
+        elif (sync_status == 'Not Synchronized'):
+            return (RESULT_STATE_WARNING, ['HAWQSTANDBY is not in sync with HAWQMASTER.'])
+    except Exception as e:
+        logger.exception('[Alert] Retrieving HAWQSTANDBY sync status from HAWQMASTER fails on host, {0}:'.format(host_name))
+        logger.exception(str(e))
+    return (RESULT_STATE_UNKNOWN, ['Sync status cannot be determined.'])
