@@ -1,0 +1,34 @@
+{
+  Map<String,UpgradePack> upgrades=ambariMetaInfo.getUpgradePacks("foo","bar");
+  assertTrue(upgrades.isEmpty());
+  upgrades=ambariMetaInfo.getUpgradePacks("HDP","2.1.1");
+  ServiceInfo si=ambariMetaInfo.getService("HDP","2.1.1","ZOOKEEPER");
+  si.setDisplayName("Zk");
+  ComponentInfo ci=si.getComponentByName("ZOOKEEPER_SERVER");
+  ci.setDisplayName("ZooKeeper1 Server2");
+  assertTrue(upgrades.containsKey("upgrade_test"));
+  UpgradePack upgrade=upgrades.get("upgrade_test");
+  assertNotNull(upgrade);
+  makeCluster();
+  UpgradeContext context=new UpgradeContext(m_masterHostResolver,HDP_21,HDP_21,UPGRADE_VERSION,Direction.UPGRADE,UpgradeType.ROLLING);
+  context.setSupportedServices(Collections.singleton("ZOOKEEPER"));
+  List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgrade,context);
+  assertEquals(3,groups.size());
+  assertEquals("PRE_CLUSTER",groups.get(0).name);
+  assertEquals("ZOOKEEPER",groups.get(1).name);
+  assertEquals("POST_CLUSTER",groups.get(2).name);
+  UpgradeGroupHolder group=groups.get(1);
+  assertTrue(group.items.get(1).getText().contains("ZooKeeper1 Server2"));
+  assertEquals(group.items.get(5).getText(),"Service Check Zk");
+  UpgradeGroupHolder postGroup=groups.get(2);
+  assertEquals("POST_CLUSTER",postGroup.name);
+  assertEquals("Finalize Upgrade",postGroup.title);
+  assertEquals(3,postGroup.items.size());
+  assertEquals("Confirm Finalize",postGroup.items.get(0).getText());
+  assertEquals("Execute HDFS Finalize",postGroup.items.get(1).getText());
+  assertEquals("Save Cluster State",postGroup.items.get(2).getText());
+  assertEquals(StageWrapper.Type.SERVER_SIDE_ACTION,postGroup.items.get(2).getType());
+  assertEquals(4,groups.get(0).items.size());
+  assertEquals(6,groups.get(1).items.size());
+  assertEquals(3,groups.get(2).items.size());
+}

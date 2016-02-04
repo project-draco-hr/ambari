@@ -20,10 +20,28 @@
   }
   StackId sourceStackId=null;
   StackId targetStackId=null;
+  Set<String> supportedServices=new HashSet<>();
 switch (direction) {
 case UPGRADE:
     sourceStackId=cluster.getCurrentStackVersion();
   RepositoryVersionEntity targetRepositoryVersion=s_repoVersionDAO.findByStackNameAndVersion(sourceStackId.getStackName(),version);
+EnumSet<RepositoryType> serviceAware=EnumSet.of(RepositoryType.PATCH,RepositoryType.SERVICE);
+if (serviceAware.contains(targetRepositoryVersion.getType())) {
+VersionDefinitionXml xml=null;
+StackInfo stackInfo=s_metaProvider.get().getStack(sourceStackId.getStackName(),sourceStackId.getStackVersion());
+try {
+  xml=targetRepositoryVersion.getRepositoryXml();
+}
+ catch (Exception e) {
+  throw new AmbariException(String.format("Could not load repository definition for version %s",version));
+}
+if (null != xml) {
+  Collection<AvailableService> services=xml.getAvailableServices(stackInfo);
+  for (  AvailableService available : services) {
+    supportedServices.add(available.getName());
+  }
+}
+}
 targetStackId=targetRepositoryVersion.getStackId();
 break;
 case DOWNGRADE:
@@ -32,6 +50,7 @@ targetStackId=cluster.getDesiredStackVersion();
 break;
 }
 UpgradeContext ctx=new UpgradeContext(resolver,sourceStackId,targetStackId,version,direction,pack.getType());
+ctx.setSupportedServices(supportedServices);
 if (direction.isDowngrade()) {
 if (requestMap.containsKey(UPGRADE_FROM_VERSION)) {
 ctx.setDowngradeFromVersion((String)requestMap.get(UPGRADE_FROM_VERSION));
@@ -97,10 +116,10 @@ itemEntity.setHosts(wrapper.getHostsJson());
 itemEntities.add(itemEntity);
 if (upgradeType == UpgradeType.NON_ROLLING && UpdateStackGrouping.class.equals(group.groupClass)) {
 if (direction.isUpgrade()) {
-  ctx.setEffectiveStackId(ctx.getTargetStackId());
+ctx.setEffectiveStackId(ctx.getTargetStackId());
 }
  else {
-  ctx.setEffectiveStackId(ctx.getOriginalStackId());
+ctx.setEffectiveStackId(ctx.getOriginalStackId());
 }
 }
  else if (UpdateStackGrouping.class.equals(group.groupClass)) {
