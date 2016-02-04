@@ -201,23 +201,26 @@
         throw new IllegalArgumentException(e.getMessage(),e);
       }
     }
- else     if (cluster.getSecurityType() != securityType) {
-      LOG.info("Received cluster security type change request from {} to {}",cluster.getSecurityType().name(),securityType.name());
-      if ((securityType == SecurityType.KERBEROS) || (securityType == SecurityType.NONE)) {
-        if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.CLUSTER_TOGGLE_KERBEROS))) {
-          throw new AuthorizationException("The authenticated user does not have authorization to enable or disable Kerberos");
-        }
-        try {
-          requestStageContainer=kerberosHelper.toggleKerberos(cluster,securityType,requestStageContainer,kerberosHelper.getManageIdentitiesDirective(requestProperties));
-        }
- catch (        KerberosOperationException e) {
-          throw new IllegalArgumentException(e.getMessage(),e);
-        }
-      }
  else {
-        throw new IllegalArgumentException(String.format("Unexpected security type encountered: %s",securityType.name()));
+      boolean forceToggleKerberos=kerberosHelper.getForceToggleKerberosDirective(requestProperties);
+      if (forceToggleKerberos || (cluster.getSecurityType() != securityType)) {
+        LOG.info("Received cluster security type change request from {} to {} (forced: {})",cluster.getSecurityType().name(),securityType.name(),forceToggleKerberos);
+        if ((securityType == SecurityType.KERBEROS) || (securityType == SecurityType.NONE)) {
+          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.CLUSTER_TOGGLE_KERBEROS))) {
+            throw new AuthorizationException("The authenticated user does not have authorization to enable or disable Kerberos");
+          }
+          try {
+            requestStageContainer=kerberosHelper.toggleKerberos(cluster,securityType,requestStageContainer,kerberosHelper.getManageIdentitiesDirective(requestProperties));
+          }
+ catch (          KerberosOperationException e) {
+            throw new IllegalArgumentException(e.getMessage(),e);
+          }
+        }
+ else {
+          throw new IllegalArgumentException(String.format("Unexpected security type encountered: %s",securityType.name()));
+        }
+        cluster.setSecurityType(securityType);
       }
-      cluster.setSecurityType(securityType);
     }
   }
   if (requestStageContainer != null) {
