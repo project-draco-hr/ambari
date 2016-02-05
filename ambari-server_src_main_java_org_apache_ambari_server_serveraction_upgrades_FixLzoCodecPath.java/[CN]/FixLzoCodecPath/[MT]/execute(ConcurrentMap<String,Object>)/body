@@ -1,0 +1,28 @@
+{
+  String clusterName=getExecutionCommand().getClusterName();
+  Cluster cluster=clusters.getCluster(clusterName);
+  ArrayList<String> modifiedProperties=new ArrayList<>();
+  for (  Map.Entry<String,String[]> target : TARGET_PROPERTIES.entrySet()) {
+    Config config=cluster.getDesiredConfigByType(target.getKey());
+    if (config == null) {
+      continue;
+    }
+    Map<String,String> properties=config.getProperties();
+    for (    String propertyName : target.getValue()) {
+      String oldContent=properties.get(propertyName);
+      String newContent=fixLzoJarPath(oldContent);
+      if (!newContent.equals(oldContent)) {
+        properties.put(propertyName,newContent);
+        modifiedProperties.add(propertyName);
+      }
+    }
+    config.setProperties(properties);
+    config.persist(false);
+  }
+  if (modifiedProperties.isEmpty()) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","No properties require lzo codec path fixes","");
+  }
+ else {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("Fixed lzo codec path value at property [%s] to " + "use ${hdp.version} instead of hardcoded HDP version.",StringUtils.join(modifiedProperties,", ")),"");
+  }
+}
