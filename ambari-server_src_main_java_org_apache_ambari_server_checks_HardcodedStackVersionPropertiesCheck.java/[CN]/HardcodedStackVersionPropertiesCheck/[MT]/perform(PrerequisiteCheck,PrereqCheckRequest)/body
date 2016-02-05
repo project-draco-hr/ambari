@@ -1,0 +1,29 @@
+{
+  String stackName=request.getTargetStackId().getStackName();
+  RepositoryVersionEntity rve=repositoryVersionDaoProvider.get().findByStackNameAndVersion(stackName,request.getRepositoryVersion());
+  Cluster cluster=m_clusters.get().getCluster(request.getClusterName());
+  String currentHdpVersion=cluster.getCurrentClusterVersion().getRepositoryVersion().getVersion();
+  Map<String,DesiredConfig> desiredConfigs=cluster.getDesiredConfigs();
+  Set<String> failures=new HashSet<>();
+  Pattern searchPattern=getHardcodeSearchPattern(currentHdpVersion);
+  for (  Entry<String,DesiredConfig> configEntry : desiredConfigs.entrySet()) {
+    String configType=configEntry.getKey();
+    DesiredConfig desiredConfig=configEntry.getValue();
+    final Config config=cluster.getConfig(configType,desiredConfig.getTag());
+    Map<String,String> properties=config.getProperties();
+    for (    Entry<String,String> property : properties.entrySet()) {
+      if (stringContainsVersionHardcode(property.getValue(),searchPattern)) {
+        failures.add(String.format(" %s/%s",configType,property.getKey()));
+      }
+    }
+    if (failures.size() > 0) {
+      prerequisiteCheck.setStatus(PrereqCheckStatus.WARNING);
+      String failReason=getFailReason(prerequisiteCheck,request);
+      prerequisiteCheck.setFailReason(String.format(failReason,currentHdpVersion));
+      prerequisiteCheck.setFailedOn(new LinkedHashSet<>(failures));
+    }
+ else {
+      prerequisiteCheck.setStatus(PrereqCheckStatus.PASS);
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  final String configType="hdfs-site";
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> configProperties=new HashMap<String,String>();
+  properties.put(configType,configProperties);
+  configProperties.put("dfs.encryption.key.provider.uri","kms://http@%HOSTGROUP::group1%:9292/kms");
+  Map<String,Map<String,String>> parentProperties=new HashMap<String,Map<String,String>>();
+  Configuration parentClusterConfig=new Configuration(parentProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap(),parentClusterConfig);
+  Collection<String> kmsServerComponents=new HashSet<String>();
+  kmsServerComponents.add("RANGER_KMS_SERVER");
+  Collection<String> hdfsComponents=new HashSet<String>();
+  hdfsComponents.add("NAMENODE");
+  hdfsComponents.add("DATANODE");
+  Collection<String> hosts=new HashSet<String>();
+  hosts.add("host1");
+  hosts.add("host2");
+  TestHostGroup group1=new TestHostGroup("group1",kmsServerComponents,hosts);
+  group1.components.add("DATANODE");
+  TestHostGroup group2=new TestHostGroup("group2",hdfsComponents,Collections.singleton("host3"));
+  Collection<TestHostGroup> hostGroups=Lists.newArrayList(group1,group2);
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForClusterCreate();
+  String updatedVal=clusterConfig.getPropertyValue(configType,"dfs.encryption.key.provider.uri");
+  Assert.assertTrue(updatedVal.startsWith("kms://http@"));
+  Assert.assertTrue(updatedVal.endsWith(":9292/kms"));
+  String hostsString=updatedVal.substring(11,updatedVal.length() - 9);
+  List<String> hostArray=Arrays.asList(hostsString.split(";"));
+  List<String> expected=Arrays.asList("host1","host2");
+  Assert.assertTrue(hostArray.containsAll(expected) && expected.containsAll(hostArray));
+}

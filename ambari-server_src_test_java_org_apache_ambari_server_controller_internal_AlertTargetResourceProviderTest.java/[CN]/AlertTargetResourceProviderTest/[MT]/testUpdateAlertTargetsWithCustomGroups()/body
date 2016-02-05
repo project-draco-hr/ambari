@@ -1,0 +1,34 @@
+{
+  Capture<AlertTargetEntity> entityCapture=new Capture<AlertTargetEntity>();
+  m_dao.create(capture(entityCapture));
+  expectLastCall().times(1);
+  AlertTargetEntity target=new AlertTargetEntity();
+  expect(m_dao.findTargetById(ALERT_TARGET_ID)).andReturn(target).once();
+  Capture<AlertGroupEntity> groupEntityCapture=new Capture<AlertGroupEntity>();
+  List<AlertGroupEntity> groups=getMockGroupEntities();
+  List<Long> groupIds=Arrays.asList(1L,2L,3L);
+  expect(m_dao.findGroupsById(EasyMock.eq(groupIds))).andReturn(groups).anyTimes();
+  expect(m_dao.findAllGroups()).andReturn(groups).anyTimes();
+  for (  AlertGroupEntity group : groups) {
+    expect(m_dao.merge(capture(groupEntityCapture))).andReturn(group).anyTimes();
+  }
+  expect(m_dao.merge(capture(entityCapture))).andReturn(target).anyTimes();
+  replay(m_amc,m_dao);
+  SecurityContextHolder.getContext().setAuthentication(TestAuthenticationFactory.createAdministrator());
+  AlertTargetResourceProvider provider=createProvider(m_amc);
+  Map<String,Object> requestProps=getCreationProperties();
+  Request request=PropertyHelper.getCreateRequest(Collections.singleton(requestProps),null);
+  provider.createResources(request);
+  requestProps=new HashMap<String,Object>();
+  requestProps.put(AlertTargetResourceProvider.ALERT_TARGET_ID,ALERT_TARGET_ID.toString());
+  requestProps.put(AlertTargetResourceProvider.ALERT_TARGET_GLOBAL,"false");
+  requestProps.put(AlertTargetResourceProvider.ALERT_TARGET_GROUPS,groupIds);
+  Predicate predicate=new PredicateBuilder().property(AlertTargetResourceProvider.ALERT_TARGET_ID).equals(ALERT_TARGET_ID.toString()).toPredicate();
+  request=PropertyHelper.getUpdateRequest(requestProps,null);
+  provider.updateResources(request,predicate);
+  assertTrue(entityCapture.hasCaptured());
+  AlertTargetEntity entity=entityCapture.getValue();
+  assertEquals(3,entity.getAlertGroups().size());
+  assertEquals(false,entity.isGlobal());
+  verify(m_amc,m_dao);
+}
