@@ -29,19 +29,7 @@ def assert_configure_secured(self):
     self.assertResourceCalled('Directory', '/var/lib/oozie/oozie-server/conf', owner='oozie', group='hadoop', recursion_follow_links=True, recursive_ownership=True)
     self.assertResourceCalled('Execute', 'ambari-sudo.sh cp /usr/lib/falcon/oozie/ext/falcon-oozie-el-extension-*.jar /usr/lib/oozie/libext', not_if="ambari-sudo.sh su oozie -l -s /bin/bash -c '[RMF_EXPORT_PLACEHOLDER]ls /var/run/oozie/oozie.pid >/dev/null 2>&1 && ps -p `cat /var/run/oozie/oozie.pid` >/dev/null 2>&1'")
     self.assertResourceCalled('Execute', 'ambari-sudo.sh chown oozie:hadoop /usr/lib/oozie/libext/falcon-oozie-el-extension-*.jar', not_if="ambari-sudo.sh su oozie -l -s /bin/bash -c '[RMF_EXPORT_PLACEHOLDER]ls /var/run/oozie/oozie.pid >/dev/null 2>&1 && ps -p `cat /var/run/oozie/oozie.pid` >/dev/null 2>&1'")
-    self.assertResourceCalled('Execute', 'cd /var/tmp/oozie && /usr/lib/oozie/bin/oozie-setup.sh prepare-war -secure', not_if="ambari-sudo.sh su oozie -l -s /bin/bash -c '[RMF_EXPORT_PLACEHOLDER]ls /var/run/oozie/oozie.pid >/dev/null 2>&1 && ps -p `cat /var/run/oozie/oozie.pid` >/dev/null 2>&1' || test -f /usr/lib/oozie/.hashcode && test -d /usr/lib/oozie/share && [[ `cat /usr/lib/oozie/.hashcode` == 'abc123hash' ]] && test -f /usr/lib/oozie/.prepare_war_cmd && [[ `cat /usr/lib/oozie/.prepare_war_cmd` == 'cd /var/tmp/oozie && /usr/lib/oozie/bin/oozie-setup.sh prepare-war -secure' ]]", user='oozie')
-    self.assertResourceCalled('File', '/usr/lib/oozie/.hashcode', content='abc123hash', mode=420)
+    self.assertResourceCalled('Execute', 'cd /var/tmp/oozie && /usr/lib/oozie/bin/oozie-setup.sh prepare-war -secure', user='oozie')
     self.assertResourceCalled('File', '/usr/lib/oozie/.prepare_war_cmd', content='cd /var/tmp/oozie && /usr/lib/oozie/bin/oozie-setup.sh prepare-war -secure', mode=420)
+    self.assertResourceCalled('File', '/usr/lib/oozie/.hashcode', content='abc123hash', mode=420)
     self.assertResourceCalled('Directory', '/var/lib/oozie/oozie-server', owner='oozie', group='hadoop', recursive_ownership=True)
-
-    def test_configure_default_hdp22(self):
-        config_file = 'stacks/2.0.6/configs/default.json'
-        with open(config_file, 'r') as f:
-            default_json = json.load(f)
-        default_json['hostLevelParams']['stack_version'] = '2.2'
-        self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/oozie_server.py'), classname='OozieServer', command='configure', config_file='default.json', hdp_stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES)
-        self.assert_configure_default()
-        self.assertResourceCalled('Directory', '/etc/oozie/conf/action-conf/hive', owner='oozie', group='hadoop', create_parents=True)
-        self.assertResourceCalled('XmlConfig', 'hive-site', owner='oozie', group='hadoop', mode=436, conf_dir='/etc/oozie/conf/action-conf/hive', configurations=self.getConfig()['configurations']['hive-site'], configuration_attributes=self.getConfig()['configuration_attributes']['hive-site'])
-        self.assertResourceCalled('XmlConfig', 'tez-site', owner='oozie', group='hadoop', mode=436, conf_dir='/etc/oozie/conf/action-conf/hive', configurations=self.getConfig()['configurations']['tez-site'], configuration_attributes=self.getConfig()['configuration_attributes']['tez-site'])
-        self.assertNoMoreResources()
