@@ -2,12 +2,13 @@ def get_postgre_hba_dir(OS_FAMILY):
     'Return postgre hba dir location depends on OS.\n  Also depends on version of postgres creates symlink like postgresql-->postgresql-9.3\n  1) /etc/rc.d/init.d/postgresql --> /etc/rc.d/init.d/postgresql-9.3\n  2) /etc/init.d/postgresql --> /etc/init.d/postgresql-9.1\n  '
     if OSCheck.is_ubuntu_family():
         return os.path.join(get_pg_hba_init_files(), get_ubuntu_pg_version(), 'main')
-    elif (OSCheck.is_redhat_family() and (int(OSCheck.get_os_major_version()) >= 7)):
+    elif (not glob.glob((get_pg_hba_init_files() + '*'))):
         return PG_HBA_ROOT_DEFAULT
     else:
         if (not os.path.isfile(get_pg_hba_init_files())):
             os.symlink(glob.glob((get_pg_hba_init_files() + '*'))[0], get_pg_hba_init_files())
-        cmd = (('alias exit=return; source ' + get_pg_hba_init_files()) + ' status &>/dev/null; echo $PGDATA')
+        pg_hba_init_basename = os.path.basename(get_pg_hba_init_files())
+        cmd = "alias basename='echo {0}; true' ; alias exit=return; source {1} status &>/dev/null; echo $PGDATA".format(pg_hba_init_basename, get_pg_hba_init_files())
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         (PG_HBA_ROOT, err) = p.communicate()
         if (PG_HBA_ROOT and (len(PG_HBA_ROOT.strip()) > 0)):
