@@ -1,0 +1,29 @@
+def prepare_war():
+    "\n  Attempt to call prepare-war command if the marker file doesn't exist or its content doesn't equal the expected command.\n  The marker file is stored in /usr/hdp/current/oozie-server/.prepare_war_cmd\n  "
+    import params
+    prepare_war_cmd_file = format('{oozie_home}/.prepare_war_cmd')
+    command = format('cd {oozie_tmp_dir} && {oozie_setup_sh} prepare-war {oozie_secure}')
+    command = command.strip()
+    run_prepare_war = False
+    if os.path.exists(prepare_war_cmd_file):
+        cmd = ''
+        with open(prepare_war_cmd_file, 'r') as f:
+            cmd = f.readline().strip()
+        if (command != cmd):
+            run_prepare_war = True
+            Logger.info(format('Will run prepare war cmd since marker file {prepare_war_cmd_file} has contents which differ.\nExpected: {command}.\nActual: {cmd}.'))
+    else:
+        run_prepare_war = True
+        Logger.info(format('Will run prepare war cmd since marker file {prepare_war_cmd_file} is missing.'))
+    if run_prepare_war:
+        Execute(command, user=params.oozie_user)
+        (return_code, output) = shell.call(command, user=params.oozie_user, logoutput=False, quiet=False)
+        if (output is None):
+            output = ''
+        if ((return_code != 0) or ('New Oozie WAR file with added'.lower() not in output.lower())):
+            message = 'Unexpected Oozie WAR preparation output {0}'.format(output)
+            Logger.error(message)
+            raise Fail(message)
+        File(prepare_war_cmd_file, content=command, mode=420)
+    else:
+        Logger.info(format('No need to run prepare-war since marker file {prepare_war_cmd_file} already exists.'))

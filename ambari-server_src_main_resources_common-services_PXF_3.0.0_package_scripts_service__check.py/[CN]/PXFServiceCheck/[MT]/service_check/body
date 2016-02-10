@@ -1,9 +1,13 @@
 def service_check(self, env):
-    Logger.info('Starting PXF service checks..')
+    '\n    Runs the service check for PXF\n    '
     import params
-    self.pxf_version = self.__get_pxf_protocol_version()
+    Logger.info('Starting PXF service checks..')
     try:
         try:
+            if params.security_enabled:
+                token = self.__get_delegation_token(params.hdfs_user, params.hdfs_user_keytab, params.hdfs_principal_name, params.kinit_path_local)
+                self.commonPXFHeaders.update({'X-GP-TOKEN': token, })
+            self.pxf_version = self.__get_pxf_protocol_version()
             self.run_hdfs_tests()
             if params.is_hbase_installed:
                 self.run_hbase_tests()
@@ -14,5 +18,8 @@ def service_check(self, env):
             Logger.error(msg)
             raise Fail(msg)
     finally:
-        self.cleanup_test_data()
+        try:
+            self.cleanup_test_data()
+        except Exception as e:
+            Logger.error(e)
     Logger.info('Service check completed successfully')
