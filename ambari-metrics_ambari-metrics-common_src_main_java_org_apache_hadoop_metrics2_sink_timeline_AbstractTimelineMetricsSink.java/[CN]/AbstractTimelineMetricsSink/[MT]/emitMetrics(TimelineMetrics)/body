@@ -2,8 +2,11 @@
   String connectUrl=getCollectorUri();
   int timeout=getTimeoutSeconds() * 1000;
   try {
+    if (connectUrl == null) {
+      throw new IOException("Unknown URL. " + "Unable to connect to metrics collector.");
+    }
     String jsonData=mapper.writeValueAsString(metrics);
-    HttpURLConnection connection=(HttpURLConnection)new URL(connectUrl).openConnection();
+    HttpURLConnection connection=connectUrl.startsWith("https") ? getSSLConnection(connectUrl) : getConnection(connectUrl);
     connection.setRequestMethod("POST");
     connection.setRequestProperty("Content-Type","application/json");
     connection.setConnectTimeout(timeout);
@@ -19,10 +22,18 @@
       LOG.info("Unable to POST metrics to collector, " + connectUrl + ", "+ "statusCode = "+ statusCode);
     }
  else {
-      LOG.debug("Metrics posted to Collector " + connectUrl);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Metrics posted to Collector " + connectUrl);
+      }
     }
   }
  catch (  IOException e) {
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("Unable to connect to collector, " + connectUrl,e);
+    }
+ else {
+      LOG.info("Unable to connect to collector, " + connectUrl);
+    }
     throw new UnableToConnectException(e).setConnectUrl(connectUrl);
   }
 }
