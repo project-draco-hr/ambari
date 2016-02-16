@@ -1,0 +1,33 @@
+{
+  ServiceComponentDesiredStateDAO serviceComponentDesiredStateDAO=injector.getInstance(ServiceComponentDesiredStateDAO.class);
+  String componentName="NAMENODE";
+  ServiceComponent component=serviceComponentFactory.createNew(service,componentName);
+  service.addServiceComponent(component);
+  component.persist();
+  ServiceComponent sc=service.getServiceComponent(componentName);
+  Assert.assertNotNull(sc);
+  sc.setDesiredState(State.INSTALLED);
+  Assert.assertEquals(State.INSTALLED,sc.getDesiredState());
+  sc.setDesiredStackVersion(new StackId("HDP-2.2.0"));
+  StackId stackId=sc.getDesiredStackVersion();
+  Assert.assertEquals(new StackId("HDP","2.2.0"),stackId);
+  Assert.assertEquals("HDP-2.2.0",sc.getDesiredStackVersion().getStackId());
+  ServiceComponentDesiredStateEntity serviceComponentDesiredStateEntity=serviceComponentDesiredStateDAO.findByName(cluster.getClusterId(),serviceName,componentName);
+  Assert.assertNotNull(serviceComponentDesiredStateEntity);
+  UpgradeEntity upgradeEntity=createUpgradeEntity("2.2.0.0","2.2.0.1");
+  ServiceComponentHistoryEntity history=new ServiceComponentHistoryEntity();
+  history.setFromStack(serviceComponentDesiredStateEntity.getDesiredStack());
+  history.setToStack(serviceComponentDesiredStateEntity.getDesiredStack());
+  history.setUpgrade(upgradeEntity);
+  history.setServiceComponentDesiredState(serviceComponentDesiredStateEntity);
+  history=serviceComponentDesiredStateDAO.merge(history);
+  serviceComponentDesiredStateEntity=serviceComponentDesiredStateDAO.findByName(cluster.getClusterId(),serviceName,componentName);
+  Assert.assertEquals(history,serviceComponentDesiredStateEntity.getHistory().iterator().next());
+  List<ServiceComponentHistoryEntity> componentHistoryList=serviceComponentDesiredStateDAO.findHistory(sc.getClusterId(),sc.getServiceName(),sc.getName());
+  assertEquals(1,componentHistoryList.size());
+  sc.delete();
+  serviceComponentDesiredStateEntity=serviceComponentDesiredStateDAO.findByName(cluster.getClusterId(),serviceName,componentName);
+  Assert.assertNull(serviceComponentDesiredStateEntity);
+  componentHistoryList=serviceComponentDesiredStateDAO.findHistory(sc.getClusterId(),sc.getServiceName(),sc.getName());
+  assertEquals(0,componentHistoryList.size());
+}
