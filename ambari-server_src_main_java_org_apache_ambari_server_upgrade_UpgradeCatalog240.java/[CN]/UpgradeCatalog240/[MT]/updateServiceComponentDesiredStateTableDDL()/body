@@ -1,0 +1,39 @@
+{
+  if (dbAccessor.tableHasPrimaryKey(SERVICE_COMPONENT_DS_TABLE,ID)) {
+    LOG.info("Skipping {} table Primary Key modifications since the new {} column already exists",SERVICE_COMPONENT_DS_TABLE,ID);
+    return;
+  }
+  dbAccessor.dropFKConstraint(HOST_COMPONENT_DS_TABLE,"hstcmpnntdesiredstatecmpnntnme");
+  dbAccessor.dropFKConstraint(HOST_COMPONENT_STATE_TABLE,"hstcomponentstatecomponentname");
+  dbAccessor.dropPKConstraint(SERVICE_COMPONENT_DS_TABLE,"servicecomponentdesiredstate_pkey");
+  DBColumnInfo idColumn=new DBColumnInfo(ID,Long.class,null,null,true);
+  dbAccessor.addColumn(SERVICE_COMPONENT_DS_TABLE,idColumn);
+  AtomicLong scdsIdCounter=new AtomicLong(1);
+  Statement statement=null;
+  ResultSet resultSet=null;
+  try {
+    statement=dbAccessor.getConnection().createStatement();
+    if (statement != null) {
+      String selectSQL=String.format("SELECT cluster_id, service_name, component_name FROM %s",SERVICE_COMPONENT_DS_TABLE);
+      resultSet=statement.executeQuery(selectSQL);
+      while (null != resultSet && resultSet.next()) {
+        final Long clusterId=resultSet.getLong("cluster_id");
+        final String serviceName=resultSet.getString("service_name");
+        final String componentName=resultSet.getString("component_name");
+        String updateSQL=String.format("UPDATE %s SET %s = %d WHERE cluster_id = %d AND service_name = '%s' AND component_name = '%s'",SERVICE_COMPONENT_DS_TABLE,ID,scdsIdCounter.getAndIncrement(),clusterId,serviceName,componentName);
+        dbAccessor.executeQuery(updateSQL);
+      }
+    }
+  }
+  finally {
+    JdbcUtils.closeResultSet(resultSet);
+    JdbcUtils.closeStatement(statement);
+  }
+  dbAccessor.alterColumn(SERVICE_COMPONENT_DS_TABLE,new DBColumnInfo(ID,Long.class,null,null,false));
+  dbAccessor.addPKConstraint(SERVICE_COMPONENT_DS_TABLE,"pk_sc_desiredstate",ID);
+  String[] uniqueColumns=new String[]{"component_name","service_name","cluster_id"};
+  dbAccessor.addUniqueConstraint(SERVICE_COMPONENT_DS_TABLE,"unq_scdesiredstate_name",uniqueColumns);
+  dbAccessor.addFKConstraint(HOST_COMPONENT_DS_TABLE,"hstcmpnntdesiredstatecmpnntnme",uniqueColumns,SERVICE_COMPONENT_DS_TABLE,uniqueColumns,false);
+  dbAccessor.addFKConstraint(HOST_COMPONENT_STATE_TABLE,"hstcomponentstatecomponentname",uniqueColumns,SERVICE_COMPONENT_DS_TABLE,uniqueColumns,false);
+  addSequence("servicecomponentdesiredstate_id_seq",scdsIdCounter.get(),false);
+}

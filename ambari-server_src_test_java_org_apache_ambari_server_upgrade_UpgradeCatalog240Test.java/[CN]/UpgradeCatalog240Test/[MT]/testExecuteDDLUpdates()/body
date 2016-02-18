@@ -12,7 +12,28 @@
   expect(dbAccessor.getConnection()).andReturn(connection);
   expect(connection.createStatement()).andReturn(statement);
   expect(statement.executeQuery(anyObject(String.class))).andReturn(resultSet);
-  replay(dbAccessor);
+  Capture<DBAccessor.DBColumnInfo> repoVersionRepoTypeColumnCapture=newCapture();
+  Capture<DBAccessor.DBColumnInfo> repoVersionUrlColumnCapture=newCapture();
+  Capture<DBAccessor.DBColumnInfo> repoVersionXmlColumnCapture=newCapture();
+  Capture<DBAccessor.DBColumnInfo> repoVersionXsdColumnCapture=newCapture();
+  Capture<DBAccessor.DBColumnInfo> repoVersionParentIdColumnCapture=newCapture();
+  dbAccessor.addColumn(eq("repo_version"),capture(repoVersionRepoTypeColumnCapture));
+  dbAccessor.addColumn(eq("repo_version"),capture(repoVersionUrlColumnCapture));
+  dbAccessor.addColumn(eq("repo_version"),capture(repoVersionXmlColumnCapture));
+  dbAccessor.addColumn(eq("repo_version"),capture(repoVersionXsdColumnCapture));
+  dbAccessor.addColumn(eq("repo_version"),capture(repoVersionParentIdColumnCapture));
+  expect(dbAccessor.tableHasPrimaryKey("servicecomponentdesiredstate","id")).andReturn(true);
+  Capture<List<DBAccessor.DBColumnInfo>> capturedHistoryColumns=EasyMock.newCapture();
+  dbAccessor.createTable(eq("servicecomponent_history"),capture(capturedHistoryColumns),eq((String[])null));
+  dbAccessor.addPKConstraint("servicecomponent_history","PK_sc_history","id");
+  dbAccessor.addFKConstraint("servicecomponent_history","FK_sc_history_component_id","component_id","servicecomponentdesiredstate","id",false);
+  dbAccessor.addFKConstraint("servicecomponent_history","FK_sc_history_upgrade_id","upgrade_id","upgrade","upgrade_id",false);
+  dbAccessor.addFKConstraint("servicecomponent_history","FK_sc_history_from_stack_id","from_stack_id","stack","stack_id",false);
+  dbAccessor.addFKConstraint("servicecomponent_history","FK_sc_history_to_stack_id","to_stack_id","stack","stack_id",false);
+  expect(dbAccessor.getConnection()).andReturn(connection);
+  expect(connection.createStatement()).andReturn(statement);
+  expect(statement.executeQuery(anyObject(String.class))).andReturn(resultSet);
+  replay(dbAccessor,configuration,connection,statement,resultSet);
   Module module=new Module(){
     @Override public void configure(    Binder binder){
       binder.bind(DBAccessor.class).toInstance(dbAccessor);
@@ -41,6 +62,17 @@
   Map<String,Class> actualCaptures=new HashMap<>();
   for (  DBAccessor.DBColumnInfo settingColumnInfo : capturedSettingColumns.getValue()) {
     actualCaptures.put(settingColumnInfo.getName(),settingColumnInfo.getType());
+  }
+  assertEquals(expectedCaptures,actualCaptures);
+  expectedCaptures=new HashMap<>();
+  expectedCaptures.put("id",Long.class);
+  expectedCaptures.put("component_id",Long.class);
+  expectedCaptures.put("upgrade_id",Long.class);
+  expectedCaptures.put("from_stack_id",Long.class);
+  expectedCaptures.put("to_stack_id",Long.class);
+  actualCaptures=new HashMap<>();
+  for (  DBAccessor.DBColumnInfo historyColumnInfo : capturedHistoryColumns.getValue()) {
+    actualCaptures.put(historyColumnInfo.getName(),historyColumnInfo.getType());
   }
   assertEquals(expectedCaptures,actualCaptures);
   verify(dbAccessor);

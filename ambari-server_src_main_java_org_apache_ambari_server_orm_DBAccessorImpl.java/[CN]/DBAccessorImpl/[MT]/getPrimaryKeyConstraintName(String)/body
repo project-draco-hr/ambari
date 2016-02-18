@@ -6,7 +6,7 @@
 switch (databaseType) {
 case ORACLE:
 {
-      String lookupPrimaryKeyNameSql=MessageFormat.format("SELECT constraint_name FROM all_constraints WHERE table_name = ''{0}'' AND constraint_type = ''P''",tableName.toUpperCase());
+      String lookupPrimaryKeyNameSql=String.format("SELECT constraint_name FROM all_constraints WHERE UPPER(table_name) = UPPER('%s') AND constraint_type = 'P'",tableName);
       try {
         statement=getConnection().createStatement();
         resultSet=statement.executeQuery(lookupPrimaryKeyNameSql);
@@ -22,7 +22,7 @@ case ORACLE:
     }
 case SQL_SERVER:
 {
-    String lookupPrimaryKeyNameSql=MessageFormat.format("SELECT constraint_name FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE OBJECTPROPERTY(OBJECT_ID(constraint_name), 'IsPrimaryKey') = 1 AND table_name = {0}",tableName);
+    String lookupPrimaryKeyNameSql=String.format("SELECT constraint_name FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE OBJECTPROPERTY(OBJECT_ID(constraint_name), 'IsPrimaryKey') = 1 AND table_name = '%s'",tableName);
     try {
       statement=getConnection().createStatement();
       resultSet=statement.executeQuery(lookupPrimaryKeyNameSql);
@@ -34,7 +34,24 @@ case SQL_SERVER:
       JdbcUtils.closeResultSet(resultSet);
       JdbcUtils.closeStatement(statement);
     }
+    break;
   }
+case POSTGRES:
+{
+  String lookupPrimaryKeyNameSql=String.format("SELECT constraint_name FROM information_schema.table_constraints AS tc WHERE tc.constraint_type = 'PRIMARY KEY' AND table_name = '%s'",tableName);
+  try {
+    statement=getConnection().createStatement();
+    resultSet=statement.executeQuery(lookupPrimaryKeyNameSql);
+    if (resultSet.next()) {
+      primaryKeyConstraintName=resultSet.getString("constraint_name");
+    }
+  }
+  finally {
+    JdbcUtils.closeResultSet(resultSet);
+    JdbcUtils.closeStatement(statement);
+  }
+  break;
+}
 default :
 break;
 }
