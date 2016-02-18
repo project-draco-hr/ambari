@@ -1,0 +1,21 @@
+{
+  final Set<Resource> resources=new HashSet<Resource>();
+  final Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  if (!AuthorizationHelper.isAuthorized(ResourceType.AMBARI,null,RoleAuthorization.AMBARI_MANAGE_GROUPS)) {
+    throw new AuthorizationException();
+  }
+  for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+    final String groupName=(String)propertyMap.get(PRIVILEGE_GROUP_NAME_PROPERTY_ID);
+    if (groupName != null) {
+      GroupEntity groupEntity=groupDAO.findGroupByName(groupName);
+      if (groupEntity == null) {
+        throw new SystemException("Group " + groupName + " was not found");
+      }
+      final Set<PrivilegeEntity> privileges=groupEntity.getPrincipal().getPrivileges();
+      for (      PrivilegeEntity privilegeEntity : privileges) {
+        resources.add(toResource(privilegeEntity,groupName,requestedIds));
+      }
+    }
+  }
+  return resources;
+}

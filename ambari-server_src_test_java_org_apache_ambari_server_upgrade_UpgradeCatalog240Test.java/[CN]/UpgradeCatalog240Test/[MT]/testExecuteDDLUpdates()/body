@@ -1,14 +1,29 @@
 {
-  UpgradeCatalog240 upgradeCatalog240=injector.getInstance(UpgradeCatalog240.class);
   Capture<DBAccessor.DBColumnInfo> capturedColumnInfo=newCapture();
-  DBAccessor dbAccessor=createStrictMock(DBAccessor.class);
+  final DBAccessor dbAccessor=createStrictMock(DBAccessor.class);
+  Configuration configuration=createNiceMock(Configuration.class);
+  Connection connection=createNiceMock(Connection.class);
+  Statement statement=createNiceMock(Statement.class);
+  ResultSet resultSet=createNiceMock(ResultSet.class);
+  Capture<List<DBAccessor.DBColumnInfo>> capturedSettingColumns=EasyMock.newCapture();
   dbAccessor.addColumn(eq("adminpermission"),capture(capturedColumnInfo));
-  expectLastCall().once();
-  Field field=AbstractUpgradeCatalog.class.getDeclaredField("dbAccessor");
-  field.set(upgradeCatalog240,dbAccessor);
+  dbAccessor.createTable(eq("setting"),capture(capturedSettingColumns),eq("id"));
+  expect(configuration.getDatabaseUrl()).andReturn(Configuration.JDBC_IN_MEMORY_URL).anyTimes();
+  expect(dbAccessor.getConnection()).andReturn(connection);
+  expect(connection.createStatement()).andReturn(statement);
+  expect(statement.executeQuery(anyObject(String.class))).andReturn(resultSet);
   replay(dbAccessor);
+  Module module=new Module(){
+    @Override public void configure(    Binder binder){
+      binder.bind(DBAccessor.class).toInstance(dbAccessor);
+      binder.bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+      binder.bind(EntityManager.class).toInstance(entityManager);
+    }
+  }
+;
+  Injector injector=Guice.createInjector(module);
+  UpgradeCatalog240 upgradeCatalog240=injector.getInstance(UpgradeCatalog240.class);
   upgradeCatalog240.executeDDLUpdates();
-  verify(dbAccessor);
   DBAccessor.DBColumnInfo columnInfo=capturedColumnInfo.getValue();
   Assert.assertNotNull(columnInfo);
   Assert.assertEquals(UpgradeCatalog240.SORT_ORDER_COL,columnInfo.getName());
@@ -16,4 +31,17 @@
   Assert.assertEquals(Short.class,columnInfo.getType());
   Assert.assertEquals(1,columnInfo.getDefaultValue());
   Assert.assertEquals(false,columnInfo.isNullable());
+  Map<String,Class> expectedCaptures=new HashMap<>();
+  expectedCaptures.put("id",Long.class);
+  expectedCaptures.put("name",String.class);
+  expectedCaptures.put("setting_type",String.class);
+  expectedCaptures.put("content",String.class);
+  expectedCaptures.put("updated_by",String.class);
+  expectedCaptures.put("update_timestamp",Long.class);
+  Map<String,Class> actualCaptures=new HashMap<>();
+  for (  DBAccessor.DBColumnInfo settingColumnInfo : capturedSettingColumns.getValue()) {
+    actualCaptures.put(settingColumnInfo.getName(),settingColumnInfo.getType());
+  }
+  assertEquals(expectedCaptures,actualCaptures);
+  verify(dbAccessor);
 }
