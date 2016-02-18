@@ -23,6 +23,7 @@ from resource_management.libraries.functions.format import format
 from resource_management.libraries.resources.hdfs_resource import HdfsResource
 from resource_management.libraries.resources.execute_hadoop import ExecuteHadoop
 from resource_management import Script
+SQL_DRIVER_PATH = '/var/lib/ambari-server/resources/sqljdbc41.jar'
 '\nThis file provides helper methods needed for the versioning of RPMs. Specifically, it does dynamic variable\ninterpretation to replace strings like {{ hdp_stack_version }}  where the value of the\nvariables cannot be determined ahead of time, but rather, depends on what files are found.\n \nIt assumes that {{ hdp_stack_version }} is constructed as ${major.minor.patch.rev}-${build_number}\nE.g., 998.2.2.1.0-998\nPlease note that "-${build_number}" is optional.\n'
 with Environment() as env:
 
@@ -149,6 +150,9 @@ with Environment() as env:
             file_content += '\n'
         with open('/var/lib/ambari-agent/data/.hdfs_resource_ignore', 'a+') as fp:
             fp.write(file_content)
+
+    def putSQLDriverToOozieShared():
+        params.HdfsResource('/user/oozie/share/lib/sqoop/{0}'.format(os.path.basename(SQL_DRIVER_PATH)), owner='hdfs', type='file', action=['create_on_execute'], mode=420, source=SQL_DRIVER_PATH)
     env.set_params(params)
     hadoop_conf_dir = params.hadoop_conf_dir
     oozie_libext_dir = format('/usr/hdp/{hdp_version}/oozie/libext')
@@ -209,6 +213,7 @@ with Environment() as env:
     copy_tarballs_to_hdfs(format('/usr/hdp/{hdp_version}/sqoop/sqoop.tar.gz'), (hdfs_path_prefix + '/hdp/apps/{{ hdp_stack_version }}/sqoop/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
     print 'Creating hdfs directories...'
     createHdfsResources()
+    putSQLDriverToOozieShared()
     putCreatedHdfsResourcesToIgnore(env)
     File(format('{ambari_libs_dir}/fast-hdfs-resource.jar'), mode=420, content=StaticFile('/var/lib/ambari-agent/cache/stacks/HDP/2.0.6/hooks/before-START/files/fast-hdfs-resource.jar'))
     try:
