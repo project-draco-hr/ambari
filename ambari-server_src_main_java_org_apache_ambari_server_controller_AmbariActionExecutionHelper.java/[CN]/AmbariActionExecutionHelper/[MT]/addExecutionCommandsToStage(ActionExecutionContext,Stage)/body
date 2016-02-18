@@ -20,6 +20,13 @@
   Set<String> candidateHosts=new HashSet<String>();
   final String serviceName=actionContext.getExpectedServiceName();
   final String componentName=actionContext.getExpectedComponentName();
+  LOG.debug("Called addExecutionCommandsToStage() for serviceName: {}, componentName: {}.",serviceName,componentName);
+  if (resourceFilter.getHostNames().isEmpty()) {
+    LOG.debug("Resource filter has no hostnames.");
+  }
+ else {
+    LOG.debug("Resource filter has hosts: {}",StringUtils.join(resourceFilter.getHostNames(),", "));
+  }
   if (null != cluster) {
     StackId stackId=cluster.getCurrentStackVersion();
     if (serviceName != null && !serviceName.isEmpty()) {
@@ -30,6 +37,7 @@
           componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
         }
  catch (        ObjectNotFoundException e) {
+          LOG.error("Did not find service {} and component {} in stack {}.",serviceName,componentName,stackId.getStackName());
         }
       }
  else {
@@ -42,6 +50,7 @@
  else {
       candidateHosts.addAll(clusters.getHostsForCluster(cluster.getClusterName()).keySet());
     }
+    LOG.debug("Request for service {} and component {} is set to run on candidate hosts: {}.",serviceName,componentName,StringUtils.join(candidateHosts,", "));
     Set<String> ignoredHosts=maintenanceStateHelper.filterHostsInMaintenanceState(candidateHosts,new MaintenanceStateHelper.HostPredicate(){
       @Override public boolean shouldHostBeRemoved(      final String hostname) throws AmbariException {
         return !maintenanceStateHelper.isOperationAllowed(cluster,actionContext.getOperationLevel(),resourceFilter,serviceName,componentName,hostname);
@@ -49,6 +58,7 @@
     }
 );
     if (!ignoredHosts.isEmpty()) {
+      LOG.debug("Hosts to ignore: {}.",StringUtils.join(ignoredHosts,", "));
       LOG.debug("Ignoring action for hosts due to maintenance state." + "Ignored hosts =" + ignoredHosts + ", component="+ componentName+ ", service="+ serviceName+ ", cluster="+ cluster.getClusterName()+ ", "+ "actionName="+ actionContext.getActionName());
     }
   }
@@ -58,7 +68,7 @@
   if (!resourceFilter.getHostNames().isEmpty() && !candidateHosts.isEmpty()) {
     for (    String hostname : resourceFilter.getHostNames()) {
       if (!candidateHosts.contains(hostname)) {
-        throw new AmbariException("Request specifies host " + hostname + " but its not a valid host based on the "+ "target service="+ serviceName+ " and component="+ componentName);
+        throw new AmbariException("Request specifies host " + hostname + " but it is not a valid host based on the "+ "target service="+ serviceName+ " and component="+ componentName);
       }
     }
   }
