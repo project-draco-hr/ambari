@@ -1,0 +1,55 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Config hiveSiteConfigs=easyMockSupport.createNiceMock(Config.class);
+  final Config AtlasSiteConfigs=easyMockSupport.createNiceMock(Config.class);
+  final ServiceComponentHost atlasHost=easyMockSupport.createNiceMock(ServiceComponentHost.class);
+  final List<ServiceComponentHost> atlasHosts=new ArrayList<>();
+  atlasHosts.add(atlasHost);
+  StackId stackId=new StackId("HDP","2.3");
+  final Map<String,String> propertiesAtlasSiteConfigs=new HashMap<String,String>(){
+{
+      put("atlas.enableTLS","true");
+      put("atlas.server.https.port","21443");
+    }
+  }
+;
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(EntityManager.class).toInstance(entityManager);
+      bind(ServiceComponentHost.class).toInstance(atlasHost);
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+    }
+  }
+);
+  expect(mockClusterExpected.getCurrentStackVersion()).andReturn(stackId).once();
+  expect(mockClusterExpected.getServiceComponentHosts("ATLAS","ATLAS_SERVER")).andReturn(atlasHosts).once();
+  expect(atlasHost.getHostName()).andReturn("c6401").once();
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("hive-site")).andReturn(hiveSiteConfigs).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("application-properties")).andReturn(AtlasSiteConfigs).anyTimes();
+  expect(AtlasSiteConfigs.getProperties()).andReturn(propertiesAtlasSiteConfigs).anyTimes();
+  UpgradeCatalog222 upgradeCatalog222=createMockBuilder(UpgradeCatalog222.class).withConstructor(Injector.class).withArgs(mockInjector).addMockedMethod("updateConfigurationPropertiesForCluster",Cluster.class,String.class,Map.class,boolean.class,boolean.class).createMock();
+  Map<String,String> expectedUpdates=new HashMap<>();
+  expectedUpdates.put("atlas.hook.hive.minThreads","1");
+  expectedUpdates.put("atlas.hook.hive.maxThreads","1");
+  expectedUpdates.put("atlas.cluster.name","primary");
+  expectedUpdates.put("atlas.rest.address","https://c6401:21443");
+  upgradeCatalog222.updateConfigurationPropertiesForCluster(mockClusterExpected,"hive-site",expectedUpdates,false,false);
+  expectLastCall().once();
+  easyMockSupport.replayAll();
+  replay(upgradeCatalog222);
+  upgradeCatalog222.updateHiveConfig();
+  easyMockSupport.verifyAll();
+}

@@ -1,35 +1,51 @@
 {
   String GET_SERVICES_WITHOUT_CONFIGS_QUERY="select c.cluster_name, service_name from clusterservices cs " + "join clusters c on cs.cluster_id=c.cluster_id " + "where service_name not in (select service_name from serviceconfig sc where sc.cluster_id=cs.cluster_id and sc.service_name=cs.service_name and sc.group_id is null)";
-  String GET_SERVICE_CONFIG_WITHOUT_MAPPING_QUERY="select service_name from serviceconfig where service_config_id not in (select service_config_id from serviceconfigmapping) and group_id is null";
+  String GET_SERVICE_CONFIG_WITHOUT_MAPPING_QUERY="select c.cluster_name, sc.service_name, sc.version from serviceconfig sc " + "join clusters c on sc.cluster_id=c.cluster_id " + "where service_config_id not in (select service_config_id from serviceconfigmapping) and group_id is null";
   String GET_STACK_NAME_VERSION_QUERY="select c.cluster_name, s.stack_name, s.stack_version from clusters c " + "join stack s on c.desired_stack_id = s.stack_id";
-  String GET_SERVICES_WITH_CONFIGS_QUERY="select c.cluster_name, cs.service_name, type_name, sc.version from clusterservices cs " + "join serviceconfig sc on cs.service_name=sc.service_name and cs.cluster_id=sc.cluster_id " + "join serviceconfigmapping scm on sc.service_config_id=scm.service_config_id "+ "join clusterconfig cc on scm.config_id=cc.config_id and sc.cluster_id=cc.cluster_id "+ "join clusters c on cc.cluster_id=c.cluster_id "+ "where sc.group_id is null "+ "group by c.cluster_name, cs.service_name, type_name, sc.version";
-  String GET_NOT_SELECTED_SERVICE_CONFIGS_QUERY="select c.cluster_name, cs.service_name,cc.type_name from clusterservices cs " + "join serviceconfig sc on cs.service_name=sc.service_name and cs.cluster_id=sc.cluster_id " + "join serviceconfigmapping scm on sc.service_config_id=scm.service_config_id "+ "join clusterconfig cc on scm.config_id=cc.config_id and cc.cluster_id=sc.cluster_id "+ "join clusterconfigmapping ccm on cc.type_name=ccm.type_name and cc.version_tag=ccm.version_tag and cc.cluster_id=ccm.cluster_id "+ "join clusters c on ccm.cluster_id=c.cluster_id "+ "where sc.group_id is null and sc.service_config_id = (select max(service_config_id) from serviceconfig sc2 where sc2.service_name=sc.service_name and sc2.cluster_id=sc.cluster_id) "+ "group by c.cluster_name,cs.service_name,cc.type_name "+ "having sum(ccm.selected) < 1";
-  Multimap<String,String> servicesWithoutConfigs=HashMultimap.create();
+  String GET_SERVICES_WITH_CONFIGS_QUERY="select c.cluster_name, cs.service_name, cc.type_name, sc.version from clusterservices cs " + "join serviceconfig sc on cs.service_name=sc.service_name and cs.cluster_id=sc.cluster_id " + "join serviceconfigmapping scm on sc.service_config_id=scm.service_config_id "+ "join clusterconfig cc on scm.config_id=cc.config_id and sc.cluster_id=cc.cluster_id "+ "join clusters c on cc.cluster_id=c.cluster_id "+ "where sc.group_id is null "+ "group by c.cluster_name, cs.service_name, cc.type_name, sc.version";
+  String GET_NOT_SELECTED_SERVICE_CONFIGS_QUERY="select c.cluster_name, cs.service_name, cc.type_name from clusterservices cs " + "join serviceconfig sc on cs.service_name=sc.service_name and cs.cluster_id=sc.cluster_id " + "join serviceconfigmapping scm on sc.service_config_id=scm.service_config_id "+ "join clusterconfig cc on scm.config_id=cc.config_id and cc.cluster_id=sc.cluster_id "+ "join clusterconfigmapping ccm on cc.type_name=ccm.type_name and cc.version_tag=ccm.version_tag and cc.cluster_id=ccm.cluster_id "+ "join clusters c on ccm.cluster_id=c.cluster_id "+ "where sc.group_id is null and sc.service_config_id = (select max(service_config_id) from serviceconfig sc2 where sc2.service_name=sc.service_name and sc2.cluster_id=sc.cluster_id) "+ "group by c.cluster_name, cs.service_name, cc.type_name "+ "having sum(ccm.selected) < 1";
+  Multimap<String,String> clusterServiceMap=HashMultimap.create();
   Map<String,Map<String,String>> clusterStackInfo=new HashMap<>();
-  Set<String> servicesWithoutMappedConfigs=new HashSet<>();
-  Map<String,Multimap<String,String>> notSelectedServiceConfigs=new HashMap<>();
+  Map<String,Multimap<String,String>> clusterServiceVersionMap=new HashMap<>();
+  Map<String,Multimap<String,String>> clusterServiceConfigType=new HashMap<>();
   ResultSet rs=null;
   try {
     Statement statement=connection.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,ResultSet.CONCUR_UPDATABLE);
     rs=statement.executeQuery(GET_SERVICES_WITHOUT_CONFIGS_QUERY);
     if (rs != null) {
       while (rs.next()) {
-        servicesWithoutConfigs.put(rs.getString("cluster_name"),rs.getString("service_name"));
+        clusterServiceMap.put(rs.getString("cluster_name"),rs.getString("service_name"));
       }
-    }
-    for (    String clusterName : servicesWithoutConfigs.keySet()) {
-      LOG.error(String.format("Service(s): %s, from cluster %s has no config(s) in serviceconfig table!",StringUtils.join(servicesWithoutConfigs.get(clusterName),","),clusterName));
-      errorAvailable=true;
+      for (      String clusterName : clusterServiceMap.keySet()) {
+        LOG.error("Service(s): {}, from cluster {} has no config(s) in serviceconfig table!",StringUtils.join(clusterServiceMap.get(clusterName),","),clusterName);
+        errorAvailable=true;
+      }
     }
     rs=statement.executeQuery(GET_SERVICE_CONFIG_WITHOUT_MAPPING_QUERY);
     if (rs != null) {
+      String serviceName=null, version=null, clusterName=null;
       while (rs.next()) {
-        servicesWithoutMappedConfigs.add(rs.getString("service_name"));
+        serviceName=rs.getString("service_name");
+        clusterName=rs.getString("cluster_name");
+        version=rs.getString("version");
+        if (clusterServiceVersionMap.get(clusterName) != null) {
+          Multimap<String,String> serviceVersion=clusterServiceVersionMap.get(clusterName);
+          serviceVersion.put(serviceName,version);
+        }
+ else {
+          Multimap<String,String> serviceVersion=HashMultimap.create();
+          ;
+          serviceVersion.put(serviceName,version);
+          clusterServiceVersionMap.put(clusterName,serviceVersion);
+        }
       }
-    }
-    if (!servicesWithoutMappedConfigs.isEmpty()) {
-      LOG.error("You have service(s) without mapped configs in serviceconfigmapping: " + StringUtils.join(servicesWithoutMappedConfigs,","));
-      errorAvailable=true;
+      for (      String clName : clusterServiceVersionMap.keySet()) {
+        Multimap<String,String> serviceVersion=clusterServiceVersionMap.get(clName);
+        for (        String servName : serviceVersion.keySet()) {
+          LOG.error("In cluster {}, service config mapping is unavailable (in table serviceconfigmapping) for service {} with version(s) {}! ",clName,servName,StringUtils.join(serviceVersion.get(servName),","));
+          errorAvailable=true;
+        }
+      }
     }
     rs=statement.executeQuery(GET_STACK_NAME_VERSION_QUERY);
     if (rs != null) {
@@ -94,7 +110,7 @@
           if (serviceConfigsFromDB != null && serviceConfigsFromStack != null) {
             serviceConfigsFromStack.removeAll(serviceConfigsFromDB);
             if (!serviceConfigsFromStack.isEmpty()) {
-              LOG.error(String.format("Required config(s): %s is(are) not available for service %s with service config version %s for cluster %s",StringUtils.join(serviceConfigsFromStack,","),serviceName,Integer.toString(serviceVersion),clusterName));
+              LOG.error("Required config(s): {} is(are) not available for service {} with service config version {} in cluster {}",StringUtils.join(serviceConfigsFromStack,","),serviceName,Integer.toString(serviceVersion),clusterName);
               errorAvailable=true;
             }
           }
@@ -108,21 +124,21 @@
         clusterName=rs.getString("cluster_name");
         serviceName=rs.getString("service_name");
         configType=rs.getString("type_name");
-        if (notSelectedServiceConfigs.get(clusterName) != null) {
-          Multimap<String,String> serviceConfigs=notSelectedServiceConfigs.get(clusterName);
+        if (clusterServiceConfigType.get(clusterName) != null) {
+          Multimap<String,String> serviceConfigs=clusterServiceConfigType.get(clusterName);
           serviceConfigs.put(serviceName,configType);
         }
  else {
           Multimap<String,String> serviceConfigs=HashMultimap.create();
           serviceConfigs.put(serviceName,configType);
-          notSelectedServiceConfigs.put(clusterName,serviceConfigs);
+          clusterServiceConfigType.put(clusterName,serviceConfigs);
         }
       }
     }
-    for (    String clusterName : notSelectedServiceConfigs.keySet()) {
-      Multimap<String,String> serviceConfig=notSelectedServiceConfigs.get(clusterName);
+    for (    String clusterName : clusterServiceConfigType.keySet()) {
+      Multimap<String,String> serviceConfig=clusterServiceConfigType.get(clusterName);
       for (      String serviceName : serviceConfig.keySet()) {
-        LOG.error(String.format("You have non selected configs: %s for service %s from cluster %s!",StringUtils.join(serviceConfig.get(serviceName),","),serviceName,clusterName));
+        LOG.error("You have non selected configs: {} for service {} from cluster {}!",StringUtils.join(serviceConfig.get(serviceName),","),serviceName,clusterName);
         errorAvailable=true;
       }
     }
