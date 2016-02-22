@@ -1,0 +1,27 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  for (  final Cluster cluster : getCheckedClusterMap(ambariManagementController.getClusters()).values()) {
+    Config hiveSiteConfig=cluster.getDesiredConfigByType(HIVE_SITE_CONFIG);
+    Config atlasConfig=cluster.getDesiredConfigByType(ATLAS_APPLICATION_PROPERTIES_CONFIG);
+    StackId stackId=cluster.getCurrentStackVersion();
+    boolean isStackNotLess23=(stackId != null && stackId.getStackName().equals("HDP") && VersionUtils.compareVersions(stackId.getStackVersion(),"2.3") >= 0);
+    List<ServiceComponentHost> atlasHost=cluster.getServiceComponentHosts("ATLAS","ATLAS_SERVER");
+    Map<String,String> updates=new HashMap<String,String>();
+    if (isStackNotLess23 && atlasHost.size() != 0 && hiveSiteConfig != null) {
+      updates.put(ATLAS_HOOK_HIVE_MINTHREADS_PROPERTY,"1");
+      updates.put(ATLAS_HOOK_HIVE_MAXTHREADS_PROPERTY,"1");
+      updates.put(ATLAS_CLUSTER_NAME_PROPERTY,"primary");
+      if (atlasConfig != null && atlasConfig.getProperties().containsKey(ATLAS_ENABLETLS_PROPERTY)) {
+        String atlasEnableTLSProperty=atlasConfig.getProperties().get(ATLAS_ENABLETLS_PROPERTY);
+        String atlasScheme="http";
+        String atlasServerHttpPortProperty=atlasConfig.getProperties().get(ATLAS_SERVER_HTTP_PORT_PROPERTY);
+        if (atlasEnableTLSProperty.toLowerCase().equals("true")) {
+          atlasServerHttpPortProperty=atlasConfig.getProperties().get(ATLAS_SERVER_HTTPS_PORT_PROPERTY);
+          atlasScheme="https";
+        }
+        updates.put(ATLAS_REST_ADDRESS_PROPERTY,String.format("%s://%s:%s",atlasScheme,atlasHost.get(0).getHostName(),atlasServerHttpPortProperty));
+      }
+      updateConfigurationPropertiesForCluster(cluster,HIVE_SITE_CONFIG,updates,false,false);
+    }
+  }
+}
