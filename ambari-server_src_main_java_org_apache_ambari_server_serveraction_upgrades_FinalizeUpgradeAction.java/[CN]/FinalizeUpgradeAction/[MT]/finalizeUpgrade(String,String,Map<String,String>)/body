@@ -5,6 +5,7 @@
     outSB.append(MessageFormat.format("Begin finalizing the upgrade of cluster {0} to version {1}\n",clusterName,version));
     Cluster cluster=clusters.getCluster(clusterName);
     StackId clusterDesiredStackId=cluster.getDesiredStackVersion();
+    StackId clusterCurrentStackId=cluster.getCurrentStackVersion();
     ClusterVersionEntity upgradingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,clusterDesiredStackId,version);
     if (upgradingClusterVersion == null) {
       throw new AmbariException(MessageFormat.format("Cluster stack version {0} not found",version));
@@ -69,7 +70,7 @@ upgradingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(cluste
 if (RepositoryVersionState.UPGRADED != upgradingClusterVersion.getState()) {
 throw new AmbariException(String.format("The cluster stack version state %s is not allowed to transition directly into %s",upgradingClusterVersion.getState(),RepositoryVersionState.CURRENT.toString()));
 }
-outSB.append(String.format("Will finalize the upgraded state of host components in %d host(s).\n",hostVersionsAllowed.size()));
+outSB.append(String.format("Finalizing the upgraded state of host components in %d host(s).\n",hostVersionsAllowed.size()));
 for (HostVersionEntity hostVersion : hostVersionsAllowed) {
 Collection<HostComponentStateEntity> hostComponentStates=hostComponentStateDAO.findByHost(hostVersion.getHostName());
 for (HostComponentStateEntity hostComponentStateEntity : hostComponentStates) {
@@ -77,10 +78,22 @@ for (HostComponentStateEntity hostComponentStateEntity : hostComponentStates) {
   hostComponentStateDAO.merge(hostComponentStateEntity);
 }
 }
-outSB.append(String.format("Will finalize the version for %d host(s).\n",hostVersionsAllowed.size()));
+outSB.append(String.format("Finalizing the version for %d host(s).\n",hostVersionsAllowed.size()));
 cluster.mapHostVersions(hostsToUpdate,upgradingClusterVersion,RepositoryVersionState.CURRENT);
-outSB.append(String.format("Will finalize the version for cluster %s.\n",clusterName));
+outSB.append(String.format("Finalizing the version for cluster %s.\n",clusterName));
 cluster.transitionClusterVersion(clusterDesiredStackId,version,RepositoryVersionState.CURRENT);
+if (commandParams.containsKey(REQUEST_ID)) {
+String requestId=commandParams.get(REQUEST_ID);
+UpgradeEntity upgradeEntity=upgradeDAO.findUpgradeByRequestId(Long.valueOf(requestId));
+if (null != upgradeEntity) {
+  outSB.append("Creating upgrade history.\n");
+  writeComponentHistory(cluster,upgradeEntity,clusterCurrentStackId,clusterDesiredStackId);
+}
+ else {
+  String warning=String.format("Unable to create upgrade history because no upgrade could be found for request with ID %s\n",requestId);
+  outSB.append(warning);
+}
+}
 outSB.append("Upgrade was successful!\n");
 return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",outSB.toString(),errSB.toString());
 }
