@@ -11,8 +11,6 @@
   Set<String> clusterNames=new HashSet<>();
   Map<String,Map<String,Set<String>>> componentNames=new HashMap<>();
   Set<State> seenNewStates=new HashSet<>();
-  Collection<ServiceComponent> recoveryEnabledComponents=new ArrayList<>();
-  Collection<ServiceComponent> recoveryDisabledComponents=new ArrayList<>();
   Resource.Type reqOpLvl;
   if (requestProperties.containsKey(RequestOperationLevel.OPERATION_LEVEL_ID)) {
     RequestOperationLevel operationLevel=new RequestOperationLevel(requestProperties);
@@ -50,18 +48,6 @@
       LOG.info("Operations cannot be applied to component " + componentName + " because service "+ serviceName+ " is in the maintenance state of "+ s.getMaintenanceState());
       continue;
     }
-    if (!StringUtils.isEmpty(request.getRecoveryEnabled())) {
-      boolean newRecoveryEnabled=Boolean.parseBoolean(request.getRecoveryEnabled());
-      boolean oldRecoveryEnabled=sc.isRecoveryEnabled();
-      if (newRecoveryEnabled != oldRecoveryEnabled) {
-        if (newRecoveryEnabled) {
-          recoveryEnabledComponents.add(sc);
-        }
- else {
-          recoveryDisabledComponents.add(sc);
-        }
-      }
-    }
     if (newState == null) {
       debug("Nothing to do for new updateServiceComponent request, request ={}, newDesiredState=null" + request);
       continue;
@@ -76,32 +62,32 @@
         isAuthorized(cluster,RoleAuthorization.SERVICE_START_STOP);
       }
       if (!State.isValidDesiredStateTransition(oldScState,newState)) {
-        throw new AmbariException("Invalid transition for" + " servicecomponent" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sc.getServiceName()+ ", componentName="+ sc.getName()+ ", recoveryEnabled="+ sc.isRecoveryEnabled()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
+        throw new AmbariException("Invalid transition for" + " servicecomponent" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sc.getServiceName()+ ", componentName="+ sc.getName()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
       }
       if (!changedComps.containsKey(newState)) {
         changedComps.put(newState,new ArrayList<ServiceComponent>());
       }
-      debug("Handling update to ServiceComponent" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", recoveryEnabled="+ sc.isRecoveryEnabled()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
+      debug("Handling update to ServiceComponent" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", currentDesiredState="+ oldScState+ ", newDesiredState="+ newState);
       changedComps.get(newState).add(sc);
     }
     for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
       State oldSchState=sch.getState();
       if (oldSchState == State.DISABLED || oldSchState == State.UNKNOWN) {
-        debug("Ignoring ServiceComponentHost" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", recoveryEnabled="+ sc.isRecoveryEnabled()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+        debug("Ignoring ServiceComponentHost" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
         continue;
       }
       if (newState == oldSchState) {
         ignoredScHosts.add(sch);
-        debug("Ignoring ServiceComponentHost" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", recoveryEnabled="+ sc.isRecoveryEnabled()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+        debug("Ignoring ServiceComponentHost" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
         continue;
       }
       if (!maintenanceStateHelper.isOperationAllowed(reqOpLvl,sch)) {
         ignoredScHosts.add(sch);
-        debug("Ignoring ServiceComponentHost in maintenance state" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", recoveryEnabled="+ sc.isRecoveryEnabled()+ ", hostname="+ sch.getHostName());
+        debug("Ignoring ServiceComponentHost in maintenance state" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName());
         continue;
       }
       if (!State.isValidStateTransition(oldSchState,newState)) {
-        throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sch.getServiceName()+ ", componentName="+ sch.getServiceComponentName()+ ", recoveryEnabled="+ sc.isRecoveryEnabled()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+        throw new AmbariException("Invalid transition for" + " servicecomponenthost" + ", clusterName=" + cluster.getClusterName() + ", clusterId="+ cluster.getClusterId()+ ", serviceName="+ sch.getServiceName()+ ", componentName="+ sch.getServiceComponentName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
       }
       if (!changedScHosts.containsKey(sc.getName())) {
         changedScHosts.put(sc.getName(),new HashMap<State,List<ServiceComponentHost>>());
@@ -109,17 +95,11 @@
       if (!changedScHosts.get(sc.getName()).containsKey(newState)) {
         changedScHosts.get(sc.getName()).put(newState,new ArrayList<ServiceComponentHost>());
       }
-      debug("Handling update to ServiceComponentHost" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", recoveryEnabled="+ sc.isRecoveryEnabled()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
+      debug("Handling update to ServiceComponentHost" + ", clusterName=" + clusterName + ", serviceName="+ serviceName+ ", componentName="+ sc.getName()+ ", hostname="+ sch.getHostName()+ ", currentState="+ oldSchState+ ", newDesiredState="+ newState);
       changedScHosts.get(sc.getName()).get(newState).add(sch);
     }
   }
   Validate.isTrue(seenNewStates.size() <= 1,"Cannot handle different desired state changes for a set of service components at the same time");
-  for (  ServiceComponent sc : recoveryEnabledComponents) {
-    sc.setRecoveryEnabled(true);
-  }
-  for (  ServiceComponent sc : recoveryDisabledComponents) {
-    sc.setRecoveryEnabled(false);
-  }
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
   return getManagementController().createAndPersistStages(cluster,requestProperties,null,null,changedComps,changedScHosts,ignoredScHosts,runSmokeTest,false);
 }
