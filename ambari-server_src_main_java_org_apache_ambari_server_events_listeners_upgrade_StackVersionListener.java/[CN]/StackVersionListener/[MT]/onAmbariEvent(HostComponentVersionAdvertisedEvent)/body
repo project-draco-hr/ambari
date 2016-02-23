@@ -1,0 +1,34 @@
+{
+  LOG.debug("Received event {}",event);
+  Cluster cluster=event.getCluster();
+  ServiceComponentHost sch=event.getServiceComponentHost();
+  String newVersion=event.getVersion();
+  m_stackVersionLock.lock();
+  try {
+    ServiceComponent sc=cluster.getService(sch.getServiceName()).getServiceComponent(sch.getServiceComponentName());
+    if (newVersion == null) {
+      processComponentVersionNotAdvertised(sch);
+    }
+ else     if (sc.getDesiredVersion().equals(State.UNKNOWN.toString())) {
+      processUnknownDesiredVersion(cluster,sc,sch,newVersion);
+    }
+ else     if (StringUtils.isNotBlank(newVersion)) {
+      String previousVersion=sch.getVersion();
+      String unknownVersion=State.UNKNOWN.toString();
+      if (previousVersion == null || previousVersion.equalsIgnoreCase(unknownVersion)) {
+        sch.setUpgradeState(UpgradeState.NONE);
+        sch.setVersion(newVersion);
+        bootstrapVersion(cluster,sch);
+      }
+ else       if (!StringUtils.equals(previousVersion,newVersion)) {
+        processComponentVersionChange(cluster,sc,sch,newVersion);
+      }
+    }
+  }
+ catch (  Exception e) {
+    LOG.error("Unable to propagate version for ServiceHostComponent on component: {}, host: {}. Error: {}",sch.getServiceComponentName(),sch.getHostName(),e.getMessage());
+  }
+ finally {
+    m_stackVersionLock.unlock();
+  }
+}

@@ -9,25 +9,23 @@
       if (hostVersionDAO.findByClusterAndHost(getClusterName(),host.getHostName()).isEmpty()) {
         performingInitialBootstrap=true;
       }
-      hostVersionEntity=new HostVersionEntity(host,repositoryVersion,RepositoryVersionState.UPGRADING);
+      hostVersionEntity=new HostVersionEntity(host,repositoryVersion,RepositoryVersionState.INSTALLING);
       hostVersionDAO.create(hostVersionEntity);
     }
     HostVersionEntity currentVersionEntity=hostVersionDAO.findByHostAndStateCurrent(getClusterName(),host.getHostName());
     boolean isCurrentPresent=(currentVersionEntity != null);
     final ServiceComponentHostSummary hostSummary=new ServiceComponentHostSummary(ambariMetaInfo,host,stack);
     if (!isCurrentPresent) {
-      if (hostSummary.isUpgradeFinished() && hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING) || performingInitialBootstrap) {
+      if (hostSummary.isUpgradeFinished() || performingInitialBootstrap) {
         hostVersionEntity.setState(RepositoryVersionState.CURRENT);
         hostVersionEntity=hostVersionDAO.merge(hostVersionEntity);
       }
     }
  else {
-      if (hostSummary.isUpgradeInProgress(currentVersionEntity.getRepositoryVersion().getVersion()) && hostVersionEntity.getState().equals(RepositoryVersionState.INSTALLED)) {
-        hostVersionEntity.setState(RepositoryVersionState.UPGRADING);
-        hostVersionEntity=hostVersionDAO.merge(hostVersionEntity);
-      }
-      if (hostSummary.isUpgradeFinished() && hostVersionEntity.getState().equals(RepositoryVersionState.UPGRADING)) {
-        hostVersionEntity.setState(RepositoryVersionState.UPGRADED);
+      if (hostSummary.isUpgradeFinished() && hostVersionEntity.getState().equals(RepositoryVersionState.INSTALLED)) {
+        currentVersionEntity.setState(RepositoryVersionState.INSTALLED);
+        hostVersionEntity.setState(RepositoryVersionState.CURRENT);
+        hostVersionDAO.merge(currentVersionEntity);
         hostVersionEntity=hostVersionDAO.merge(hostVersionEntity);
       }
     }

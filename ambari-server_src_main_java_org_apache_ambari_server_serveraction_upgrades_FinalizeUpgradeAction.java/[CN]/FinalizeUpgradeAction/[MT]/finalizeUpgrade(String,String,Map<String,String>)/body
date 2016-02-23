@@ -18,20 +18,18 @@
       boolean hostHasCorrectVersionState=false;
       RepositoryVersionState hostVersionState=hostVersion.getState();
 switch (hostVersionState) {
-case UPGRADED:
 case CURRENT:
 {
           hostHasCorrectVersionState=true;
           break;
         }
+case NOT_REQUIRED:
 case INSTALLED:
 {
         HostEntity host=hostVersion.getHostEntity();
         ServiceComponentHostSummary hostSummary=new ServiceComponentHostSummary(ambariMetaInfo,host,clusterDesiredStackId);
         if (hostSummary.haveAllComponentsFinishedAdvertisingVersion()) {
           hostHasCorrectVersionState=true;
-          hostVersion.setState(RepositoryVersionState.UPGRADED);
-          hostVersion=hostVersionDAO.merge(hostVersion);
         }
  else {
           hostsWithoutCorrectVersionState.add(hostVersion.getHostName());
@@ -63,11 +61,11 @@ for (InfoTuple error : errors) {
 throw new AmbariException(messageBuff.toString());
 }
 upgradingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,clusterDesiredStackId,version);
-if (RepositoryVersionState.UPGRADING == upgradingClusterVersion.getState()) {
-cluster.transitionClusterVersion(clusterDesiredStackId,version,RepositoryVersionState.UPGRADED);
+if (RepositoryVersionState.INSTALLING == upgradingClusterVersion.getState()) {
+cluster.transitionClusterVersion(clusterDesiredStackId,version,RepositoryVersionState.INSTALLED);
 upgradingClusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,clusterDesiredStackId,version);
 }
-if (RepositoryVersionState.UPGRADED != upgradingClusterVersion.getState()) {
+if (RepositoryVersionState.INSTALLED != upgradingClusterVersion.getState()) {
 throw new AmbariException(String.format("The cluster stack version state %s is not allowed to transition directly into %s",upgradingClusterVersion.getState(),RepositoryVersionState.CURRENT.toString()));
 }
 outSB.append(String.format("Finalizing the upgraded state of host components in %d host(s).\n",hostVersionsAllowed.size()));
@@ -80,6 +78,7 @@ for (HostComponentStateEntity hostComponentStateEntity : hostComponentStates) {
 }
 outSB.append(String.format("Finalizing the version for %d host(s).\n",hostVersionsAllowed.size()));
 cluster.mapHostVersions(hostsToUpdate,upgradingClusterVersion,RepositoryVersionState.CURRENT);
+cluster.setUpgradeEntity(null);
 outSB.append(String.format("Finalizing the version for cluster %s.\n",clusterName));
 cluster.transitionClusterVersion(clusterDesiredStackId,version,RepositoryVersionState.CURRENT);
 if (commandParams.containsKey(REQUEST_ID)) {
