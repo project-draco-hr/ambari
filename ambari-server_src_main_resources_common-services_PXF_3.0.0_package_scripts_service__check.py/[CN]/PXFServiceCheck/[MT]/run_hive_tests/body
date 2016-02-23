@@ -1,7 +1,23 @@
 def run_hive_tests(self):
     '\n    Runs a set of PXF Hive checks\n    '
-    Logger.info('Running PXF Hive checks')
+    import params
+    Logger.info('Running PXF Hive service checks')
     self.__check_if_client_exists('Hive')
-    self.__cleanup_hive_data()
-    self.__write_hive_data()
-    self.__check_pxf_hive_read()
+    hive_populate_data_cmds = 'DROP TABLE IF EXISTS {0};\nCREATE TABLE {0} (id INT);\nINSERT INTO {0} VALUES (1);'.format(pxf_constants.pxf_hive_test_table)
+    File('{0}/{1}'.format(params.exec_tmp_dir, pxf_constants.hive_populate_data_script), content=InlineTemplate('{0}'.format(hive_populate_data_cmds)))
+    hive_server_port = default('/configurations/hive-site/hive.server2.thrift.port', None)
+    hive_server_host = default('/clusterHostInfo/hive_server_host', None)
+    if ((hive_server_host is None) or (hive_server_port is None)):
+        raise Fail('Input parameters are invalid for beeline connection string, both hive_server_host and hive.server2.thrift.port should be not None. Current values are:\nhive_server_host={0}\nhive.server2.thrift.port={1}'.format(hive_server_host, hive_server_port))
+    jdbc_url = 'jdbc:hive2://{0}:{1}/default'.format(hive_server_host[0], hive_server_port)
+    beeline_conn_cmd = "beeline -u '{0}'".format(jdbc_url)
+    if params.security_enabled:
+        hive_server_principal = default('/configurations/hive-site/hive.server2.authentication.kerberos.principal', None)
+        if (hive_server_principal is None):
+            raise Fail('Input parameter invalid for beeline connection string, hive.server2.authentication.kerberos.principal should be not None')
+        beeline_conn_cmd = "beeline -u '{0};principal={1}'".format(jdbc_url, hive_server_principal)
+    try:
+        self.__write_hive_data(beeline_conn_cmd)
+        self.__check_pxf_hive_read()
+    finally:
+        self.__cleanup_hive_data(beeline_conn_cmd)
