@@ -1,0 +1,66 @@
+{
+  Cluster cluster=heartbeatTestHelper.getDummyCluster();
+  Service hdfs=cluster.addService(HDFS);
+  hdfs.persist();
+  hdfs.addServiceComponent(DATANODE).persist();
+  hdfs.getServiceComponent(DATANODE).addServiceComponentHost(DummyHostname1).persist();
+  hdfs.getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1).setState(State.STARTED);
+  ActionQueue aq=new ActionQueue();
+  HeartBeat hb=new HeartBeat();
+  hb.setTimestamp(System.currentTimeMillis());
+  hb.setResponseId(0);
+  hb.setHostname(DummyHostname1);
+  hb.setNodeStatus(new HostStatus(HostStatus.Status.HEALTHY,DummyHostStatus));
+  hb.setReports(new ArrayList<CommandReport>());
+  List<Map<String,String>> procs=new ArrayList<Map<String,String>>();
+  Map<String,String> proc1info=new HashMap<String,String>();
+  proc1info.put("name","a");
+  proc1info.put("status","RUNNING");
+  procs.add(proc1info);
+  Map<String,String> proc2info=new HashMap<String,String>();
+  proc2info.put("name","b");
+  proc2info.put("status","NOT_RUNNING");
+  procs.add(proc2info);
+  Map<String,Object> extra=new HashMap<String,Object>();
+  extra.put("processes",procs);
+  ArrayList<ComponentStatus> componentStatuses=new ArrayList<ComponentStatus>();
+  ComponentStatus componentStatus1=new ComponentStatus();
+  componentStatus1.setClusterName(DummyCluster);
+  componentStatus1.setServiceName(HDFS);
+  componentStatus1.setMessage(DummyHostStatus);
+  componentStatus1.setStatus(State.STARTED.name());
+  componentStatus1.setSecurityState(SecurityState.UNSECURED.name());
+  componentStatus1.setComponentName(DATANODE);
+  componentStatus1.setExtra(extra);
+  componentStatuses.add(componentStatus1);
+  hb.setComponentStatus(componentStatuses);
+  final HostRoleCommand command=hostRoleCommandFactory.create(DummyHostname1,Role.DATANODE,null,null);
+  ActionManager am=heartbeatTestHelper.getMockActionManager();
+  expect(am.getTasks(anyObject(List.class))).andReturn(new ArrayList<HostRoleCommand>(){
+{
+      add(command);
+    }
+  }
+).anyTimes();
+  replay(am);
+  HeartBeatHandler handler=heartbeatTestHelper.getHeartBeatHandler(am,aq);
+  HeartbeatProcessor heartbeatProcessor=handler.getHeartbeatProcessor();
+  heartbeatProcessor.processHeartbeat(hb);
+  ServiceComponentHost sch=hdfs.getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1);
+  Assert.assertEquals(Integer.valueOf(2),Integer.valueOf(sch.getProcesses().size()));
+  hb=new HeartBeat();
+  hb.setTimestamp(System.currentTimeMillis());
+  hb.setResponseId(1);
+  hb.setHostname(DummyHostname1);
+  hb.setNodeStatus(new HostStatus(HostStatus.Status.HEALTHY,DummyHostStatus));
+  hb.setReports(new ArrayList<CommandReport>());
+  componentStatus1=new ComponentStatus();
+  componentStatus1.setClusterName(DummyCluster);
+  componentStatus1.setServiceName(HDFS);
+  componentStatus1.setMessage(DummyHostStatus);
+  componentStatus1.setStatus(State.STARTED.name());
+  componentStatus1.setSecurityState(SecurityState.UNSECURED.name());
+  componentStatus1.setComponentName(DATANODE);
+  hb.setComponentStatus(Collections.singletonList(componentStatus1));
+  heartbeatProcessor.processHeartbeat(hb);
+}

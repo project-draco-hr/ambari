@@ -1,0 +1,70 @@
+{
+  Cluster cluster=heartbeatTestHelper.getDummyCluster();
+  Service hdfs=cluster.addService(HDFS);
+  hdfs.persist();
+  hdfs.addServiceComponent(DATANODE).persist();
+  hdfs.getServiceComponent(DATANODE).addServiceComponentHost(DummyHostname1).persist();
+  hdfs.addServiceComponent(NAMENODE).persist();
+  hdfs.getServiceComponent(NAMENODE).addServiceComponentHost(DummyHostname1).persist();
+  hdfs.addServiceComponent(SECONDARY_NAMENODE).persist();
+  hdfs.getServiceComponent(SECONDARY_NAMENODE).addServiceComponentHost(DummyHostname1).persist();
+  ActionQueue aq=new ActionQueue();
+  ServiceComponentHost serviceComponentHost1=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1);
+  ServiceComponentHost serviceComponentHost2=clusters.getCluster(DummyCluster).getService(HDFS).getServiceComponent(NAMENODE).getServiceComponentHost(DummyHostname1);
+  serviceComponentHost1.setState(State.INSTALLED);
+  serviceComponentHost2.setState(State.STARTED);
+  serviceComponentHost1.setRestartRequired(true);
+  serviceComponentHost2.setRestartRequired(true);
+  HeartBeat hb=new HeartBeat();
+  hb.setResponseId(0);
+  hb.setNodeStatus(new HostStatus(HostStatus.Status.HEALTHY,DummyHostStatus));
+  hb.setHostname(DummyHostname1);
+  List<CommandReport> reports=new ArrayList<CommandReport>();
+  CommandReport cr=new CommandReport();
+  cr.setActionId(StageUtils.getActionId(requestId,stageId));
+  cr.setServiceName(HDFS);
+  cr.setRoleCommand("CUSTOM_COMMAND");
+  cr.setCustomCommand("START");
+  cr.setTaskId(1);
+  cr.setRole(DATANODE);
+  cr.setStatus("COMPLETED");
+  cr.setStdErr("");
+  cr.setStdOut("");
+  cr.setExitCode(215);
+  cr.setClusterName(DummyCluster);
+  CommandReport crn=new CommandReport();
+  crn.setActionId(StageUtils.getActionId(requestId,stageId));
+  crn.setServiceName(HDFS);
+  crn.setRoleCommand("CUSTOM_COMMAND");
+  crn.setCustomCommand("STOP");
+  crn.setTaskId(1);
+  crn.setRole(NAMENODE);
+  crn.setStatus("COMPLETED");
+  crn.setStdErr("");
+  crn.setStdOut("");
+  crn.setExitCode(215);
+  crn.setClusterName(DummyCluster);
+  reports.add(cr);
+  reports.add(crn);
+  hb.setReports(reports);
+  assertTrue(serviceComponentHost1.isRestartRequired());
+  final HostRoleCommand command=hostRoleCommandFactory.create(DummyHostname1,Role.DATANODE,null,null);
+  ActionManager am=heartbeatTestHelper.getMockActionManager();
+  expect(am.getTasks(anyObject(List.class))).andReturn(new ArrayList<HostRoleCommand>(){
+{
+      add(command);
+      add(command);
+    }
+  }
+);
+  replay(am);
+  HeartBeatHandler handler=heartbeatTestHelper.getHeartBeatHandler(am,aq);
+  HeartbeatProcessor heartbeatProcessor=handler.getHeartbeatProcessor();
+  heartbeatProcessor.processHeartbeat(hb);
+  State componentState1=serviceComponentHost1.getState();
+  assertEquals(State.STARTED,componentState1);
+  assertFalse(serviceComponentHost1.isRestartRequired());
+  State componentState2=serviceComponentHost2.getState();
+  assertEquals(State.INSTALLED,componentState2);
+  assertTrue(serviceComponentHost2.isRestartRequired());
+}

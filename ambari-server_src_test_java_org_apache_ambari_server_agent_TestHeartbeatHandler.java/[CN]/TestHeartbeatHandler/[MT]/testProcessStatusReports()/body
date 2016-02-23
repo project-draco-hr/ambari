@@ -1,6 +1,6 @@
 {
   Clusters fsm=clusters;
-  Cluster cluster=getDummyCluster();
+  Cluster cluster=heartbeatTestHelper.getDummyCluster();
   Host hostObject=clusters.getHost(DummyHostname1);
   Service hdfs=cluster.addService(HDFS);
   hdfs.persist();
@@ -12,7 +12,7 @@
   hdfs.getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1).setState(State.STARTED);
   ActionQueue aq=new ActionQueue();
   final HostRoleCommand command=hostRoleCommandFactory.create(DummyHostname1,Role.DATANODE,null,null);
-  ActionManager am=getMockActionManager();
+  ActionManager am=heartbeatTestHelper.getMockActionManager();
   expect(am.getTasks(anyObject(List.class))).andReturn(new ArrayList<HostRoleCommand>(){
 {
       add(command);
@@ -22,6 +22,7 @@
 ).anyTimes();
   replay(am);
   HeartBeatHandler handler=new HeartBeatHandler(fsm,aq,am,injector);
+  HeartbeatProcessor heartbeatProcessor=handler.getHeartbeatProcessor();
   Register reg=new Register();
   HostInfo hi=new HostInfo();
   hi.setHostName(DummyHostname1);
@@ -54,6 +55,7 @@
   componentStatus.add(nameNodeStatus);
   hb1.setComponentStatus(componentStatus);
   handler.handleHeartBeat(hb1);
+  heartbeatProcessor.processHeartbeat(hb1);
   assertEquals(HostHealthStatus.HealthStatus.HEALTHY.name(),hostObject.getStatus());
   HeartBeat hb2=new HeartBeat();
   hb2.setResponseId(1);
@@ -76,6 +78,7 @@
   componentStatus.add(nameNodeStatus);
   hb2.setComponentStatus(componentStatus);
   handler.handleHeartBeat(hb2);
+  heartbeatProcessor.processHeartbeat(hb2);
   assertEquals(HostHealthStatus.HealthStatus.ALERT.name(),hostObject.getStatus());
   hdfs.getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1).setMaintenanceState(MaintenanceState.ON);
   HeartBeat hb2a=new HeartBeat();
@@ -99,6 +102,7 @@
   componentStatus.add(nameNodeStatus);
   hb2a.setComponentStatus(componentStatus);
   handler.handleHeartBeat(hb2a);
+  heartbeatProcessor.processHeartbeat(hb2a);
   assertEquals(HostHealthStatus.HealthStatus.HEALTHY.name(),hostObject.getStatus());
   hdfs.getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1).setMaintenanceState(MaintenanceState.OFF);
   HeartBeat hb3=new HeartBeat();
@@ -122,9 +126,11 @@
   componentStatus.add(nameNodeStatus);
   hb3.setComponentStatus(componentStatus);
   handler.handleHeartBeat(hb3);
+  heartbeatProcessor.processHeartbeat(hb3);
   assertEquals(HostHealthStatus.HealthStatus.UNHEALTHY.name(),hostObject.getStatus());
   hb1.setResponseId(4);
   handler.handleHeartBeat(hb1);
+  heartbeatProcessor.processHeartbeat(hb1);
   assertEquals(HostHealthStatus.HealthStatus.HEALTHY.name(),hostObject.getStatus());
   reset(am);
   expect(am.getTasks(anyObject(List.class))).andReturn(new ArrayList<HostRoleCommand>(){
@@ -149,9 +155,11 @@
   componentStatus.add(dataNodeStatus);
   hb4.setComponentStatus(componentStatus);
   handler.handleHeartBeat(hb4);
+  heartbeatProcessor.processHeartbeat(hb4);
   assertEquals(HostHealthStatus.HealthStatus.UNHEALTHY.name(),hostObject.getStatus());
   hb1.setResponseId(6);
   handler.handleHeartBeat(hb1);
+  heartbeatProcessor.processHeartbeat(hb1);
   assertEquals(HostHealthStatus.HealthStatus.HEALTHY.name(),hostObject.getStatus());
   HeartBeat hb5=new HeartBeat();
   hb5.setResponseId(7);
@@ -172,5 +180,6 @@
   reports.add(cr1);
   hb5.setReports(reports);
   handler.handleHeartBeat(hb5);
+  heartbeatProcessor.processHeartbeat(hb5);
   assertEquals(HostHealthStatus.HealthStatus.ALERT.name(),hostObject.getStatus());
 }
