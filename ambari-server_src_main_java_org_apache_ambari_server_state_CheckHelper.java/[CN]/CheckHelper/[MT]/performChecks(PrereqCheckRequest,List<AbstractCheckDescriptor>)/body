@@ -1,13 +1,17 @@
 {
   final String clusterName=request.getClusterName();
   final List<PrerequisiteCheck> prerequisiteCheckResults=new ArrayList<PrerequisiteCheck>();
-  for (  AbstractCheckDescriptor checkDescriptor : checksRegistry) {
-    final PrerequisiteCheck prerequisiteCheck=new PrerequisiteCheck(checkDescriptor.getDescription(),clusterName);
+  List<DescriptorPreCheck> applicablePreChecks=getApplicablePrerequisiteChecks(request,checksRegistry);
+  for (  DescriptorPreCheck descriptorPreCheck : applicablePreChecks) {
+    AbstractCheckDescriptor checkDescriptor=descriptorPreCheck.descriptor;
+    PrerequisiteCheck prerequisiteCheck=descriptorPreCheck.check;
     try {
-      if (!checkDescriptor.isApplicable(request)) {
-        continue;
-      }
       checkDescriptor.perform(prerequisiteCheck,request);
+      boolean canBypassPreChecks=checkDescriptor.isStackUpgradeAllowedToBypassPreChecks();
+      if (prerequisiteCheck.getStatus() == PrereqCheckStatus.FAIL && canBypassPreChecks) {
+        LOG.error("Check {} failed but stack upgrade is allowed to bypass failures. Error to bypass: {}. Failed on: {}",checkDescriptor.getDescription().name(),prerequisiteCheck.getFailReason(),StringUtils.join(prerequisiteCheck.getFailedOn(),", "));
+        prerequisiteCheck.setStatus(PrereqCheckStatus.BYPASS);
+      }
       prerequisiteCheckResults.add(prerequisiteCheck);
       request.addResult(checkDescriptor.getDescription(),prerequisiteCheck.getStatus());
     }
