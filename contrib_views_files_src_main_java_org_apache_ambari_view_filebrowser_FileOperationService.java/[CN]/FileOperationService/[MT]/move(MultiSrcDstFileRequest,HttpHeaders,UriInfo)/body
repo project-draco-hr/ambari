@@ -1,0 +1,43 @@
+{
+  try {
+    HdfsApi api=getApi(context);
+    ResponseBuilder result;
+    String message="";
+    List<String> sources=request.sourcePaths;
+    String destination=request.destinationPath;
+    if (sources.isEmpty()) {
+      result=Response.ok(new FileOperationResult(false,"Can't move 0 file/folder to '" + destination + "'")).status(422);
+      return result.build();
+    }
+    int index=0;
+    for (    String src : sources) {
+      String fileName=getFileName(src);
+      String finalDestination=getDestination(destination,fileName);
+      try {
+        if (api.rename(src,finalDestination)) {
+          index++;
+        }
+ else {
+          message="Failed to move '" + src + "' to '"+ finalDestination+ "'";
+          break;
+        }
+      }
+ catch (      IOException exception) {
+        message=exception.getMessage();
+        logger.error("Failed to move '{}' to '{}'. Exception: {}",src,finalDestination,exception.getMessage());
+        break;
+      }
+    }
+    if (index == sources.size()) {
+      result=Response.ok(new FileOperationResult(true)).status(200);
+    }
+ else {
+      FileOperationResult errorResult=getFailureFileOperationResult(sources,index,message);
+      result=Response.ok(errorResult).status(422);
+    }
+    return result.build();
+  }
+ catch (  Exception ex) {
+    throw new ServiceFormattedException(ex.getMessage(),ex);
+  }
+}

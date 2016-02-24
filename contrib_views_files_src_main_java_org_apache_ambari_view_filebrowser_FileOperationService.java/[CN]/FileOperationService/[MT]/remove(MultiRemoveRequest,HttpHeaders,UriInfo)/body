@@ -1,0 +1,40 @@
+{
+  try {
+    HdfsApi api=getApi(context);
+    ResponseBuilder result;
+    String message="";
+    if (request.paths.size() == 0) {
+      result=Response.ok(new FileOperationResult(false,"No path entries provided."));
+    }
+ else {
+      int index=0;
+      for (      MultiRemoveRequest.PathEntry entry : request.paths) {
+        try {
+          if (api.delete(entry.path,entry.recursive)) {
+            index++;
+          }
+ else {
+            message="Failed to remove '" + entry.path + "'";
+            break;
+          }
+        }
+ catch (        IOException exception) {
+          message=exception.getMessage();
+          logger.error("Failed to remove '{}'. Exception: {}",entry.path,exception.getMessage());
+          break;
+        }
+      }
+      if (index == request.paths.size()) {
+        result=Response.ok(new FileOperationResult(true)).status(200);
+      }
+ else {
+        FileOperationResult errorResult=getFailureFileOperationResult(getPathsFromPathsEntries(request.paths),index,message);
+        result=Response.ok(errorResult).status(422);
+      }
+    }
+    return result.build();
+  }
+ catch (  Exception ex) {
+    throw new ServiceFormattedException(ex.getMessage(),ex);
+  }
+}
