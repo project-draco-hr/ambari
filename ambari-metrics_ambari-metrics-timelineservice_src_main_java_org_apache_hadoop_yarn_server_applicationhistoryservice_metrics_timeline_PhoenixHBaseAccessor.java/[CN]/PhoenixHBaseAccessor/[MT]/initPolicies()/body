@@ -1,0 +1,54 @@
+{
+  boolean enableNormalizer=hbaseConf.getBoolean("hbase.normalizer.enabled",true);
+  boolean enableFifoCompaction=metricsConf.getBoolean("timeline.metrics.hbase.fifo.compaction.enabled",true);
+  if (!enableNormalizer && !enableFifoCompaction) {
+    return;
+  }
+  HBaseAdmin hBaseAdmin=null;
+  try {
+    hBaseAdmin=dataSource.getHBaseAdmin();
+  }
+ catch (  IOException e) {
+    LOG.warn("Unable to initialize HBaseAdmin for setting policies.",e);
+  }
+  if (hBaseAdmin != null) {
+    for (    String tableName : PHOENIX_TABLES) {
+      try {
+        boolean modifyTable=false;
+        HTableDescriptor tableDescriptor=hBaseAdmin.getTableDescriptor(tableName.getBytes());
+        if (enableNormalizer && !tableDescriptor.isNormalizationEnabled()) {
+          tableDescriptor.setNormalizationEnabled(true);
+          LOG.info("Enabling normalizer for " + tableName);
+          modifyTable=true;
+        }
+        Map<String,String> config=tableDescriptor.getConfiguration();
+        if (enableFifoCompaction && !FIFO_COMPACTION_POLICY_CLASS.equals(config.get(HSTORE_COMPACTION_CLASS_KEY))) {
+          tableDescriptor.setConfiguration(HSTORE_COMPACTION_CLASS_KEY,FIFO_COMPACTION_POLICY_CLASS);
+          LOG.info("Setting config property " + HSTORE_COMPACTION_CLASS_KEY + " = "+ FIFO_COMPACTION_POLICY_CLASS+ " for "+ tableName);
+          tableDescriptor.setConfiguration(BLOCKING_STORE_FILES_KEY,"1000");
+          LOG.info("Setting config property " + BLOCKING_STORE_FILES_KEY + " = "+ 1000+ " for "+ tableName);
+          modifyTable=true;
+        }
+        if (!enableFifoCompaction && FIFO_COMPACTION_POLICY_CLASS.equals(config.get(HSTORE_COMPACTION_CLASS_KEY))) {
+          tableDescriptor.setConfiguration(HSTORE_COMPACTION_CLASS_KEY,DEFAULT_COMPACTION_POLICY_CLASS);
+          LOG.info("Setting config property " + HSTORE_COMPACTION_CLASS_KEY + " = "+ DEFAULT_COMPACTION_POLICY_CLASS+ " for "+ tableName);
+          tableDescriptor.setConfiguration(BLOCKING_STORE_FILES_KEY,"300");
+          LOG.info("Setting config property " + BLOCKING_STORE_FILES_KEY + " = "+ 300+ " for "+ tableName);
+          modifyTable=true;
+        }
+        if (modifyTable) {
+          hBaseAdmin.modifyTable(tableName.getBytes(),tableDescriptor);
+        }
+      }
+ catch (      IOException e) {
+        LOG.error("Failed setting policies for " + tableName,e);
+      }
+    }
+    try {
+      hBaseAdmin.close();
+    }
+ catch (    IOException e) {
+      LOG.warn("Exception on HBaseAdmin close.",e);
+    }
+  }
+}

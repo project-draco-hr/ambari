@@ -1,0 +1,27 @@
+{
+  HBaseAdmin hBaseAdmin=hdb.getHBaseAdmin();
+  for (  String tableName : PHOENIX_TABLES) {
+    HTableDescriptor tableDescriptor=hBaseAdmin.getTableDescriptor(tableName.getBytes());
+    Assert.assertFalse("Normalizer disabled by default.",tableDescriptor.isNormalizationEnabled());
+    Assert.assertNull("Default compaction policy is null.",tableDescriptor.getConfigurationValue(HSTORE_COMPACTION_CLASS_KEY));
+  }
+  hdb.initPolicies();
+  boolean normalizerEnabled=false;
+  String compactionPolicy=null;
+  for (int i=0; i < 10; i++) {
+    LOG.warn("Policy check retry : " + i);
+    for (    String tableName : PHOENIX_TABLES) {
+      HTableDescriptor tableDescriptor=hBaseAdmin.getTableDescriptor(tableName.getBytes());
+      normalizerEnabled=tableDescriptor.isNormalizationEnabled();
+      compactionPolicy=tableDescriptor.getConfigurationValue(HSTORE_COMPACTION_CLASS_KEY);
+      LOG.debug("Table: " + tableName + ", normalizerEnabled = "+ normalizerEnabled);
+      LOG.debug("Table: " + tableName + ", compactionPolicy = "+ compactionPolicy);
+      if (!normalizerEnabled || compactionPolicy == null) {
+        Thread.sleep(2000l);
+      }
+    }
+  }
+  Assert.assertTrue("Normalizer enabled.",normalizerEnabled);
+  Assert.assertEquals("FIFO compaction policy is set.",FIFO_COMPACTION_POLICY_CLASS,compactionPolicy);
+  hBaseAdmin.close();
+}
