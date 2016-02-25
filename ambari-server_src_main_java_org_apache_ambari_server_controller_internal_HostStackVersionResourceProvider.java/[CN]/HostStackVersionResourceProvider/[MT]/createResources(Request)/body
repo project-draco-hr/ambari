@@ -8,19 +8,9 @@
     throw new UnsupportedOperationException("Multiple requests cannot be executed at the same time.");
   }
   Map<String,Object> propertyMap=iterator.next();
-  Set<String> requiredProperties=new HashSet<String>(){
-{
-      add(HOST_STACK_VERSION_HOST_NAME_PROPERTY_ID);
-      add(HOST_STACK_VERSION_REPO_VERSION_PROPERTY_ID);
-      add(HOST_STACK_VERSION_STACK_PROPERTY_ID);
-      add(HOST_STACK_VERSION_VERSION_PROPERTY_ID);
-    }
-  }
-;
+  Set<String> requiredProperties=Sets.newHashSet(HOST_STACK_VERSION_HOST_NAME_PROPERTY_ID,HOST_STACK_VERSION_REPO_VERSION_PROPERTY_ID,HOST_STACK_VERSION_STACK_PROPERTY_ID,HOST_STACK_VERSION_VERSION_PROPERTY_ID);
   for (  String requiredProperty : requiredProperties) {
-    if (!propertyMap.containsKey(requiredProperty)) {
-      throw new IllegalArgumentException(String.format("The required property %s is not defined",requiredProperty));
-    }
+    Validate.isTrue(propertyMap.containsKey(requiredProperty),String.format("The required property %s is not defined",requiredProperty));
   }
   String clName=(String)propertyMap.get(HOST_STACK_VERSION_CLUSTER_NAME_PROPERTY_ID);
   hostName=(String)propertyMap.get(HOST_STACK_VERSION_HOST_NAME_PROPERTY_ID);
@@ -81,7 +71,7 @@
     throw new UnsupportedOperationException(String.format("Repo version %s for stack %s " + "for host %s is in %s state. Can not transition to INSTALLING state",desiredRepoVersion,stackId,hostName,hostVersEntity.getState().toString()));
   }
   List<OperatingSystemEntity> operatingSystems=repoVersionEnt.getOperatingSystems();
-  Map<String,List<RepositoryEntity>> perOsRepos=new HashMap<String,List<RepositoryEntity>>();
+  Map<String,List<RepositoryEntity>> perOsRepos=new HashMap<>();
   for (  OperatingSystemEntity operatingSystem : operatingSystems) {
     perOsRepos.put(operatingSystem.getOsType(),operatingSystem.getRepositories());
   }
@@ -90,8 +80,8 @@
   if (repoInfo == null) {
     throw new SystemException(String.format("Repositories for os type %s are " + "not defined. Repo version=%s, stackId=%s",osFamily,desiredRepoVersion,stackId));
   }
-  List<ServiceOsSpecific.Package> packages=new ArrayList<ServiceOsSpecific.Package>();
-  Set<String> servicesOnHost=new HashSet<String>();
+  List<ServiceOsSpecific.Package> packages=new ArrayList<>();
+  Set<String> servicesOnHost=new HashSet<>();
   List<ServiceComponentHost> components=cluster.getServiceComponentHosts(host.getHostName());
   for (  ServiceComponentHost component : components) {
     servicesOnHost.add(component.getServiceName());
@@ -137,7 +127,7 @@
   actionContext.setTimeout(Short.valueOf(configuration.getDefaultAgentTaskTimeout(true)));
   String caption=String.format(INSTALL_PACKAGES_FULL_NAME + " on host %s",hostName);
   RequestStageContainer req=createRequest(caption);
-  Map<String,String> hostLevelParams=new HashMap<String,String>();
+  Map<String,String> hostLevelParams=new HashMap<>();
   hostLevelParams.put(JDK_LOCATION,getManagementController().getJdkResourceUrl());
   String clusterHostInfoJson;
   try {
@@ -162,7 +152,6 @@
   try {
     hostVersEntity.setState(RepositoryVersionState.INSTALLING);
     hostVersionDAO.merge(hostVersEntity);
-    StackId desiredStackId=cluster.getDesiredStackVersion();
     cluster.recalculateClusterVersionState(repoVersionEnt);
     req.persist();
   }
