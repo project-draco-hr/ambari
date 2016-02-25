@@ -8,6 +8,7 @@ def get_namenode_states_noretries(hdfs_site, security_enabled, run_user):
     nn_unique_ids = hdfs_site[nn_unique_ids_key].split(',')
     for nn_unique_id in nn_unique_ids:
         is_https_enabled = (hdfs_site['dfs.https.enable'] if (not is_empty(hdfs_site['dfs.https.enable'])) else False)
+        rpc_key = NAMENODE_RPC_FRAGMENT.format(name_service, nn_unique_id)
         if (not is_https_enabled):
             key = NAMENODE_HTTP_FRAGMENT.format(name_service, nn_unique_id)
             protocol = 'http'
@@ -16,6 +17,11 @@ def get_namenode_states_noretries(hdfs_site, security_enabled, run_user):
             protocol = 'https'
         if (key in hdfs_site):
             value = str(hdfs_site[key])
+            if ((INADDR_ANY in value) and (rpc_key in hdfs_site)):
+                rpc_value = str(hdfs_site[rpc_key])
+                if (INADDR_ANY not in rpc_value):
+                    rpc_host = rpc_value.split(':')[0]
+                    value = value.replace(INADDR_ANY, rpc_host)
             jmx_uri = JMX_URI_FRAGMENT.format(protocol, value)
             state = get_value_from_jmx(jmx_uri, 'tag.HAState', security_enabled, run_user, is_https_enabled)
             if (not state):
