@@ -1,0 +1,21 @@
+@retry(times=8, sleep_time=20, backoff_factor=1, err_class=Fail)
+def wait_for_dfs_directory_created(self, dir_path, ignored_dfs_dirs):
+    import params
+    if (not is_empty(dir_path)):
+        dir_path = HdfsResourceProvider.parse_path(dir_path)
+        if (dir_path in ignored_dfs_dirs):
+            Logger.info((("Skipping DFS directory '" + dir_path) + "' as it's marked to be ignored."))
+            return
+        Logger.info((("Verifying if DFS directory '" + dir_path) + "' exists."))
+        dir_exists = None
+        if WebHDFSUtil.is_webhdfs_available(params.is_webhdfs_enabled, params.default_fs):
+            util = WebHDFSUtil(params.hdfs_site, params.yarn_user, params.security_enabled)
+            list_status = util.run_command(dir_path, 'GETFILESTATUS', method='GET', ignore_status_codes=['404'], assertable_result=False)
+            dir_exists = ('FileStatus' in list_status)
+        else:
+            dfs_ret_code = shell.call(format(('hdfs --config {hadoop_conf_dir} dfs -test -d ' + dir_path)), user=params.yarn_user)[0]
+            dir_exists = (not dfs_ret_code)
+        if (not dir_exists):
+            raise Fail((("DFS directory '" + dir_path) + "' does not exist !"))
+        else:
+            Logger.info((("DFS directory '" + dir_path) + "' exists."))
