@@ -5,40 +5,46 @@
   }
   Transactional transactional=readTransactionMetadata(methodInvocation);
   EntityManager em=emProvider.get();
+  lockTransaction(methodInvocation);
   if (em.getTransaction().isActive()) {
     return methodInvocation.proceed();
   }
-  Object result;
-  final EntityTransaction txn=em.getTransaction();
-  txn.begin();
   try {
-    result=methodInvocation.proceed();
-  }
- catch (  Exception e) {
-    if (rollbackIfNecessary(transactional,e,txn)) {
+    final EntityTransaction txn=em.getTransaction();
+    txn.begin();
+    Object result;
+    try {
+      result=methodInvocation.proceed();
+    }
+ catch (    Exception e) {
+      if (rollbackIfNecessary(transactional,e,txn)) {
+        txn.commit();
+      }
+      detailedLogForPersistenceError(e);
+      throw e;
+    }
+ finally {
+      if (null != didWeStartWork.get() && !txn.isActive()) {
+        didWeStartWork.remove();
+        unitOfWork.end();
+      }
+    }
+    try {
       txn.commit();
     }
-    detailedLogForPersistenceError(e);
-    throw e;
-  }
- finally {
-    if (null != didWeStartWork.get() && !txn.isActive()) {
-      didWeStartWork.remove();
-      unitOfWork.end();
+ catch (    Exception e) {
+      detailedLogForPersistenceError(e);
+      throw e;
     }
-  }
-  try {
-    txn.commit();
-  }
- catch (  Exception e) {
-    detailedLogForPersistenceError(e);
-    throw e;
-  }
  finally {
-    if (null != didWeStartWork.get()) {
-      didWeStartWork.remove();
-      unitOfWork.end();
+      if (null != didWeStartWork.get()) {
+        didWeStartWork.remove();
+        unitOfWork.end();
+      }
     }
+    return result;
   }
-  return result;
+  finally {
+    unlockTransaction();
+  }
 }
