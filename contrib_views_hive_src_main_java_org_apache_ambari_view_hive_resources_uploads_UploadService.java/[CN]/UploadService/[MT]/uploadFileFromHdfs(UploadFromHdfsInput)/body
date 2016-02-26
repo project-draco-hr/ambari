@@ -1,0 +1,38 @@
+{
+  if (ParseOptions.InputFileType.CSV.toString().equals(input.getInputFileType()) && input.getIsFirstRowHeader().equals(Boolean.FALSE)) {
+    LoadQueryInput loadQueryInput=new LoadQueryInput(input.getHdfsPath(),input.getDatabaseName(),input.getTableName());
+    String loadQuery=new QueryGenerator().generateLoadQuery(loadQueryInput);
+    try {
+      Job job=createJob(loadQuery,input.getDatabaseName());
+      JSONObject jo=new JSONObject();
+      jo.put("jobId",job.getId());
+      return Response.ok(jo).build();
+    }
+ catch (    Exception e) {
+      LOG.error("Exception occurred while creating job for Load From HDFS query : " + loadQuery,e);
+      throw new ServiceFormattedException(e.getMessage(),e);
+    }
+  }
+ else {
+    InputStream hdfsStream=null;
+    try {
+      hdfsStream=getHDFSFileStream(input.getHdfsPath());
+      String path=uploadFileFromStream(hdfsStream,input.getIsFirstRowHeader(),input.getInputFileType(),input.getTableName(),input.getDatabaseName());
+      JSONObject jo=new JSONObject();
+      jo.put("uploadedPath",path);
+      return Response.ok(jo).build();
+    }
+ catch (    Exception e) {
+      LOG.error("Exception occurred while uploading the file from HDFS with path : " + input.getHdfsPath(),e);
+      throw new ServiceFormattedException(e.getMessage(),e);
+    }
+ finally {
+      if (null != hdfsStream)       try {
+        hdfsStream.close();
+      }
+ catch (      IOException e) {
+        LOG.error("Exception occured while closing the HDFS stream for path : " + input.getHdfsPath(),e);
+      }
+    }
+  }
+}

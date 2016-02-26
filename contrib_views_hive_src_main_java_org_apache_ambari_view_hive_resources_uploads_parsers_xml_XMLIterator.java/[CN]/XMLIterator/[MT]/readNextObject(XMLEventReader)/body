@@ -1,0 +1,86 @@
+{
+  LinkedHashMap<String,String> row=new LinkedHashMap<>();
+  boolean objectStarted=false;
+  String currentName=null;
+  while (true) {
+    XMLEvent event=reader.nextEvent();
+switch (event.getEventType()) {
+case XMLStreamConstants.START_ELEMENT:
+      StartElement startElement=event.asStartElement();
+    String qName=startElement.getName().getLocalPart();
+  LOG.debug("startName : {}",qName);
+switch (qName) {
+case TAG_TABLE:
+  if (documentStarted) {
+    throw new IllegalArgumentException("Cannot have a <table> tag nested inside another <table> tag");
+  }
+ else {
+    documentStarted=true;
+  }
+break;
+case TAG_ROW:
+if (objectStarted) {
+throw new IllegalArgumentException("Cannot have a <row> tag nested inside another <row> tag");
+}
+ else {
+objectStarted=true;
+}
+break;
+case TAG_COL:
+if (!objectStarted) {
+throw new IllegalArgumentException("Stray tag " + qName);
+}
+Attribute nameAttr=startElement.getAttributeByName(new QName("name"));
+if (null == nameAttr) {
+throw new IllegalArgumentException("Missing name attribute in col tag.");
+}
+currentName=nameAttr.getValue();
+break;
+default :
+throw new IllegalArgumentException("Illegal start tag " + qName + " encountered.");
+}
+break;
+case XMLStreamConstants.END_ELEMENT:
+EndElement endElement=event.asEndElement();
+String name=endElement.getName().getLocalPart();
+LOG.debug("endName : {}",name);
+switch (name) {
+case TAG_TABLE:
+if (!documentStarted) {
+throw new IllegalArgumentException("Stray </table> tag.");
+}
+throw new EndOfDocumentException("End of XML document.");
+case TAG_ROW:
+if (!objectStarted) {
+throw new IllegalArgumentException("Stray </row> tag.");
+}
+return row;
+case TAG_COL:
+if (!objectStarted) {
+throw new IllegalArgumentException("Stray tag " + name);
+}
+currentName=null;
+break;
+default :
+throw new IllegalArgumentException("Illegal start ending " + name + " encountered.");
+}
+break;
+case XMLStreamConstants.CHARACTERS:
+Characters characters=event.asCharacters();
+if (characters.isWhiteSpace() && currentName == null) break;
+String data=characters.getData();
+LOG.debug("character data : {}",data);
+if (currentName == null) {
+throw new IllegalArgumentException("Illegal characters outside any tag : " + data);
+}
+ else {
+String oldData=row.get(currentName);
+if (null != oldData) {
+data=oldData + data;
+}
+row.put(currentName,data);
+}
+break;
+}
+}
+}
