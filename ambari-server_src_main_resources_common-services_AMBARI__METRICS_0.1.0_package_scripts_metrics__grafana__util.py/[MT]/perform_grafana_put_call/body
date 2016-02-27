@@ -1,0 +1,22 @@
+def perform_grafana_put_call(url, id, payload, server):
+    response = None
+    data = None
+    headers = {'Content-Type': 'application/json', }
+    grafana_https_enabled = (server.protocol.lower() == 'https')
+    for i in xrange(0, GRAFANA_CONNECT_TRIES):
+        try:
+            conn = network.get_http_connection(server.host, int(server.port), grafana_https_enabled)
+            conn.request('PUT', ((url + '/') + str(id)), payload, headers)
+            response = conn.getresponse()
+            data = response.read()
+            Logger.info(('Http data: %s' % data))
+            conn.close()
+            break
+        except (httplib.HTTPException, socket.error) as ex:
+            if (i < (GRAFANA_CONNECT_TRIES - 1)):
+                time.sleep(GRAFANA_CONNECT_TIMEOUT)
+                Logger.info(('Connection to Grafana failed. Next retry in %s seconds.' % GRAFANA_CONNECT_TIMEOUT))
+                continue
+            else:
+                raise Fail('Ambari Metrics Grafana update failed')
+    return (response, data)

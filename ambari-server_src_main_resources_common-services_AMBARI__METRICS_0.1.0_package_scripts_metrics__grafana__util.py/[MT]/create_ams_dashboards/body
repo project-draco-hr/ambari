@@ -1,0 +1,60 @@
+def create_ams_dashboards():
+    '\n  Create dashboards in grafana from the json files\n  '
+    import params
+    server = Server(protocol=params.ams_grafana_protocol.strip(), host=params.ams_grafana_host.strip(), port=params.ams_grafana_port)
+    dashboard_files = params.get_grafana_dashboard_defs()
+    version = params.get_ambari_version()
+    Logger.info(('Checking dashboards to update for Ambari version : %s' % version))
+    Dashboard = namedtuple('Dashboard', ['uri', 'id', 'title', 'tags'])
+    existing_dashboards = []
+    response = perform_grafana_get_call(GRAFANA_SEARCH_BULTIN_DASHBOARDS, server)
+    if (response and (response.status == 200)):
+        data = response.read()
+        try:
+            datasources = json.loads(data)
+        except:
+            Logger.error(('Unable to parse JSON response from grafana request: %s' % GRAFANA_SEARCH_BULTIN_DASHBOARDS))
+            Logger.info(data)
+            return
+        for datasource in datasources:
+            existing_dashboards.append(Dashboard(uri=datasource['uri'], id=datasource['id'], title=datasource['title'], tags=datasource['tags']))
+        pass
+    else:
+        Logger.error(('Failed to execute search query on Grafana dashboards. query = %s\n statuscode = %s\n reason = %s\n data = %s\n' % (GRAFANA_SEARCH_BULTIN_DASHBOARDS, response.status, response.reason, response.read())))
+        return
+    Logger.debug(('Dashboard definitions found = %s' % str(dashboard_files)))
+    if dashboard_files:
+        for dashboard_file in dashboard_files:
+            try:
+                with open(dashboard_file, 'r') as file:
+                    dashboard_def = json.load(file)
+            except Exception as e:
+                Logger.error(('Unable to load dashboard json file %s' % dashboard_file))
+                Logger.error(str(e))
+                continue
+            if dashboard_def:
+                update_def = True
+                if ('id' in dashboard_def):
+                    dashboard_def['id'] = None
+                dashboard_def['tags'] = ['builtin', version]
+                dashboard_def['overwrite'] = True
+                for dashboard in existing_dashboards:
+                    if (dashboard.title == dashboard_def['title']):
+                        if (version not in dashboard.tags):
+                            update_def = True
+                        else:
+                            update_def = False
+                pass
+                if update_def:
+                    Logger.info(('Updating dashboard definition for %s with tags: %s' % (dashboard_def['title'], dashboard_def['tags'])))
+                    dashboard_def_payload = {'dashboard': dashboard_def, }
+                    paylaod = json.dumps(dashboard_def_payload).strip()
+                    (response, data) = perform_grafana_post_call(GRAFANA_DASHBOARDS_URL, paylaod, server)
+                    if (response and (response.status == 200)):
+                        Logger.info(('Dashboard created successfully.\n %s' % str(data)))
+                    else:
+                        Logger.error(('Failed creating dashboard: %s' % dashboard_def['title']))
+                    pass
+                pass
+            pass
+        pass

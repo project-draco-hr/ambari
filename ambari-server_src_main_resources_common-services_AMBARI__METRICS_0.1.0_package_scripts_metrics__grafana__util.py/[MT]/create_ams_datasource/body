@@ -1,86 +1,50 @@
 def create_ams_datasource():
     import params
-    GRAFANA_CONNECT_TRIES = 5
-    GRAFANA_CONNECT_TIMEOUT = 15
-    GRAFANA_URL = '/api/datasources'
-    METRICS_GRAFANA_DATASOURCE_NAME = 'AMBARI_METRICS'
-    grafana_https_enabled = (params.ams_grafana_protocol.lower() == 'https')
-    headers = {'Content-type': 'application/json', }
+    server = Server(protocol=params.ams_grafana_protocol.strip(), host=params.ams_grafana_host.strip(), port=params.ams_grafana_port)
+    '\n  Create AMS datasource in Grafana, if exsists make sure the collector url is accurate\n  '
     ams_datasource_json = Template('metrics_grafana_datasource.json.j2', ams_datasource_name=METRICS_GRAFANA_DATASOURCE_NAME).get_content()
     Logger.info('Checking if AMS Grafana datasource already exists')
-    Logger.info(('Connecting (GET) to %s:%s%s' % (params.hostname, params.ams_grafana_port, GRAFANA_URL)))
-    conn = network.get_http_connection(params.hostname, int(params.ams_grafana_port), grafana_https_enabled)
-    conn.request('GET', GRAFANA_URL)
-    response = conn.getresponse()
-    Logger.info(('Http response: %s %s' % (response.status, response.reason)))
+    response = perform_grafana_get_call(GRAFANA_DATASOURCE_URL, server)
+    create_datasource = True
     if (response.status == 200):
         datasources = response.read()
         datasources_json = json.loads(datasources)
         for i in xrange(0, len(datasources_json)):
             datasource_name = datasources_json[i]['name']
             if (datasource_name == METRICS_GRAFANA_DATASOURCE_NAME):
+                create_datasource = False
                 Logger.info('Ambari Metrics Grafana datasource already present. Checking Metrics Collector URL')
                 datasource_url = datasources_json[i]['url']
-                if (datasource_url == ((((params.metric_collector_protocol + '://') + params.metric_collector_host) + ':') + params.metric_collector_port)):
-                    Logger.info('Metrics Collector URL validation succeeded. Skipping datasource creation')
-                    GRAFANA_CONNECT_TRIES = 0
+                if is_unchanged_datasource_url(datasource_url):
+                    Logger.info('Metrics Collector URL validation succeeded.')
+                    return
                 else:
-                    Logger.info('Metrics Collector URL validation failed.')
                     datasource_id = datasources_json[i]['id']
-                    Logger.info('Deleting obselete Metrics datasource.')
-                    conn = network.get_http_connection(params.hostname, int(params.ams_grafana_port), grafana_https_enabled)
-                    conn.request('PUT', ((GRAFANA_URL + '/') + str(datasource_id)), ams_datasource_json, headers)
-                    response = conn.getresponse()
-                    data = response.read()
-                    Logger.info(('Http data: %s' % data))
-                    conn.close()
+                    Logger.info(('Metrics Collector URL validation failed. Updating datasource, id = %s' % datasource_id))
+                    (response, data) = perform_grafana_put_call(GRAFANA_DATASOURCE_URL, datasource_id, ams_datasource_json, server)
                     if (response.status == 200):
                         Logger.info('Ambari Metrics Grafana data source updated.')
-                        GRAFANA_CONNECT_TRIES = 0
                     elif (response.status == 500):
                         Logger.info('Ambari Metrics Grafana data source update failed. Not retrying.')
                         raise Fail(('Ambari Metrics Grafana data source update failed. PUT request status: %s %s \n%s' % (response.status, response.reason, data)))
                     else:
-                        Logger.info('Ambari Metrics Grafana data source update failed.')
-                        if (i < (GRAFANA_CONNECT_TRIES - 1)):
-                            time.sleep(GRAFANA_CONNECT_TIMEOUT)
-                            Logger.info(('Next retry in %s seconds.' % GRAFANA_CONNECT_TIMEOUT))
-                        else:
-                            raise Fail(('Ambari Metrics Grafana data source creation failed. POST request status: %s %s \n%s' % (response.status, response.reason, data)))
-                break
+                        raise Fail(('Ambari Metrics Grafana data source creation failed. PUT request status: %s %s \n%s' % (response.status, response.reason, data)))
+                pass
+            pass
+        pass
     else:
         Logger.info('Error checking for Ambari Metrics Grafana datasource. Will attempt to create.')
-    if (GRAFANA_CONNECT_TRIES > 0):
-        Logger.info('Attempting to create Ambari Metrics Grafana datasource')
-    for i in xrange(0, GRAFANA_CONNECT_TRIES):
-        try:
-            Logger.info(('Generated datasource:\n%s' % ams_datasource_json))
-            Logger.info(('Connecting (POST) to %s:%s%s' % (params.hostname, params.ams_grafana_port, GRAFANA_URL)))
-            conn = network.get_http_connection(params.hostname, int(params.ams_grafana_port), grafana_https_enabled)
-            conn.request('POST', GRAFANA_URL, ams_datasource_json, headers)
-            response = conn.getresponse()
-            Logger.info(('Http response: %s %s' % (response.status, response.reason)))
-        except (httplib.HTTPException, socket.error) as ex:
-            if (i < (GRAFANA_CONNECT_TRIES - 1)):
-                time.sleep(GRAFANA_CONNECT_TIMEOUT)
-                Logger.info(('Connection to Grafana failed. Next retry in %s seconds.' % GRAFANA_CONNECT_TIMEOUT))
-                continue
-            else:
-                raise Fail('Ambari Metrics Grafana datasource not created')
-        data = response.read()
-        Logger.info(('Http data: %s' % data))
-        conn.close()
+    if (not create_datasource):
+        return
+    else:
+        Logger.info(('Generating datasource:\n%s' % ams_datasource_json))
+        (response, data) = perform_grafana_post_call(GRAFANA_DATASOURCE_URL, ams_datasource_json, server)
         if (response.status == 200):
             Logger.info('Ambari Metrics Grafana data source created.')
-            break
         elif (response.status == 500):
             Logger.info('Ambari Metrics Grafana data source creation failed. Not retrying.')
             raise Fail(('Ambari Metrics Grafana data source creation failed. POST request status: %s %s \n%s' % (response.status, response.reason, data)))
         else:
             Logger.info('Ambari Metrics Grafana data source creation failed.')
-            if (i < (GRAFANA_CONNECT_TRIES - 1)):
-                time.sleep(GRAFANA_CONNECT_TIMEOUT)
-                Logger.info(('Next retry in %s seconds.' % GRAFANA_CONNECT_TIMEOUT))
-            else:
-                raise Fail(('Ambari Metrics Grafana data source creation failed. POST request status: %s %s \n%s' % (response.status, response.reason, data)))
+            raise Fail(('Ambari Metrics Grafana data source creation failed. POST request status: %s %s \n%s' % (response.status, response.reason, data)))
     pass
