@@ -4,20 +4,26 @@
   try {
     List<ServiceConfigVersionResponse> serviceConfigVersionResponses=new ArrayList<ServiceConfigVersionResponse>();
     List<ServiceConfigEntity> serviceConfigs=serviceConfigDAO.getServiceConfigs(getClusterId());
-    Map<String,ServiceConfigVersionResponse> activeServiceConfigResponses=new HashMap<>();
+    Map<String,Map<String,ServiceConfigVersionResponse>> activeServiceConfigResponses=new HashMap<>();
     for (    ServiceConfigEntity serviceConfigEntity : serviceConfigs) {
       ServiceConfigVersionResponse serviceConfigVersionResponse=convertToServiceConfigVersionResponse(serviceConfigEntity);
-      ServiceConfigVersionResponse activeServiceConfigResponse=activeServiceConfigResponses.get(serviceConfigVersionResponse.getServiceName());
+      Map<String,ServiceConfigVersionResponse> activeServiceConfigResponseGroups=activeServiceConfigResponses.get(serviceConfigVersionResponse.getServiceName());
+      if (activeServiceConfigResponseGroups == null) {
+        Map<String,ServiceConfigVersionResponse> serviceConfigGroups=new HashMap<>();
+        activeServiceConfigResponses.put(serviceConfigVersionResponse.getServiceName(),serviceConfigGroups);
+        activeServiceConfigResponseGroups=serviceConfigGroups;
+      }
+      ServiceConfigVersionResponse activeServiceConfigResponse=activeServiceConfigResponseGroups.get(serviceConfigVersionResponse.getGroupName());
       if (activeServiceConfigResponse == null) {
+        activeServiceConfigResponseGroups.put(serviceConfigVersionResponse.getGroupName(),serviceConfigVersionResponse);
         activeServiceConfigResponse=serviceConfigVersionResponse;
-        activeServiceConfigResponses.put(serviceConfigVersionResponse.getServiceName(),serviceConfigVersionResponse);
       }
       serviceConfigVersionResponse.setConfigurations(new ArrayList<ConfigurationResponse>());
       if (serviceConfigEntity.getGroupId() == null) {
-        if (serviceConfigVersionResponse.getCreateTime() > activeServiceConfigResponse.getCreateTime())         activeServiceConfigResponses.put(serviceConfigVersionResponse.getServiceName(),serviceConfigVersionResponse);
+        if (serviceConfigVersionResponse.getCreateTime() > activeServiceConfigResponse.getCreateTime())         activeServiceConfigResponseGroups.put(serviceConfigVersionResponse.getGroupName(),serviceConfigVersionResponse);
       }
  else       if (clusterConfigGroups != null && clusterConfigGroups.containsKey(serviceConfigEntity.getGroupId())) {
-        if (serviceConfigVersionResponse.getVersion() > activeServiceConfigResponse.getVersion())         activeServiceConfigResponses.put(serviceConfigVersionResponse.getServiceName(),serviceConfigVersionResponse);
+        if (serviceConfigVersionResponse.getVersion() > activeServiceConfigResponse.getVersion())         activeServiceConfigResponseGroups.put(serviceConfigVersionResponse.getGroupName(),serviceConfigVersionResponse);
       }
       serviceConfigVersionResponse.setIsCurrent(false);
       List<ClusterConfigEntity> clusterConfigEntities=serviceConfigEntity.getClusterConfigEntities();
@@ -27,8 +33,10 @@
       }
       serviceConfigVersionResponses.add(serviceConfigVersionResponse);
     }
-    for (    ServiceConfigVersionResponse serviceConfigVersionResponse : activeServiceConfigResponses.values()) {
-      serviceConfigVersionResponse.setIsCurrent(true);
+    for (    Map<String,ServiceConfigVersionResponse> serviceConfigVersionResponseGroup : activeServiceConfigResponses.values()) {
+      for (      ServiceConfigVersionResponse serviceConfigVersionResponse : serviceConfigVersionResponseGroup.values()) {
+        serviceConfigVersionResponse.setIsCurrent(true);
+      }
     }
     return serviceConfigVersionResponses;
   }
