@@ -1,0 +1,75 @@
+{
+  makeUpgradeCluster();
+  Cluster c=m_injector.getInstance(Clusters.class).getCluster("c1");
+  assertEquals(1,c.getConfigsByType("zoo.cfg").size());
+  c.setCurrentStackVersion(HDP_211_STACK);
+  c.setDesiredStackVersion(HDP_220_STACK);
+  ConfigFactory cf=m_injector.getInstance(ConfigFactory.class);
+  Config config=cf.createNew(c,"zoo.cfg",new HashMap<String,String>(){
+{
+      put("replace.key.1","r1");
+      put("replace.key.2","r2");
+      put("replace.key.3","r3a1");
+      put("replace.key.4","r4");
+      put("replace.key.5","r5");
+    }
+  }
+,new HashMap<String,Map<String,String>>());
+  config.setTag("version2");
+  config.persist();
+  c.addConfig(config);
+  c.addDesiredConfig("user",Collections.singleton(config));
+  assertEquals(2,c.getConfigsByType("zoo.cfg").size());
+  List<Replace> replacements=new ArrayList<Replace>();
+  Replace replace2=new Replace();
+  replacements.add(replace2);
+  replace2.key="replace.key.4";
+  replace2.find="r";
+  replace2.replaceWith="R";
+  replace2.ifKey="replace.key.1";
+  replace2.ifType="zoo.cfg";
+  replace2.ifValue="not-this-value";
+  replacements.add(replace2);
+  Replace replace3=new Replace();
+  replacements.add(replace3);
+  replace3.key="replace.key.2";
+  replace3.find="r";
+  replace3.replaceWith="R";
+  replace3.ifKey="replace.key.1";
+  replace3.ifType="zoo.cfg";
+  replace3.ifKeyState=PropertyKeyState.ABSENT;
+  replacements.add(replace3);
+  Replace replace4=new Replace();
+  replacements.add(replace3);
+  replace4.key="replace.key.5";
+  replace4.find="r";
+  replace4.replaceWith="R";
+  replace4.ifKey="no.such.key";
+  replace4.ifType="zoo.cfg";
+  replace4.ifKeyState=PropertyKeyState.PRESENT;
+  replacements.add(replace4);
+  Map<String,String> commandParams=new HashMap<String,String>();
+  commandParams.put("upgrade_direction","upgrade");
+  commandParams.put("version",HDP_2_2_0_1);
+  commandParams.put("clusterName","c1");
+  commandParams.put(ConfigureTask.PARAMETER_CONFIG_TYPE,"zoo.cfg");
+  commandParams.put(ConfigureTask.PARAMETER_REPLACEMENTS,new Gson().toJson(replacements));
+  ExecutionCommand executionCommand=new ExecutionCommand();
+  executionCommand.setCommandParams(commandParams);
+  executionCommand.setClusterName("c1");
+  HostRoleCommand hostRoleCommand=hostRoleCommandFactory.create(null,null,null,null);
+  hostRoleCommand.setExecutionCommandWrapper(new ExecutionCommandWrapper(executionCommand));
+  ConfigureAction action=m_injector.getInstance(ConfigureAction.class);
+  action.setExecutionCommand(executionCommand);
+  action.setHostRoleCommand(hostRoleCommand);
+  CommandReport report=action.execute(null);
+  assertNotNull(report);
+  assertEquals(2,c.getConfigsByType("zoo.cfg").size());
+  config=c.getDesiredConfigByType("zoo.cfg");
+  assertNotNull(config);
+  assertEquals("r1",config.getProperties().get("replace.key.1"));
+  assertEquals("r2",config.getProperties().get("replace.key.2"));
+  assertEquals("r3a1",config.getProperties().get("replace.key.3"));
+  assertEquals("r4",config.getProperties().get("replace.key.4"));
+  assertEquals("r5",config.getProperties().get("replace.key.5"));
+}

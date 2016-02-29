@@ -1,0 +1,90 @@
+{
+  makeUpgradeCluster();
+  Cluster c=m_injector.getInstance(Clusters.class).getCluster("c1");
+  assertEquals(1,c.getConfigsByType("zoo.cfg").size());
+  c.setDesiredStackVersion(HDP_220_STACK);
+  ConfigFactory cf=m_injector.getInstance(ConfigFactory.class);
+  Config config=cf.createNew(c,"zoo.cfg",new HashMap<String,String>(){
+{
+      put("initLimit","10");
+      put("move.key.1","m1");
+      put("move.key.2","m2");
+      put("move.key.3","m3");
+      put("move.key.4","m4");
+    }
+  }
+,new HashMap<String,Map<String,String>>());
+  config.setTag("version2");
+  config.persist();
+  c.addConfig(config);
+  c.addDesiredConfig("user",Collections.singleton(config));
+  assertEquals(2,c.getConfigsByType("zoo.cfg").size());
+  List<ConfigurationKeyValue> configurations=new ArrayList<>();
+  ConfigurationKeyValue keyValue=new ConfigurationKeyValue();
+  configurations.add(keyValue);
+  keyValue.key="initLimit";
+  keyValue.value="11";
+  Map<String,String> commandParams=new HashMap<String,String>();
+  commandParams.put("upgrade_direction","upgrade");
+  commandParams.put("version",HDP_2_2_0_1);
+  commandParams.put("clusterName","c1");
+  commandParams.put(ConfigureTask.PARAMETER_CONFIG_TYPE,"zoo.cfg");
+  commandParams.put(ConfigureTask.PARAMETER_KEY_VALUE_PAIRS,new Gson().toJson(configurations));
+  List<Transfer> transfers=new ArrayList<>();
+  Transfer transfer1=new Transfer();
+  transfer1.operation=TransferOperation.MOVE;
+  transfer1.fromKey="move.key.1";
+  transfer1.toKey="move.to.key.1";
+  transfers.add(transfer1);
+  Transfer transfer2=new Transfer();
+  transfer2.operation=TransferOperation.MOVE;
+  transfer2.fromKey="move.key.2";
+  transfer2.toKey="move.to.key.2";
+  transfer2.ifKey="initLimit";
+  transfer2.ifType="zoo.cfg";
+  transfer2.ifValue="10";
+  transfers.add(transfer2);
+  Transfer transfer3=new Transfer();
+  transfer3.operation=TransferOperation.MOVE;
+  transfer3.fromKey="move.key.3";
+  transfer3.toKey="move.to.key.3";
+  transfer3.ifKey="initLimit";
+  transfer3.ifType="zoo.cfg";
+  transfer3.ifKeyState=PropertyKeyState.PRESENT;
+  transfers.add(transfer3);
+  Transfer transfer4=new Transfer();
+  transfer4.operation=TransferOperation.MOVE;
+  transfer4.fromKey="move.key.4";
+  transfer4.toKey="move.to.key.4";
+  transfer4.ifKey="no.such.key";
+  transfer4.ifType="zoo.cfg";
+  transfer4.ifKeyState=PropertyKeyState.ABSENT;
+  transfers.add(transfer4);
+  commandParams.put(ConfigureTask.PARAMETER_TRANSFERS,new Gson().toJson(transfers));
+  ExecutionCommand executionCommand=new ExecutionCommand();
+  executionCommand.setCommandParams(commandParams);
+  executionCommand.setClusterName("c1");
+  executionCommand.setRoleParams(new HashMap<String,String>());
+  executionCommand.getRoleParams().put(ServerAction.ACTION_USER_NAME,"username");
+  HostRoleCommand hostRoleCommand=hostRoleCommandFactory.create(null,null,null,null);
+  hostRoleCommand.setExecutionCommandWrapper(new ExecutionCommandWrapper(executionCommand));
+  ConfigureAction action=m_injector.getInstance(ConfigureAction.class);
+  action.setExecutionCommand(executionCommand);
+  action.setHostRoleCommand(hostRoleCommand);
+  CommandReport report=action.execute(null);
+  assertNotNull(report);
+  assertEquals(3,c.getConfigsByType("zoo.cfg").size());
+  config=c.getDesiredConfigByType("zoo.cfg");
+  assertNotNull(config);
+  assertFalse("version2".equals(config.getTag()));
+  Map<String,String> map=config.getProperties();
+  assertEquals(5,map.size());
+  String[] shouldNotExitKeys=new String[]{"move.key.1","move.key.2","move.key.3","move.key.4"};
+  String[] shouldExitKeys=new String[]{"move.to.key.1","move.to.key.2","move.to.key.3","move.to.key.4"};
+  for (  String key : shouldNotExitKeys) {
+    assertFalse(map.containsKey(key));
+  }
+  for (  String key : shouldExitKeys) {
+    assertTrue(map.containsKey(key));
+  }
+}

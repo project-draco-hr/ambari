@@ -1,0 +1,39 @@
+{
+  Map<String,UpgradePack> upgrades=ambariMetaInfo.getUpgradePacks("HDP","2.1.1");
+  assertTrue(upgrades.containsKey("upgrade_test"));
+  UpgradePack upgrade=upgrades.get("upgrade_test");
+  ConfigUpgradePack cup=ambariMetaInfo.getConfigUpgradePack("HDP","2.1.1");
+  assertNotNull(upgrade);
+  Cluster cluster=makeCluster();
+  UpgradeContext context=new UpgradeContext(m_masterHostResolver,HDP_21,HDP_21,UPGRADE_VERSION,Direction.UPGRADE,UpgradeType.ROLLING);
+  List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgrade,context);
+  assertEquals(7,groups.size());
+  UpgradeGroupHolder hiveGroup=groups.get(4);
+  assertEquals("HIVE",hiveGroup.name);
+  ConfigureTask configureTask=(ConfigureTask)hiveGroup.items.get(4).getTasks().get(0).getTasks().get(0);
+  Map<String,String> configProperties=configureTask.getConfigurationChanges(cluster,cup);
+  assertFalse(configProperties.isEmpty());
+  assertEquals(configProperties.get(ConfigureTask.PARAMETER_CONFIG_TYPE),"hive-site");
+  assertTrue(configProperties.containsKey(ConfigureTask.PARAMETER_KEY_VALUE_PAIRS));
+  assertTrue(configProperties.containsKey(ConfigureTask.PARAMETER_REPLACEMENTS));
+  assertTrue(configProperties.containsKey(ConfigureTask.PARAMETER_TRANSFERS));
+  String configurationJson=configProperties.get(ConfigureTask.PARAMETER_KEY_VALUE_PAIRS);
+  String transferJson=configProperties.get(ConfigureTask.PARAMETER_TRANSFERS);
+  System.out.println(" testConfigTaskConditionSkip >> transferJson" + transferJson);
+  String replacementJson=configProperties.get(ConfigureTask.PARAMETER_REPLACEMENTS);
+  assertNotNull(configurationJson);
+  assertNotNull(transferJson);
+  assertNotNull(replacementJson);
+  List<ConfigUpgradeChangeDefinition.ConfigurationKeyValue> keyValuePairs=m_gson.fromJson(configurationJson,new TypeToken<List<ConfigUpgradeChangeDefinition.ConfigurationKeyValue>>(){
+  }
+.getType());
+  assertTrue(keyValuePairs.isEmpty());
+  List<ConfigUpgradeChangeDefinition.Replace> replacements=m_gson.fromJson(replacementJson,new TypeToken<List<ConfigUpgradeChangeDefinition.Replace>>(){
+  }
+.getType());
+  assertTrue(replacements.isEmpty());
+  List<ConfigUpgradeChangeDefinition.Transfer> transfers=m_gson.fromJson(transferJson,new TypeToken<List<ConfigUpgradeChangeDefinition.Transfer>>(){
+  }
+.getType());
+  assertTrue(transfers.isEmpty());
+}
