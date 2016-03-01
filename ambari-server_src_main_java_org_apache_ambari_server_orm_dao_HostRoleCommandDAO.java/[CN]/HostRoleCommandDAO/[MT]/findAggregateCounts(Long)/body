@@ -1,8 +1,19 @@
 {
-  if (hostRoleCommandStatusSummaryCacheEnabled) {
-    return hrcStatusSummaryCache.getUnchecked(requestId);
-  }
- else {
+  if (!hostRoleCommandStatusSummaryCacheEnabled) {
     return loadAggregateCounts(requestId);
+  }
+  Map<Long,HostRoleCommandStatusSummaryDTO> map=hrcStatusSummaryCache.getIfPresent(requestId);
+  if (null != map) {
+    return map;
+  }
+  ReadWriteLock lock=transactionLocks.getLock(LockArea.HRC_STATUS_CACHE);
+  lock.readLock().lock();
+  try {
+    map=loadAggregateCounts(requestId);
+    hrcStatusSummaryCache.put(requestId,map);
+    return map;
+  }
+  finally {
+    lock.readLock().unlock();
   }
 }
