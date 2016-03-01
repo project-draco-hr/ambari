@@ -1,5 +1,6 @@
 {
   String hostString=createHostString(sshHostInfo.getHosts());
+  long bootstrapTimeout=calculateBSTimeout(sshHostInfo.getHosts().size());
   ScheduledExecutorService scheduler=Executors.newScheduledThreadPool(1);
   BSStatusCollector statusCollector=new BSStatusCollector();
   ScheduledFuture<?> handle=scheduler.scheduleWithFixedDelay(statusCollector,0,10,TimeUnit.SECONDS);
@@ -53,36 +54,33 @@
         envVariables.putAll(envVarsWin);
       }
     }
-    LOG.info("Host= " + hostString + " bs="+ this.bsScript+ " requestDir="+ requestIdDir+ " user="+ user+ " sshPort="+ sshPort+ " keyfile="+ this.sshKeyFile+ " passwordFile "+ this.passwordFile+ " server="+ this.ambariHostname+ " version="+ projectVersion+ " serverPort="+ this.serverPort+ " userRunAs="+ userRunAs);
+    LOG.info("Host= " + hostString + " bs="+ this.bsScript+ " requestDir="+ requestIdDir+ " user="+ user+ " sshPort="+ sshPort+ " keyfile="+ this.sshKeyFile+ " passwordFile "+ this.passwordFile+ " server="+ this.ambariHostname+ " version="+ projectVersion+ " serverPort="+ this.serverPort+ " userRunAs="+ userRunAs+ " timeout="+ bootstrapTimeout / 1000);
     envVariables.put("AMBARI_PASSPHRASE",agentSetupPassword);
     if (this.verbose)     envVariables.put("BS_VERBOSE","\"-vvv\"");
-    String[] env=new String[envVariables.size()];
-    int iVar=0;
-    for (    Map.Entry<String,String> pair : envVariables.entrySet()) {
-      env[iVar++]=pair.getKey() + "=" + pair.getValue();
-    }
     if (LOG.isDebugEnabled()) {
       LOG.debug(Arrays.toString(command));
     }
     String bootStrapOutputFilePath=requestIdDir + File.separator + "bootstrap.out";
     String bootStrapErrorFilePath=requestIdDir + File.separator + "bootstrap.err";
-    Process process=Runtime.getRuntime().exec(command,env);
-    PrintWriter stdOutWriter=null;
-    PrintWriter stdErrWriter=null;
-    try {
-      stdOutWriter=new PrintWriter(bootStrapOutputFilePath);
-      stdErrWriter=new PrintWriter(bootStrapErrorFilePath);
-      IOUtils.copy(process.getInputStream(),stdOutWriter);
-      IOUtils.copy(process.getErrorStream(),stdErrWriter);
-    }
-  finally {
-      if (stdOutWriter != null)       stdOutWriter.close();
-      if (stdErrWriter != null)       stdErrWriter.close();
-    }
+    ProcessBuilder pb=new ProcessBuilder(command);
+    pb.redirectOutput(new File(bootStrapOutputFilePath));
+    pb.redirectError(new File(bootStrapErrorFilePath));
+    Map<String,String> env=pb.environment();
+    env.putAll(envVariables);
+    Process process=pb.start();
     try {
       String logInfoMessage="Bootstrap output, log=" + bootStrapErrorFilePath + " "+ bootStrapOutputFilePath+ " at "+ this.ambariHostname;
       LOG.info(logInfoMessage);
-      int exitCode=process.waitFor();
+      int exitCode=1;
+      boolean timedOut=false;
+      if (waitForProcessTermination(process,bootstrapTimeout)) {
+        exitCode=process.exitValue();
+      }
+ else {
+        LOG.warn("Bootstrap process timed out. It will be destroyed.");
+        process.destroy();
+        timedOut=true;
+      }
       String outMesg="";
       String errMesg="";
       try {
@@ -93,6 +91,9 @@
         LOG.info("Error in reading files ",io);
       }
       scriptlog=outMesg + "\n\n" + errMesg;
+      if (timedOut) {
+        scriptlog+="\n\n Bootstrap process timed out. It was destroyed.";
+      }
       LOG.info("Script log Mesg " + scriptlog);
       if (exitCode != 0) {
         stat=BSStat.ERROR;
