@@ -1,0 +1,56 @@
+{
+  loadConfigurations();
+  clusterGlobalLock.readLock().lock();
+  try {
+    Map<String,Set<DesiredConfig>> map=new HashMap<>();
+    Collection<String> types=new HashSet<>();
+    Collection<ClusterConfigMappingEntity> entities=bypassCache ? clusterDAO.getClusterConfigMappingEntitiesByCluster(getClusterId()) : getClusterEntity().getConfigMappingEntities();
+    for (    ClusterConfigMappingEntity e : entities) {
+      if (allVersions || e.isSelected() > 0) {
+        DesiredConfig c=new DesiredConfig();
+        c.setServiceName(null);
+        c.setTag(e.getTag());
+        c.setUser(e.getUser());
+        if (!allConfigs.containsKey(e.getType())) {
+          LOG.error("Config inconsistency exists:" + " unknown configType=" + e.getType());
+          continue;
+        }
+        Map<String,Config> configMap=allConfigs.get(e.getType());
+        if (!configMap.containsKey(e.getTag())) {
+          LOG.debug("Config inconsistency exists for typeName=" + e.getType() + ", unknown versionTag="+ e.getTag());
+          continue;
+        }
+        Config config=configMap.get(e.getTag());
+        c.setVersion(config.getVersion());
+        Set<DesiredConfig> configs=map.get(e.getType());
+        if (configs == null) {
+          configs=new HashSet<>();
+        }
+        configs.add(c);
+        map.put(e.getType(),configs);
+        types.add(e.getType());
+      }
+    }
+    Map<Long,String> hostIdToName=new HashMap<Long,String>();
+    if (!map.isEmpty()) {
+      Map<String,List<HostConfigMapping>> hostMappingsByType=hostConfigMappingDAO.findSelectedHostsByTypes(clusterId,types);
+      for (      Entry<String,Set<DesiredConfig>> entry : map.entrySet()) {
+        List<DesiredConfig.HostOverride> hostOverrides=new ArrayList<DesiredConfig.HostOverride>();
+        for (        HostConfigMapping mappingEntity : hostMappingsByType.get(entry.getKey())) {
+          if (!hostIdToName.containsKey(mappingEntity.getHostId())) {
+            HostEntity hostEntity=hostDAO.findById(mappingEntity.getHostId());
+            hostIdToName.put(mappingEntity.getHostId(),hostEntity.getHostName());
+          }
+          hostOverrides.add(new DesiredConfig.HostOverride(hostIdToName.get(mappingEntity.getHostId()),mappingEntity.getVersion()));
+        }
+        for (        DesiredConfig c : entry.getValue()) {
+          c.setHostOverrides(hostOverrides);
+        }
+      }
+    }
+    return map;
+  }
+  finally {
+    clusterGlobalLock.readLock().unlock();
+  }
+}
