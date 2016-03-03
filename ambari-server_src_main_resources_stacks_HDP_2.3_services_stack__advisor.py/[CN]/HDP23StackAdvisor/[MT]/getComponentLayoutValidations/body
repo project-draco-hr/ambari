@@ -11,38 +11,27 @@ def getComponentLayoutValidations(self, services, hosts):
         hawqStandbyHosts = self.__getHosts(componentsList, 'HAWQSTANDBY')
         hawqSegmentHosts = self.__getHosts(componentsList, 'HAWQSEGMENT')
         datanodeHosts = self.__getHosts(componentsList, 'DATANODE')
-        mismatchHosts = set(hawqSegmentHosts).symmetric_difference(set(datanodeHosts))
+        mismatchHosts = sorted(set(hawqSegmentHosts).symmetric_difference(set(datanodeHosts)))
         if (len(mismatchHosts) > 0):
             hostsString = ', '.join(mismatchHosts)
-            message = 'HAWQSEGMENT is not co-located with DATANODE on the following {0} host(s): {1}'.format(len(mismatchHosts), hostsString)
+            message = 'HAWQ Segment must be installed on all DataNodes. The following {0} host(s) do not satisfy the colocation recommendation: {1}'.format(len(mismatchHosts), hostsString)
             childItems.append({'type': 'host-component', 'level': 'WARN', 'message': message, 'component-name': 'HAWQSEGMENT', })
         if ((len(hawqMasterHosts) == 1) and (len(hawqStandbyHosts) == 1) and (hawqMasterHosts == hawqStandbyHosts)):
-            message = 'HAWQ Standby Master and HAWQ Master should not be deployed on the same host.'
+            message = 'HAWQ Master and HAWQ Standby Master cannot be deployed on the same host.'
             childItems.append({'type': 'host-component', 'level': 'ERROR', 'message': message, 'component-name': 'HAWQSTANDBY', 'host': hawqStandbyHosts[0], })
         if ((len(hawqMasterHosts) == 1) and (hostsCount > 1) and self.isLocalHost(hawqMasterHosts[0])):
-            message = 'HAWQ Master and Ambari Server should not be deployed on the same host. If you leave them collocated, make sure to set HAWQ Master Port property to a value different from the port number used by Ambari Server database.'
+            message = 'HAWQ Master and Ambari Server should not be deployed on the same host. If you leave them colocated, make sure to set HAWQ Master Port property to a value different from the port number used by Ambari Server database.'
             childItems.append({'type': 'host-component', 'level': 'WARN', 'message': message, 'component-name': 'HAWQMASTER', 'host': hawqMasterHosts[0], })
         if ((len(hawqStandbyHosts) == 1) and (hostsCount > 1) and self.isLocalHost(hawqStandbyHosts[0])):
-            message = 'HAWQ Standby Master and Ambari Server should not be deployed on the same host. If you leave them collocated, make sure to set HAWQ Master Port property to a value different from the port number used by Ambari Server database.'
+            message = 'HAWQ Standby Master and Ambari Server should not be deployed on the same host. If you leave them colocated, make sure to set HAWQ Master Port property to a value different from the port number used by Ambari Server database.'
             childItems.append({'type': 'host-component', 'level': 'WARN', 'message': message, 'component-name': 'HAWQSTANDBY', 'host': hawqStandbyHosts[0], })
     if ('PXF' in servicesList):
         pxfHosts = self.__getHosts(componentsList, 'PXF')
-        namenodeHosts = self.__getHosts(componentsList, 'NAMENODE')
-        datanodeHosts = self.__getHosts(componentsList, 'DATANODE')
-        mismatchHosts = sorted(set(namenodeHosts).difference(set(pxfHosts)))
+        expectedPxfHosts = set((self.__getHosts(componentsList, 'NAMENODE') + self.__getHosts(componentsList, 'DATANODE')))
+        mismatchHosts = sorted(expectedPxfHosts.symmetric_difference(set(pxfHosts)))
         if (len(mismatchHosts) > 0):
             hostsString = ', '.join(mismatchHosts)
-            message = 'PXF is not co-located with NAMENODE on the following {0} host(s): {1}'.format(len(mismatchHosts), hostsString)
-            childItems.append({'type': 'host-component', 'level': 'WARN', 'message': message, 'component-name': 'PXF', })
-        mismatchHosts = sorted(set(datanodeHosts).difference(set(pxfHosts)))
-        if (len(mismatchHosts) > 0):
-            hostsString = ', '.join(mismatchHosts)
-            message = 'PXF is not co-located with DATANODE on the following {0} host(s): {1}'.format(len(mismatchHosts), hostsString)
-            childItems.append({'type': 'host-component', 'level': 'WARN', 'message': message, 'component-name': 'PXF', })
-        mismatchHosts = sorted(set(pxfHosts).difference(set(namenodeHosts).union(set(datanodeHosts))))
-        if (len(mismatchHosts) > 0):
-            hostsString = ', '.join(mismatchHosts)
-            message = 'PXF is not co-located with NAMENODE or DATANODE on the following {0} host(s): {1}'.format(len(mismatchHosts), hostsString)
+            message = 'PXF must be installed on the NameNode, Standby NameNode and all DataNodes. The following {0} host(s) do not satisfy the colocation recommendation: {1}'.format(len(mismatchHosts), hostsString)
             childItems.append({'type': 'host-component', 'level': 'WARN', 'message': message, 'component-name': 'PXF', })
     if ('SPARK' in servicesList):
         if ('SPARK_THRIFTSERVER' in servicesList):
