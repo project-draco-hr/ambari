@@ -1,0 +1,26 @@
+{
+  Injector injector=createStrictMock(Injector.class);
+  MaintenanceStateHelper maintenanceStateHelper=createMockBuilder(MaintenanceStateHelper.class).withConstructor(injector).createNiceMock();
+  Clusters clusters=createMock(Clusters.class);
+  Cluster cluster=createMock(Cluster.class);
+  Service service=createNiceMock(Service.class);
+  ServiceComponent serviceComponent=createMock(ServiceComponent.class);
+  ServiceComponentHost sch=createMock(ServiceComponentHost.class);
+  final Host host=createNiceMock(Host.class);
+  long clusterId=1L;
+  String hostName="c6401.ambari.apache.org";
+  Alert alert=new Alert("foo-alert",null,"HDFS","DATANODE",hostName,AlertState.CRITICAL);
+  expect(host.getMaintenanceState(clusterId)).andReturn(MaintenanceState.OFF).once();
+  expect(clusters.getHost(hostName)).andReturn(host).once();
+  expect(clusters.getClusterById(clusterId)).andReturn(cluster).once();
+  expect(cluster.getService("HDFS")).andReturn(service).once();
+  expect(service.getMaintenanceState()).andReturn(MaintenanceState.OFF);
+  expect(service.getServiceComponent("DATANODE")).andReturn(serviceComponent).once();
+  expect(serviceComponent.getServiceComponentHost(hostName)).andReturn(sch).once();
+  expect(sch.getMaintenanceState()).andReturn(MaintenanceState.ON).once();
+  injectField(maintenanceStateHelper,clusters);
+  replay(maintenanceStateHelper,clusters,host,cluster,service,serviceComponent,sch);
+  MaintenanceState state=maintenanceStateHelper.getEffectiveState(clusterId,alert);
+  Assert.assertEquals(MaintenanceState.ON,state);
+  verify(maintenanceStateHelper,clusters,host,cluster,service,serviceComponent,sch);
+}

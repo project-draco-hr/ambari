@@ -1,0 +1,31 @@
+{
+  String serviceName=alert.getService();
+  String componentName=alert.getComponent();
+  String hostName=alert.getHostName();
+  if (null == serviceName && null == hostName) {
+    LOG.warn("Unable to determine maintenance state for an alert without a service or host");
+    return MaintenanceState.OFF;
+  }
+  if (StringUtils.isNotBlank(hostName)) {
+    Host host=clusters.getHost(hostName);
+    if (host.getMaintenanceState(clusterId) != MaintenanceState.OFF) {
+      return MaintenanceState.ON;
+    }
+  }
+  if (StringUtils.equals(Services.AMBARI.name(),serviceName)) {
+    return MaintenanceState.OFF;
+  }
+  Cluster cluster=clusters.getClusterById(clusterId);
+  Service service=cluster.getService(serviceName);
+  if (service.getMaintenanceState() != MaintenanceState.OFF) {
+    return MaintenanceState.ON;
+  }
+  if (StringUtils.isNotBlank(componentName)) {
+    ServiceComponent serviceComponent=service.getServiceComponent(componentName);
+    ServiceComponentHost serviceComponentHost=serviceComponent.getServiceComponentHost(hostName);
+    if (serviceComponentHost.getMaintenanceState() != MaintenanceState.OFF) {
+      return MaintenanceState.ON;
+    }
+  }
+  return MaintenanceState.OFF;
+}
