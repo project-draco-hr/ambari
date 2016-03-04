@@ -1,0 +1,95 @@
+{
+  HadoopTimelineMetricsSink sink=createMockBuilder(HadoopTimelineMetricsSink.class).withConstructor().addMockedMethod("appendPrefix").addMockedMethod("emitMetrics").createNiceMock();
+  SubsetConfiguration conf=createNiceMock(SubsetConfiguration.class);
+  expect(conf.getString(eq("slave.host.name"))).andReturn("testhost").anyTimes();
+  expect(conf.getParent()).andReturn(null).anyTimes();
+  expect(conf.getPrefix()).andReturn("service").anyTimes();
+  expect(conf.getString(eq(COLLECTOR_PROPERTY))).andReturn("localhost:63188").anyTimes();
+  expect(conf.getString(eq("serviceName-prefix"),eq(""))).andReturn("").anyTimes();
+  expect(conf.getInt(eq(MAX_METRIC_ROW_CACHE_SIZE),anyInt())).andReturn(10).anyTimes();
+  expect(conf.getInt(eq(METRICS_SEND_INTERVAL),anyInt())).andReturn(10).anyTimes();
+  conf.setListDelimiter(eq(','));
+  expectLastCall().anyTimes();
+  Set<String> rpcPortSuffixes=new HashSet<String>(){
+{
+      add("metric.rpc.client.port");
+      add("metric.rpc.datanode.port");
+      add("metric.rpc.healthcheck.port");
+    }
+  }
+;
+  expect(conf.getKeys()).andReturn(rpcPortSuffixes.iterator());
+  expect(conf.getString("metric.rpc.client.port")).andReturn("8020");
+  expect(conf.getString("metric.rpc.datanode.port")).andReturn("8040");
+  expect(conf.getString("metric.rpc.healthcheck.port")).andReturn("8060");
+  AbstractMetric metric=createNiceMock(AbstractMetric.class);
+  expect(metric.name()).andReturn("rpc.metricName").anyTimes();
+  expect(metric.value()).andReturn(1.0).once();
+  expect(metric.value()).andReturn(2.0).once();
+  expect(metric.value()).andReturn(3.0).once();
+  expect(metric.value()).andReturn(4.0).once();
+  expect(metric.value()).andReturn(5.0).once();
+  expect(metric.value()).andReturn(6.0).once();
+  MetricsRecord record=createNiceMock(MetricsRecord.class);
+  expect(record.name()).andReturn("testMetric").anyTimes();
+  expect(record.context()).andReturn("rpc").anyTimes();
+  Collection<MetricsTag> tags1=Collections.singletonList(new MetricsTag(new MetricsInfo(){
+    @Override public String name(){
+      return "port";
+    }
+    @Override public String description(){
+      return null;
+    }
+  }
+,"8020"));
+  Collection<MetricsTag> tags2=Collections.singletonList(new MetricsTag(new MetricsInfo(){
+    @Override public String name(){
+      return "port";
+    }
+    @Override public String description(){
+      return null;
+    }
+  }
+,"8040"));
+  expect(record.tags()).andReturn(tags1).times(6);
+  expect(record.tags()).andReturn(tags2).times(6);
+  sink.appendPrefix(eq(record),(StringBuilder)anyObject());
+  expectLastCall().anyTimes().andStubAnswer(new IAnswer<Object>(){
+    @Override public Object answer() throws Throwable {
+      return null;
+    }
+  }
+);
+  final Long now=System.currentTimeMillis();
+  expect(record.timestamp()).andReturn(now).times(2);
+  expect(record.timestamp()).andReturn(now + 100l).times(2);
+  expect(record.timestamp()).andReturn(now + 200l).once();
+  expect(record.timestamp()).andReturn(now + 300l).once();
+  expect(record.metrics()).andReturn(Arrays.asList(metric)).anyTimes();
+  final List<TimelineMetrics> capturedMetrics=new ArrayList<TimelineMetrics>();
+  sink.emitMetrics((TimelineMetrics)anyObject());
+  expectLastCall().andStubAnswer(new IAnswer<Object>(){
+    @Override public Object answer() throws Throwable {
+      capturedMetrics.add((TimelineMetrics)EasyMock.getCurrentArguments()[0]);
+      return null;
+    }
+  }
+);
+  replay(conf,sink,record,metric);
+  sink.init(conf);
+  sink.putMetrics(record);
+  sink.putMetrics(record);
+  sink.putMetrics(record);
+  sink.putMetrics(record);
+  sink.putMetrics(record);
+  sink.putMetrics(record);
+  verify(conf,sink,record,metric);
+  Assert.assertEquals(2,capturedMetrics.size());
+  Iterator<TimelineMetrics> metricsIterator=capturedMetrics.iterator();
+  TimelineMetric timelineMetric1=metricsIterator.next().getMetrics().get(0);
+  Assert.assertEquals(2,timelineMetric1.getMetricValues().size());
+  Assert.assertEquals("rpc.testMetric.client.rpc.metricName",timelineMetric1.getMetricName());
+  TimelineMetric timelineMetric2=metricsIterator.next().getMetrics().get(0);
+  Assert.assertEquals(2,timelineMetric2.getMetricValues().size());
+  Assert.assertEquals("rpc.testMetric.datanode.rpc.metricName",timelineMetric2.getMetricName());
+}

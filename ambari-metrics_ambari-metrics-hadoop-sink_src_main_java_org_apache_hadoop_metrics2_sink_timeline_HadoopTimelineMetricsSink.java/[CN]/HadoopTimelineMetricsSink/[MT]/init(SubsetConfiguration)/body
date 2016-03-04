@@ -1,4 +1,5 @@
 {
+  this.conf=conf;
   LOG.info("Initializing Timeline metrics sink.");
   if (conf.getString("slave.host.name") != null) {
     hostName=conf.getString("slave.host.name");
@@ -36,25 +37,36 @@
   Iterator<String> it=(Iterator<String>)conf.getKeys();
   while (it.hasNext()) {
     String propertyName=it.next();
-    if (propertyName != null && propertyName.startsWith(TAGS_FOR_PREFIX_PROPERTY_PREFIX)) {
-      String contextName=propertyName.substring(TAGS_FOR_PREFIX_PROPERTY_PREFIX.length());
-      String[] tags=conf.getStringArray(propertyName);
-      boolean useAllTags=false;
-      Set<String> set=null;
-      if (tags.length > 0) {
-        set=new HashSet<String>();
-        for (        String tag : tags) {
-          tag=tag.trim();
-          useAllTags|=tag.equals("*");
-          if (tag.length() > 0) {
-            set.add(tag);
+    if (propertyName != null) {
+      if (propertyName.startsWith(TAGS_FOR_PREFIX_PROPERTY_PREFIX)) {
+        String contextName=propertyName.substring(TAGS_FOR_PREFIX_PROPERTY_PREFIX.length());
+        String[] tags=conf.getStringArray(propertyName);
+        boolean useAllTags=false;
+        Set<String> set=null;
+        if (tags.length > 0) {
+          set=new HashSet<String>();
+          for (          String tag : tags) {
+            tag=tag.trim();
+            useAllTags|=tag.equals("*");
+            if (tag.length() > 0) {
+              set.add(tag);
+            }
+          }
+          if (useAllTags) {
+            set=null;
           }
         }
-        if (useAllTags) {
-          set=null;
-        }
+        useTagsMap.put(contextName,set);
       }
-      useTagsMap.put(contextName,set);
+      if (propertyName.startsWith(RPC_METRIC_PREFIX)) {
+        int beginIdx=RPC_METRIC_PREFIX.length() + 1;
+        String suffixStr=propertyName.substring(beginIdx);
+        String configPrefix=suffixStr.substring(0,suffixStr.indexOf("."));
+        rpcPortSuffixes.put(conf.getString(propertyName).trim(),configPrefix.trim());
+      }
     }
+  }
+  if (!rpcPortSuffixes.isEmpty()) {
+    LOG.info("RPC port properties configured: " + rpcPortSuffixes);
   }
 }
