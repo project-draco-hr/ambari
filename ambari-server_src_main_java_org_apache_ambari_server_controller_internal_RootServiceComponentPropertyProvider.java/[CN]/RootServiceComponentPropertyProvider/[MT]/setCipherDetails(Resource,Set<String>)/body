@@ -1,0 +1,33 @@
+{
+synchronized (CACHED_CIPHER_MAX_KEY_LENGTHS) {
+    if (CACHED_CIPHER_MAX_KEY_LENGTHS.isEmpty()) {
+      for (      Provider provider : Security.getProviders()) {
+        String providerName=provider.getName();
+        for (        Provider.Service service : provider.getServices()) {
+          String algorithmName=service.getAlgorithm();
+          if ("Cipher".equalsIgnoreCase(service.getType())) {
+            try {
+              CACHED_CIPHER_MAX_KEY_LENGTHS.put(String.format("%s.%s",providerName,algorithmName).toLowerCase(),Cipher.getMaxAllowedKeyLength(algorithmName));
+            }
+ catch (            NoSuchAlgorithmException e) {
+              LOG.warn(String.format("Failed to get the max key length of cipher %s, skipping.",algorithmName),e);
+            }
+          }
+        }
+      }
+    }
+  }
+  if (requestedIds.contains(CIPHER_PROPERTIES_PROPERTY_ID)) {
+    for (    Map.Entry<String,Integer> entry : CACHED_CIPHER_MAX_KEY_LENGTHS.entrySet()) {
+      setResourceProperty(resource,PropertyHelper.getPropertyId(CIPHER_PROPERTIES_PROPERTY_ID,entry.getKey()),entry.getValue(),requestedIds);
+    }
+  }
+  if (requestedIds.contains(JCE_POLICY_PROPERTY_ID)) {
+    Boolean unlimitedKeyJCEPolicyInstalled=null;
+    Map.Entry<String,Integer> entry=CACHED_CIPHER_MAX_KEY_LENGTHS.entrySet().iterator().next();
+    if (entry != null) {
+      unlimitedKeyJCEPolicyInstalled=(Integer.MAX_VALUE == entry.getValue());
+    }
+    setResourceProperty(resource,PropertyHelper.getPropertyId(JCE_POLICY_PROPERTY_ID,"unlimited_key"),unlimitedKeyJCEPolicyInstalled,requestedIds);
+  }
+}
