@@ -1,19 +1,24 @@
 def service_check(self, env):
     '\n    Runs the service check for PXF\n    '
     import params
+    self.total_tests = 0
+    self.checks_failed = 0
     Logger.info('Starting PXF service checks')
-    try:
-        if params.security_enabled:
-            token = self.__get_delegation_token(params.hdfs_user, params.hdfs_user_keytab, params.hdfs_principal_name, params.kinit_path_local)
-            self.commonPXFHeaders.update({'X-GP-TOKEN': token, })
-        self.pxf_version = self.__get_pxf_protocol_version()
-        self.run_hdfs_tests()
-        if params.is_hbase_installed:
-            self.run_hbase_tests()
-        if params.is_hive_installed:
-            self.run_hive_tests()
-    except Exception as ex:
-        Logger.error('Exception received during service check execution:\n{0}'.format(ex))
-        Logger.error('PXF service check failed.')
-        raise
+    if params.security_enabled:
+        self.total_tests += 1
+        token = self.__get_delegation_token(params.hdfs_user, params.hdfs_user_keytab, params.hdfs_principal_name, params.kinit_path_local)
+        self.commonPXFHeaders.update({'X-GP-TOKEN': token, })
+    self.total_tests += 1
+    self.pxf_version = self.__get_pxf_protocol_version()
+    self.total_tests += 1
+    self.run_hdfs_tests()
+    if params.is_hbase_installed:
+        self.total_tests += 1
+        self.run_hbase_tests()
+    if params.is_hive_installed:
+        self.total_tests += 1
+        self.run_hive_tests()
+    if self.checks_failed:
+        Logger.error('***FAILURE*** - {0} out of {1} tests failed.'.format(self.checks_failed, self.total_tests))
+        sys.exit(1)
     Logger.info('Service check completed successfully')
