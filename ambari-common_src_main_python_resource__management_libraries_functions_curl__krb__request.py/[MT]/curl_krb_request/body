@@ -1,5 +1,7 @@
-def curl_krb_request(tmp_dir, keytab, principal, url, cache_file_prefix, krb_exec_search_paths, return_only_http_code, alert_name, user, connection_timeout=CONNECTION_TIMEOUT_DEFAULT):
+def curl_krb_request(tmp_dir, keytab, principal, url, cache_file_prefix, krb_exec_search_paths, return_only_http_code, caller_label, user, connection_timeout=CONNECTION_TIMEOUT_DEFAULT, kinit_timer_ms=DEFAULT_KERBEROS_KINIT_TIMER_MS):
+    "\n  Makes a curl request using the kerberos credentials stored in a calculated cache file. The\n  cache file is created by combining the supplied principal, keytab, user, and request name into\n  a unique hash.\n\n  This function will use the klist command to determine if the cache is expired and will perform\n  a kinit if necessary. Additionally, it has an internal timer to force a kinit after a\n  configurable amount of time. This is to prevent boundary issues where requests hit the edge\n  of a ticket's lifetime.\n\n  :param tmp_dir: the directory to use for storing the local kerberos cache for this request.\n  :param keytab: the location of the keytab to use when performing a kinit\n  :param principal: the principal to use when performing a kinit\n  :param url: the URL to request\n  :param cache_file_prefix: an identifier used to build the unique cache name for this request.\n                            This ensures that multiple requests can use the same cache.\n  :param krb_exec_search_paths: the search path to use for invoking kerberos binaries\n  :param return_only_http_code: True to return only the HTTP code, False to return GET content\n  :param caller_label: an identifier to give context into the caller of this module (used for logging)\n  :param user: the user to invoke the curl command as\n  :param connection_timeout: if specified, a connection timeout for curl (default 10 seconds)\n  :param kinit_timer_ms: if specified, the time (in ms), before forcing a kinit even if the\n                         klist cache is still valid.\n  :return:\n  "
     import uuid
+    is_kinit_required = False
     ccache_file_name = _md5('{0}|{1}'.format(principal, keytab)).hexdigest()
     ccache_file_path = '{0}{1}{2}_{3}_cc_{4}'.format(tmp_dir, os.sep, cache_file_prefix, user, ccache_file_name)
     kerberos_env = {'KRB5CCNAME': ccache_file_path, }
@@ -10,15 +12,23 @@ def curl_krb_request(tmp_dir, keytab, principal, url, cache_file_prefix, krb_exe
             klist_path_local = get_klist_path(krb_exec_search_paths)
         else:
             klist_path_local = get_klist_path()
-        if (shell.call('{0} -s {1}'.format(klist_path_local, ccache_file_path), user=user)[0] != 0):
+        last_kinit_time = _KINIT_CACHE_TIMES.get(ccache_file_name, 0)
+        current_time = long(time.time())
+        if ((current_time - kinit_timer_ms) > last_kinit_time):
+            is_kinit_required = True
+        if (not is_kinit_required):
+            klist_command = '{0} -s {1}'.format(klist_path_local, ccache_file_path)
+            is_kinit_required = (shell.call(klist_command, user=user)[0] != 0)
+        if is_kinit_required:
             if krb_exec_search_paths:
                 kinit_path_local = get_kinit_path(krb_exec_search_paths)
             else:
                 kinit_path_local = get_kinit_path()
-            logger.debug('[Alert][{0}] Enabling Kerberos authentication via GSSAPI using ccache at {1}.'.format(alert_name, ccache_file_path))
-            shell.checked_call('{0} -l 5m -c {1} -kt {2} {3} > /dev/null'.format(kinit_path_local, ccache_file_path, keytab, principal), user=user)
+            logger.debug('Enabling Kerberos authentication for %s via GSSAPI using ccache at %s', caller_label, ccache_file_path)
+            shell.checked_call('{0} -c {1} -kt {2} {3} > /dev/null'.format(kinit_path_local, ccache_file_path, keytab, principal), user=user)
+            _KINIT_CACHE_TIMES[ccache_file_name] = current_time
         else:
-            logger.debug('[Alert][{0}] Kerberos authentication via GSSAPI already enabled using ccache at {1}.'.format(alert_name, ccache_file_path))
+            logger.debug('Kerberos authentication for %s via GSSAPI already enabled using ccache at %s.', caller_label, ccache_file_path)
     finally:
         kinit_lock.release()
     cookies_dir = os.path.join(tmp_dir, 'cookies')
@@ -38,7 +48,7 @@ def curl_krb_request(tmp_dir, keytab, principal, url, cache_file_prefix, krb_exe
                 (_, curl_stdout, curl_stderr) = get_user_call_output(['curl', '-L', '-k', '--negotiate', '-u', ':', '-b', cookie_file, '-c', cookie_file, url, '--connect-timeout', str(connection_timeout), '--max-time', str(maximum_timeout)], user=user, env=kerberos_env)
         except Fail:
             if logger.isEnabledFor(logging.DEBUG):
-                logger.exception('[Alert][{0}] Unable to make a web request.'.format(alert_name))
+                logger.exception('Unable to make a curl request for {0}.'.format(caller_label))
             raise
     finally:
         if os.path.isfile(cookie_file):
@@ -51,5 +61,5 @@ def curl_krb_request(tmp_dir, keytab, principal, url, cache_file_prefix, krb_exe
             return (int(curl_stdout), error_msg, time_millis)
         else:
             return (curl_stdout, error_msg, time_millis)
-    logger.debug('[Alert][{0}] Curl response is empty! Please take a look at error message: '.format(alert_name, str(error_msg)))
+    logger.debug('The curl response for %s is empty; standard error = %s', caller_label, str(error_msg))
     return ('', error_msg, time_millis)
