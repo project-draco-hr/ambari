@@ -1,0 +1,16 @@
+def _call_with_retries(self, cmd, is_checked=True, **kwargs):
+    func = (shell.checked_call if is_checked else shell.call)
+    for i in range(self.resource.retry_count):
+        is_last_time = (i == (self.resource.retry_count - 1))
+        try:
+            (code, out) = func(cmd, **kwargs)
+        except Fail as ex:
+            if ((not self._is_handled_error(str(ex), is_last_time)) or is_last_time):
+                raise
+            self._notify_about_handled_error(str(ex), is_last_time)
+        else:
+            if ((not code) or (not self._is_handled_error(out, is_last_time))):
+                break
+            self._notify_about_handled_error(str(out), is_last_time)
+        time.sleep(self.resource.retry_sleep)
+    return (code, out)
