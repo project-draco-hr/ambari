@@ -1,0 +1,40 @@
+def install_windows_msi(url_base, save_dir, save_files, hadoop_user, hadoop_password, stack_version):
+    global _working_dir
+    _working_dir = save_dir
+    save_dir = os.path.abspath(save_dir)
+    msi_save_dir = save_dir
+    install_lock = SystemWideLock('Global\\hdp_msi_lock')
+    try:
+        if (not install_lock.lock()):
+            Logger.info('Some other task currently installing hdp.msi, waiting for 10 min for finish')
+            if (not install_lock.lock(600000)):
+                raise Fail('Timeout on acquiring lock')
+        if _validate_msi_install():
+            Logger.info('hdp.msi already installed')
+            return
+        stack_version_formatted = format_stack_version(stack_version)
+        hdp_22_specific_props = ''
+        if ((stack_version_formatted != '') and (compare_versions(stack_version_formatted, '2.2') >= 0)):
+            hdp_22_specific_props = hdp_22.format(hdp_data_dir=hdp_data_dir)
+        hdp_msi_file = ''
+        for save_file in save_files:
+            if save_file.lower().endswith('.msi'):
+                hdp_msi_file = save_file
+            file_url = urlparse.urljoin(url_base, save_file)
+            try:
+                download_file(file_url, os.path.join(msi_save_dir, save_file))
+            except:
+                raise Fail('Failed to download {url}'.format(url=file_url))
+        File(os.path.join(msi_save_dir, 'properties.txt'), content=cluster_properties.format(hdp_log_dir=hdp_log_dir, hdp_data_dir=hdp_data_dir, local_host=local_host, db_flavor=db_flavor, hdp_22_specific_props=hdp_22_specific_props))
+        hdp_msi_path = os_utils.quote_path(os.path.join(save_dir, hdp_msi_file))
+        hdp_log_path = os_utils.quote_path(os.path.join(save_dir, (hdp_msi_file[:(-3)] + 'log')))
+        hdp_layout_path = os_utils.quote_path(os.path.join(save_dir, 'properties.txt'))
+        hadoop_password_arg = os_utils.quote_path(hadoop_password)
+        Execute(INSTALL_MSI_CMD.format(hdp_msi_path=hdp_msi_path, hdp_log_path=hdp_log_path, hdp_layout_path=hdp_layout_path, hadoop_user=hadoop_user, hadoop_password_arg=hadoop_password_arg))
+        reload_windows_env()
+        _ensure_services_created(hadoop_user, hadoop_password)
+        _create_symlinks(stack_version)
+        _write_marker()
+        _validate_msi_install()
+    finally:
+        install_lock.unlock()

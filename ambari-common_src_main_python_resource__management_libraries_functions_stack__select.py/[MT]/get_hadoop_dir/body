@@ -1,0 +1,22 @@
+def get_hadoop_dir(target, force_latest_on_upgrade=False):
+    '\n  Return the hadoop shared directory in the following override order\n  1. Use default for 2.1 and lower\n  2. If 2.2 and higher, use /usr/hdp/current/hadoop-client/{target}\n  3. If 2.2 and higher AND for an upgrade, use /usr/hdp/<version>/hadoop/{target}.\n  However, if the upgrade has not yet invoked hdp-select, return the current\n  version of the component.\n  :target: the target directory\n  :force_latest_on_upgrade: if True, then this will return the "current" directory\n  without the HDP version built into the path, such as /usr/hdp/current/hadoop-client\n  '
+    if (not (target in HADOOP_DIR_DEFAULTS)):
+        raise Fail('Target {0} not defined'.format(target))
+    hadoop_dir = HADOOP_DIR_DEFAULTS[target]
+    if Script.is_stack_greater_or_equal('2.2'):
+        if (target == 'home'):
+            hadoop_dir = HADOOP_HOME_DIR_TEMPLATE.format('current', 'hadoop-client')
+        else:
+            hadoop_dir = HADOOP_DIR_TEMPLATE.format('current', 'hadoop-client', target)
+        if (not force_latest_on_upgrade):
+            stack_info = _get_upgrade_stack()
+            if (stack_info is not None):
+                stack_version = stack_info[1]
+                current_stack_version = get_role_component_current_stack_version()
+                if ((current_stack_version is not None) and (stack_version != current_stack_version)):
+                    stack_version = current_stack_version
+                if (target == 'home'):
+                    hadoop_dir = HADOOP_HOME_DIR_TEMPLATE.format(stack_version, 'hadoop')
+                else:
+                    hadoop_dir = HADOOP_DIR_TEMPLATE.format(stack_version, 'hadoop', target)
+    return hadoop_dir
