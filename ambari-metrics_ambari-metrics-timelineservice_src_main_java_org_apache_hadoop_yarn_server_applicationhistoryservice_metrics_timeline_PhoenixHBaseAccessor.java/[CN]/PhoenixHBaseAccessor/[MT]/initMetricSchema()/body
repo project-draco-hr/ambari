@@ -3,14 +3,6 @@
   Statement stmt=null;
   String encoding=metricsConf.get(HBASE_ENCODING_SCHEME,DEFAULT_ENCODING);
   String compression=metricsConf.get(HBASE_COMPRESSION_SCHEME,DEFAULT_TABLE_COMPRESSION);
-  String precisionTtl=getDaysInSeconds(metricsConf.get(PRECISION_TABLE_TTL,"1"));
-  String hostMinTtl=getDaysInSeconds(metricsConf.get(HOST_MINUTE_TABLE_TTL,"7"));
-  String hostHourTtl=getDaysInSeconds(metricsConf.get(HOST_HOUR_TABLE_TTL,"30"));
-  String hostDailyTtl=getDaysInSeconds(metricsConf.get(HOST_DAILY_TABLE_TTL,"365"));
-  String clusterSecTtl=getDaysInSeconds(metricsConf.get(CLUSTER_SECOND_TABLE_TTL,"7"));
-  String clusterMinTtl=getDaysInSeconds(metricsConf.get(CLUSTER_MINUTE_TABLE_TTL,"30"));
-  String clusterHourTtl=getDaysInSeconds(metricsConf.get(CLUSTER_HOUR_TABLE_TTL,"365"));
-  String clusterDailyTtl=getDaysInSeconds(metricsConf.get(CLUSTER_DAILY_TABLE_TTL,"730"));
   try {
     LOG.info("Initializing metrics schema...");
     conn=getConnectionRetryingOnException();
@@ -37,29 +29,12 @@
     stmt.executeUpdate(String.format(CREATE_METRICS_CLUSTER_AGGREGATE_GROUPED_TABLE_SQL,METRICS_CLUSTER_AGGREGATE_MINUTE_TABLE_NAME,encoding,clusterHourTtl,compression));
     stmt.executeUpdate(String.format(CREATE_METRICS_CLUSTER_AGGREGATE_GROUPED_TABLE_SQL,METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME,encoding,clusterHourTtl,compression));
     stmt.executeUpdate(String.format(CREATE_METRICS_CLUSTER_AGGREGATE_GROUPED_TABLE_SQL,METRICS_CLUSTER_AGGREGATE_DAILY_TABLE_NAME,encoding,clusterDailyTtl,compression));
-    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_RECORD_TABLE_NAME,precisionTtl));
-    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_AGGREGATE_MINUTE_TABLE_NAME,hostMinTtl));
-    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_AGGREGATE_HOURLY_TABLE_NAME,hostHourTtl));
-    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_AGGREGATE_DAILY_TABLE_NAME,hostDailyTtl));
-    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_CLUSTER_AGGREGATE_TABLE_NAME,clusterSecTtl));
-    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_CLUSTER_AGGREGATE_MINUTE_TABLE_NAME,clusterMinTtl));
-    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME,clusterHourTtl));
-    stmt.executeUpdate(String.format(ALTER_SQL,METRICS_CLUSTER_AGGREGATE_DAILY_TABLE_NAME,clusterDailyTtl));
     conn.commit();
     LOG.info("Metrics schema initialized.");
   }
- catch (  SQLException sql) {
-    if (sql.getErrorCode() == SQLExceptionCode.SET_UNSUPPORTED_PROP_ON_ALTER_TABLE.getErrorCode()) {
-      LOG.warn("Cannot update TTL on tables. " + sql.getMessage());
-    }
- else {
-      LOG.error("Error creating Metrics Schema in HBase using Phoenix.",sql);
-      throw new MetricsSystemInitializationException("Error creating Metrics Schema in HBase using Phoenix.",sql);
-    }
-  }
-catch (  InterruptedException e) {
-    LOG.error("Error creating Metrics Schema in HBase using Phoenix.",e);
-    throw new MetricsSystemInitializationException("Error creating Metrics Schema in HBase using Phoenix.",e);
+ catch (  SQLException|InterruptedException sql) {
+    LOG.error("Error creating Metrics Schema in HBase using Phoenix.",sql);
+    throw new MetricsSystemInitializationException("Error creating Metrics Schema in HBase using Phoenix.",sql);
   }
  finally {
     if (stmt != null) {
