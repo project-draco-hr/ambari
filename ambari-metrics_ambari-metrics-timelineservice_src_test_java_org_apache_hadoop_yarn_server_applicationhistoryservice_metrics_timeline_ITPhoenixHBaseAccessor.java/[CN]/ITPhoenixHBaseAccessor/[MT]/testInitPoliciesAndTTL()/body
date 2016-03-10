@@ -1,11 +1,23 @@
 {
   HBaseAdmin hBaseAdmin=hdb.getHBaseAdmin();
+  String precisionTtl="";
   for (  String tableName : PHOENIX_TABLES) {
     HTableDescriptor tableDescriptor=hBaseAdmin.getTableDescriptor(tableName.getBytes());
     Assert.assertFalse("Normalizer disabled by default.",tableDescriptor.isNormalizationEnabled());
     Assert.assertNull("Default compaction policy is null.",tableDescriptor.getConfigurationValue(HSTORE_COMPACTION_CLASS_KEY));
+    for (    HColumnDescriptor family : tableDescriptor.getColumnFamilies()) {
+      if (tableName.equals(METRICS_RECORD_TABLE_NAME)) {
+        precisionTtl=family.getValue("TTL");
+      }
+    }
+    Assert.assertEquals("Precision TTL value.",hdb.getDaysInSeconds("1"),precisionTtl);
   }
-  hdb.initPolicies();
+  Field f=PhoenixHBaseAccessor.class.getDeclaredField("tableTTL");
+  f.setAccessible(true);
+  Map<String,String> precisionValues=(Map<String,String>)f.get(hdb);
+  precisionValues.put(METRICS_RECORD_TABLE_NAME,hdb.getDaysInSeconds("2"));
+  f.set(hdb,precisionValues);
+  hdb.initPoliciesAndTTL();
   boolean normalizerEnabled=false;
   String compactionPolicy=null;
   for (int i=0; i < 10; i++) {
@@ -19,9 +31,15 @@
       if (!normalizerEnabled || compactionPolicy == null) {
         Thread.sleep(2000l);
       }
+      if (tableName.equals(METRICS_RECORD_TABLE_NAME)) {
+        for (        HColumnDescriptor family : tableDescriptor.getColumnFamilies()) {
+          precisionTtl=family.getValue("TTL");
+        }
+      }
     }
   }
   Assert.assertTrue("Normalizer enabled.",normalizerEnabled);
   Assert.assertEquals("FIFO compaction policy is set.",FIFO_COMPACTION_POLICY_CLASS,compactionPolicy);
+  Assert.assertEquals("Precision TTL value not changed.",hdb.getDaysInSeconds("2"),precisionTtl);
   hBaseAdmin.close();
 }
