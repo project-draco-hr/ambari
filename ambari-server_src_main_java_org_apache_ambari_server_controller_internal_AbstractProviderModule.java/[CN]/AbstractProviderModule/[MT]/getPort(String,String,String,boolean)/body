@@ -1,10 +1,10 @@
 {
-  Map<String,Map<String,String>> clusterJmxPorts=jmxPortMap.get(clusterName);
+  ConcurrentMap<String,ConcurrentMap<String,String>> clusterJmxPorts=jmxPortMap.get(clusterName);
   if (clusterJmxPorts == null) {
 synchronized (jmxPortMap) {
       clusterJmxPorts=jmxPortMap.get(clusterName);
       if (clusterJmxPorts == null) {
-        clusterJmxPorts=new ConcurrentHashMap<String,Map<String,String>>();
+        clusterJmxPorts=new ConcurrentHashMap<String,ConcurrentMap<String,String>>();
         jmxPortMap.put(clusterName,clusterJmxPorts);
       }
     }
@@ -24,18 +24,21 @@ synchronized (jmxPortMap) {
         for (        Entry<String,String> entry : portMap.entrySet()) {
           String portString=getPortString(entry.getValue());
           if (null != portString) {
-            if (!clusterJmxPorts.containsKey(hostName)) {
-              clusterJmxPorts.put(hostName,new ConcurrentHashMap<String,String>());
-            }
+            clusterJmxPorts.putIfAbsent(hostName,new ConcurrentHashMap<String,String>());
             clusterJmxPorts.get(hostName).put(entry.getKey(),portString);
           }
         }
       }
     }
  catch (    Exception e) {
-      LOG.error("Exception initializing jmx port maps. " + e);
+      LOG.error("Exception initializing jmx port maps. ",e);
     }
   }
   LOG.debug("jmxPortMap -> " + jmxPortMap);
-  return clusterJmxPorts.get(hostName).get(componentName);
+  ConcurrentMap<String,String> hostJmxPorts=clusterJmxPorts.get(hostName);
+  if (hostJmxPorts == null) {
+    LOG.debug("Jmx ports not loaded from properties: clusterName={}, componentName={}, hostName={}, " + "clusterJmxPorts={}, jmxPortMap.get(clusterName)={}",clusterName,componentName,hostName,clusterJmxPorts,jmxPortMap.get(clusterName));
+    return null;
+  }
+  return hostJmxPorts.get(componentName);
 }
