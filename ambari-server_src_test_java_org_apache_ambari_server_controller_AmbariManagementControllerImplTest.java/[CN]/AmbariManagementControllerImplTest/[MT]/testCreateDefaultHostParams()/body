@@ -8,6 +8,8 @@
   String JCE_NAME="jceName";
   String OJDBC_JAR_NAME="OjdbcJarName";
   String SERVER_DB_NAME="ServerDBName";
+  Set<String> notManagedHdfsPathSet=new HashSet<>(Arrays.asList("/tmp","/apps/falcon"));
+  Gson gson=new Gson();
   ActionManager manager=createNiceMock(ActionManager.class);
   StackId stackId=createNiceMock(StackId.class);
   Cluster cluster=createNiceMock(Cluster.class);
@@ -16,6 +18,7 @@
   ClusterVersionDAO clusterVersionDAO=createNiceMock(ClusterVersionDAO.class);
   ClusterVersionEntity clusterVersionEntity=createNiceMock(ClusterVersionEntity.class);
   RepositoryVersionEntity repositoryVersionEntity=createNiceMock(RepositoryVersionEntity.class);
+  ConfigHelper configHelper=createNiceMock(ConfigHelper.class);
   expect(cluster.getClusterName()).andReturn(clusterName);
   expect(cluster.getDesiredStackVersion()).andReturn(stackId);
   expect(stackId.getStackName()).andReturn(SOME_STACK_NAME).anyTimes();
@@ -31,7 +34,8 @@
   expect(clusterVersionDAO.findByClusterAndStateCurrent(clusterName)).andReturn(clusterVersionEntity).anyTimes();
   expect(clusterVersionEntity.getRepositoryVersion()).andReturn(repositoryVersionEntity).anyTimes();
   expect(repositoryVersionEntity.getVersion()).andReturn("1234").anyTimes();
-  replay(manager,clusters,cluster,injector,stackId,configuration,clusterVersionDAO,clusterVersionEntity,repositoryVersionEntity);
+  expect(configHelper.getPropertyValuesWithPropertyType(stackId,PropertyInfo.PropertyType.NOT_MANAGED_HDFS_PATH,cluster)).andReturn(notManagedHdfsPathSet);
+  replay(manager,clusters,cluster,injector,stackId,configuration,clusterVersionDAO,clusterVersionEntity,repositoryVersionEntity,configHelper);
   AmbariManagementControllerImpl ambariManagementControllerImpl=createMockBuilder(AmbariManagementControllerImpl.class).addMockedMethod("getRcaParameters").withConstructor(manager,clusters,injector).createNiceMock();
   expect(ambariManagementControllerImpl.getRcaParameters()).andReturn(new HashMap<String,String>());
   replay(ambariManagementControllerImpl);
@@ -50,11 +54,19 @@
   f=helperClass.getDeclaredField("clusterVersionDAO");
   f.setAccessible(true);
   f.set(helper,clusterVersionDAO);
+  f=helperClass.getDeclaredField("configHelper");
+  f.setAccessible(true);
+  f.set(helper,configHelper);
+  f=helperClass.getDeclaredField("gson");
+  f.setAccessible(true);
+  f.set(helper,gson);
   Map<String,String> defaultHostParams=helper.createDefaultHostParams(cluster);
-  assertEquals(defaultHostParams.size(),15);
+  assertEquals(defaultHostParams.size(),16);
   assertEquals(defaultHostParams.get(DB_DRIVER_FILENAME),MYSQL_JAR);
   assertEquals(defaultHostParams.get(STACK_NAME),SOME_STACK_NAME);
   assertEquals(defaultHostParams.get(STACK_VERSION),SOME_STACK_VERSION);
   assertEquals("true",defaultHostParams.get(HOST_SYS_PREPPED));
   assertEquals("8",defaultHostParams.get(JAVA_VERSION));
+  assertNotNull(defaultHostParams.get(NOT_MANAGED_HDFS_PATH_LIST));
+  assertTrue(defaultHostParams.get(NOT_MANAGED_HDFS_PATH_LIST).contains("/tmp"));
 }
