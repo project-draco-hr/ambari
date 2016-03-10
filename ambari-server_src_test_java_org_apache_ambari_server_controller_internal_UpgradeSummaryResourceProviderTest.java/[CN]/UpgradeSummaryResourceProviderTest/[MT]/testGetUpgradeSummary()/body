@@ -1,0 +1,73 @@
+{
+  createCluster();
+  Cluster cluster=clusters.getCluster(clusterName);
+  ResourceProvider upgradeSummaryResourceProvider=createProvider(amc);
+  Request requestResource=PropertyHelper.getReadRequest();
+  Predicate pBogus=new PredicateBuilder().property(UpgradeSummaryResourceProvider.UPGRADE_SUMMARY_CLUSTER_NAME).equals("bogus name").toPredicate();
+  try {
+    Set<Resource> resources=upgradeSummaryResourceProvider.getResources(requestResource,pBogus);
+    assertTrue("Expected exception to be thrown",false);
+  }
+ catch (  Exception e) {
+    ;
+  }
+  Long upgradeRequestId=1L;
+  Predicate p1=new PredicateBuilder().property(UpgradeSummaryResourceProvider.UPGRADE_SUMMARY_CLUSTER_NAME).equals(clusterName).toPredicate();
+  Predicate p2=new PredicateBuilder().property(UpgradeSummaryResourceProvider.UPGRADE_SUMMARY_REQUEST_ID).equals(upgradeRequestId.toString()).toPredicate();
+  Predicate p1And2=new AndPredicate(p1,p2);
+  Set<Resource> resources=upgradeSummaryResourceProvider.getResources(requestResource,p1And2);
+  assertEquals(0,resources.size());
+  UpgradeEntity upgrade=new UpgradeEntity();
+  upgrade.setRequestId(upgradeRequestId);
+  upgrade.setClusterId(cluster.getClusterId());
+  upgrade.setId(1L);
+  upgrade.setUpgradePackage("some-name");
+  upgrade.setUpgradeType(UpgradeType.ROLLING);
+  upgrade.setDirection(Direction.UPGRADE);
+  upgrade.setFromVersion("2.2.0.0");
+  upgrade.setToVersion("2.2.0.1");
+  upgradeDAO.create(upgrade);
+  Resource r;
+  resources=upgradeSummaryResourceProvider.getResources(requestResource,p1And2);
+  assertEquals(1,resources.size());
+  r=resources.iterator().next();
+  Assert.assertNull(r.getPropertyValue(UpgradeSummaryResourceProvider.UPGRADE_SUMMARY_FAIL_REASON));
+  Long currentStageId=1L;
+  createCommands(cluster,upgradeRequestId,currentStageId);
+  resources=upgradeSummaryResourceProvider.getResources(requestResource,p1And2);
+  assertEquals(1,resources.size());
+  r=resources.iterator().next();
+  Assert.assertNull(r.getPropertyValue(UpgradeSummaryResourceProvider.UPGRADE_SUMMARY_FAIL_REASON));
+  RequestEntity requestEntity=requestDAO.findByPK(upgradeRequestId);
+  HostEntity h1=hostDAO.findByName("h1");
+  StageEntity nextStage=new StageEntity();
+  nextStage.setRequest(requestEntity);
+  nextStage.setClusterId(cluster.getClusterId());
+  nextStage.setRequestId(upgradeRequestId);
+  nextStage.setStageId(++currentStageId);
+  requestEntity.getStages().add(nextStage);
+  stageDAO.create(nextStage);
+  requestDAO.merge(requestEntity);
+  HostRoleCommandEntity hrc2=new HostRoleCommandEntity();
+  hrc2.setStage(nextStage);
+  hrc2.setStatus(HostRoleStatus.FAILED);
+  hrc2.setRole(Role.ZOOKEEPER_SERVER);
+  hrc2.setRoleCommand(RoleCommand.RESTART);
+  hrc2.setCommandDetail("Restart ZOOKEEPER_SERVER");
+  hrc2.setHostEntity(h1);
+  nextStage.setHostRoleCommands(new ArrayList<HostRoleCommandEntity>());
+  nextStage.getHostRoleCommands().add(hrc2);
+  h1.getHostRoleCommandEntities().add(hrc2);
+  hrcDAO.create(hrc2);
+  hostDAO.merge(h1);
+  hrc2.setRequestId(upgradeRequestId);
+  hrc2.setStageId(nextStage.getStageId());
+  hrcDAO.merge(hrc2);
+  Resource failedTask=new ResourceImpl(Resource.Type.Task);
+  expect(m_upgradeHelper.getTaskResource(anyString(),anyLong(),anyLong(),anyLong())).andReturn(failedTask).anyTimes();
+  replay(m_upgradeHelper);
+  resources=upgradeSummaryResourceProvider.getResources(requestResource,p1And2);
+  assertEquals(1,resources.size());
+  r=resources.iterator().next();
+  assertEquals("Failed calling Restart ZOOKEEPER_SERVER on host h1",r.getPropertyValue(UpgradeSummaryResourceProvider.UPGRADE_SUMMARY_FAIL_REASON));
+}

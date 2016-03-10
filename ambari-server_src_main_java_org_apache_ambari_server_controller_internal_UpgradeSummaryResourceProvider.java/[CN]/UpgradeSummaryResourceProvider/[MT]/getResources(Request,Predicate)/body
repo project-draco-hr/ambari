@@ -1,0 +1,53 @@
+{
+  Set<Resource> resources=new HashSet<Resource>();
+  Set<String> requestPropertyIds=getRequestPropertyIds(request,predicate);
+  for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+    String clusterName=(String)propertyMap.get(UPGRADE_SUMMARY_CLUSTER_NAME);
+    if (null == clusterName || clusterName.isEmpty()) {
+      throw new IllegalArgumentException("The cluster name is required when querying for upgrades");
+    }
+    Cluster cluster;
+    try {
+      cluster=getManagementController().getClusters().getCluster(clusterName);
+    }
+ catch (    AmbariException e) {
+      throw new NoSuchResourceException(String.format("Cluster %s could not be loaded",clusterName));
+    }
+    List<UpgradeEntity> upgrades=new ArrayList<UpgradeEntity>();
+    String upgradeRequestIdStr=(String)propertyMap.get(UPGRADE_SUMMARY_REQUEST_ID);
+    if (null != upgradeRequestIdStr) {
+      UpgradeEntity upgrade=s_upgradeDAO.findUpgradeByRequestId(Long.valueOf(upgradeRequestIdStr));
+      if (null != upgrade) {
+        upgrades.add(upgrade);
+      }
+    }
+ else {
+      upgrades=s_upgradeDAO.findUpgrades(cluster.getClusterId());
+    }
+    for (    UpgradeEntity entity : upgrades) {
+      Resource resource=new ResourceImpl(Resource.Type.UpgradeSummary);
+      Long upgradeRequestId=entity.getRequestId();
+      setResourceProperty(resource,UPGRADE_SUMMARY_CLUSTER_NAME,clusterName,requestPropertyIds);
+      setResourceProperty(resource,UPGRADE_SUMMARY_REQUEST_ID,entity.getRequestId(),requestPropertyIds);
+      HostRoleCommandEntity mostRecentFailure=s_hostRoleCommandDAO.findMostRecentFailure(upgradeRequestId);
+      String displayText=null;
+      HostRoleCommandEntity failedTask=null;
+      if (mostRecentFailure != null) {
+        UpgradeSummary summary=new UpgradeSummary(mostRecentFailure);
+        displayText=summary.getDisplayText();
+        failedTask=summary.getFailedTask();
+        Resource taskResource=s_upgradeHelper.getTaskResource(clusterName,failedTask.getRequestId(),failedTask.getStageId(),failedTask.getTaskId());
+        if (taskResource != null) {
+          for (          Map.Entry<String,String> property : TASK_MAPPED_IDS.entrySet()) {
+            String taskPropertyId=property.getKey();
+            String upgradeSummaryPropertyId=property.getValue();
+            setResourceProperty(resource,upgradeSummaryPropertyId,taskResource.getPropertyValue(taskPropertyId),requestPropertyIds);
+          }
+        }
+      }
+      setResourceProperty(resource,UPGRADE_SUMMARY_FAIL_REASON,displayText,requestPropertyIds);
+      resources.add(resource);
+    }
+  }
+  return resources;
+}
