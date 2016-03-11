@@ -1,0 +1,21 @@
+{
+  final String clusterName=request.getClusterName();
+  final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+  RepositoryVersionEntity clusterVersion=cluster.getCurrentClusterVersion().getRepositoryVersion();
+  List<String> errorMessages=new ArrayList<String>();
+  Map<String,Service> services=cluster.getServices();
+  if (clusterVersion != null) {
+    String desiredVersion=clusterVersion.getVersion();
+    for (    Service service : services.values()) {
+      validateService(service,desiredVersion,prerequisiteCheck,errorMessages);
+    }
+  }
+ else {
+    listAllComponentsWithHostVersions(services.values(),prerequisiteCheck,errorMessages);
+  }
+  if (!prerequisiteCheck.getFailedOn().isEmpty()) {
+    prerequisiteCheck.setStatus(PrereqCheckStatus.WARNING);
+    String failReason=getFailReason(prerequisiteCheck,request);
+    prerequisiteCheck.setFailReason(String.format(failReason,StringUtils.join(errorMessages,"\n")));
+  }
+}
