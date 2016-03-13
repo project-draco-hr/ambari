@@ -1,0 +1,20 @@
+{
+  final DBAccessor dbAccessor=createStrictMock(DBAccessor.class);
+  Module module=new Module(){
+    @Override public void configure(    Binder binder){
+      binder.bind(DBAccessor.class).toInstance(dbAccessor);
+      binder.bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+      binder.bind(EntityManager.class).toInstance(entityManager);
+    }
+  }
+;
+  Injector injector=Guice.createInjector(module);
+  String expectedWidgetUpdate="UPDATE widget SET widget_name='%s', description='%s', " + "widget_values='[{\"name\": \"%s\", \"value\": \"%s\"}]' WHERE widget_name='%s'";
+  Capture<String> capturedStatements=Capture.newInstance(CaptureType.ALL);
+  expect(dbAccessor.executeUpdate(capture(capturedStatements))).andReturn(1);
+  UpgradeCatalog222 upgradeCatalog222=injector.getInstance(UpgradeCatalog222.class);
+  replay(dbAccessor);
+  upgradeCatalog222.updateCorruptedReplicaWidget();
+  List<String> statements=capturedStatements.getValues();
+  assertTrue(statements.contains(String.format(expectedWidgetUpdate,UpgradeCatalog222.WIDGET_CORRUPT_REPLICAS,UpgradeCatalog222.WIDGET_CORRUPT_REPLICAS_DESCRIPTION,UpgradeCatalog222.WIDGET_CORRUPT_REPLICAS,UpgradeCatalog222.WIDGET_VALUES_VALUE,UpgradeCatalog222.WIDGET_CORRUPT_BLOCKS)));
+}
