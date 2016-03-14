@@ -1,21 +1,21 @@
 {
   List<MetricDefinition> filteredComponentMetrics=null;
-  if (componentMetrics != null) {
-    Cloner cloner=new Cloner();
-    filteredComponentMetrics=cloner.deepClone(componentMetrics);
-    for (    MetricDefinition metricDefinition : filteredComponentMetrics) {
-      if (metricDefinition.getType().equals("ganglia")) {
-        for (        Map<String,Metric> metricByCategory : metricDefinition.getMetricsByCategory().values()) {
-          Iterator<Map.Entry<String,Metric>> iterator=metricByCategory.entrySet().iterator();
-          while (iterator.hasNext()) {
-            Map.Entry<String,Metric> entry=iterator.next();
-            String metricName=entry.getKey();
-            if (PropertyHelper.hasAggregateFunctionSuffix(metricName)) {
-              iterator.remove();
-            }
+  if (metricsDefinitions != null) {
+    filteredComponentMetrics=new ArrayList<>();
+    for (    MetricDefinition metricDefinition : metricsDefinitions) {
+      Map<String,Map<String,Metric>> categorizedMetricsCopy=new HashMap<>();
+      Map<String,Map<String,Metric>> categorizedMetrics=metricDefinition.getMetricsByCategory();
+      for (      String category : categorizedMetrics.keySet()) {
+        Map<String,Metric> namedMetricsCopy=new HashMap<>();
+        Map<String,Metric> namedMetrics=categorizedMetrics.get(category);
+        for (        String metricName : namedMetrics.keySet()) {
+          if (!(metricDefinition.getType().equals("ganglia") && PropertyHelper.hasAggregateFunctionSuffix(metricName))) {
+            namedMetricsCopy.put(metricName,namedMetrics.get(metricName));
           }
         }
+        categorizedMetricsCopy.put(category,namedMetricsCopy);
       }
+      filteredComponentMetrics.add(new MetricDefinition(metricDefinition.getType(),metricDefinition.getProperties(),categorizedMetricsCopy));
     }
   }
   return filteredComponentMetrics;
