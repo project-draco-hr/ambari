@@ -1,0 +1,40 @@
+{
+  AuthorizationHelper.verifyAuthorization(ResourceType.CLUSTER,null,REQUIRED_GET_AUTHORIZATIONS);
+  Set<String> requestedIds=getRequestPropertyIds(request,predicate);
+  Set<Resource> resources=new HashSet<Resource>();
+  AmbariManagementController managementController=getManagementController();
+  Clusters clusters=managementController.getClusters();
+  for (  Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
+    String clusterName=getClusterName(propertyMap);
+    Cluster cluster;
+    try {
+      cluster=clusters.getCluster(clusterName);
+      if (cluster == null) {
+        throw new NoSuchParentResourceException(String.format("A cluster with the name %s does not exist.",clusterName));
+      }
+    }
+ catch (    AmbariException e) {
+      throw new NoSuchParentResourceException(String.format("A cluster with the name %s does not exist.",clusterName));
+    }
+    AuthorizationHelper.verifyAuthorization(ResourceType.CLUSTER,cluster.getResourceId(),REQUIRED_GET_AUTHORIZATIONS);
+    KerberosDescriptorType kerberosDescriptorType=getKerberosDescriptorType(propertyMap);
+    if (kerberosDescriptorType == null) {
+      for (      KerberosDescriptorType type : KerberosDescriptorType.values()) {
+        resources.add(toResource(clusterName,type,null,requestedIds));
+      }
+    }
+ else {
+      KerberosDescriptor kerberosDescriptor;
+      try {
+        kerberosDescriptor=getKerberosDescriptor(cluster,kerberosDescriptorType);
+      }
+ catch (      AmbariException e) {
+        throw new SystemException("An unexpected error occurred building the cluster's composite Kerberos Descriptor",e);
+      }
+      if (kerberosDescriptor != null) {
+        resources.add(toResource(clusterName,kerberosDescriptorType,kerberosDescriptor,requestedIds));
+      }
+    }
+  }
+  return resources;
+}

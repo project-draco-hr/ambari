@@ -1,0 +1,71 @@
+{
+  StackId stackVersion=createMock(StackId.class);
+  expect(stackVersion.getStackName()).andReturn("stackName").atLeastOnce();
+  expect(stackVersion.getStackVersion()).andReturn("stackVersion").atLeastOnce();
+  Cluster cluster=createMock(Cluster.class);
+  expect(cluster.getResourceId()).andReturn(4L).atLeastOnce();
+  expect(cluster.getCurrentStackVersion()).andReturn(stackVersion).atLeastOnce();
+  expect(cluster.getClusterName()).andReturn("c1").anyTimes();
+  Clusters clusters=createMock(Clusters.class);
+  expect(clusters.getCluster("c1")).andReturn(cluster).atLeastOnce();
+  KerberosDescriptorFactory kerberosDescriptorFactory=injector.getInstance(KerberosDescriptorFactory.class);
+  KerberosDescriptor kerberosDescriptor=kerberosDescriptorFactory.createInstance(STACK_MAP);
+  AmbariMetaInfo metaInfo=createMock(AmbariMetaInfo.class);
+  expect(metaInfo.getKerberosDescriptor("stackName","stackVersion")).andReturn(kerberosDescriptor).atLeastOnce();
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  expect(managementController.getClusters()).andReturn(clusters).atLeastOnce();
+  expect(managementController.getAmbariMetaInfo()).andReturn(metaInfo).atLeastOnce();
+  Request request=createMock(Request.class);
+  expect(request.getPropertyIds()).andReturn(null).atLeastOnce();
+  Map<String,Map<String,Object>> artifactPropertyMap=new HashMap<>();
+  artifactPropertyMap.put(ArtifactResourceProvider.ARTIFACT_DATA_PROPERTY,USER_MAP);
+  artifactPropertyMap.put(ArtifactResourceProvider.ARTIFACT_DATA_PROPERTY + "/properties",null);
+  Resource artifactResource=createMock(Resource.class);
+  expect(artifactResource.getPropertiesMap()).andReturn(artifactPropertyMap).atLeastOnce();
+  ResourceProvider artifactResourceProvider=createStrictMock(ArtifactResourceProvider.class);
+  expect(artifactResourceProvider.getResources(anyObject(Request.class),anyObject(Predicate.class))).andReturn(Collections.singleton(artifactResource)).atLeastOnce();
+  ClusterController clusterController=createStrictMock(ClusterController.class);
+  expect(clusterController.ensureResourceProvider(Resource.Type.Artifact)).andReturn(artifactResourceProvider).atLeastOnce();
+  replayAll();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(Resource.Type.ClusterKerberosDescriptor,PropertyHelper.getPropertyIds(Resource.Type.ClusterKerberosDescriptor),PropertyHelper.getKeyPropertyIds(Resource.Type.ClusterKerberosDescriptor),managementController);
+  setClusterController(provider,clusterController);
+  setKerberosDescriptorFactory(provider,kerberosDescriptorFactory);
+  Predicate clusterPredicate=new PredicateBuilder().property(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_CLUSTER_NAME_PROPERTY_ID).equals("c1").toPredicate();
+  Predicate typePredicate;
+  Set<Resource> results;
+  typePredicate=new PredicateBuilder().property(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_TYPE_PROPERTY_ID).equals("STACK").toPredicate();
+  results=provider.getResources(request,new AndPredicate(clusterPredicate,typePredicate));
+  Assert.assertEquals(1,results.size());
+  for (  Resource result : results) {
+    Assert.assertEquals("c1",result.getPropertyValue(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_CLUSTER_NAME_PROPERTY_ID));
+    Assert.assertEquals("STACK",result.getPropertyValue(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_TYPE_PROPERTY_ID));
+    Map partial1=result.getPropertiesMap().get(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_DESCRIPTOR_PROPERTY_ID);
+    Map partial2=result.getPropertiesMap().get("KerberosDescriptor/kerberos_descriptor/properties");
+    partial1.put("properties",partial2);
+    Assert.assertEquals(STACK_MAP,partial1);
+  }
+  typePredicate=new PredicateBuilder().property(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_TYPE_PROPERTY_ID).equals("USER").toPredicate();
+  results=provider.getResources(request,new AndPredicate(clusterPredicate,typePredicate));
+  Assert.assertEquals(1,results.size());
+  for (  Resource result : results) {
+    Assert.assertEquals("c1",result.getPropertyValue(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_CLUSTER_NAME_PROPERTY_ID));
+    Assert.assertEquals("USER",result.getPropertyValue(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_TYPE_PROPERTY_ID));
+    Map partial1=result.getPropertiesMap().get(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_DESCRIPTOR_PROPERTY_ID);
+    Map partial2=result.getPropertiesMap().get("KerberosDescriptor/kerberos_descriptor/properties");
+    partial1.put("properties",partial2);
+    Assert.assertEquals(USER_MAP,partial1);
+  }
+  typePredicate=new PredicateBuilder().property(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_TYPE_PROPERTY_ID).equals("COMPOSITE").toPredicate();
+  results=provider.getResources(request,new AndPredicate(clusterPredicate,typePredicate));
+  Assert.assertEquals(1,results.size());
+  for (  Resource result : results) {
+    Assert.assertEquals("c1",result.getPropertyValue(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_CLUSTER_NAME_PROPERTY_ID));
+    Assert.assertEquals("COMPOSITE",result.getPropertyValue(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_TYPE_PROPERTY_ID));
+    Map partial1=result.getPropertiesMap().get(ClusterKerberosDescriptorResourceProvider.CLUSTER_KERBEROS_DESCRIPTOR_DESCRIPTOR_PROPERTY_ID);
+    Map partial2=result.getPropertiesMap().get("KerberosDescriptor/kerberos_descriptor/properties");
+    partial1.put("properties",partial2);
+    Assert.assertEquals(COMPOSITE_MAP,partial1);
+  }
+  verifyAll();
+}
