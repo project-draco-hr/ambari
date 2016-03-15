@@ -1,5 +1,5 @@
 def convert_conf_directories_to_symlinks(package, version, dirs, skip_existing_links=True, link_to='current'):
-    '\n  Assumes HDP 2.3+, moves around directories and creates the conf symlink for the given package.\n  If the package does not exist, then no work is performed.\n\n  - Creates a /etc/<component>/conf.backup directory\n  - Copies all configs from /etc/<component>/conf to conf.backup\n  - Removes /etc/<component>/conf\n  - Creates /etc/<component>/<version>/0\n  - Creates /usr/hdp/current/<component>-client/conf -> /etc/<component>/<version>/0\n  - Links /etc/<component>/conf to <something>\n  -- /etc/<component>/conf -> /usr/hdp/current/[component]-client/conf\n  -- /etc/<component>/conf -> /etc/<component>/conf.backup\n\n  :param package: the package to create symlinks for (zookeeper, falcon, etc)\n  :param version: the version number to use with conf-select (2.3.0.0-1234)\n  :param dirs: the directories associated with the package (from PACKAGE_DIRS)\n  :param skip_existing_links: True to not do any work if already a symlink\n  :param link_to: link to "current" or "backup"\n  '
+    '\n  Assumes HDP 2.3+, moves around directories and creates the conf symlink for the given package.\n  If the package does not exist, then no work is performed.\n\n  - Creates a /etc/<component>/conf.backup directory\n  - Copies all configs from /etc/<component>/conf to conf.backup\n  - Removes /etc/<component>/conf\n  - Creates /etc/<component>/<version>/0 via conf-select\n  - /usr/hdp/current/<component>-client/conf -> /etc/<component>/<version>/0 via conf-select\n  - Links /etc/<component>/conf to <something> depending on function paramter\n  -- /etc/<component>/conf -> /usr/hdp/current/[component]-client/conf (usually)\n  -- /etc/<component>/conf -> /etc/<component>/conf.backup (only when supporting < HDP 2.3)\n\n  :param package: the package to create symlinks for (zookeeper, falcon, etc)\n  :param version: the version number to use with conf-select (2.3.0.0-1234)\n  :param dirs: the directories associated with the package (from PACKAGE_DIRS)\n  :param skip_existing_links: True to not do any work if already a symlink\n  :param link_to: link to "current" or "backup"\n  '
     bad_dirs = []
     for dir_def in dirs:
         if (not os.path.exists(dir_def['conf_dir'])):
@@ -42,7 +42,7 @@ def convert_conf_directories_to_symlinks(package, version, dirs, skip_existing_l
             old_conf = dirs[0]['conf_dir']
             versioned_conf = need_dirs[0]
             Execute(as_sudo(['cp', '-R', '-p', os.path.join(old_conf, '*'), versioned_conf], auto_escape=False), only_if=format('ls -d {old_conf}/*'))
-    link_component_conf_to_versioned_config(package, version)
+    select('HDP', package, version, ignore_errors=True)
     try:
         for dir_def in dirs:
             new_symlink = dir_def['conf_dir']

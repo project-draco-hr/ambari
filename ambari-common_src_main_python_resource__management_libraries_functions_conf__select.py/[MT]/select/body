@@ -1,20 +1,26 @@
-def select(stack_name, package, version, try_create=True):
-    '\n  Selects a config version for the specified package.\n  :stack_name: the name of the stack\n  :package: the name of the package, as-used by conf-select\n  :version: the version number to create\n  :try_create: optional argument to attempt to create the directory before setting it\n  '
-    if (not _valid(stack_name, package, version)):
-        return
-    if try_create:
-        create(stack_name, package, version)
-    shell.checked_call(get_cmd('set-conf-dir', package, version), logoutput=False, quiet=False, sudo=True)
-    if (package in PACKAGE_DIRS):
-        Logger.info('Ensuring that {0} has the correct symlink structure'.format(package))
-        directory_list = PACKAGE_DIRS[package]
-        for directory_structure in directory_list:
-            conf_dir = directory_structure['conf_dir']
-            current_dir = directory_structure['current_dir']
-            if (not os.path.islink(conf_dir)):
-                if os.path.exists(conf_dir):
-                    parent_directory = os.path.dirname(conf_dir)
-                    conf_install_dir = os.path.join(parent_directory, 'conf.backup')
-                    Execute(('cp', '-R', '-p', conf_dir, conf_install_dir), not_if=format('test -e {conf_install_dir}'), sudo=True)
-                    Directory(conf_dir, action='delete')
-                Link(conf_dir, to=current_dir)
+def select(stack_name, package, version, try_create=True, ignore_errors=False):
+    '\n  Selects a config version for the specified package.\n  :param stack_name: the name of the stack\n  :param package: the name of the package, as-used by conf-select\n  :param version: the version number to create\n  :param try_create: optional argument to attempt to create the directory before setting it\n  :param ignore_errors: optional argument to ignore any error and simply log a warning\n  '
+    try:
+        if (not _valid(stack_name, package, version)):
+            return
+        if try_create:
+            create(stack_name, package, version)
+        shell.checked_call(get_cmd('set-conf-dir', package, version), logoutput=False, quiet=False, sudo=True)
+        if (package in PACKAGE_DIRS):
+            Logger.info('Ensuring that {0} has the correct symlink structure'.format(package))
+            directory_list = PACKAGE_DIRS[package]
+            for directory_structure in directory_list:
+                conf_dir = directory_structure['conf_dir']
+                current_dir = directory_structure['current_dir']
+                if (not os.path.islink(conf_dir)):
+                    if os.path.exists(conf_dir):
+                        parent_directory = os.path.dirname(conf_dir)
+                        conf_install_dir = os.path.join(parent_directory, 'conf.backup')
+                        Execute(('cp', '-R', '-p', conf_dir, conf_install_dir), not_if=format('test -e {conf_install_dir}'), sudo=True)
+                        Directory(conf_dir, action='delete')
+                    Link(conf_dir, to=current_dir)
+    except Exception as exception:
+        if (ignore_errors is True):
+            Logger.warning('Could not select the directory for package {0}. Error: {1}'.format(package, str(exception)))
+        else:
+            raise

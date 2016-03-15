@@ -1,16 +1,17 @@
 def create(stack_name, package, version, dry_run=False):
-    '\n  Creates a config version for the specified package\n  :param stack_name: the name of the stack\n  :param package: the name of the package, as-used by conf-select\n  :param version: the version number to create\n  :return List of directories created\n  '
+    '\n  Creates a config version for the specified package\n  :param stack_name: the name of the stack\n  :param package: the name of the package, as-used by conf-select\n  :param version: the version number to create\n  :param dry_run: False to create the versioned config directory, True to only return what would be created\n  :return List of directories created\n  '
     Logger.info('Checking if need to create versioned conf dir /etc/{0}/{1}/0'.format(package, version))
     if (not _valid(stack_name, package, version)):
         Logger.info('Will not create it since parameters are not valid.')
         return []
     command = ('dry-run-create' if dry_run else 'create-conf-dir')
     (code, stdout, stderr) = shell.call(get_cmd(command, package, version), logoutput=False, quiet=False, sudo=True, stderr=subprocess.PIPE)
-    dirs = []
+    created_directories = []
     if ((0 == code) and (stdout is not None)):
         for line in stdout.splitlines():
-            dirs.append(line.rstrip('\n'))
-    if ((not code) and stdout and (command == 'create-conf-dir')):
-        for d in dirs:
-            Directory(d, mode=493, cd_access='a', create_parents=True)
-    return dirs
+            created_directories.append(line.rstrip('\n'))
+    if ((not code) and stdout and (not dry_run)):
+        for directory in created_directories:
+            Directory(directory, mode=493, cd_access='a', create_parents=True)
+        _seed_new_configuration_directories(package, created_directories)
+    return created_directories
