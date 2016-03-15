@@ -1,0 +1,44 @@
+{
+  StackEntity stackEntity=stackDAO.find(HDP_22_STACK.getStackName(),HDP_22_STACK.getStackVersion());
+  org.junit.Assert.assertNotNull(stackEntity);
+  ResourceTypeEntity resourceTypeEntity=new ResourceTypeEntity();
+  resourceTypeEntity.setId(ResourceType.CLUSTER.getId());
+  resourceTypeEntity.setName(ResourceType.CLUSTER.name());
+  resourceTypeEntity=resourceTypeDAO.merge(resourceTypeEntity);
+  ResourceEntity resourceEntity=new ResourceEntity();
+  resourceEntity.setResourceType(resourceTypeEntity);
+  ClusterEntity clusterEntity=new ClusterEntity();
+  clusterEntity.setClusterName(clusterName);
+  clusterEntity.setClusterInfo("test_cluster_info1");
+  clusterEntity.setResource(resourceEntity);
+  clusterEntity.setDesiredStack(stackEntity);
+  clusterDAO.create(clusterEntity);
+  StackId stackId=new StackId(desiredStackId);
+  Cluster cluster=clusters.getCluster(clusterName);
+  cluster.setDesiredStackVersion(stackId);
+  cluster.setCurrentStackVersion(stackId);
+  ConfigFactory cf=injector.getInstance(ConfigFactory.class);
+  Config config=cf.createNew(cluster,"cluster-env",configProperties,new HashMap<String,Map<String,String>>());
+  config.setTag("version1");
+  config.persist();
+  cluster.addConfig(config);
+  cluster.addDesiredConfig("user",Collections.singleton(config));
+  helper.getOrCreateRepositoryVersion(stackId,stackId.getStackVersion());
+  cluster.createClusterVersion(stackId,stackId.getStackVersion(),"admin",RepositoryVersionState.INSTALLING);
+  Map<String,String> hostAttributes=new HashMap<String,String>();
+  hostAttributes.put("os_family","redhat");
+  hostAttributes.put("os_release_version","6.3");
+  List<HostEntity> hostEntities=new ArrayList<HostEntity>();
+  for (  String hostName : hostNames) {
+    clusters.addHost(hostName);
+    Host host=clusters.getHost(hostName);
+    host.setHostAttributes(hostAttributes);
+    host.persist();
+    HostEntity hostEntity=hostDAO.findByName(hostName);
+    Assert.assertNotNull(hostEntity);
+    hostEntities.add(hostEntity);
+  }
+  clusterEntity.setHostEntities(hostEntities);
+  clusters.mapHostsToCluster(hostNames,clusterName);
+  return cluster;
+}
