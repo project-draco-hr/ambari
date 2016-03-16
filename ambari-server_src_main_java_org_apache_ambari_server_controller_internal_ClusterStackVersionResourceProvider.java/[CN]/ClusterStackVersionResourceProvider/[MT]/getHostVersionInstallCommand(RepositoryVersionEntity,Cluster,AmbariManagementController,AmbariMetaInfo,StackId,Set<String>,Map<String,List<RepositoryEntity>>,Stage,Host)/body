@@ -2,7 +2,7 @@
   String osFamily=host.getOsFamily();
   final List<RepositoryEntity> repoInfo=perOsRepos.get(osFamily);
   if (repoInfo == null) {
-    throw new SystemException(String.format("Repositories for os type %s are " + "not defined. Repo version=%s, stackId=%s",osFamily,desiredRepoVersion,stackId));
+    throw new SystemException(String.format("Repositories for os type %s are " + "not defined. Repo version=%s, stackId=%s",osFamily,repoVersion.getVersion(),stackId));
   }
   List<ServiceOsSpecific.Package> packages=new ArrayList<ServiceOsSpecific.Package>();
   Set<String> servicesOnHost=new HashSet<String>();
@@ -44,9 +44,19 @@
   final String repoList=gson.toJson(repoInfo);
   Map<String,String> params=new HashMap<String,String>();
   params.put("stack_id",stackId.getStackId());
-  params.put("repository_version",desiredRepoVersion);
+  params.put("repository_version",repoVersion.getVersion());
   params.put("base_urls",repoList);
-  params.put("package_list",packageList);
+  params.put(KeyNames.PACKAGE_LIST,packageList);
+  VersionDefinitionXml xml=null;
+  try {
+    xml=repoVersion.getRepositoryXml();
+  }
+ catch (  Exception e) {
+    throw new SystemException(String.format("Could not load xml from repo version %s",repoVersion.getVersion()));
+  }
+  if (null != xml && StringUtils.isNotBlank(xml.release.packageVersion)) {
+    params.put(KeyNames.PACKAGE_VERSION,xml.release.packageVersion);
+  }
   RequestResourceFilter filter=new RequestResourceFilter(null,null,Collections.singletonList(host.getHostName()));
   ActionExecutionContext actionContext=new ActionExecutionContext(cluster.getClusterName(),INSTALL_PACKAGES_ACTION,Collections.singletonList(filter),params);
   actionContext.setTimeout(Short.valueOf(configuration.getDefaultAgentTaskTimeout(true)));
