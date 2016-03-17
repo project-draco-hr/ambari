@@ -4,9 +4,7 @@ def setup_ranger_admin(upgrade_type=None):
     ranger_conf = params.ranger_conf
     Directory(ranger_conf, owner=params.unix_user, group=params.unix_group, create_parents=True)
     if (upgrade_type is not None):
-        ranger_home = format('/usr/hdp/{version}/ranger-admin')
-        ranger_conf = format('/usr/hdp/{version}/ranger-admin/conf')
-        copy_jdbc_connector(stack_version=params.version)
+        copy_jdbc_connector()
     File(format('/usr/lib/ambari-agent/{check_db_connection_jar_name}'), content=DownloadSource(format('{jdk_location}{check_db_connection_jar_name}')), mode=420)
     cp = format('{check_db_connection_jar}')
     if (params.db_flavor.lower() == 'sqla'):
@@ -45,6 +43,10 @@ def setup_ranger_admin(upgrade_type=None):
         dst_file = format('{ranger_home}/conf/security-applicationContext.xml')
         Execute(('cp', '-f', src_file, dst_file), sudo=True)
         File(params.security_app_context_file, owner=params.unix_user, group=params.unix_group)
+    if ((upgrade_type is not None) and params.stack_is_hdp23_or_further):
+        if os.path.islink('/usr/bin/ranger-admin'):
+            Link('/usr/bin/ranger-admin', action='delete')
+        Link('/usr/bin/ranger-admin', to=format('{ranger_home}/ews/ranger-admin-services.sh'))
     Execute(('ln', '-sf', format('{ranger_home}/ews/ranger-admin-services.sh'), '/usr/bin/ranger-admin'), not_if=format('ls /usr/bin/ranger-admin'), only_if=format('ls {ranger_home}/ews/ranger-admin-services.sh'), sudo=True)
     XmlConfig('ranger-admin-site.xml', conf_dir=ranger_conf, configurations=params.config['configurations']['ranger-admin-site'], configuration_attributes=params.config['configuration_attributes']['ranger-admin-site'], owner=params.unix_user, group=params.unix_group, mode=420)
     Directory(os.path.join(ranger_conf, 'ranger_jaas'), mode=448, owner=params.unix_user, group=params.unix_group)
