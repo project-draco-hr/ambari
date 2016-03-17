@@ -1,10 +1,10 @@
 def get_combined_disk_usage(self):
-    disk_usage = namedtuple('disk_usage', ['total', 'used', 'free', 'percent', 'part_max_used'])
     combined_disk_total = 0
     combined_disk_used = 0
     combined_disk_free = 0
     combined_disk_percent = 0
     max_percent_usage = ('', 0)
+    partition_count = 0
     for part in psutil.disk_partitions(all=False):
         if (os.name == 'nt'):
             if (('cdrom' in part.opts) or (part.fstype == '')):
@@ -15,9 +15,13 @@ def get_combined_disk_usage(self):
         combined_disk_total += (usage.total if hasattr(usage, 'total') else 0)
         combined_disk_used += (usage.used if hasattr(usage, 'used') else 0)
         combined_disk_free += (usage.free if hasattr(usage, 'free') else 0)
-        combined_disk_percent += (usage.percent if hasattr(usage, 'percent') else 0)
+        if hasattr(usage, 'percent'):
+            combined_disk_percent += usage.percent
+            partition_count += 1
         if (hasattr(usage, 'percent') and (max_percent_usage[1] < int(usage.percent))):
             max_percent_usage = (part.mountpoint, usage.percent)
         pass
     pass
-    return {'disk_total': bytes2human(combined_disk_total), 'disk_used': bytes2human(combined_disk_used), 'disk_free': bytes2human(combined_disk_free), 'disk_percent': bytes2human(combined_disk_percent), }
+    if (partition_count > 0):
+        combined_disk_percent /= partition_count
+    return {'disk_total': bytes2human(combined_disk_total), 'disk_used': bytes2human(combined_disk_used), 'disk_free': bytes2human(combined_disk_free), 'disk_percent': combined_disk_percent, }
