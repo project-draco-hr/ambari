@@ -43,20 +43,29 @@
  catch (    Exception e) {
       throw new SystemException(String.format("Could not load xml for Repository %s",entity.getId()),e);
     }
+    final StackInfo stack;
+    try {
+      stack=ambariMetaInfo.getStack(entity.getStackName(),entity.getStackVersion());
+    }
+ catch (    AmbariException e) {
+      throw new SystemException(String.format("Could not load stack %s for Repository %s",entity.getStackId().toString(),entity.getId()));
+    }
+    final List<ManifestServiceInfo> stackServices;
     if (null != xml) {
-      final StackInfo stack;
-      try {
-        stack=ambariMetaInfo.getStack(entity.getStackName(),entity.getStackVersion());
-      }
- catch (      AmbariException e) {
-        throw new SystemException(String.format("Could not load stack %s for Repository %s",entity.getStackId().toString(),entity.getId()));
-      }
       setResourceProperty(resource,REPOSITORY_VERSION_RELEASE_VERSION,xml.release.version,requestedIds);
       setResourceProperty(resource,REPOSITORY_VERSION_RELEASE_BUILD,xml.release.build,requestedIds);
       setResourceProperty(resource,REPOSITORY_VERSION_RELEASE_COMPATIBLE_WITH,xml.release.compatibleWith,requestedIds);
       setResourceProperty(resource,REPOSITORY_VERSION_RELEASE_NOTES,xml.release.releaseNotes,requestedIds);
       setResourceProperty(resource,REPOSITORY_VERSION_AVAILABLE_SERVICES,xml.getAvailableServices(stack),requestedIds);
+      stackServices=xml.getStackServices(stack);
     }
+ else {
+      stackServices=new ArrayList<>();
+      for (      ServiceInfo si : stack.getServices()) {
+        stackServices.add(new ManifestServiceInfo(si.getName(),si.getDisplayName(),si.getComment(),Collections.singleton(si.getVersion())));
+      }
+    }
+    setResourceProperty(resource,REPOSITORY_VERSION_STACK_SERVICES,stackServices,requestedIds);
     resources.add(resource);
   }
   return resources;
