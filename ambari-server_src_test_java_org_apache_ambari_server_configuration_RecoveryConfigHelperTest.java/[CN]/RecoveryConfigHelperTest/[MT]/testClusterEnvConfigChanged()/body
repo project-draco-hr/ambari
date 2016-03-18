@@ -1,0 +1,23 @@
+{
+  Cluster cluster=heartbeatTestHelper.getDummyCluster();
+  Service hdfs=cluster.addService(HDFS);
+  hdfs.persist();
+  hdfs.addServiceComponent(DATANODE).setRecoveryEnabled(true);
+  hdfs.getServiceComponent(DATANODE).persist();
+  hdfs.getServiceComponent(DATANODE).addServiceComponentHost(DummyHostname1).persist();
+  hdfs.getServiceComponent(DATANODE).getServiceComponentHost(DummyHostname1).setDesiredState(State.INSTALLED);
+  RecoveryConfig recoveryConfig=recoveryConfigHelper.getRecoveryConfig(cluster.getClusterName(),DummyHostname1);
+  assertEquals(recoveryConfig.getEnabledComponents(),"DATANODE");
+  Config config=cluster.getDesiredConfigByType("cluster-env");
+  config.updateProperties(new HashMap<String,String>(){
+{
+      put(RecoveryConfigHelper.RECOVERY_ENABLED_KEY,"false");
+    }
+  }
+);
+  config.persist(false);
+  boolean isConfigStale=recoveryConfigHelper.isConfigStale(cluster.getClusterName(),DummyHostname1,recoveryConfig.getRecoveryTimestamp());
+  assertTrue(isConfigStale);
+  recoveryConfig=recoveryConfigHelper.getRecoveryConfig(cluster.getClusterName(),DummyHostname1);
+  assertNull(recoveryConfig.getEnabledComponents());
+}
