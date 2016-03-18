@@ -1,5 +1,6 @@
 def recommendYARNConfigurations(self, configurations, clusterData, services, hosts):
     putYarnProperty = self.putProperty(configurations, 'yarn-site', services)
+    putYarnPropertyAttribute = self.putPropertyAttribute(configurations, 'yarn-site')
     putYarnEnvProperty = self.putProperty(configurations, 'yarn-env', services)
     nodemanagerMinRam = 1048576
     if ('referenceNodeManagerHost' in clusterData):
@@ -12,3 +13,14 @@ def recommendYARNConfigurations(self, configurations, clusterData, services, hos
     if (('cluster-env' in services['configurations']) and ('user_group' in services['configurations']['cluster-env']['properties'])):
         containerExecutorGroup = services['configurations']['cluster-env']['properties']['user_group']
     putYarnProperty('yarn.nodemanager.linux-container-executor.group', containerExecutorGroup)
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    if ('TEZ' in servicesList):
+        ambari_user = self.getAmbariUser(services)
+        putYarnProperty('yarn.timeline-service.http-authentication.proxyuser.{0}.hosts'.format(ambari_user), '*')
+        putYarnProperty('yarn.timeline-service.http-authentication.proxyuser.{0}.groups'.format(ambari_user), '*')
+        putYarnProperty('yarn.timeline-service.http-authentication.proxyuser.{0}.users'.format(ambari_user), '*')
+        old_ambari_user = self.getOldAmbariUser(services)
+        if (old_ambari_user is not None):
+            putYarnPropertyAttribute('yarn.timeline-service.http-authentication.proxyuser.{0}.hosts'.format(old_ambari_user), 'delete', 'true')
+            putYarnPropertyAttribute('yarn.timeline-service.http-authentication.proxyuser.{0}.groups'.format(old_ambari_user), 'delete', 'true')
+            putYarnPropertyAttribute('yarn.timeline-service.http-authentication.proxyuser.{0}.users'.format(old_ambari_user), 'delete', 'true')

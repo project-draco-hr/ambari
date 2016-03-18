@@ -24,9 +24,9 @@
     try {
       Set<String> services=new HashSet<String>();
       Map<String,Set<String>> propertiesToIgnore=null;
-      for (      ServiceComponentHost sch : schToProcess) {
-        String hostName=sch.getHostName();
-        try {
+      try {
+        for (        ServiceComponentHost sch : schToProcess) {
+          String hostName=sch.getHostName();
           String serviceName=sch.getServiceName();
           String componentName=sch.getServiceComponentName();
           KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
@@ -44,15 +44,24 @@
           }
           services.add(serviceName);
         }
- catch (        IOException e) {
-          String message=String.format("Failed to write index file - %s",identityDataFile.getAbsolutePath());
-          LOG.error(message,e);
-          actionLog.writeStdOut(message);
-          actionLog.writeStdErr(message + "\n" + e.getLocalizedMessage());
-          throw new AmbariException(message,e);
+        Map<String,String> kerberosEnvProperties=configurations.get("kerberos-env");
+        if (kerberosEnvProperties != null && kerberosEnvProperties.get(KerberosHelper.CREATE_AMBARI_PRINCIPAL) != null && "true".equalsIgnoreCase(kerberosEnvProperties.get(KerberosHelper.CREATE_AMBARI_PRINCIPAL)) && includeAmbariIdentity) {
+          KerberosIdentityDescriptor ambariServerIdentity=kerberosDescriptor.getIdentity(KerberosHelper.AMBARI_IDENTITY_NAME);
+          if (ambariServerIdentity != null) {
+            List<KerberosIdentityDescriptor> componentIdentities=Collections.singletonList(ambariServerIdentity);
+            kerberosHelper.addIdentities(kerberosIdentityDataFileWriter,componentIdentities,identityFilter,KerberosHelper.AMBARI_SERVER_HOST_NAME,"AMBARI_SEVER","AMBARI_SEVER",kerberosConfigurations,configurations);
+            propertiesToIgnore=gatherPropertiesToIgnore(componentIdentities,propertiesToIgnore);
+          }
         }
       }
-      kerberosHelper.applyStackAdvisorUpdates(cluster,services,configurations,kerberosConfigurations,propertiesToIgnore,kerberosEnabled);
+ catch (      IOException e) {
+        String message=String.format("Failed to write index file - %s",identityDataFile.getAbsolutePath());
+        LOG.error(message,e);
+        actionLog.writeStdOut(message);
+        actionLog.writeStdErr(message + "\n" + e.getLocalizedMessage());
+        throw new AmbariException(message,e);
+      }
+      kerberosHelper.applyStackAdvisorUpdates(cluster,services,configurations,kerberosConfigurations,propertiesToIgnore,propertiesToInsert,propertiesToRemove,kerberosEnabled);
     }
   finally {
       if (kerberosIdentityDataFileWriter != null) {

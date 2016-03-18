@@ -1,0 +1,45 @@
+{
+  KerberosPrincipalEntity principalEntity=kerberosPrincipalDAO.find(principal);
+  String cachedKeytabPath=(principalEntity == null) ? null : principalEntity.getCachedKeytabPath();
+  if (cachedKeytabPath == null) {
+    return false;
+  }
+  Keytab keytab=null;
+  try {
+    keytab=Keytab.read(new File(cachedKeytabPath));
+  }
+ catch (  IOException e) {
+    String message=String.format("Failed to read the cached keytab for %s, recreating if possible - %b",principal,e.getMessage());
+    if (LOG.isDebugEnabled()) {
+      LOG.warn(message,e);
+    }
+ else {
+      LOG.warn(message,e);
+    }
+  }
+  if (keytab == null) {
+    return false;
+  }
+  File keytabFile=new File(keytabFilePath);
+  ensureKeytabFolderExists(keytabFilePath);
+  try {
+    boolean created=operationHandler.createKeytabFile(keytab,keytabFile);
+    String message=String.format("Keytab successfully created: %s for principal %s",created,principal);
+    if (actionLog != null) {
+      actionLog.writeStdOut(message);
+    }
+    if (created) {
+      ensureAmbariOnlyAccess(keytabFile);
+      configureJAAS(principal,keytabFilePath,actionLog);
+    }
+    return created;
+  }
+ catch (  KerberosOperationException e) {
+    String message=String.format("Failed to create keytab file for %s - %s",principal,e.getMessage());
+    if (actionLog != null) {
+      actionLog.writeStdErr(message);
+    }
+    LOG.error(message,e);
+  }
+  return false;
+}
