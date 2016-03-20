@@ -1,0 +1,18 @@
+def validateHAWQHdfsClientConfigurations(self, properties, recommendedDefaults, configurations, services, hosts):
+    hdfs_client = properties
+    validationItems = []
+    PROP_NAME = 'output.replace-datanode-on-failure'
+    if (PROP_NAME in hdfs_client):
+        value = hdfs_client[PROP_NAME].upper()
+        componentsListList = [service['components'] for service in services['services']]
+        componentsList = [item['StackServiceComponents'] for sublist in componentsListList for item in sublist]
+        numSegments = len(self.__getHosts(componentsList, 'HAWQSEGMENT'))
+        message = None
+        limit = 4
+        if ((numSegments > limit) and (value != 'TRUE')):
+            message = '{0} should be set to true (checked) for clusters with more than {1} HAWQ Segments'
+        elif ((numSegments <= limit) and (value != 'FALSE')):
+            message = '{0} should be set to false (unchecked) for clusters with {1} or less HAWQ Segments'
+        if message:
+            validationItems.append({'config-name': PROP_NAME, 'item': self.getWarnItem(message.format(PROP_NAME, str(limit))), })
+    return self.toConfigurationValidationProblems(validationItems, 'hdfs-client')
