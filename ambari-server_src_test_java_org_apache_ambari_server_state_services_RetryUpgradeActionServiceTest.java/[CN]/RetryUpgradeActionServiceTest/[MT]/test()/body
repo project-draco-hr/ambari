@@ -1,0 +1,63 @@
+{
+  int timeoutMins=1;
+  RetryUpgradeActionService service=injector.getInstance(RetryUpgradeActionService.class);
+  service.startUp();
+  service.runOneIteration();
+  createCluster();
+  service.setMaxTimeout(timeoutMins);
+  service.runOneIteration();
+  prepareUpgrade();
+  service.runOneIteration();
+  List<HostRoleCommandEntity> commands=hostRoleCommandDAO.findAll();
+  Assert.assertTrue(!commands.isEmpty());
+  for (  HostRoleCommandEntity hrc : commands) {
+    if (hrc.getStatus() == HostRoleStatus.PENDING) {
+      Assert.fail("Did not expect any HostRoleCommands to be PENDING");
+    }
+  }
+  List<StageEntity> stages=stageDAO.findByStageIds(upgradeRequestId,new HashSet<Long>(){
+{
+      add(stageId);
+    }
+  }
+);
+  Assert.assertTrue(!stages.isEmpty() && stages.size() == 1);
+  StageEntity stageEntity=stages.get(0);
+  HostRoleCommandEntity hrc2=new HostRoleCommandEntity();
+  hrc2.setStage(stageEntity);
+  hrc2.setStatus(HostRoleStatus.HOLDING_FAILED);
+  hrc2.setRole(Role.ZOOKEEPER_SERVER);
+  hrc2.setRoleCommand(RoleCommand.RESTART);
+  hrc2.setRetryAllowed(false);
+  hrc2.setAutoSkipOnFailure(false);
+  stageEntity.getHostRoleCommands().add(hrc2);
+  hostRoleCommandDAO.create(hrc2);
+  stageDAO.merge(stageEntity);
+  service.runOneIteration();
+  commands=hostRoleCommandDAO.findAll();
+  Assert.assertTrue(!commands.isEmpty() && commands.size() == 2);
+  for (  HostRoleCommandEntity hrc : commands) {
+    if (hrc.getStatus() == HostRoleStatus.PENDING) {
+      Assert.fail("Did not expect any HostRoleCommands to be PENDING");
+    }
+  }
+  long now=System.currentTimeMillis();
+  hrc2.setRetryAllowed(true);
+  hrc2.setOriginalStartTime(now);
+  hostRoleCommandDAO.merge(hrc2);
+  service.runOneIteration();
+  Assert.assertEquals(HostRoleStatus.PENDING,hostRoleCommandDAO.findByPK(hrc2.getTaskId()).getStatus());
+  now=System.currentTimeMillis();
+  hrc2.setOriginalStartTime(now - (timeoutMins * 60000) - 1);
+  hrc2.setStatus(HostRoleStatus.HOLDING_FAILED);
+  hostRoleCommandDAO.merge(hrc2);
+  service.runOneIteration();
+  Assert.assertEquals(HostRoleStatus.HOLDING_FAILED,hostRoleCommandDAO.findByPK(hrc2.getTaskId()).getStatus());
+  now=System.currentTimeMillis();
+  hrc2.setOriginalStartTime(now);
+  hrc2.setStatus(HostRoleStatus.HOLDING_FAILED);
+  hrc2.setCustomCommandName("org.apache.ambari.server.serveraction.upgrades.FinalizeUpgradeAction");
+  hostRoleCommandDAO.merge(hrc2);
+  service.runOneIteration();
+  Assert.assertEquals(HostRoleStatus.HOLDING_FAILED,hostRoleCommandDAO.findByPK(hrc2.getTaskId()).getStatus());
+}
