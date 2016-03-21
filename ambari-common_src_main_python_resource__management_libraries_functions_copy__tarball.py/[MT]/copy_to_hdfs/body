@@ -1,42 +1,13 @@
 def copy_to_hdfs(name, user_group, owner, file_mode=292, custom_source_file=None, custom_dest_file=None, force_execute=False, use_upgrading_version_during_uprade=True, replace_existing_files=False, host_sys_prepped=False):
     '\n  :param name: Tarball name, e.g., tez, hive, pig, sqoop.\n  :param user_group: Group to own the directory.\n  :param owner: File owner\n  :param file_mode: File permission\n  :param custom_source_file: Override the source file path\n  :param custom_dest_file: Override the destination file path\n  :param force_execute: If true, will execute the HDFS commands immediately, otherwise, will defer to the calling function.\n  :param use_upgrading_version_during_uprade: If true, will use the version going to during upgrade. Otherwise, use the CURRENT (source) version.\n  :param host_sys_prepped: If true, tarballs will not be copied as the cluster deployment uses prepped VMs.\n  :return: Will return True if successful, otherwise, False.\n  '
     import params
-    if ((params.stack_name is None) or (params.stack_name.upper() not in TARBALL_MAP)):
-        Logger.error('Cannot copy {0} tarball to HDFS because stack {1} does not support this operation.'.format(str(name), str(params.stack_name)))
-        return False
-    if ((name is None) or (name.lower() not in TARBALL_MAP[params.stack_name.upper()])):
-        Logger.warning('Cannot copy tarball to HDFS because {0} is not supported in stack {1} for this operation.'.format(str(name), str(params.stack_name)))
-        return False
     Logger.info('Called copy_to_hdfs tarball: {0}'.format(name))
-    (source_file, dest_file) = TARBALL_MAP[params.stack_name.upper()][name.lower()]
-    if (custom_source_file is not None):
-        source_file = custom_source_file
-    if (custom_dest_file is not None):
-        dest_file = custom_dest_file
+    (success, source_file, dest_file) = _get_tarball_paths(name, use_upgrading_version_during_uprade, custom_source_file, custom_dest_file)
+    if (not success):
+        return False
     if host_sys_prepped:
         Logger.info('Skipping copying {0} to {1} for {2} as its a sys_prepped host.'.format(str(source_file), str(dest_file), str(name)))
         return True
-    upgrade_direction = default('/commandParams/upgrade_direction', None)
-    is_stack_upgrade = (upgrade_direction is not None)
-    current_version = default('/hostLevelParams/current_version', None)
-    Logger.info('Default version is {0}'.format(current_version))
-    if is_stack_upgrade:
-        if use_upgrading_version_during_uprade:
-            current_version = default('/commandParams/version', None)
-            Logger.info('Because this is a Stack Upgrade, will use version {0}'.format(current_version))
-        else:
-            Logger.info('This is a Stack Upgrade, but keep the version unchanged.')
-    elif (current_version is None):
-        stack_version = _get_single_version_from_stack_select()
-        if stack_version:
-            Logger.info('Will use stack version {0}'.format(stack_version))
-            current_version = stack_version
-    if (current_version is None):
-        message_suffix = (('during rolling %s' % str(upgrade_direction)) if is_stack_upgrade else '')
-        Logger.warning('Cannot copy {0} tarball because unable to determine current version {1}.'.format(name, message_suffix))
-        return False
-    source_file = source_file.replace(STACK_VERSION_PATTERN, current_version)
-    dest_file = dest_file.replace(STACK_VERSION_PATTERN, current_version)
     Logger.info('Source file: {0} , Dest file in HDFS: {1}'.format(source_file, dest_file))
     if (not os.path.exists(source_file)):
         Logger.warning('WARNING. Cannot copy {0} tarball because file does not exist: {1} . It is possible that this component is not installed on this host.'.format(str(name), str(source_file)))
