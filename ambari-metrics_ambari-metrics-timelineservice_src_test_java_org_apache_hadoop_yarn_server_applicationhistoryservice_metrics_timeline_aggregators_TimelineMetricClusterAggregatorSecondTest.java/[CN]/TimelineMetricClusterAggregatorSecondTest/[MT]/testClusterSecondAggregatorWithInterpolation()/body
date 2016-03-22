@@ -1,0 +1,33 @@
+{
+  long aggregatorInterval=120000l;
+  long sliceInterval=30000l;
+  long metricInterval=10000l;
+  Configuration configuration=new Configuration();
+  TimelineMetricMetadataManager metricMetadataManagerMock=EasyMock.createNiceMock(TimelineMetricMetadataManager.class);
+  TimelineMetricClusterAggregatorSecond secondAggregator=new TimelineMetricClusterAggregatorSecond("TimelineClusterAggregatorSecond",metricMetadataManagerMock,null,configuration,null,aggregatorInterval,2,"false","","",aggregatorInterval,sliceInterval);
+  secondAggregator.timeSliceIntervalMillis=sliceInterval;
+  long roundedEndTime=AbstractTimelineAggregator.getRoundedAggregateTimeMillis(aggregatorInterval);
+  long roundedStartTime=roundedEndTime - aggregatorInterval;
+  List<Long[]> timeSlices=secondAggregator.getTimeSlices(roundedStartTime,roundedEndTime);
+  TreeMap<Long,Double> metricValues=new TreeMap<Long,Double>();
+  long startTime=roundedEndTime - aggregatorInterval;
+  for (int i=1; startTime < roundedEndTime; i++) {
+    startTime+=metricInterval;
+    if (i % 6 == 1 || i % 6 == 2) {
+      metricValues.put(startTime,(double)i);
+    }
+  }
+  TimelineMetric metric=new TimelineMetric();
+  metric.setMetricName("TestMetric");
+  metric.setHostName("TestHost");
+  metric.setAppId("TestAppId");
+  metric.setMetricValues(metricValues);
+  Map<TimelineClusterMetric,Double> timelineClusterMetricMap=secondAggregator.sliceFromTimelineMetric(metric,timeSlices);
+  TimelineClusterMetric timelineClusterMetric=new TimelineClusterMetric(metric.getMetricName(),metric.getAppId(),metric.getInstanceId(),0l,null);
+  timelineClusterMetric.setTimestamp(roundedStartTime + 2 * sliceInterval);
+  Assert.assertTrue(timelineClusterMetricMap.containsKey(timelineClusterMetric));
+  Assert.assertEquals(timelineClusterMetricMap.get(timelineClusterMetric),4.5);
+  timelineClusterMetric.setTimestamp(roundedStartTime + 4 * sliceInterval);
+  Assert.assertTrue(timelineClusterMetricMap.containsKey(timelineClusterMetric));
+  Assert.assertEquals(timelineClusterMetricMap.get(timelineClusterMetric),7.5);
+}
