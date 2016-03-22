@@ -1,0 +1,40 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  Map<String,String> rangerPropertyMap=new HashMap<String,String>(){
+{
+      put("HTTPS_CLIENT_AUTH","https.attrib.clientAuth");
+      put("HTTPS_KEYSTORE_FILE","https.attrib.keystoreFile");
+      put("HTTPS_KEYSTORE_PASS","https.attrib.keystorePass");
+      put("HTTPS_KEY_ALIAS","https.attrib.keyAlias");
+      put("HTTPS_SERVICE_PORT","https.service.port");
+      put("HTTP_ENABLED","http.enabled");
+      put("HTTP_SERVICE_PORT","http.service.port");
+    }
+  }
+;
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (clusterMap != null && !clusterMap.isEmpty()) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        Config rangerSite=cluster.getDesiredConfigByType(RANGER_SITE_CONFIG);
+        Map<String,String> rangerSiteProperties;
+        Map<String,String> convertedRangerSiteProperties=new HashMap<>();
+        Set<String> oldPropertiesList=new HashSet<>();
+        if (rangerSite != null) {
+          rangerSiteProperties=rangerSite.getProperties();
+          for (          Map.Entry<String,String> mapEntry : rangerPropertyMap.entrySet()) {
+            String oldKey=mapEntry.getKey();
+            String newKey=mapEntry.getValue();
+            if (rangerSiteProperties.containsKey(oldKey)) {
+              convertedRangerSiteProperties.put(newKey,rangerSiteProperties.get(oldKey));
+              oldPropertiesList.add(oldKey);
+            }
+          }
+        }
+        updateConfigurationPropertiesForCluster(cluster,RANGER_SITE_CONFIG,convertedRangerSiteProperties,true,false);
+        removeConfigurationPropertiesFromCluster(cluster,RANGER_SITE_CONFIG,oldPropertiesList);
+      }
+    }
+  }
+}
