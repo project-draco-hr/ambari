@@ -1,0 +1,40 @@
+{
+  if (!isOpen()) {
+    throw new KerberosOperationException("This operation handler has not been opened");
+  }
+  if ((principal == null) || principal.isEmpty()) {
+    throw new KerberosOperationException("Failed to set password - no principal specified");
+  }
+ else   if ((password == null) || password.isEmpty()) {
+    throw new KerberosOperationException("Failed to set password - no password specified");
+  }
+ else   if (!isServicePrincipal(principal)) {
+    DeconstructedPrincipal deconstructedPrincipal=createDeconstructPrincipal(principal);
+    if (usePasswordExpiry) {
+      Calendar calendar=Calendar.getInstance();
+      calendar.add(Calendar.YEAR,PASSWORD_EXPIRY_YEAR);
+      invokeIpa(String.format("user-mod %s --setattr userPassword=%s",deconstructedPrincipal.getPrimary(),password));
+      List<String> command=new ArrayList<>();
+      command.add(executableIpa);
+      command.add("user-mod");
+      command.add(deconstructedPrincipal.getPrimary());
+      command.add("--setattr");
+      command.add(String.format("krbPasswordExpiration=%s",expiryFormat.format(calendar.getTime())));
+      ShellCommandUtil.Result result=executeCommand(command.toArray(new String[command.size()]));
+      if (!result.isSuccessful()) {
+        throw new KerberosOperationException("Failed to set password expiry");
+      }
+    }
+ else {
+      updatePassword(deconstructedPrincipal.getPrimary(),password);
+    }
+  }
+ else {
+    ShellCommandUtil.Result result=invokeIpa(String.format("service-show %s",principal));
+    if (result.isSuccessful() && result.getStdout().contains("Keytab: False")) {
+      LOG.debug("Found service principal " + principal + " without password/keytab. Setting one");
+      createKeytab(principal,password,0);
+    }
+  }
+  return getKeyNumber(principal);
+}

@@ -1,0 +1,50 @@
+{
+  if (!isOpen()) {
+    throw new KerberosOperationException("This operation handler has not been opened");
+  }
+  if ((principal == null) || principal.isEmpty()) {
+    throw new KerberosOperationException("Failed to create new principal - no principal specified");
+  }
+ else   if (((password == null) || password.isEmpty()) && service) {
+    throw new KerberosOperationException("Failed to create new user principal - no password specified");
+  }
+ else {
+    DeconstructedPrincipal deconstructedPrincipal=createDeconstructPrincipal(principal);
+    if (service) {
+      ShellCommandUtil.Result result=invokeIpa(String.format("service-add %s",principal));
+      if (result.isSuccessful()) {
+        return 0;
+      }
+ else {
+        LOG.error("Failed to execute ipa query: service-add --ok-as-delegate=TRUE {}\nSTDOUT: {}\nSTDERR: {}",principal,result.getStdout(),result.getStderr());
+        throw new KerberosOperationException(String.format("Failed to create service principal for %s\nSTDOUT: %s\nSTDERR: %s",principal,result.getStdout(),result.getStderr()));
+      }
+    }
+ else {
+      if (!StringUtils.isAllLowerCase(deconstructedPrincipal.getPrincipalName())) {
+        LOG.warn(deconstructedPrincipal.getPrincipalName() + " is not in lowercase. FreeIPA does not recognize user " + "principals that are not entirely in lowercase. This can lead to issues with kinit and keytabs. Make "+ "sure users are in lowercase ");
+      }
+      ShellCommandUtil.Result result=invokeIpa(String.format("user-add %s --principal=%s --first %s --last %s --setattr userPassword=%s",deconstructedPrincipal.getPrimary(),deconstructedPrincipal.getPrincipalName(),deconstructedPrincipal.getPrimary(),deconstructedPrincipal.getPrimary(),password));
+      if (!result.isSuccessful()) {
+        throw new KerberosOperationException(String.format("Failed to create user principal for %s\nSTDOUT: %s\nSTDERR: %s",principal,result.getStdout(),result.getStderr()));
+      }
+      if (getUserPrincipalGroup() != null && !getUserPrincipalGroup().isEmpty()) {
+        result=invokeIpa(String.format("group-add-member %s --users=%s",getUserPrincipalGroup(),deconstructedPrincipal.getPrimary()));
+        if (!result.isSuccessful()) {
+          throw new KerberosOperationException(String.format("Failed to create user principal for %s\nSTDOUT: %s\nSTDERR: %s",principal,result.getStdout(),result.getStderr()));
+        }
+      }
+      if (!usePasswordExpiry) {
+        updatePassword(deconstructedPrincipal.getPrimary(),password);
+        return getKeyNumber(principal);
+      }
+      Calendar calendar=Calendar.getInstance();
+      calendar.add(Calendar.YEAR,PASSWORD_EXPIRY_YEAR);
+      result=invokeIpa(String.format("user-mod %s --setattr krbPasswordExpiration=%s",deconstructedPrincipal.getPrimary(),expiryFormat.format(calendar.getTime())));
+      if (result.isSuccessful()) {
+        return getKeyNumber(principal);
+      }
+      throw new KerberosOperationException(String.format("Unknown error while creating principal for %s\n" + "STDOUT: %s\n" + "STDERR: %s\n",principal,result.getStdout(),result.getStderr()));
+    }
+  }
+}

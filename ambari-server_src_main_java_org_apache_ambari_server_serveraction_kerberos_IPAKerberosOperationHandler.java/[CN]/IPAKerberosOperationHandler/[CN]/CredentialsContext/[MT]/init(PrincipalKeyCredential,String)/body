@@ -1,0 +1,67 @@
+{
+  Process process;
+  BufferedReader reader=null;
+  OutputStreamWriter osw=null;
+  LOG.debug("Entering doKinit");
+  try {
+    String credentialsCache=String.format("FILE:%s",fileName);
+    LOG.debug("start subprocess " + executableKinit + " "+ credentials.getPrincipal());
+    process=Runtime.getRuntime().exec(new String[]{executableKinit,"-c",credentialsCache,credentials.getPrincipal()});
+    reader=new BufferedReader(new InputStreamReader(process.getInputStream(),StandardCharsets.UTF_8));
+    osw=new OutputStreamWriter(process.getOutputStream());
+    char[] data=new char[1024];
+    StringBuilder sb=new StringBuilder();
+    int count=0;
+    while (!reader.ready()) {
+      Thread.sleep(1000L);
+      if (count >= 5) {
+        process.destroy();
+        throw new KerberosOperationException("No answer from kinit");
+      }
+      count++;
+    }
+    while (reader.ready()) {
+      reader.read(data);
+      sb.append(data);
+    }
+    String line=sb.toString();
+    LOG.debug("Reading a line: " + line);
+    if (!line.startsWith("Password")) {
+      throw new KerberosOperationException("Unexpected response from kinit while trying to get ticket for " + credentials.getPrincipal() + " got: "+ line);
+    }
+    osw.write(credentials.getKey());
+    osw.write('\n');
+    osw.close();
+    process.waitFor();
+    LOG.debug("done subprocess");
+  }
+ catch (  IOException e) {
+    String message=String.format("Failed to execute the command: %s",e.getLocalizedMessage());
+    LOG.error(message,e);
+    throw new KerberosOperationException(message,e);
+  }
+catch (  InterruptedException e) {
+    String message=String.format("Failed to execute the command: %s",e.getLocalizedMessage());
+    LOG.error(message,e);
+    throw new KerberosOperationException(message,e);
+  }
+ finally {
+    if (osw != null) {
+      try {
+        osw.close();
+      }
+ catch (      IOException e) {
+      }
+    }
+    if (reader != null) {
+      try {
+        reader.close();
+      }
+ catch (      IOException e) {
+      }
+    }
+  }
+  if (process.exitValue() != 0) {
+    throw new KerberosOperationException("kinit failed for " + credentials.getPrincipal() + ". Wrong password?");
+  }
+}

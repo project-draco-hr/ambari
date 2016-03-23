@@ -1,0 +1,40 @@
+{
+  if (!isOpen()) {
+    throw new KerberosOperationException("This operation handler has not been opened");
+  }
+  if ((principal == null) || principal.isEmpty()) {
+    throw new KerberosOperationException("Failed to get key number for principal  - no principal specified");
+  }
+ else {
+    List<String> command=new ArrayList<>();
+    command.add(executableKvno);
+    command.add(principal);
+    ShellCommandUtil.Result result=executeCommand(command.toArray(new String[command.size()]));
+    String stdOut=result.getStdout();
+    if (stdOut == null) {
+      String message=String.format("Failed to get key number for %s:\n\tExitCode: %s\n\tSTDOUT: NULL\n\tSTDERR: %s",principal,result.getExitCode(),result.getStderr());
+      LOG.warn(message);
+      throw new KerberosOperationException(message);
+    }
+    Matcher matcher=PATTERN_GET_KEY_NUMBER.matcher(stdOut);
+    if (matcher.matches()) {
+      NumberFormat numberFormat=NumberFormat.getIntegerInstance();
+      String keyNumber=matcher.group(1);
+      numberFormat.setGroupingUsed(false);
+      try {
+        Number number=numberFormat.parse(keyNumber);
+        return (number == null) ? 0 : number.intValue();
+      }
+ catch (      ParseException e) {
+        String message=String.format("Failed to get key number for %s - invalid key number value (%s):\n\tExitCode: %s\n\tSTDOUT: NULL\n\tSTDERR: %s",principal,keyNumber,result.getExitCode(),result.getStderr());
+        LOG.warn(message);
+        throw new KerberosOperationException(message);
+      }
+    }
+ else {
+      String message=String.format("Failed to get key number for %s - unexpected STDOUT data:\n\tExitCode: %s\n\tSTDOUT: NULL\n\tSTDERR: %s",principal,result.getExitCode(),result.getStderr());
+      LOG.warn(message);
+      throw new KerberosOperationException(message);
+    }
+  }
+}

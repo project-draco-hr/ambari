@@ -1,0 +1,29 @@
+{
+  if ((principal == null) || principal.isEmpty()) {
+    throw new KerberosOperationException("Failed to create keytab file, missing principal");
+  }
+  if (cachedKeytabs.containsKey(principal)) {
+    return cachedKeytabs.get(principal);
+  }
+  UUID uuid=UUID.randomUUID();
+  String fileName=System.getProperty("java.io.tmpdir") + File.pathSeparator + "ambari."+ uuid.toString();
+  List<String> command=new ArrayList<>();
+  command.add(executableIpaGetKeytab);
+  command.add("-s");
+  command.add(getAdminServerHost());
+  command.add("-p");
+  command.add(principal);
+  command.add("-k");
+  command.add(fileName);
+  ShellCommandUtil.Result result=executeCommand(command.toArray(new String[command.size()]));
+  if (!result.isSuccessful()) {
+    String message=String.format("Failed to get key number for %s:\n\tExitCode: %s\n\tSTDOUT: %s\n\tSTDERR: %s",principal,result.getExitCode(),result.getStdout(),result.getStderr());
+    LOG.warn(message);
+    throw new KerberosOperationException(message);
+  }
+  File keytabFile=new File(fileName);
+  Keytab keytab=readKeytabFile(keytabFile);
+  keytabFile.delete();
+  cachedKeytabs.put(principal,keytab);
+  return keytab;
+}

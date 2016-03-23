@@ -1,0 +1,83 @@
+{
+  BufferedReader reader=null;
+  BufferedReader stderr=null;
+  OutputStreamWriter out=null;
+  LOG.debug("Updating password for: " + principal);
+  UUID uuid=UUID.randomUUID();
+  String fileName=System.getProperty("java.io.tmpdir") + File.pathSeparator + "krb5cc_"+ uuid.toString();
+  try {
+    ShellCommandUtil.Result result=invokeIpa(String.format("user-mod %s --random",principal));
+    if (!result.isSuccessful()) {
+      throw new KerberosOperationException(result.getStderr());
+    }
+    Pattern pattern=Pattern.compile("password: (.*)");
+    Matcher matcher=pattern.matcher(result.getStdout());
+    if (!matcher.find()) {
+      throw new KerberosOperationException("Unexpected response from ipa: " + result.getStdout());
+    }
+    String old_password=matcher.group(1);
+    String credentialsCache=String.format("FILE:%s",fileName);
+    Process process=Runtime.getRuntime().exec(new String[]{executableKinit,"-c",credentialsCache,principal});
+    reader=new BufferedReader(new InputStreamReader(process.getInputStream(),StandardCharsets.UTF_8));
+    stderr=new BufferedReader(new InputStreamReader(process.getInputStream(),StandardCharsets.UTF_8));
+    out=new OutputStreamWriter(process.getOutputStream());
+    String data=readData(reader,stderr);
+    if (!data.startsWith("Password")) {
+      process.destroy();
+      throw new KerberosOperationException("Unexpected response from kinit while trying to password for " + principal + " got: "+ data);
+    }
+    LOG.debug("Sending old password");
+    out.write(old_password);
+    out.write('\n');
+    out.flush();
+    data=readData(reader,stderr);
+    if (!data.contains("Enter")) {
+      process.destroy();
+      throw new KerberosOperationException("Unexpected response from kinit while trying to password for " + principal + " got: "+ data);
+    }
+    LOG.debug("Sending new password");
+    out.write(password);
+    out.write('\n');
+    out.flush();
+    data=readData(reader,stderr);
+    if (!data.contains("again")) {
+      process.destroy();
+      throw new KerberosOperationException("Unexpected response from kinit while trying to password for " + principal + " got: "+ data);
+    }
+    LOG.debug("Sending new password again");
+    out.write(password);
+    out.write('\n');
+    out.flush();
+    process.waitFor();
+  }
+ catch (  IOException e) {
+    LOG.error("Cannot read stream: " + e);
+    throw new KerberosOperationException(e.getMessage());
+  }
+catch (  InterruptedException e) {
+    LOG.error("Process interrupted: " + e);
+    throw new KerberosOperationException(e.getMessage());
+  }
+ finally {
+    try {
+      if (out != null)       out.close();
+    }
+ catch (    IOException e) {
+      LOG.warn("Cannot close out stream: " + e);
+    }
+    try {
+      if (reader != null)       reader.close();
+    }
+ catch (    IOException e) {
+      LOG.warn("Cannot close stdin stream: " + e);
+    }
+    try {
+      if (stderr != null)       stderr.close();
+    }
+ catch (    IOException e) {
+      LOG.warn("Cannot close stderr stream: " + e);
+    }
+    File ccache=new File(fileName);
+    ccache.delete();
+  }
+}
