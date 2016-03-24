@@ -13,6 +13,13 @@
   if (stackInfo == null) {
     throw new StackAccessException("stackName=" + stackId.getStackName() + ", stackVersion="+ stackId.getStackVersion());
   }
+  RepositoryVersionEntity versionEntity=null;
+  if (null != request.getRepositoryVersion()) {
+    versionEntity=repositoryVersionDAO.findByStackAndVersion(stackId,request.getRepositoryVersion());
+    if (null == versionEntity) {
+      throw new AmbariException(String.format("Tried to create a cluster on version %s, but that version doesn't exist",request.getRepositoryVersion()));
+    }
+  }
   boolean foundInvalidHosts=false;
   StringBuilder invalidHostsStr=new StringBuilder();
   if (request.getHostNames() != null) {
@@ -38,4 +45,11 @@
     clusters.mapHostsToCluster(request.getHostNames(),request.getClusterName());
   }
   initializeWidgetsAndLayouts(c,null);
+  if (null != versionEntity) {
+    ClusterVersionDAO clusterVersionDAO=injector.getInstance(ClusterVersionDAO.class);
+    ClusterVersionEntity clusterVersion=clusterVersionDAO.findByClusterAndStackAndVersion(request.getClusterName(),stackId,request.getRepositoryVersion());
+    if (null == clusterVersion) {
+      c.createClusterVersion(stackId,versionEntity.getVersion(),getAuthName(),RepositoryVersionState.INIT);
+    }
+  }
 }

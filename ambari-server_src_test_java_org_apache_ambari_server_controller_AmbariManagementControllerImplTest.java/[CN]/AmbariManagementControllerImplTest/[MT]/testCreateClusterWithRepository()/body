@@ -1,0 +1,37 @@
+{
+  Injector injector=createNiceMock(Injector.class);
+  ClusterVersionDAO clusterVersionDAO=createNiceMock(ClusterVersionDAO.class);
+  expect(clusterVersionDAO.findByClusterAndStackAndVersion(anyObject(String.class),anyObject(StackId.class),anyObject(String.class))).andReturn(null).once();
+  RepositoryVersionEntity repoVersion=createNiceMock(RepositoryVersionEntity.class);
+  RepositoryVersionDAO repoVersionDAO=createNiceMock(RepositoryVersionDAO.class);
+  expect(repoVersionDAO.findByStackAndVersion(anyObject(StackId.class),anyObject(String.class))).andReturn(repoVersion).anyTimes();
+  expect(injector.getInstance(MaintenanceStateHelper.class)).andReturn(null).atLeastOnce();
+  expect(injector.getInstance(Gson.class)).andReturn(null);
+  expect(injector.getInstance(KerberosHelper.class)).andReturn(createNiceMock(KerberosHelper.class));
+  expect(injector.getInstance(ClusterVersionDAO.class)).andReturn(clusterVersionDAO);
+  Cluster cluster=createNiceMock(Cluster.class);
+  expect(cluster.getDesiredStackVersion()).andReturn(new StackId("HDP-2.1")).atLeastOnce();
+  cluster.createClusterVersion(anyObject(StackId.class),anyObject(String.class),anyObject(String.class),anyObject(RepositoryVersionState.class));
+  expectLastCall().once();
+  expect(clusters.getCluster("c1")).andReturn(cluster).atLeastOnce();
+  StackInfo stackInfo=createNiceMock(StackInfo.class);
+  expect(stackInfo.getWidgetsDescriptorFileLocation()).andReturn(null).once();
+  expect(ambariMetaInfo.getStack("HDP","2.1")).andReturn(stackInfo).atLeastOnce();
+  replay(injector,clusters,ambariMetaInfo,stackInfo,cluster,repoVersionDAO,repoVersion,clusterVersionDAO);
+  AmbariManagementController controller=new AmbariManagementControllerImpl(null,clusters,injector);
+  setAmbariMetaInfo(ambariMetaInfo,controller);
+  Class<?> c=controller.getClass();
+  Field f=c.getDeclaredField("repositoryVersionDAO");
+  f.setAccessible(true);
+  f.set(controller,repoVersionDAO);
+  Properties p=new Properties();
+  p.setProperty("","");
+  Configuration configuration=new Configuration(p);
+  f=c.getDeclaredField("configs");
+  f.setAccessible(true);
+  f.set(controller,configuration);
+  ClusterRequest cr=new ClusterRequest(null,"c1","HDP-2.1",null);
+  cr.setRepositoryVersion("2.1.1.0-1234");
+  controller.createCluster(cr);
+  verify(injector,clusters,ambariMetaInfo,stackInfo,cluster,repoVersionDAO,repoVersion,clusterVersionDAO);
+}
