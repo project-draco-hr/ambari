@@ -1,0 +1,32 @@
+{
+  UpgradeEntity upgradeInProgress=this.getUpgradeEntity();
+  if (upgradeInProgress == null) {
+    return this.getCurrentClusterVersion();
+  }
+  String effectiveVersion=null;
+switch (upgradeInProgress.getUpgradeType()) {
+case NON_ROLLING:
+    if (upgradeInProgress.getDirection() == Direction.UPGRADE) {
+      boolean pastChangingStack=this.isNonRollingUpgradePastUpgradingStack(upgradeInProgress);
+      effectiveVersion=pastChangingStack ? upgradeInProgress.getToVersion() : upgradeInProgress.getFromVersion();
+    }
+ else {
+      effectiveVersion=upgradeInProgress.getToVersion();
+    }
+  break;
+case ROLLING:
+default :
+effectiveVersion=upgradeInProgress.getToVersion();
+break;
+}
+if (effectiveVersion == null) {
+throw new AmbariException("Unable to determine which version to use during Stack Upgrade, effectiveVersion is null.");
+}
+Collection<ClusterVersionEntity> clusterVersionEntities=getClusterEntity().getClusterVersionEntities();
+for (ClusterVersionEntity clusterVersionEntity : clusterVersionEntities) {
+if (clusterVersionEntity.getRepositoryVersion().getVersion().equals(effectiveVersion)) {
+return clusterVersionEntity;
+}
+}
+return null;
+}
