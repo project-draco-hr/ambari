@@ -10,7 +10,7 @@
   List<org.apache.ambari.server.actionmanager.Request> requests=actionManager.getRequests(Collections.singletonList(Long.valueOf(requestId)));
   org.apache.ambari.server.actionmanager.Request internalRequest=requests.get(0);
   HostRoleStatus internalStatus=CalculatedStatus.statusFromStages(internalRequest.getStages()).getStatus();
-  if (HostRoleStatus.PENDING == status && internalStatus != HostRoleStatus.ABORTED) {
+  if (HostRoleStatus.PENDING == status && !(internalStatus == HostRoleStatus.ABORTED || internalStatus == HostRoleStatus.IN_PROGRESS)) {
     throw new IllegalArgumentException(String.format("Can only set status to %s when the upgrade is %s (currently %s)",status,HostRoleStatus.ABORTED,internalStatus));
   }
   Long clusterId=internalRequest.getClusterId();
@@ -19,6 +19,9 @@
       actionManager.cancelRequest(internalRequest.getRequestId(),reason);
       try {
         Cluster cluster=clusters.get().getClusterById(clusterId);
+        UpgradeEntity lastUpgradeItemForCluster=s_upgradeDAO.findLastUpgradeForCluster(cluster.getClusterId());
+        lastUpgradeItemForCluster.setSuspended(true);
+        s_upgradeDAO.merge(lastUpgradeItemForCluster);
         cluster.setUpgradeEntity(null);
       }
  catch (      AmbariException e) {
@@ -37,6 +40,8 @@
     try {
       Cluster cluster=clusters.get().getClusterById(clusterId);
       UpgradeEntity lastUpgradeItemForCluster=s_upgradeDAO.findLastUpgradeForCluster(cluster.getClusterId());
+      lastUpgradeItemForCluster.setSuspended(false);
+      s_upgradeDAO.merge(lastUpgradeItemForCluster);
       cluster.setUpgradeEntity(lastUpgradeItemForCluster);
     }
  catch (    AmbariException e) {
