@@ -9,8 +9,18 @@ def recommendHAWQConfigurations(self, configurations, clusterData, services, hos
         putHawqSiteProperty = self.putProperty(configurations, 'hawq-site', services)
         if (self.isHawqMasterComponentOnAmbariServer(services) and ('hawq_master_address_port' in hawq_site)):
             putHawqSiteProperty('hawq_master_address_port', '')
-        if (numSegments and ('default_hash_table_bucket_number' in hawq_site)):
-            putHawqSiteProperty('default_hash_table_bucket_number', (numSegments * 6))
+        if (numSegments and ('default_hash_table_bucket_number' in hawq_site) and ('hawq_rm_nvseg_perquery_limit' in hawq_site)):
+            factor_min = 1
+            factor_max = 6
+            limit = int(hawq_site['hawq_rm_nvseg_perquery_limit'])
+            factor = (limit / numSegments)
+            if (factor < factor_min):
+                buckets = limit
+            elif (factor > factor_max):
+                buckets = (factor_max * numSegments)
+            else:
+                buckets = (factor * numSegments)
+            putHawqSiteProperty('default_hash_table_bucket_number', buckets)
         if (('YARN' in servicesList) and ('yarn-site' in services['configurations'])):
             yarn_site = services['configurations']['yarn-site']['properties']
             for (hs_prop, ys_prop) in self.getHAWQYARNPropertyMapping().items():
