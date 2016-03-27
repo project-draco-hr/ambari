@@ -36,35 +36,34 @@ def createComponentLayoutRecommendations(self, services, hosts):
         slaveClientComponents = [component for component in service['components'] if (self.isSlaveComponent(component) or self.isClientComponent(component))]
         for component in slaveClientComponents:
             componentName = component['StackServiceComponents']['component_name']
-            if (component['StackServiceComponents']['cardinality'] == 'ALL'):
-                hostsForComponent = hostsList
-            else:
-                componentIsPopulated = self.isComponentHostsPopulated(component)
-                if componentIsPopulated:
-                    hostsForComponent = component['StackServiceComponents']['hostnames']
+            componentIsPopulated = self.isComponentHostsPopulated(component)
+            hostsForComponent = []
+            if componentIsPopulated:
+                hostsForComponent = component['StackServiceComponents']['hostnames']
+            elif self.isSlaveComponent(component):
+                cardinality = str(component['StackServiceComponents']['cardinality'])
+                if (self.isComponentUsingCardinalityForLayout(componentName) and cardinality):
+                    if (cardinality == 'ALL'):
+                        hostsMin = len(hostsList)
+                        hostsForComponent = hostsList
+                    elif ('+' in cardinality):
+                        hostsMin = int(cardinality[:(-1)])
+                    elif ('-' in cardinality):
+                        nums = cardinality.split('-')
+                        hostsMin = int(nums[0])
+                    else:
+                        hostsMin = int(cardinality)
+                    if (hostsMin > len(hostsForComponent)):
+                        hostsForComponent.extend(freeHosts[0:(hostsMin - len(hostsForComponent))])
                 else:
-                    hostsForComponent = []
-                if self.isSlaveComponent(component):
-                    cardinality = str(component['StackServiceComponents']['cardinality'])
-                    if (self.isComponentUsingCardinalityForLayout(componentName) and cardinality):
-                        if ('+' in cardinality):
-                            hostsMin = int(cardinality[:(-1)])
-                        elif ('-' in cardinality):
-                            nums = cardinality.split('-')
-                            hostsMin = int(nums[0])
-                        else:
-                            hostsMin = int(cardinality)
-                        if (hostsMin > len(hostsForComponent)):
-                            hostsForComponent.extend(freeHosts[0:(hostsMin - len(hostsForComponent))])
-                    elif (not componentIsPopulated):
-                        hostsForComponent.extend(freeHosts)
-                        if (not hostsForComponent):
-                            hostsForComponent = hostsList[(-1):]
-                    hostsForComponent = list(set(hostsForComponent))
-                elif (self.isClientComponent(component) and (not componentIsPopulated)):
-                    hostsForComponent = freeHosts[0:1]
+                    hostsForComponent.extend(freeHosts)
                     if (not hostsForComponent):
                         hostsForComponent = hostsList[(-1):]
+                hostsForComponent = list(set(hostsForComponent))
+            elif self.isClientComponent(component):
+                hostsForComponent = freeHosts[0:1]
+                if (not hostsForComponent):
+                    hostsForComponent = hostsList[(-1):]
             for hostName in hostsForComponent:
                 if (hostName not in hostsComponentsMap):
                     hostsComponentsMap[hostName] = []
