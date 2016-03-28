@@ -1,0 +1,29 @@
+{
+  LdapContextSource ldapCtxSource=new LdapContextSource();
+  ldapCtxSource.setUrls(new String[]{"ldap://localhost:33389"});
+  ldapCtxSource.setBase("dc=ambari,dc=apache,dc=org");
+  ldapCtxSource.afterPropertiesSet();
+  Properties properties=new Properties();
+  properties.setProperty(Configuration.CLIENT_SECURITY_KEY,"ldap");
+  properties.setProperty(Configuration.SERVER_PERSISTENCE_TYPE_KEY,"in-memory");
+  properties.setProperty(Configuration.METADATA_DIR_PATH,"src/test/resources/stacks");
+  properties.setProperty(Configuration.SERVER_VERSION_FILE,"src/test/resources/version");
+  properties.setProperty(Configuration.OS_VERSION_KEY,"centos5");
+  properties.setProperty(Configuration.SHARED_RESOURCES_DIR_KEY,"src/test/resources/");
+  properties.setProperty(Configuration.LDAP_BASE_DN_KEY,"dc=ambari,dc=apache,dc=org");
+  Configuration configuration=new Configuration(properties);
+  AmbariLdapBindAuthenticator bindAuthenticator=new AmbariLdapBindAuthenticator(ldapCtxSource,configuration);
+  LdapUserSearch userSearch=new FilterBasedLdapUserSearch("","(&(cn={0})(objectClass=person))",ldapCtxSource);
+  bindAuthenticator.setUserSearch(userSearch);
+  String loginAlias="JohnSmith";
+  String userName="deniedUser";
+  Authentication authentication=new UsernamePasswordAuthenticationToken(loginAlias,"password");
+  RequestContextHolder.setRequestAttributes(servletRequestAttributes);
+  servletRequestAttributes.setAttribute(eq(loginAlias),eq(userName),eq(RequestAttributes.SCOPE_SESSION));
+  expectLastCall().once();
+  replayAll();
+  DirContextOperations user=bindAuthenticator.authenticate(authentication);
+  verifyAll();
+  String ldapUserNameAttribute=configuration.getLdapServerProperties().getUsernameAttribute();
+  assertEquals(userName,user.getStringAttribute(ldapUserNameAttribute));
+}
