@@ -1,4 +1,16 @@
 def setup_passwordless_ssh():
     '\n  Exchanges ssh keys to setup passwordless ssh for the hawq_user between the HAWQ Master and the HAWQ Segment nodes\n  '
     import params
-    utils.exec_hawq_operation('ssh-exkeys', format('-f {hawq_hosts_file} -p {hawq_password!p}', hawq_hosts_file=hawq_constants.hawq_hosts_file, hawq_password=params.hawq_password))
+    failed_hosts = []
+    for host in params.hawq_all_hosts:
+        try:
+            utils.exec_hawq_operation('ssh-exkeys', format('-h {hawq_host} -p {hawq_password!p}', hawq_host=host, hawq_password=params.hawq_password))
+        except:
+            failed_hosts.append(host)
+    failed_hosts_cnt = len(failed_hosts)
+    if (failed_hosts_cnt > 0):
+        DEBUG_HELP_MSG = 'Please verify the logs below to debug the cause of failure.'
+        if (failed_hosts_cnt == len(params.hawq_all_hosts)):
+            raise Fail('Setting up passwordless ssh failed for all the HAWQ hosts. {0}'.format(DEBUG_HELP_MSG))
+        else:
+            Logger.error('**WARNING**: Setting up passwordless ssh failed with the hosts below, proceeding with HAWQ Master start:\n{0}\n\n{1}'.format('\n'.join(failed_hosts), DEBUG_HELP_MSG))
