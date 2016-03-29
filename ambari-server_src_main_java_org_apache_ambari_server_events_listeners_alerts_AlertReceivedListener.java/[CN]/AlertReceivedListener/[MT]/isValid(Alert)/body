@@ -3,11 +3,20 @@
   String serviceName=alert.getService();
   String componentName=alert.getComponent();
   String hostName=alert.getHostName();
-  if (null == clusterName) {
+  String ambariServiceName=Services.AMBARI.name();
+  String ambariServerComponentName=Components.AMBARI_SERVER.name();
+  String ambariAgentComponentName=Components.AMBARI_AGENT.name();
+  if (ambariServiceName.equals(serviceName) && ambariServerComponentName.equals(componentName)) {
     return true;
   }
-  String ambariServiceName=Services.AMBARI.name();
-  if (ambariServiceName.equals(serviceName)) {
+  if (StringUtils.isBlank(clusterName)) {
+    if (StringUtils.isBlank(hostName)) {
+      return true;
+    }
+    if (!m_clusters.get().hostExists(hostName)) {
+      LOG.error("Unable to process alert {} for an invalid host named {}",alert.getName(),hostName);
+      return false;
+    }
     return true;
   }
   final Cluster cluster;
@@ -27,17 +36,24 @@
     }
     return false;
   }
+  if (ambariServiceName.equals(serviceName) && ambariAgentComponentName.equals(componentName)) {
+    if (StringUtils.isBlank(hostName) || !m_clusters.get().hostExists(hostName) || !m_clusters.get().isHostMappedToCluster(clusterName,hostName)) {
+      LOG.warn("Unable to process alert {} for cluster {} and host {} because the host is not a part of the cluster.",alert.getName(),clusterName,hostName);
+      return false;
+    }
+    return true;
+  }
   if (StringUtils.isNotBlank(hostName)) {
     if (!m_clusters.get().hostExists(hostName)) {
-      LOG.error("Unable to process alert {} for an invalid host named {}",alert.getName(),hostName);
+      LOG.warn("Unable to process alert {} for an invalid host named {}",alert.getName(),hostName);
       return false;
     }
     if (!cluster.getServices().containsKey(serviceName)) {
-      LOG.error("Unable to process alert {} for an invalid service named {}",alert.getName(),serviceName);
+      LOG.warn("Unable to process alert {} for an invalid service named {}",alert.getName(),serviceName);
       return false;
     }
     if (null != componentName && !cluster.getHosts(serviceName,componentName).contains(hostName)) {
-      LOG.error("Unable to process alert {} for an invalid service {} and component {} on host {}",alert.getName(),serviceName,componentName,hostName);
+      LOG.warn("Unable to process alert {} for an invalid service {} and component {} on host {}",alert.getName(),serviceName,componentName,hostName);
       return false;
     }
   }
