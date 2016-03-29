@@ -1,0 +1,33 @@
+{
+  if (jmxDesiredRpcSuffixProperties.containsKey(componentName)) {
+    Map<String,Map<String,String>> componentToPortsMap;
+    if (jmxDesiredRpcSuffixes.containsKey(clusterName)) {
+      componentToPortsMap=jmxDesiredRpcSuffixes.get(clusterName);
+    }
+ else {
+      componentToPortsMap=new HashMap<>();
+      componentToPortsMap.put(componentName,new HashMap<String,String>());
+      jmxDesiredRpcSuffixes.put(clusterName,componentToPortsMap);
+    }
+    Map<String,String> portToTagMap=componentToPortsMap.get(componentName);
+    portToTagMap.clear();
+    Map<String,String[]> keys=jmxDesiredRpcSuffixProperties.get(componentName);
+    if ("NAMENODE".equals(componentName)) {
+      Map<String,Object> configProperties=getConfigProperties(clusterName,configVersion,serviceConfigTypes.get(componentServiceMap.get(componentName)));
+      if (configProperties.containsKey("dfs.nameservices")) {
+        componentName+="-HA";
+        keys=jmxDesiredRpcSuffixProperties.get(componentName);
+        Map<String,String[]> stringMap=jmxDesiredRpcSuffixProperties.get(componentName);
+        for (        String tag : stringMap.keySet()) {
+          keys.put(tag,getNamenodeHaProperty(configProperties,stringMap.get(tag),hostName));
+        }
+      }
+    }
+    Map<String,String> props=getDesiredConfigMap(clusterName,configVersion,config,keys);
+    for (    Entry<String,String> prop : props.entrySet()) {
+      if (prop.getValue() != null) {
+        portToTagMap.put(getPortString(prop.getValue()).trim(),prop.getKey());
+      }
+    }
+  }
+}
