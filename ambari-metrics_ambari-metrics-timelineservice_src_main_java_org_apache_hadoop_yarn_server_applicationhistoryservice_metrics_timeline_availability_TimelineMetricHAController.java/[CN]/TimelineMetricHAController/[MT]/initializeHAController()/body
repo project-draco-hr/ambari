@@ -1,0 +1,30 @@
+{
+  admin=new ZKHelixAdmin(zkConnectUrl);
+  LOG.info("Creating zookeeper cluster node: " + CLUSTER_NAME);
+  admin.addCluster(CLUSTER_NAME,false);
+  List<String> nodes=admin.getInstancesInCluster(CLUSTER_NAME);
+  if (nodes == null || !nodes.contains(instanceConfig.getInstanceName())) {
+    LOG.info("Adding participant instance " + instanceConfig);
+    admin.addInstance(CLUSTER_NAME,instanceConfig);
+  }
+  if (admin.getStateModelDef(CLUSTER_NAME,STATE_MODEL_NAME) == null) {
+    LOG.info("Adding ONLINE-OFFLINE state model to the cluster");
+    admin.addStateModelDef(CLUSTER_NAME,STATE_MODEL_NAME,OnlineOfflineSMD.build());
+  }
+  List<String> resources=admin.getResourcesInCluster(CLUSTER_NAME);
+  if (!resources.contains(METRIC_AGGREGATORS)) {
+    LOG.info("Adding resource " + METRIC_AGGREGATORS + " with 2 partitions and 1 replicas");
+    admin.addResource(CLUSTER_NAME,METRIC_AGGREGATORS,2,OnlineOfflineSMD.name,FULL_AUTO.toString());
+  }
+  admin.rebalance(CLUSTER_NAME,METRIC_AGGREGATORS,1);
+  startAggregators();
+  startController();
+  Runtime.getRuntime().addShutdownHook(new Thread(){
+    @Override public void run(){
+      aggregationTaskRunner.stop();
+      manager.disconnect();
+    }
+  }
+);
+  isInitialized=true;
+}

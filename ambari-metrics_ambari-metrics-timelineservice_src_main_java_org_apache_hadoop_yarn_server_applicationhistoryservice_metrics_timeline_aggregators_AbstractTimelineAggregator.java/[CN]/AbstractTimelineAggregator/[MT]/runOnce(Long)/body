@@ -1,16 +1,31 @@
 {
-  long currentTime=System.currentTimeMillis();
-  long lastCheckPointTime=readLastCheckpointSavingOnFirstRun(currentTime);
-  if (lastCheckPointTime != -1) {
-    LOG.info("Last check point time: " + lastCheckPointTime + ", lagBy: "+ ((currentTime - lastCheckPointTime) / 1000)+ " seconds.");
-    boolean success=doWork(lastCheckPointTime,lastCheckPointTime + SLEEP_INTERVAL);
-    if (success) {
-      try {
-        saveCheckPoint(lastCheckPointTime + SLEEP_INTERVAL);
-      }
- catch (      IOException io) {
-        LOG.warn("Error saving checkpoint, restarting aggregation at " + "previous checkpoint.");
-      }
-    }
+  boolean performAggregationFunction=true;
+  if (taskRunner != null) {
+switch (getAggregatorType()) {
+case HOST:
+      performAggregationFunction=taskRunner.performsHostAggregation();
+    break;
+case CLUSTER:
+  performAggregationFunction=taskRunner.performsClusterAggregation();
+}
+}
+if (performAggregationFunction) {
+long currentTime=System.currentTimeMillis();
+long lastCheckPointTime=readLastCheckpointSavingOnFirstRun(currentTime);
+if (lastCheckPointTime != -1) {
+LOG.info("Last check point time: " + lastCheckPointTime + ", lagBy: "+ ((currentTime - lastCheckPointTime) / 1000)+ " seconds.");
+boolean success=doWork(lastCheckPointTime,lastCheckPointTime + SLEEP_INTERVAL);
+if (success) {
+  try {
+    saveCheckPoint(lastCheckPointTime + SLEEP_INTERVAL);
   }
+ catch (  IOException io) {
+    LOG.warn("Error saving checkpoint, restarting aggregation at " + "previous checkpoint.");
+  }
+}
+}
+}
+ else {
+LOG.info("Skipping aggregation function not owned by this instance.");
+}
 }

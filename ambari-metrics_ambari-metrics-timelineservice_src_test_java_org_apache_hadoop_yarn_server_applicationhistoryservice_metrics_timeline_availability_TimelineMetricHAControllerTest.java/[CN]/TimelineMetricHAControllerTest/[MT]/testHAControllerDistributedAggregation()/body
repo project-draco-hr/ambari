@@ -1,0 +1,29 @@
+{
+  TimelineMetricHAController haController=new TimelineMetricHAController(configuration);
+  haController.initializeHAController();
+  Thread.sleep(10000);
+  Assert.assertTrue(haController.isInitialized());
+  Assert.assertEquals(1,haController.getLiveInstanceHostNames().size());
+  Assert.assertTrue(haController.getAggregationTaskRunner().performsClusterAggregation());
+  Assert.assertTrue(haController.getAggregationTaskRunner().performsHostAggregation());
+  InstanceConfig instanceConfig2=new InstanceConfig("h2_12001");
+  haController.admin.addInstance(CLUSTER_NAME,instanceConfig2);
+  HelixManager manager2=HelixManagerFactory.getZKHelixManager(CLUSTER_NAME,instanceConfig2.getInstanceName(),InstanceType.PARTICIPANT,haController.zkConnectUrl);
+  manager2.getStateMachineEngine().registerStateModelFactory(STATE_MODEL_NAME,new OnlineOfflineStateModelFactory(instanceConfig2.getInstanceName(),new AggregationTaskRunner(instanceConfig2.getInstanceName(),"")));
+  manager2.connect();
+  haController.admin.rebalance(CLUSTER_NAME,METRIC_AGGREGATORS,1);
+  Thread.sleep(10000);
+  Assert.assertEquals(2,haController.getLiveInstanceHostNames().size());
+  ExternalView view=haController.admin.getResourceExternalView(CLUSTER_NAME,METRIC_AGGREGATORS);
+  Map<String,String> partitionInstanceMap=new HashMap<>();
+  for (  String partition : view.getPartitionSet()) {
+    Map<String,String> states=view.getStateMap(partition);
+    for (    Map.Entry<String,String> stateEntry : states.entrySet()) {
+      partitionInstanceMap.put(partition,stateEntry.getKey());
+      Assert.assertEquals("ONLINE",stateEntry.getValue());
+    }
+  }
+  Assert.assertEquals(2,partitionInstanceMap.size());
+  haController.getAggregationTaskRunner().stop();
+  haController.manager.disconnect();
+}

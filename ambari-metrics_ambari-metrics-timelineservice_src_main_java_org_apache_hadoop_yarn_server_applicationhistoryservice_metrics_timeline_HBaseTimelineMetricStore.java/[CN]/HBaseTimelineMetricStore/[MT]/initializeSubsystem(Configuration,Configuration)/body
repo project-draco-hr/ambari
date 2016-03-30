@@ -5,27 +5,37 @@
     metricMetadataManager=new TimelineMetricMetadataManager(hBaseAccessor,metricsConf);
     metricMetadataManager.initializeMetadata();
     hBaseAccessor.initPoliciesAndTTL();
+    if (configuration.isDistributedOperationModeEnabled()) {
+      haController=new TimelineMetricHAController(configuration);
+      try {
+        haController.initializeHAController();
+      }
+ catch (      Exception e) {
+        LOG.error(e);
+        throw new MetricsSystemInitializationException("Unable to " + "initialize HA controller",e);
+      }
+    }
     if (Boolean.parseBoolean(metricsConf.get(USE_GROUPBY_AGGREGATOR_QUERIES,"true"))) {
       LOG.info("Using group by aggregators for aggregating host and cluster metrics.");
     }
-    TimelineMetricAggregator secondClusterAggregator=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorSecond(hBaseAccessor,metricsConf,metricMetadataManager);
+    TimelineMetricAggregator secondClusterAggregator=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorSecond(hBaseAccessor,metricsConf,metricMetadataManager,haController);
     scheduleAggregatorThread(secondClusterAggregator);
-    TimelineMetricAggregator minuteClusterAggregator=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorMinute(hBaseAccessor,metricsConf);
+    TimelineMetricAggregator minuteClusterAggregator=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorMinute(hBaseAccessor,metricsConf,haController);
     scheduleAggregatorThread(minuteClusterAggregator);
-    TimelineMetricAggregator hourlyClusterAggregator=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorHourly(hBaseAccessor,metricsConf);
+    TimelineMetricAggregator hourlyClusterAggregator=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorHourly(hBaseAccessor,metricsConf,haController);
     scheduleAggregatorThread(hourlyClusterAggregator);
-    TimelineMetricAggregator dailyClusterAggregator=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorDaily(hBaseAccessor,metricsConf);
+    TimelineMetricAggregator dailyClusterAggregator=TimelineMetricAggregatorFactory.createTimelineClusterAggregatorDaily(hBaseAccessor,metricsConf,haController);
     scheduleAggregatorThread(dailyClusterAggregator);
-    TimelineMetricAggregator minuteHostAggregator=TimelineMetricAggregatorFactory.createTimelineMetricAggregatorMinute(hBaseAccessor,metricsConf);
+    TimelineMetricAggregator minuteHostAggregator=TimelineMetricAggregatorFactory.createTimelineMetricAggregatorMinute(hBaseAccessor,metricsConf,haController);
     scheduleAggregatorThread(minuteHostAggregator);
-    TimelineMetricAggregator hourlyHostAggregator=TimelineMetricAggregatorFactory.createTimelineMetricAggregatorHourly(hBaseAccessor,metricsConf);
+    TimelineMetricAggregator hourlyHostAggregator=TimelineMetricAggregatorFactory.createTimelineMetricAggregatorHourly(hBaseAccessor,metricsConf,haController);
     scheduleAggregatorThread(hourlyHostAggregator);
-    TimelineMetricAggregator dailyHostAggregator=TimelineMetricAggregatorFactory.createTimelineMetricAggregatorDaily(hBaseAccessor,metricsConf);
+    TimelineMetricAggregator dailyHostAggregator=TimelineMetricAggregatorFactory.createTimelineMetricAggregatorDaily(hBaseAccessor,metricsConf,haController);
     scheduleAggregatorThread(dailyHostAggregator);
     if (!configuration.isTimelineMetricsServiceWatcherDisabled()) {
       int initDelay=configuration.getTimelineMetricsServiceWatcherInitDelay();
       int delay=configuration.getTimelineMetricsServiceWatcherDelay();
-      executorService.scheduleWithFixedDelay(new TimelineMetricStoreWatcher(this,configuration),initDelay,delay,TimeUnit.SECONDS);
+      watchdogExecutorService.scheduleWithFixedDelay(new TimelineMetricStoreWatcher(this,configuration),initDelay,delay,TimeUnit.SECONDS);
       LOG.info("Started watchdog for timeline metrics store with initial " + "delay = " + initDelay + ", delay = "+ delay);
     }
     isInitialized=true;
