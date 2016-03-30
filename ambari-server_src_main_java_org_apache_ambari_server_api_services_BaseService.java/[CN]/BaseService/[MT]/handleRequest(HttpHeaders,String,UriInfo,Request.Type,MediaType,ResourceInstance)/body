@@ -1,16 +1,28 @@
 {
+  RequestBody rb=new RequestBody();
+  rb.setBody(body);
+  Request request=getRequestFactory().createRequest(headers,rb,uriInfo,requestType,resource);
   Result result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.OK));
   try {
     Set<RequestBody> requestBodySet=getBodyParser().parse(body);
     Iterator<RequestBody> iterator=requestBodySet.iterator();
     while (iterator.hasNext() && result.getStatus().getStatus().equals(ResultStatus.STATUS.OK)) {
       RequestBody requestBody=iterator.next();
-      Request request=getRequestFactory().createRequest(headers,requestBody,uriInfo,requestType,resource);
+      request=getRequestFactory().createRequest(headers,requestBody,uriInfo,requestType,resource);
       result=request.process();
+      requestAuditLogger.log(request,result);
+    }
+    if (requestBodySet.isEmpty() || !ResultStatus.STATUS.OK.equals(result.getStatus().getStatus())) {
+      requestAuditLogger.log(request,result);
     }
   }
  catch (  BodyParseException e) {
     result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.BAD_REQUEST,e.getMessage()));
+    requestAuditLogger.log(request,result);
+  }
+catch (  Throwable t) {
+    requestAuditLogger.log(request,new ResultImpl(new ResultStatus(ResultStatus.STATUS.SERVER_ERROR,t.getMessage())));
+    throw t;
   }
   ResultSerializer serializer=mediaType == null ? getResultSerializer() : getResultSerializer(mediaType);
   Response.ResponseBuilder builder=Response.status(result.getStatus().getStatusCode()).entity(serializer.serialize(result));

@@ -1,0 +1,22 @@
+{
+  String username=((User)SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getUsername();
+switch (request.getRequestType()) {
+case POST:
+    return CreateUserRequestAuditEvent.builder().withTimestamp(System.currentTimeMillis()).withRequestType(request.getRequestType()).withResultStatus(result.getStatus()).withUrl(request.getURI()).withRemoteIp(request.getRemoteAddress()).withUserName(username).withCreatedUsername(getUsername(request)).withActive(isActive(request)).withAdmin(isAdmin(request)).build();
+case DELETE:
+  return DeleteUserRequestAuditEvent.builder().withTimestamp(System.currentTimeMillis()).withRequestType(request.getRequestType()).withResultStatus(result.getStatus()).withUrl(request.getURI()).withRemoteIp(request.getRemoteAddress()).withUserName(username).withDeletedUsername(request.getResource().getKeyValueMap().get(Resource.Type.User)).build();
+case PUT:
+if (hasActive(request)) {
+  return ActivateUserRequestAuditEvent.builder().withTimestamp(System.currentTimeMillis()).withRequestType(request.getRequestType()).withResultStatus(result.getStatus()).withUrl(request.getURI()).withRemoteIp(request.getRemoteAddress()).withUserName(username).withAffectedUsername(getUsername(request)).withActive(isActive(request)).build();
+}
+if (hasAdmin(request)) {
+return AdminUserRequestAuditEvent.builder().withTimestamp(System.currentTimeMillis()).withRequestType(request.getRequestType()).withResultStatus(result.getStatus()).withUrl(request.getURI()).withRemoteIp(request.getRemoteAddress()).withUserName(username).withAffectedUsername(getUsername(request)).withAdmin(isAdmin(request)).build();
+}
+if (hasOldPassword(request)) {
+return UserPasswordChangeRequestAuditEvent.builder().withTimestamp(System.currentTimeMillis()).withRequestType(request.getRequestType()).withResultStatus(result.getStatus()).withUrl(request.getURI()).withRemoteIp(request.getRemoteAddress()).withUserName(username).withAffectedUsername(getUsername(request)).build();
+}
+default :
+break;
+}
+return null;
+}
