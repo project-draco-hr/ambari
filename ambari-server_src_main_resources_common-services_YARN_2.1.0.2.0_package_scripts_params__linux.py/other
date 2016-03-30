@@ -5,6 +5,8 @@ from resource_management.libraries.resources.hdfs_resource import HdfsResource
 from resource_management.libraries.functions import conf_select
 from resource_management.libraries.functions import stack_select
 from resource_management.libraries.functions import format
+from resource_management.libraries.functions import StackFeature
+from resource_management.libraries.functions.stack_features import check_stack_feature
 from resource_management.libraries.functions import get_kinit_path
 from resource_management.libraries.functions.get_not_managed_resources import get_not_managed_resources
 from resource_management.libraries.functions.version import format_stack_version
@@ -16,10 +18,13 @@ YARN_SERVER_ROLE_DIRECTORY_MAP = {'APP_TIMELINE_SERVER': 'hadoop-yarn-timelinese
 config = Script.get_config()
 tmp_dir = Script.get_tmp_dir()
 stack_name = default('/hostLevelParams/stack_name', None)
+stack_root = Script.get_stack_root()
 tarball_map = default('/configurations/cluster-env/tarball_map', None)
 stack_version_unformatted = config['hostLevelParams']['stack_version']
 stack_version_formatted_major = format_stack_version(stack_version_unformatted)
 stack_version_formatted = functions.get_stack_version('hadoop-yarn-resourcemanager')
+stack_supports_ru = (stack_version_formatted_major and check_stack_feature(StackFeature.ROLLING_UPGRADE, stack_version_formatted_major))
+stack_supports_timeline_state_store = (stack_version_formatted_major and check_stack_feature(StackFeature.TIMELINE_STATE_STORE, stack_version_formatted_major))
 version = default('/commandParams/version', None)
 hostname = config['hostname']
 hadoop_libexec_dir = stack_select.get_hadoop_dir('libexec')
@@ -32,7 +37,7 @@ mapred_bin = '/usr/lib/hadoop-mapreduce/sbin'
 yarn_bin = '/usr/lib/hadoop-yarn/sbin'
 yarn_container_bin = '/usr/lib/hadoop-yarn/bin'
 hadoop_java_io_tmpdir = os.path.join(tmp_dir, 'hadoop_java_io_tmpdir')
-if Script.is_stack_greater_or_equal('2.2'):
+if stack_supports_ru:
     mapred_role_root = 'hadoop-mapreduce-client'
     command_role = default('/role', '')
     if (command_role in MAPR_SERVER_ROLE_DIRECTORY_MAP):
@@ -40,11 +45,12 @@ if Script.is_stack_greater_or_equal('2.2'):
     yarn_role_root = 'hadoop-yarn-client'
     if (command_role in YARN_SERVER_ROLE_DIRECTORY_MAP):
         yarn_role_root = YARN_SERVER_ROLE_DIRECTORY_MAP[command_role]
-    hadoop_mapred2_jar_location = format('/usr/hdp/current/{mapred_role_root}')
-    mapred_bin = format('/usr/hdp/current/{mapred_role_root}/sbin')
-    hadoop_yarn_home = format('/usr/hdp/current/{yarn_role_root}')
-    yarn_bin = format('/usr/hdp/current/{yarn_role_root}/sbin')
-    yarn_container_bin = format('/usr/hdp/current/{yarn_role_root}/bin')
+    hadoop_mapred2_jar_location = format('{stack_root}/current/{mapred_role_root}')
+    mapred_bin = format('{stack_root}/current/{mapred_role_root}/sbin')
+    hadoop_yarn_home = format('{stack_root}/current/{yarn_role_root}')
+    yarn_bin = format('{stack_root}/current/{yarn_role_root}/sbin')
+    yarn_container_bin = format('{stack_root}/current/{yarn_role_root}/bin')
+if stack_supports_timeline_state_store:
     ats_leveldb_state_store_dir = config['configurations']['yarn-site']['yarn.timeline-service.leveldb-state-store.path']
 entity_groupfs_active_dir = config['configurations']['yarn-site']['yarn.timeline-service.entity-group-fs-store.active-dir']
 entity_groupfs_active_dir_mode = 1023
