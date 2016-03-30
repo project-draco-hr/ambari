@@ -1,0 +1,35 @@
+{
+  long lastCheckPointTime=-1;
+  try {
+    lastCheckPointTime=readCheckPoint();
+    if (lastCheckPointTime != -1) {
+      LOG.info("Last Checkpoint read : " + new Date(lastCheckPointTime));
+      if (isLastCheckPointTooOld(currentTime,lastCheckPointTime)) {
+        LOG.warn("Last Checkpoint is too old, discarding last checkpoint. " + "lastCheckPointTime = " + new Date(lastCheckPointTime));
+        lastCheckPointTime=getRoundedAggregateTimeMillis(getSleepIntervalMillis()) - getSleepIntervalMillis();
+        LOG.info("Saving checkpoint time. " + new Date((lastCheckPointTime)));
+        saveCheckPoint(lastCheckPointTime);
+      }
+ else {
+        if (lastCheckPointTime > 0) {
+          lastCheckPointTime=getRoundedCheckPointTimeMillis(lastCheckPointTime,getSleepIntervalMillis());
+          LOG.info("Rounded off checkpoint : " + new Date(lastCheckPointTime));
+        }
+        if (isLastCheckPointTooYoung(lastCheckPointTime)) {
+          LOG.info("Last checkpoint too recent for aggregation. Sleeping for 1 cycle.");
+          return -1;
+        }
+      }
+    }
+ else {
+      LOG.info("No checkpoint found");
+      long firstCheckPoint=getRoundedAggregateTimeMillis(getSleepIntervalMillis());
+      LOG.info("Saving checkpoint time. " + new Date((firstCheckPoint)));
+      saveCheckPoint(firstCheckPoint);
+    }
+  }
+ catch (  IOException io) {
+    LOG.warn("Unable to write last checkpoint time. Resuming sleep.",io);
+  }
+  return lastCheckPointTime;
+}
