@@ -55,6 +55,7 @@
       current.setLatestTimestamp(alert.getTimestamp());
       if (alertState != AlertState.SKIPPED) {
         current.setLatestText(alert.getText());
+        current.setOccurrences(current.getOccurrences() + 1);
       }
       toMerge.put(alert,current);
     }
@@ -69,31 +70,49 @@
       current.setOriginalTimestamp(alert.getTimestamp());
       current.setLatestText(alert.getText());
       current.setAlertHistory(history);
-      toCreateHistoryAndMerge.put(alert,current);
-      oldStates.put(alert,oldState);
+switch (alertState) {
+case OK:
+        current.setOccurrences(1);
+      break;
+case CRITICAL:
+case SKIPPED:
+case UNKNOWN:
+case WARNING:
+    if (oldState == AlertState.OK) {
+      current.setOccurrences(1);
     }
-  }
-  saveEntities(toCreate,toMerge,toCreateHistoryAndMerge);
-  for (  Map.Entry<Alert,AlertCurrentEntity> entry : toCreate.entrySet()) {
-    Alert alert=entry.getKey();
-    AlertCurrentEntity entity=entry.getValue();
-    Long clusterId=getClusterIdByName(alert.getCluster());
-    if (clusterId == null) {
-      LOG.error("Unable to process alert {} for an invalid cluster named {}",alert.getName(),alert.getCluster());
-      continue;
+ else {
+      current.setOccurrences(current.getOccurrences() + 1);
     }
-    InitialAlertEvent initialAlertEvent=new InitialAlertEvent(clusterId,alert,entity);
-    m_alertEventPublisher.publish(initialAlertEvent);
-  }
-  for (  Map.Entry<Alert,AlertCurrentEntity> entry : toCreateHistoryAndMerge.entrySet()) {
-    Alert alert=entry.getKey();
-    AlertCurrentEntity entity=entry.getValue();
-    Long clusterId=getClusterIdByName(alert.getCluster());
-    if (clusterId == null) {
-      LOG.error("Unable to process alert {} for an invalid cluster named {}",alert.getName(),alert.getCluster());
-      continue;
-    }
-    AlertStateChangeEvent alertChangedEvent=new AlertStateChangeEvent(clusterId,alert,entity,oldStates.get(alert));
-    m_alertEventPublisher.publish(alertChangedEvent);
-  }
+  break;
+default :
+break;
+}
+toCreateHistoryAndMerge.put(alert,current);
+oldStates.put(alert,oldState);
+}
+}
+saveEntities(toCreate,toMerge,toCreateHistoryAndMerge);
+for (Map.Entry<Alert,AlertCurrentEntity> entry : toCreate.entrySet()) {
+Alert alert=entry.getKey();
+AlertCurrentEntity entity=entry.getValue();
+Long clusterId=getClusterIdByName(alert.getCluster());
+if (clusterId == null) {
+LOG.error("Unable to process alert {} for an invalid cluster named {}",alert.getName(),alert.getCluster());
+continue;
+}
+InitialAlertEvent initialAlertEvent=new InitialAlertEvent(clusterId,alert,entity);
+m_alertEventPublisher.publish(initialAlertEvent);
+}
+for (Map.Entry<Alert,AlertCurrentEntity> entry : toCreateHistoryAndMerge.entrySet()) {
+Alert alert=entry.getKey();
+AlertCurrentEntity entity=entry.getValue();
+Long clusterId=getClusterIdByName(alert.getCluster());
+if (clusterId == null) {
+LOG.error("Unable to process alert {} for an invalid cluster named {}",alert.getName(),alert.getCluster());
+continue;
+}
+AlertStateChangeEvent alertChangedEvent=new AlertStateChangeEvent(clusterId,alert,entity,oldStates.get(alert));
+m_alertEventPublisher.publish(alertChangedEvent);
+}
 }
