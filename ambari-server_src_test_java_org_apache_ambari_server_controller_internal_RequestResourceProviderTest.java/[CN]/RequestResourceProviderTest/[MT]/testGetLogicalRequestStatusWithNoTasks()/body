@@ -1,0 +1,48 @@
+{
+  Resource.Type type=Resource.Type.Request;
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  ActionManager actionManager=createNiceMock(ActionManager.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  RequestEntity requestMock=createNiceMock(RequestEntity.class);
+  expect(requestMock.getRequestContext()).andReturn("this is a context").anyTimes();
+  expect(requestMock.getRequestId()).andReturn(100L).anyTimes();
+  Capture<Collection<Long>> requestIdsCapture=Capture.newInstance();
+  ClusterTopology topology=createNiceMock(ClusterTopology.class);
+  expect(topology.getClusterId()).andReturn(2L).anyTimes();
+  Long clusterId=2L;
+  String clusterName="cluster1";
+  Cluster cluster=createNiceMock(Cluster.class);
+  expect(cluster.getClusterId()).andReturn(clusterId).anyTimes();
+  expect(cluster.getClusterName()).andReturn(clusterName).anyTimes();
+  expect(managementController.getActionManager()).andReturn(actionManager).anyTimes();
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getCluster(eq(clusterName))).andReturn(cluster).anyTimes();
+  expect(clusters.getClusterById(clusterId)).andReturn(cluster).anyTimes();
+  expect(requestDAO.findByPks(capture(requestIdsCapture),eq(true))).andReturn(Lists.newArrayList(requestMock));
+  expect(hrcDAO.findAggregateCounts((Long)anyObject())).andReturn(Collections.<Long,HostRoleCommandStatusSummaryDTO>emptyMap()).anyTimes();
+  TopologyRequest topologyRequest=createNiceMock(TopologyRequest.class);
+  expect(topologyRequest.getHostGroupInfo()).andReturn(Collections.<String,HostGroupInfo>emptyMap()).anyTimes();
+  expect(topologyRequest.getBlueprint()).andReturn(null).anyTimes();
+  PowerMock.mockStatic(AmbariServer.class);
+  expect(AmbariServer.getController()).andReturn(managementController).anyTimes();
+  PowerMock.replayAll(topologyRequest,topology,managementController,clusters);
+  LogicalRequest logicalRequest=new LogicalRequest(200L,topologyRequest,topology);
+  reset(topologyManager);
+  expect(topologyManager.getRequest(100L)).andReturn(logicalRequest).anyTimes();
+  expect(topologyManager.getRequests(eq(Collections.singletonList(100L)))).andReturn(Collections.singletonList(logicalRequest)).anyTimes();
+  expect(topologyManager.getStageSummaries(EasyMock.<Long>anyObject())).andReturn(Collections.<Long,HostRoleCommandStatusSummaryDTO>emptyMap()).anyTimes();
+  replay(actionManager,requestMock,requestDAO,hrcDAO,topologyManager);
+  ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
+  Set<String> propertyIds=ImmutableSet.of(RequestResourceProvider.REQUEST_ID_PROPERTY_ID,RequestResourceProvider.REQUEST_STATUS_PROPERTY_ID,RequestResourceProvider.REQUEST_PROGRESS_PERCENT_ID);
+  Predicate predicate=new PredicateBuilder().property(RequestResourceProvider.REQUEST_ID_PROPERTY_ID).equals("100").toPredicate();
+  Request request=PropertyHelper.getReadRequest(propertyIds);
+  Set<Resource> resources=provider.getResources(request,predicate);
+  PowerMock.verifyAll();
+  verify(actionManager,requestMock,requestDAO,hrcDAO,topologyManager);
+  Assert.assertEquals(1,resources.size());
+  for (  Resource resource : resources) {
+    Assert.assertEquals(100L,(long)(Long)resource.getPropertyValue(RequestResourceProvider.REQUEST_ID_PROPERTY_ID));
+    Assert.assertEquals("PENDING",resource.getPropertyValue(RequestResourceProvider.REQUEST_STATUS_PROPERTY_ID));
+    Assert.assertEquals(0.0,resource.getPropertyValue(RequestResourceProvider.REQUEST_PROGRESS_PERCENT_ID));
+  }
+}
