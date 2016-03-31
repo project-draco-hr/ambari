@@ -13,7 +13,10 @@ from resource_management.libraries.resources.hdfs_resource import HdfsResource
 from resource_management.libraries.functions import stack_select
 from resource_management.libraries.functions import conf_select
 from resource_management.libraries.functions.get_not_managed_resources import get_not_managed_resources
+from resource_management.libraries.functions.stack_features import check_stack_feature
+from resource_management.libraries.functions import StackFeature
 config = Script.get_config()
+stack_root = Script.get_stack_root()
 tmp_dir = Script.get_tmp_dir()
 stack_name = default('/hostLevelParams/stack_name', None)
 upgrade_direction = default('/commandParams/upgrade_direction', None)
@@ -23,11 +26,10 @@ stack_version_unformatted = config['hostLevelParams']['stack_version']
 stack_version_formatted = format_stack_version(stack_version_unformatted)
 upgrade_from_version = default('/hostLevelParams/current_version', None)
 knox_data_dir = '/var/lib/knox/data'
-if (stack_name and (stack_name.upper() == 'HDP')):
-    Logger.info(format('HDP version to use is {version_formatted}'))
-    if Script.is_stack_greater(version_formatted, '2.3.0.0'):
-        knox_data_dir = format('/usr/hdp/{version}/knox/data')
-        Logger.info(format('Detected HDP with stack version {version}, will use knox_data_dir = {knox_data_dir}'))
+Logger.info(format('Stack version to use is {version_formatted}'))
+if (version_formatted and check_stack_feature(StackFeature.KNOX_VERSIONED_DATA_DIR, version_formatted)):
+    knox_data_dir = format('{stack_root}/{version}/knox/data')
+    Logger.info(format('Detected stack with version {version}, will use knox_data_dir = {knox_data_dir}'))
 knox_master_secret_path = format('{knox_data_dir}/security/master')
 knox_cert_store_path = format('{knox_data_dir}/security/keystores/gateway.jks')
 knox_user = default('/configurations/knox-env/knox_user', 'knox')
@@ -37,14 +39,14 @@ knox_bin = '/usr/bin/gateway'
 knox_conf_dir = '/etc/knox/conf'
 ldap_bin = '/usr/lib/knox/bin/ldap.sh'
 knox_client_bin = '/usr/lib/knox/bin/knoxcli.sh'
-if Script.is_stack_greater_or_equal('2.2'):
-    knox_bin = '/usr/hdp/current/knox-server/bin/gateway.sh'
-    knox_conf_dir = '/usr/hdp/current/knox-server/conf'
-    ldap_bin = '/usr/hdp/current/knox-server/bin/ldap.sh'
-    knox_client_bin = '/usr/hdp/current/knox-server/bin/knoxcli.sh'
-    knox_master_secret_path = '/usr/hdp/current/knox-server/data/security/master'
-    knox_cert_store_path = '/usr/hdp/current/knox-server/data/security/keystores/gateway.jks'
-    knox_data_dir = '/usr/hdp/current/knox-server/data/'
+if (stack_version_formatted and check_stack_feature(StackFeature.ROLLING_UPGRADE, stack_version_formatted)):
+    knox_bin = format('{stack_root}/current/knox-server/bin/gateway.sh')
+    knox_conf_dir = format('{stack_root}/current/knox-server/conf')
+    ldap_bin = format('{stack_root}/current/knox-server/bin/ldap.sh')
+    knox_client_bin = format('{stack_root}/current/knox-server/bin/knoxcli.sh')
+    knox_master_secret_path = format('{stack_root}/current/knox-server/data/security/master')
+    knox_cert_store_path = format('{stack_root}/current/knox-server/data/security/keystores/gateway.jks')
+    knox_data_dir = format('{stack_root}/current/knox-server/data/')
 knox_group = default('/configurations/knox-env/knox_group', 'knox')
 mode = 420
 stack_version_unformatted = config['hostLevelParams']['stack_version']
@@ -127,7 +129,7 @@ has_oozie = (not (oozie_server_host == None))
 oozie_server_port = '11000'
 if has_oozie:
     oozie_server_port = get_port_from_url(config['configurations']['oozie-site']['oozie.base.url'])
-knox_managed_pid_symlink = '/usr/hdp/current/knox-server/pids'
+knox_managed_pid_symlink = format('{stack_root}/current/knox-server/pids')
 knox_master_secret = config['configurations']['knox-env']['knox_master_secret']
 knox_host_name = config['clusterHostInfo']['knox_gateway_hosts'][0]
 knox_host_name_in_cluster = config['hostname']
@@ -202,7 +204,7 @@ if has_ranger_admin:
         jdbc_driver = 'sap.jdbc4.sqlanywhere.IDriver'
     downloaded_custom_connector = format('{tmp_dir}/{jdbc_jar_name}')
     driver_curl_source = format('{jdk_location}/{jdbc_symlink_name}')
-    driver_curl_target = format('/usr/hdp/current/knox-server/ext/{jdbc_jar_name}')
+    driver_curl_target = format('{stack_root}/current/knox-server/ext/{jdbc_jar_name}')
     knox_ranger_plugin_config = {'username': repo_config_username, 'password': repo_config_password, 'knox.url': format('https://{knox_host_name}:{knox_host_port}/gateway/admin/api/v1/topologies'), 'commonNameForCertificate': common_name_for_certificate, }
     knox_ranger_plugin_repo = {'isActive': 'true', 'config': json.dumps(knox_ranger_plugin_config), 'description': 'knox repo', 'name': repo_name, 'repositoryType': 'knox', 'assetType': '5', }
     ranger_audit_solr_urls = config['configurations']['ranger-admin-site']['ranger.audit.solr.urls']
