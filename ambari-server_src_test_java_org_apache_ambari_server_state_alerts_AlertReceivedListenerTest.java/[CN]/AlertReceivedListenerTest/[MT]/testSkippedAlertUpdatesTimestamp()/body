@@ -1,23 +1,26 @@
 {
   String definitionName=ALERT_DEFINITION + "1";
-  String serviceName=Services.AMBARI.name();
-  String componentName=Components.AMBARI_SERVER.name();
+  String serviceName="HDFS";
+  String componentName="NAMENODE";
+  String text=serviceName + " " + componentName+ " is OK";
   Alert alert=new Alert(definitionName,null,serviceName,componentName,HOST1,AlertState.OK);
   alert.setCluster(m_cluster.getClusterName());
   alert.setLabel(ALERT_LABEL);
-  alert.setText(serviceName + " " + componentName+ " is OK");
+  alert.setText(text);
   alert.setTimestamp(1L);
   AlertReceivedListener listener=m_injector.getInstance(AlertReceivedListener.class);
   AlertReceivedEvent event=new AlertReceivedEvent(m_cluster.getClusterId(),alert);
   listener.onAlertEvent(event);
   List<AlertCurrentEntity> allCurrent=m_dao.findCurrent();
   assertEquals(1,allCurrent.size());
-  alert.setHostName("INVALID");
-  alert.setCluster("INVALID");
-  m_dao.removeCurrentByHost(HOST1);
-  allCurrent=m_dao.findCurrent();
-  assertEquals(0,allCurrent.size());
+  assertEquals(1L,(long)allCurrent.get(0).getOriginalTimestamp());
+  assertEquals(1L,(long)allCurrent.get(0).getLatestTimestamp());
+  alert.setState(AlertState.SKIPPED);
+  alert.setTimestamp(2L);
+  alert.setText("INVALID");
   listener.onAlertEvent(event);
   allCurrent=m_dao.findCurrent();
-  assertEquals(1,allCurrent.size());
+  assertEquals(1L,(long)allCurrent.get(0).getOriginalTimestamp());
+  assertEquals(2L,(long)allCurrent.get(0).getLatestTimestamp());
+  assertEquals(text,allCurrent.get(0).getLatestText());
 }

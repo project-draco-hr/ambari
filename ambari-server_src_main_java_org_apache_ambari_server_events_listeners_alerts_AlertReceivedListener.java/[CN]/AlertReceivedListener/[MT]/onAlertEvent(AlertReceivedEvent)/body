@@ -25,6 +25,7 @@
       continue;
     }
     AlertCurrentEntity current;
+    AlertState alertState=alert.getState();
     if (StringUtils.isBlank(alert.getHostName()) || definition.isHostIgnored()) {
       current=m_alertsDao.findCurrentByNameNoHost(clusterId,alert.getName());
     }
@@ -32,6 +33,9 @@
       current=m_alertsDao.findCurrentByHostAndName(clusterId,alert.getHostName(),alert.getName());
     }
     if (null == current) {
+      if (alertState == AlertState.SKIPPED) {
+        continue;
+      }
       AlertHistoryEntity history=createHistory(clusterId,definition,alert);
       MaintenanceState maintenanceState=MaintenanceState.OFF;
       try {
@@ -47,9 +51,11 @@
       current.setOriginalTimestamp(alert.getTimestamp());
       toCreate.put(alert,current);
     }
- else     if (alert.getState() == current.getAlertHistory().getAlertState()) {
+ else     if (alertState == current.getAlertHistory().getAlertState() || alertState == AlertState.SKIPPED) {
       current.setLatestTimestamp(alert.getTimestamp());
-      current.setLatestText(alert.getText());
+      if (alertState != AlertState.SKIPPED) {
+        current.setLatestText(alert.getText());
+      }
       toMerge.put(alert,current);
     }
  else {
