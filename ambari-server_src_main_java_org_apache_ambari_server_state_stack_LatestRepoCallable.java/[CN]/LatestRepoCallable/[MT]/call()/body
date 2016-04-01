@@ -7,7 +7,7 @@
   try {
     if (sourceUri.startsWith("http")) {
       URLStreamProvider streamProvider=new URLStreamProvider(LOOKUP_CONNECTION_TIMEOUT,LOOKUP_READ_TIMEOUT,null,null,null);
-      LOG.info("Loading latest URL info for stack " + stack.getName() + "-"+ stack.getVersion()+ " from "+ sourceUri);
+      LOG.info("Loading latest URL info for stack {}-{} from {}",stack.getName(),stack.getVersion(),sourceUri);
       latestUrlMap=gson.fromJson(new InputStreamReader(streamProvider.readFrom(sourceUri)),type);
     }
  else {
@@ -19,13 +19,13 @@
         jsonFile=new File(sourceUri);
       }
       if (jsonFile.exists()) {
-        LOG.info("Loading latest URL info for stack " + stack.getName() + "-"+ stack.getVersion()+ " from "+ jsonFile);
+        LOG.info("Loading latest URL info for stack{}-{} from {}",stack.getName(),stack.getVersion(),jsonFile);
         latestUrlMap=gson.fromJson(new FileReader(jsonFile),type);
       }
     }
   }
  catch (  Exception e) {
-    LOG.info("Could not load the URI for stack " + stack.getName() + "-"+ stack.getVersion()+ " from "+ sourceUri+ " ("+ e.getMessage()+ ")"+ ". Using default repository values.");
+    LOG.info("Could not load the URI for stack {}-{} from {}, ({}).  Using default repository values",stack.getName(),stack.getVersion(),sourceUri,e.getMessage());
     throw e;
   }
   if (null != latestUrlMap) {
@@ -58,6 +58,38 @@
           }
         }
       }
+    }
+  }
+  StackId stackId=new StackId(stack);
+  if (!latestUrlMap.containsKey(stackId.toString())) {
+    return null;
+  }
+  Map<String,Object> map=latestUrlMap.get(stackId.toString());
+  if (null == map || !map.containsKey("manifests")) {
+    return null;
+  }
+  @SuppressWarnings("unchecked") Map<String,Object> versionMap=(Map<String,Object>)map.get("manifests");
+  VersionDefinitionXml.Merger merger=new VersionDefinitionXml.Merger();
+  for (  Entry<String,Object> entry : versionMap.entrySet()) {
+    String version=entry.getKey();
+    @SuppressWarnings("unchecked") Map<String,String> osMap=(Map<String,String>)entry.getValue();
+    for (    Entry<String,String> versionEntry : osMap.entrySet()) {
+      String uriString=versionEntry.getValue();
+      if ('.' == uriString.charAt(0)) {
+        uriString=new File(stackRepoFolder,uriString).toURI().toString();
+      }
+      try {
+        URI uri=new URI(uriString);
+        VersionDefinitionXml xml=VersionDefinitionXml.load(uri.toURL());
+        merger.add(version,xml);
+      }
+ catch (      Exception e) {
+        LOG.warn("Could not load version definition for {} identified by {}. {}",stackId,uriString,e.getMessage(),e);
+      }
+    }
+    VersionDefinitionXml xml=merger.merge();
+    if (null != xml) {
+      stack.addVersionDefinition(version,xml);
     }
   }
   return null;

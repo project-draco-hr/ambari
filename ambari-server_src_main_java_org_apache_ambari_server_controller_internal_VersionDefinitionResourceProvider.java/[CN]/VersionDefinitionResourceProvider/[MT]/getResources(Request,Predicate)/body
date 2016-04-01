@@ -1,21 +1,43 @@
 {
   Set<Resource> results=new HashSet<Resource>();
   Set<String> requestPropertyIds=getRequestPropertyIds(request,predicate);
-  if (null == predicate) {
+  Set<Map<String,Object>> propertyMaps=getPropertyMaps(predicate);
+  if (propertyMaps.isEmpty()) {
     List<RepositoryVersionEntity> versions=s_repoVersionDAO.findAllDefinitions();
     for (    RepositoryVersionEntity entity : versions) {
       results.add(toResource(entity,requestPropertyIds));
     }
   }
  else {
-    for (    Map<String,Object> propertyMap : getPropertyMaps(predicate)) {
-      String id=(String)propertyMap.get(VERSION_DEF_ID);
-      if (null == id) {
-        continue;
+    for (    Map<String,Object> propertyMap : propertyMaps) {
+      if (propertyMap.containsKey(SHOW_AVAILABLE) && Boolean.parseBoolean(propertyMap.get(SHOW_AVAILABLE).toString())) {
+        for (        Entry<String,VersionDefinitionXml> entry : s_metaInfo.get().getVersionDefinitions().entrySet()) {
+          results.add(toResource(entry.getKey(),entry.getValue(),requestPropertyIds));
+        }
       }
-      RepositoryVersionEntity entity=s_repoVersionDAO.findByPK(Long.parseLong(id));
-      if (null != entity) {
-        results.add(toResource(entity,requestPropertyIds));
+ else {
+        String id=(String)propertyMap.get(VERSION_DEF_ID);
+        if (null != id) {
+          if (NumberUtils.isDigits(id)) {
+            RepositoryVersionEntity entity=s_repoVersionDAO.findByPK(Long.parseLong(id));
+            if (null != entity) {
+              results.add(toResource(entity,requestPropertyIds));
+            }
+          }
+ else {
+            VersionDefinitionXml xml=s_metaInfo.get().getVersionDefinition(id);
+            if (null == xml) {
+              throw new NoSuchResourceException(String.format("Could not find version %s",id));
+            }
+            results.add(toResource(id,xml,requestPropertyIds));
+          }
+        }
+ else {
+          List<RepositoryVersionEntity> versions=s_repoVersionDAO.findAllDefinitions();
+          for (          RepositoryVersionEntity entity : versions) {
+            results.add(toResource(entity,requestPropertyIds));
+          }
+        }
       }
     }
   }

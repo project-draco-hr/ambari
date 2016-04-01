@@ -4,6 +4,12 @@
   String osType=request.getOsType();
   String repoId=request.getRepoId();
   Long repositoryVersionId=request.getRepositoryVersionId();
+  String versionDefinitionId=request.getVersionDefinitionId();
+  if (null == repositoryVersionId && null != versionDefinitionId) {
+    if (NumberUtils.isDigits(versionDefinitionId)) {
+      repositoryVersionId=Long.valueOf(versionDefinitionId);
+    }
+  }
   Set<RepositoryResponse> responses=new HashSet<RepositoryResponse>();
   if (repositoryVersionId != null) {
     final RepositoryVersionEntity repositoryVersion=repositoryVersionDAO.findByPK(repositoryVersionId);
@@ -12,13 +18,34 @@
         if (operatingSystem.getOsType().equals(osType)) {
           for (          RepositoryEntity repository : operatingSystem.getRepositories()) {
             final RepositoryResponse response=new RepositoryResponse(repository.getBaseUrl(),osType,repository.getRepositoryId(),repository.getName(),"","","");
-            response.setRepositoryVersionId(repositoryVersionId);
+            if (null != versionDefinitionId) {
+              response.setVersionDefinitionId(versionDefinitionId);
+            }
+ else {
+              response.setRepositoryVersionId(repositoryVersionId);
+            }
             response.setStackName(repositoryVersion.getStackName());
             response.setStackVersion(repositoryVersion.getStackVersion());
             responses.add(response);
           }
           break;
         }
+      }
+    }
+  }
+ else   if (null != versionDefinitionId) {
+    VersionDefinitionXml xml=ambariMetaInfo.getVersionDefinition(versionDefinitionId);
+    if (null == xml) {
+      throw new AmbariException(String.format("Version identified by %s does not exist",versionDefinitionId));
+    }
+    StackId stackId=new StackId(xml.release.stackId);
+    for (    RepositoryXml.Os os : xml.repositoryInfo.getOses()) {
+      for (      RepositoryXml.Repo repo : os.getRepos()) {
+        RepositoryResponse resp=new RepositoryResponse(repo.getBaseUrl(),os.getFamily(),repo.getRepoId(),repo.getRepoName(),repo.getMirrorsList(),repo.getBaseUrl(),repo.getLatestUri());
+        resp.setVersionDefinitionId(versionDefinitionId);
+        resp.setStackName(stackId.getStackName());
+        resp.setStackVersion(stackId.getStackVersion());
+        responses.add(resp);
       }
     }
   }

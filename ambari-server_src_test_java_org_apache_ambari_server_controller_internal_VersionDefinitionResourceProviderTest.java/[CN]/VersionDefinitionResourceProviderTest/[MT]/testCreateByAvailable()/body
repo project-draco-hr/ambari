@@ -1,0 +1,25 @@
+{
+  AmbariMetaInfo ami=injector.getInstance(AmbariMetaInfo.class);
+  StackManager sm=ami.getStackManager();
+  int maxWait=15000;
+  int waitTime=0;
+  while (waitTime < maxWait && !sm.haveAllRepoUrlsBeenResolved()) {
+    Thread.sleep(5);
+    waitTime+=5;
+  }
+  if (waitTime >= maxWait) {
+    fail("Latest Repo tasks did not complete");
+  }
+  Authentication authentication=TestAuthenticationFactory.createAdministrator();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  final ResourceProvider versionProvider=new VersionDefinitionResourceProvider();
+  Request getRequest=PropertyHelper.getReadRequest("VersionDefinition");
+  Set<Resource> results=versionProvider.getResources(getRequest,null);
+  Assert.assertEquals(0,results.size());
+  Map<String,Object> createMap=new HashMap<>();
+  createMap.put("VersionDefinition/available","HDP-2.2.0-2.2.1.0");
+  Request createRequest=PropertyHelper.getCreateRequest(Collections.singleton(createMap),null);
+  versionProvider.createResources(createRequest);
+  results=versionProvider.getResources(getRequest,null);
+  Assert.assertEquals(1,results.size());
+}

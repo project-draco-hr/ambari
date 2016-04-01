@@ -4,16 +4,41 @@
   String stackVersion=request.getStackVersion();
   String osType=request.getOsType();
   Long repositoryVersionId=request.getRepositoryVersionId();
+  String versionDefinitionId=request.getVersionDefinitionId();
+  if (null == repositoryVersionId && null != versionDefinitionId) {
+    if (NumberUtils.isDigits(versionDefinitionId)) {
+      repositoryVersionId=Long.valueOf(versionDefinitionId);
+    }
+  }
   if (repositoryVersionId != null) {
     final RepositoryVersionEntity repositoryVersion=repositoryVersionDAO.findByPK(repositoryVersionId);
     if (repositoryVersion != null) {
       for (      OperatingSystemEntity operatingSystem : repositoryVersion.getOperatingSystems()) {
         final OperatingSystemResponse response=new OperatingSystemResponse(operatingSystem.getOsType());
-        response.setRepositoryVersionId(repositoryVersionId);
+        if (null != versionDefinitionId) {
+          response.setVersionDefinitionId(repositoryVersionId.toString());
+        }
+ else {
+          response.setRepositoryVersionId(repositoryVersionId);
+        }
         response.setStackName(repositoryVersion.getStackName());
         response.setStackVersion(repositoryVersion.getStackVersion());
         responses.add(response);
       }
+    }
+  }
+ else   if (null != versionDefinitionId) {
+    VersionDefinitionXml xml=ambariMetaInfo.getVersionDefinition(versionDefinitionId);
+    if (null == xml) {
+      throw new AmbariException(String.format("Version identified by %s does not exist",versionDefinitionId));
+    }
+    StackId stackId=new StackId(xml.release.stackId);
+    for (    RepositoryXml.Os os : xml.repositoryInfo.getOses()) {
+      OperatingSystemResponse resp=new OperatingSystemResponse(os.getFamily());
+      resp.setVersionDefinitionId(versionDefinitionId);
+      resp.setStackName(stackId.getStackName());
+      resp.setStackVersion(stackId.getStackVersion());
+      responses.add(resp);
     }
   }
  else {

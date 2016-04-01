@@ -4,8 +4,8 @@
     throw new IllegalArgumentException("Cannot process more than one file per request");
   }
   final Map<String,Object> properties=requestProperties.iterator().next();
-  if (!properties.containsKey(VERSION_DEF_DEFINITION_URL) && !properties.containsKey(VERSION_DEF_DEFINITION_BASE64)) {
-    throw new IllegalArgumentException(String.format("%s is required or upload the file directly",VERSION_DEF_DEFINITION_URL));
+  if (!properties.containsKey(VERSION_DEF_DEFINITION_URL) && !properties.containsKey(VERSION_DEF_DEFINITION_BASE64) && !properties.containsKey(VERSION_DEF_AVAILABLE_DEFINITION)) {
+    throw new IllegalArgumentException(String.format("Creation method is not known.  %s or %s is required or upload the file directly",VERSION_DEF_DEFINITION_URL,VERSION_DEF_AVAILABLE_DEFINITION));
   }
   if (properties.containsKey(VERSION_DEF_DEFINITION_URL) && properties.containsKey(VERSION_DEF_DEFINITION_BASE64)) {
     throw new IllegalArgumentException(String.format("Specify ONLY the url with %s or upload the file directly",VERSION_DEF_DEFINITION_URL));
@@ -14,12 +14,30 @@
     @Override public RepositoryVersionEntity invoke() throws AmbariException {
       String definitionUrl=(String)properties.get(VERSION_DEF_DEFINITION_URL);
       String definitionBase64=(String)properties.get(VERSION_DEF_DEFINITION_BASE64);
+      String definitionName=(String)properties.get(VERSION_DEF_AVAILABLE_DEFINITION);
       XmlHolder holder=null;
       if (null != definitionUrl) {
         holder=loadXml(definitionUrl);
       }
- else {
+ else       if (null != definitionBase64) {
         holder=loadXml(Base64.decodeBase64(definitionBase64));
+      }
+ else       if (null != definitionName) {
+        VersionDefinitionXml xml=s_metaInfo.get().getVersionDefinition(definitionName);
+        if (null == xml) {
+          throw new AmbariException(String.format("Version %s not found",definitionName));
+        }
+        holder=new XmlHolder();
+        holder.xml=xml;
+        try {
+          holder.xmlString=xml.toXml();
+        }
+ catch (        Exception e) {
+          throw new AmbariException(String.format("The available repository %s does not serialize",definitionName));
+        }
+      }
+ else {
+        throw new AmbariException("Cannot determine creation method");
       }
       RepositoryVersionEntity entity=toRepositoryVersionEntity(holder);
       RepositoryVersionResourceProvider.validateRepositoryVersion(s_repoVersionDAO,s_metaInfo.get(),entity);
