@@ -1,9 +1,8 @@
 @not_for_platform(PLATFORM_WINDOWS)
 @patch.object(OSCheck, 'os_distribution', new=MagicMock(return_value=os_distro_value))
 @patch('time.sleep')
-@patch('sys.exit')
 @patch('os.path.exists')
-def test_daemonize_and_stop(self, exists_mock, sys_exit_mock, sleep_mock):
+def test_daemonize_and_stop(self, exists_mock, sleep_mock):
     from ambari_commons.shell import shellRunnerLinux
     oldpid = ProcessHelper.pidfile
     pid = str(os.getpid())
@@ -12,18 +11,24 @@ def test_daemonize_and_stop(self, exists_mock, sys_exit_mock, sleep_mock):
     main.daemonize()
     saved = open(ProcessHelper.pidfile, 'r').read()
     self.assertEqual(pid, saved)
+    main.GRACEFUL_STOP_TRIES = 1
     with patch('ambari_commons.shell.shellRunnerLinux.run') as kill_mock:
         exists_mock.return_value = False
-        main.stop_agent()
-        kill_mock.assert_called_with(['ambari-sudo.sh', 'kill', '-15', pid])
-        sys_exit_mock.assert_called_with(0)
+        kill_mock.side_effect = [{'exitCode': 0, 'output': '', 'error': '', }, {'exitCode': 1, 'output': '', 'error': '', }]
+        try:
+            main.stop_agent()
+            raise Exception('main.stop_agent() should raise sys.exit(0).')
+        except SystemExit as e:
+            self.assertEquals(0, e.code)
+        kill_mock.assert_has_calls([call(['ambari-sudo.sh', 'kill', '-15', pid]), call(['ambari-sudo.sh', 'kill', '-0', pid])])
         kill_mock.reset_mock()
-        sys_exit_mock.reset_mock()
-        kill_mock.return_value = {'exitCode': 0, 'output': 'out', 'error': 'err', }
+        kill_mock.side_effect = [{'exitCode': 0, 'output': '', 'error': '', }, {'exitCode': 0, 'output': '', 'error': '', }, {'exitCode': 0, 'output': '', 'error': '', }]
         exists_mock.return_value = True
-        main.stop_agent()
-        kill_mock.assert_any_call(['ambari-sudo.sh', 'kill', '-15', pid])
-        kill_mock.assert_any_call(['ambari-sudo.sh', 'kill', '-9', pid])
-        sys_exit_mock.assert_called_with(0)
+        try:
+            main.stop_agent()
+            raise Exception('main.stop_agent() should raise sys.exit(0).')
+        except SystemExit as e:
+            self.assertEquals(0, e.code)
+        kill_mock.assert_has_calls([call(['ambari-sudo.sh', 'kill', '-15', pid]), call(['ambari-sudo.sh', 'kill', '-0', pid]), call(['ambari-sudo.sh', 'kill', '-9', pid])])
     ProcessHelper.pidfile = oldpid
     os.remove(tmpoutfile)
