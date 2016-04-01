@@ -1,6 +1,6 @@
 {
-  Properties properties=new Properties();
-  Configuration conf=new Configuration(properties);
+  final long HOST_REGISTRATION_TIME=100L;
+  final long STAGE_LAST_ATTEMPT_TIME=HOST_REGISTRATION_TIME - 1;
   ActionQueue aq=new ActionQueue();
   Clusters fsm=mock(Clusters.class);
   Cluster oneClusterMock=mock(Cluster.class);
@@ -13,27 +13,36 @@
   when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
   when(scomp.getServiceComponentHost(anyString())).thenReturn(sch);
   when(serviceObj.getCluster()).thenReturn(oneClusterMock);
-  String hostname1="ahost.ambari.apache.org";
+  HostEntity hostEntity=new HostEntity();
+  hostEntity.setHostName(hostname);
+  hostDAO.create(hostEntity);
   HashMap<String,ServiceComponentHost> hosts=new HashMap<String,ServiceComponentHost>();
-  hosts.put(hostname1,sch);
+  hosts.put(hostname,sch);
   when(scomp.getServiceComponentHosts()).thenReturn(hosts);
-  Stage stage=null;
-  Stage stage2=null;
+  long requestId=1;
   final List<Stage> stages=new ArrayList<Stage>();
-  stages.add(stage=getStageWithSingleTask(hostname1,"cluster1",Role.NAMENODE,RoleCommand.STOP,Service.Type.HDFS,1,1,1));
-  addInstallTaskToStage(stage,hostname1,"cluster1",Role.HBASE_MASTER,RoleCommand.INSTALL,Service.Type.HBASE,1);
-  stages.add(stage2=getStageWithSingleTask(hostname1,"cluster1",Role.DATANODE,RoleCommand.STOP,Service.Type.HDFS,1,1,1));
-  for (  Stage stageToMakeSkippable : stages) {
-    stageToMakeSkippable.setSkippable(true);
-  }
-  HostRoleCommand command=stage.getOrderedHostRoleCommands().iterator().next();
-  command.setStatus(HostRoleStatus.FAILED);
+  int namenodeCmdTaskId=1;
+  stages.add(getStageWithSingleTask(hostname,"cluster1",Role.NAMENODE,RoleCommand.START,Service.Type.HDFS,namenodeCmdTaskId,1,(int)requestId));
+  stages.add(getStageWithSingleTask(hostname,"cluster1",Role.DATANODE,RoleCommand.START,Service.Type.HDFS,2,2,(int)requestId));
+  Host host=mock(Host.class);
+  when(fsm.getHost(anyString())).thenReturn(host);
+  when(host.getState()).thenReturn(HostState.HEALTHY);
+  when(host.getHostName()).thenReturn(hostname);
+  when(host.getLastRegistrationTime()).thenReturn(HOST_REGISTRATION_TIME);
+  stages.get(0).setLastAttemptTime(host.getHostName(),Role.NAMENODE.toString(),STAGE_LAST_ATTEMPT_TIME);
+  stages.get(1).setLastAttemptTime(host.getHostName(),Role.DATANODE.toString(),STAGE_LAST_ATTEMPT_TIME);
   ActionDBAccessor db=mock(ActionDBAccessor.class);
   RequestEntity request=mock(RequestEntity.class);
   when(request.isExclusive()).thenReturn(false);
   when(db.getRequestEntity(anyLong())).thenReturn(request);
   when(db.getCommandsInProgressCount()).thenReturn(stages.size());
   when(db.getStagesInProgress()).thenReturn(stages);
+  List<HostRoleCommand> requestTasks=new ArrayList<HostRoleCommand>();
+  for (  Stage stage : stages) {
+    requestTasks.addAll(stage.getOrderedHostRoleCommands());
+  }
+  when(db.getRequestTasks(anyLong())).thenReturn(requestTasks);
+  when(db.getAllStages(anyLong())).thenReturn(stages);
   doAnswer(new Answer<Void>(){
     @Override public Void answer(    InvocationOnMock invocation) throws Throwable {
       List<CommandReport> reports=(List<CommandReport>)invocation.getArguments()[0];
@@ -87,10 +96,13 @@
     }
   }
 ).when(db).abortOperation(anyLong());
-  ActionScheduler scheduler=spy(new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),unitOfWork,null,conf));
-  doReturn(false).when(scheduler).wasAgentRestartedDuringOperation(any(Host.class),any(Stage.class),anyString());
+  Properties properties=new Properties();
+  Configuration conf=new Configuration(properties);
+  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),unitOfWork,null,conf);
   scheduler.doWork();
-  Assert.assertEquals(HostRoleStatus.FAILED,stages.get(0).getHostRoleStatus(hostname1,"NAMENODE"));
-  Assert.assertEquals(HostRoleStatus.QUEUED,stages.get(0).getHostRoleStatus(hostname1,"HBASE_MASTER"));
-  Assert.assertEquals(HostRoleStatus.PENDING,stages.get(1).getHostRoleStatus(hostname1,"DATANODE"));
+  String reason="Some reason";
+  scheduler.scheduleCancellingRequest(requestId,reason);
+  scheduler.doWork();
+  Assert.assertEquals(HostRoleStatus.ABORTED,stages.get(0).getHostRoleStatus(hostname,"NAMENODE"));
+  Assert.assertEquals(HostRoleStatus.ABORTED,stages.get(1).getHostRoleStatus(hostname,"DATANODE"));
 }
