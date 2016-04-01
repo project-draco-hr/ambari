@@ -1,0 +1,57 @@
+def install_mpack(options):
+    '\n  Install management pack\n  :param options: Command line options\n  '
+    mpack_path = options.mpack_path
+    if (not mpack_path):
+        print_error_msg('Management pack not specified!')
+        raise FatalException((-1), 'Management pack not specified!')
+    print_info_msg('Installing management pack {0}'.format(mpack_path))
+    tmp_archive_path = download_mpack(mpack_path)
+    tmp_root_dir = expand_mpack(tmp_archive_path)
+    mpack_metadata = read_mpack_metadata(tmp_root_dir)
+    if (not mpack_metadata):
+        raise FatalException((-1), 'Malformed management pack {0}. Metadata file missing!'.format(mpack_path))
+    validate_mpack_prerequisites(mpack_metadata)
+    if options.purge:
+        purge_stacks_and_mpacks()
+    (stack_location, service_definitions_location, mpacks_staging_location) = get_mpack_properties()
+    if (not os.path.exists(stack_location)):
+        sudo.makedir(stack_location, 493)
+    if (not os.path.exists(service_definitions_location)):
+        sudo.makedir(service_definitions_location, 493)
+    if (not os.path.exists(mpacks_staging_location)):
+        sudo.makedir(mpacks_staging_location, 493)
+    mpack_name = mpack_metadata.name
+    mpack_version = mpack_metadata.version
+    mpack_dirname = ((mpack_name + '-') + mpack_version)
+    mpack_staging_dir = os.path.join(mpacks_staging_location, mpack_dirname)
+    print_info_msg('Stage management pack {0}-{1} to staging location {2}'.format(mpack_name, mpack_version, mpack_staging_dir))
+    if os.path.exists(mpack_staging_dir):
+        if options.force:
+            print_info_msg('Force removing previously installed management pack from {0}'.format(mpack_staging_dir))
+            sudo.rmtree(mpack_staging_dir)
+        else:
+            error_msg = 'Management pack {0}-{1} already installed!'.format(mpack_name, mpack_version)
+            print_error_msg(error_msg)
+            raise FatalException((-1), error_msg)
+    shutil.move(tmp_root_dir, mpack_staging_dir)
+    for artifact in mpack_metadata.artifacts:
+        artifact_name = artifact.name
+        artifact_type = artifact.type
+        artifact_source_dir = os.path.join(mpack_staging_dir, artifact.source_dir)
+        print_info_msg('Processing artifact {0} of type {1} in {2}'.format(artifact_name, artifact_type, artifact_source_dir))
+        if (artifact.type == 'stack-definitions'):
+            process_stack_definitions_artifact(artifact, artifact_source_dir, options)
+        elif (artifact.type == 'stack-definition'):
+            process_stack_definition_artifact(artifact, artifact_source_dir, options)
+        elif (artifact.type == 'service-definitions'):
+            process_service_definitions_artifact(artifact, artifact_source_dir, options)
+        elif (artifact.type == 'service-definition'):
+            process_service_definition_artifact(artifact, artifact_source_dir, options)
+        elif (artifact.type == 'stack-extension-definitions'):
+            process_stack_extension_definitions_artifact(artifact, artifact_source_dir, options)
+        elif (artifact.type == 'stack-extension-definition'):
+            process_stack_extension_definition_artifact(artifact, artifact_source_dir, options)
+        else:
+            print_info_msg('Unknown artifact {0} of type {1}'.format(artifact_name, artifact_type))
+    print_info_msg('Management pack {0}-{1} successfully installed!'.format(mpack_name, mpack_version))
+    return (mpack_name, mpack_version, mpack_staging_dir)

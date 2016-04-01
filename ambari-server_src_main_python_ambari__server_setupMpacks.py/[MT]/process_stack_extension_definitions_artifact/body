@@ -1,0 +1,29 @@
+def process_stack_extension_definitions_artifact(artifact, artifact_source_dir, options):
+    '\n  Process stack-extension-definitions artifact\n  :param artifact: Artifact metadata\n  :param artifact_source_dir: Location of artifact in the management pack\n  :param options: Command line options\n  '
+    (stack_location, service_definitions_location, mpacks_staging_location) = get_mpack_properties()
+    service_versions_map = None
+    if ('service_versions_map' in artifact):
+        service_versions_map = artifact.service_versions_map
+    if (not service_versions_map):
+        print_error_msg('Must provide service versions map for stack-extension-definitions artifact!')
+        raise FatalException((-1), 'Must provide service versions map for stack-extension-definition artifact!')
+    for service_name in os.listdir(artifact_source_dir):
+        source_service_path = os.path.join(artifact_source_dir, service_name)
+        for service_version in os.listdir(source_service_path):
+            source_service_version_path = os.path.join(source_service_path, service_version)
+            for service_version_entry in service_versions_map:
+                if ((service_name == service_version_entry.service_name) and (service_version == service_version_entry.service_version)):
+                    applicable_stacks = service_version_entry.applicable_stacks
+                    for applicable_stack in applicable_stacks:
+                        stack_name = applicable_stack.stack_name
+                        stack_version = applicable_stack.stack_version
+                        dest_stack_path = os.path.join(stack_location, stack_name)
+                        dest_stack_version_path = os.path.join(dest_stack_path, stack_version)
+                        dest_stack_services_path = os.path.join(dest_stack_version_path, 'services')
+                        dest_link = os.path.join(dest_stack_services_path, service_name)
+                        if (os.path.exists(dest_stack_path) and os.path.exists(dest_stack_version_path)):
+                            if (not os.path.exists(dest_stack_services_path)):
+                                sudo.makedir(dest_stack_services_path, 493)
+                            if (options.force and os.path.islink(dest_link)):
+                                sudo.unlink(dest_link)
+                            sudo.symlink(source_service_version_path, dest_link)

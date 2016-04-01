@@ -1,0 +1,26 @@
+def uninstall_mpack(mpack_name, mpack_version):
+    '\n  Uninstall specific management pack\n  :param mpack_name: Management pack name\n  :param mpack_version: Management pack version\n  '
+    print_info_msg('Uninstalling management pack {0}-{1}'.format(mpack_name, mpack_version))
+    (stack_location, service_definitions_location, mpacks_staging_location) = get_mpack_properties()
+    found = False
+    if (os.path.exists(mpacks_staging_location) and os.path.isdir(mpacks_staging_location)):
+        staged_mpack_dirs = os.listdir(mpacks_staging_location)
+        for dir in staged_mpack_dirs:
+            staged_mpack_dir = os.path.join(mpacks_staging_location, dir)
+            if os.path.isdir(staged_mpack_dir):
+                staged_mpack_metadata = read_mpack_metadata(staged_mpack_dir)
+                if (not staged_mpack_metadata):
+                    print_error_msg('Skipping malformed management pack {0}-{1}. Metadata file missing!'.format(staged_mpack_name, staged_mpack_version))
+                    continue
+                staged_mpack_name = staged_mpack_metadata.name
+                staged_mpack_version = staged_mpack_metadata.version
+                if ((mpack_name == staged_mpack_name) and (compare_versions(staged_mpack_version, mpack_version) == 0)):
+                    print_info_msg('Removing management pack staging location {0}'.format(staged_mpack_dir))
+                    sudo.rmtree(staged_mpack_dir)
+                    remove_symlinks(stack_location, service_definitions_location, staged_mpack_dir)
+                    found = True
+                    break
+    if (not found):
+        print_error_msg('Management pack {0}-{1} is not installed!'.format(mpack_name, mpack_version))
+    else:
+        print_info_msg('Management pack {0}-{1} successfully uninstalled!'.format(mpack_name, mpack_version))
