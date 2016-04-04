@@ -3,12 +3,13 @@ def get_hadoop_conf_dir(force_latest_on_upgrade=False):
     hadoop_conf_dir = '/etc/hadoop/conf'
     stack_name = None
     stack_root = Script.get_stack_root()
+    stack_version = Script.get_stack_version()
     version = None
     allow_setting_conf_select_symlink = False
     if (not Script.in_stack_upgrade()):
-        if Script.is_stack_greater_or_equal('2.2'):
+        if (stack_version and check_stack_feature(StackFeature.ROLLING_UPGRADE, stack_version)):
             hadoop_conf_dir = os.path.join(stack_root, 'current', 'hadoop-client', 'conf')
-        if Script.is_stack_greater_or_equal('2.3'):
+        if (stack_version and check_stack_feature(StackFeature.CONFIG_VERSIONING, stack_version)):
             hadoop_conf_dir = os.path.join(stack_root, 'current', 'hadoop-client', 'conf')
             stack_name = default('/hostLevelParams/stack_name', None)
             version = default('/commandParams/version', None)
@@ -17,7 +18,7 @@ def get_hadoop_conf_dir(force_latest_on_upgrade=False):
                 allow_setting_conf_select_symlink = True
     else:
         '\n    Whenever upgrading to HDP 2.2, or downgrading back to 2.2, need to use /etc/hadoop/conf\n    Whenever upgrading to HDP 2.3, or downgrading back to 2.3, need to use a versioned hadoop conf dir\n\n    Type__|_Source_|_Target_|_Direction_____________|_Comment_____________________________________________________________\n    Normal|        | 2.2    |                       | Use /etc/hadoop/conf\n    Normal|        | 2.3    |                       | Use /etc/hadoop/conf, which should be a symlink to <stack-root>/current/hadoop-client/conf\n    EU    | 2.1    | 2.3    | Upgrade               | Use versioned <stack-root>/current/hadoop-client/conf\n          |        |        | No Downgrade Allowed  | Invalid\n    EU/RU | 2.2    | 2.2.*  | Any                   | Use <stack-root>/current/hadoop-client/conf\n    EU/RU | 2.2    | 2.3    | Upgrade               | Use <stack-root>/$version/hadoop/conf, which should be a symlink destination\n          |        |        | Downgrade             | Use <stack-root>/current/hadoop-client/conf\n    EU/RU | 2.3    | 2.3.*  | Any                   | Use <stack-root>/$version/hadoop/conf, which should be a symlink destination\n    '
-        if Script.is_stack_greater_or_equal('2.2'):
+        if (stack_version and check_stack_feature(StackFeature.ROLLING_UPGRADE, stack_version)):
             hadoop_conf_dir = os.path.join(stack_root, 'current', 'hadoop-client', 'conf')
             stack_info = stack_select._get_upgrade_stack()
             if (stack_info is not None):
@@ -26,7 +27,7 @@ def get_hadoop_conf_dir(force_latest_on_upgrade=False):
             else:
                 raise Fail("Unable to get parameter 'version'")
             Logger.info('In the middle of a stack upgrade/downgrade for Stack {0} and destination version {1}, determining which hadoop conf dir to use.'.format(stack_name, version))
-            if (compare_versions(format_stack_version(version), '2.3.0.0') >= 0):
+            if (version and check_stack_feature(StackFeature.CONFIG_VERSIONING, version)):
                 if (not force_latest_on_upgrade):
                     current_stack_version = stack_select.get_role_component_current_stack_version()
                     if ((current_stack_version is not None) and (version != current_stack_version)):
