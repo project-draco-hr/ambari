@@ -2,11 +2,11 @@
 def prepare_libext_directory():
     '\n    Performs the following actions on libext:\n      - creates <stack-root>/current/oozie/libext and recursively\n      - set 777 permissions on it and its parents.\n      - downloads JDBC driver JAR if needed\n      - copies Falcon JAR for the Oozie WAR if needed\n    '
     import params
-    target_version_needs_compression_libraries = (compare_versions(format_stack_version(params.version), '2.2.1.0') >= 0)
+    target_version_needs_compression_libraries = (params.version and check_stack_feature(StackFeature.LZO, params.version))
     Directory(params.oozie_libext_dir, mode=511)
     if (params.lzo_enabled and ((params.upgrade_direction == Direction.UPGRADE) or target_version_needs_compression_libraries)):
         hadoop_lzo_pattern = 'hadoop-lzo*.jar'
-        hadoop_client_new_lib_dir = format('/usr/hdp/{version}/hadoop/lib')
+        hadoop_client_new_lib_dir = format('{stack_root}/{version}/hadoop/lib')
         files = glob.iglob(os.path.join(hadoop_client_new_lib_dir, hadoop_lzo_pattern))
         if (not files):
             raise Fail('There are no files at {0} matching {1}'.format(hadoop_client_new_lib_dir, hadoop_lzo_pattern))
@@ -18,8 +18,8 @@ def prepare_libext_directory():
                 files_copied = True
         if (not files_copied):
             raise Fail('There are no files at {0} matching {1}'.format(hadoop_client_new_lib_dir, hadoop_lzo_pattern))
-    oozie_ext_zip_file = '/usr/share/HDP-oozie/ext-2.2.zip'
-    oozie_ext_zip_target_path = os.path.join(params.oozie_libext_dir, 'ext-2.2.zip')
+    oozie_ext_zip_file = params.ext_js_path
+    oozie_ext_zip_target_path = os.path.join(params.oozie_libext_dir, params.ext_js_file)
     if (not os.path.isfile(oozie_ext_zip_file)):
         raise Fail('Unable to copy {0} because it does not exist'.format(oozie_ext_zip_file))
     Logger.info('Copying {0} to {1}'.format(oozie_ext_zip_file, params.oozie_libext_dir))
@@ -32,7 +32,7 @@ def prepare_libext_directory():
         raise Fail('Unable to determine the stack that is being upgraded to or downgraded to.')
     stack_version = upgrade_stack[1]
     if params.has_falcon_host:
-        versioned_falcon_jar_directory = '/usr/hdp/{0}/falcon/oozie/ext/falcon-oozie-el-extension-*.jar'.format(stack_version)
+        versioned_falcon_jar_directory = '{0}/{1}/falcon/oozie/ext/falcon-oozie-el-extension-*.jar'.format(params.stack_root, stack_version)
         Logger.info('Copying {0} to {1}'.format(versioned_falcon_jar_directory, params.oozie_libext_dir))
         Execute(format('{sudo} cp {versioned_falcon_jar_directory} {oozie_libext_dir}'))
         Execute(format('{sudo} chown {oozie_user}:{user_group} {oozie_libext_dir}/falcon-oozie-el-extension-*.jar'))
