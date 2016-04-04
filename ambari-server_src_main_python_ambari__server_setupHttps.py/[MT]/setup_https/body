@@ -1,8 +1,8 @@
-def setup_https(args):
+def setup_https(options):
     if (not is_root()):
         warn = 'ambari-server setup-https is run as non-root user, some sudo privileges might be required'
         print warn
-    args.exit_message = None
+    options.exit_message = None
     if (not get_silent()):
         properties = get_ambari_properties()
         try:
@@ -13,16 +13,19 @@ def setup_https(args):
             api_ssl_old_value = properties.get_property(SSL_API)
             cert_was_imported = False
             cert_must_import = True
+            disable_https = ((options.api_ssl in ['false']) if (options.api_ssl is not None) else None)
+            configure_https = ((options.api_ssl in ['true']) if (options.api_ssl is not None) else None)
             if api_ssl:
-                if get_YN_input('Do you want to disable HTTPS [y/n] (n)? ', False):
+                disable_https = (disable_https if (disable_https is not None) else get_YN_input('Do you want to disable HTTPS [y/n] (n)? ', False))
+                if disable_https:
                     properties.process_pair(SSL_API, 'false')
                     cert_must_import = False
                 else:
-                    properties.process_pair(SSL_API_PORT, get_validated_string_input((('SSL port [' + str(client_api_ssl_port)) + '] ? '), str(client_api_ssl_port), '^[0-9]{1,5}$', 'Invalid port.', False, validatorFunction=is_valid_https_port))
-                    cert_was_imported = import_cert_and_key_action(security_server_keys_dir, properties)
-            elif get_YN_input('Do you want to configure HTTPS [y/n] (y)? ', True):
-                properties.process_pair(SSL_API_PORT, get_validated_string_input((('SSL port [' + str(client_api_ssl_port)) + '] ? '), str(client_api_ssl_port), '^[0-9]{1,5}$', 'Invalid port.', False, validatorFunction=is_valid_https_port))
-                cert_was_imported = import_cert_and_key_action(security_server_keys_dir, properties)
+                    properties.process_pair(SSL_API_PORT, get_validated_string_input((('SSL port [' + str(client_api_ssl_port)) + '] ? '), str(client_api_ssl_port), '^[0-9]{1,5}$', 'Invalid port.', False, validatorFunction=is_valid_https_port, answer=options.api_ssl_port))
+                    cert_was_imported = import_cert_and_key_action(security_server_keys_dir, properties, options)
+            elif get_YN_input('Do you want to configure HTTPS [y/n] (y)? ', True, configure_https):
+                properties.process_pair(SSL_API_PORT, get_validated_string_input((('SSL port [' + str(client_api_ssl_port)) + '] ? '), str(client_api_ssl_port), '^[0-9]{1,5}$', 'Invalid port.', False, validatorFunction=is_valid_https_port, answer=options.api_ssl_port))
+                cert_was_imported = import_cert_and_key_action(security_server_keys_dir, properties, options)
             else:
                 return False
             if (cert_must_import and (not cert_was_imported)):

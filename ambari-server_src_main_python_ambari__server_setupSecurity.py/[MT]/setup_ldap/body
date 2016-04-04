@@ -1,10 +1,10 @@
-def setup_ldap():
+def setup_ldap(options):
     if (not is_root()):
         err = 'Ambari-server setup-ldap should be run with root-level privileges'
         raise FatalException(4, err)
     properties = get_ambari_properties()
     isSecure = get_is_secure(properties)
-    ldap_property_list_reqd = init_ldap_properties_list_reqd(properties)
+    ldap_property_list_reqd = init_ldap_properties_list_reqd(properties, options)
     ldap_property_list_opt = ['authentication.ldap.managerDn', LDAP_MGR_PASSWORD_PROPERTY, SSL_TRUSTSTORE_TYPE_PROPERTY, SSL_TRUSTSTORE_PATH_PROPERTY, SSL_TRUSTSTORE_PASSWORD_PROPERTY]
     ldap_property_list_truststore = [SSL_TRUSTSTORE_TYPE_PROPERTY, SSL_TRUSTSTORE_PATH_PROPERTY, SSL_TRUSTSTORE_PASSWORD_PROPERTY]
     ldap_property_list_passwords = [LDAP_MGR_PASSWORD_PROPERTY, SSL_TRUSTSTORE_PASSWORD_PROPERTY]
@@ -13,16 +13,16 @@ def setup_ldap():
     SSL_TRUSTSTORE_PATH_DEFAULT = get_value_from_properties(properties, SSL_TRUSTSTORE_PATH_PROPERTY)
     ldap_property_value_map = {}
     for ldap_prop in ldap_property_list_reqd:
-        input = get_validated_string_input(ldap_prop.ldap_prop_val_prompt, ldap_prop.ldap_prop_name, ldap_prop.prompt_regex, 'Invalid characters in the input!', False, ldap_prop.allow_empty_prompt)
+        input = get_validated_string_input(ldap_prop.ldap_prop_val_prompt, ldap_prop.ldap_prop_name, ldap_prop.prompt_regex, 'Invalid characters in the input!', False, ldap_prop.allow_empty_prompt, answer=ldap_prop.option)
         if ((input is not None) and (input != '')):
             ldap_property_value_map[ldap_prop.prop_name] = input
     bindAnonymously = ldap_property_value_map['authentication.ldap.bindAnonymously']
     anonymous = (bindAnonymously and (bindAnonymously.lower() == 'true'))
     mgr_password = None
     if (not anonymous):
-        username = get_validated_string_input('Manager DN* {0}: '.format(get_prompt_default(LDAP_MGR_DN_DEFAULT)), LDAP_MGR_DN_DEFAULT, '.*', 'Invalid characters in the input!', False, False)
+        username = get_validated_string_input('Manager DN* {0}: '.format(get_prompt_default(LDAP_MGR_DN_DEFAULT)), LDAP_MGR_DN_DEFAULT, '.*', 'Invalid characters in the input!', False, False, answer=options.ldap_manager_dn)
         ldap_property_value_map[LDAP_MGR_USERNAME_PROPERTY] = username
-        mgr_password = configure_ldap_password()
+        mgr_password = configure_ldap_password(options)
         ldap_property_value_map[LDAP_MGR_PASSWORD_PROPERTY] = mgr_password
     useSSL = ldap_property_value_map['authentication.ldap.useSSL']
     ldaps = (useSSL and (useSSL.lower() == 'true'))
@@ -32,17 +32,21 @@ def setup_ldap():
         truststore_set = bool(SSL_TRUSTSTORE_PATH_DEFAULT)
         if truststore_set:
             truststore_default = 'y'
-        custom_trust_store = get_YN_input('Do you want to provide custom TrustStore for Ambari [y/n] ({0})?'.format(truststore_default), truststore_set)
+        custom_trust_store = (True if ((options.trust_store_path is not None) and options.trust_store_path) else False)
+        if (not custom_trust_store):
+            custom_trust_store = get_YN_input('Do you want to provide custom TrustStore for Ambari [y/n] ({0})?'.format(truststore_default), truststore_set)
         if custom_trust_store:
-            ts_type = get_validated_string_input('TrustStore type [jks/jceks/pkcs12] {0}:'.format(get_prompt_default(SSL_TRUSTSTORE_TYPE_DEFAULT)), SSL_TRUSTSTORE_TYPE_DEFAULT, '^(jks|jceks|pkcs12)?$', 'Wrong type', False)
+            ts_type = get_validated_string_input('TrustStore type [jks/jceks/pkcs12] {0}:'.format(get_prompt_default(SSL_TRUSTSTORE_TYPE_DEFAULT)), SSL_TRUSTSTORE_TYPE_DEFAULT, '^(jks|jceks|pkcs12)?$', 'Wrong type', False, answer=options.trust_store_type)
             ts_path = None
             while True:
-                ts_path = get_validated_string_input('Path to TrustStore file {0}:'.format(get_prompt_default(SSL_TRUSTSTORE_PATH_DEFAULT)), SSL_TRUSTSTORE_PATH_DEFAULT, '.*', False, False)
+                ts_path = get_validated_string_input('Path to TrustStore file {0}:'.format(get_prompt_default(SSL_TRUSTSTORE_PATH_DEFAULT)), SSL_TRUSTSTORE_PATH_DEFAULT, '.*', False, False, answer=options.trust_store_path)
                 if os.path.exists(ts_path):
                     break
                 else:
                     print 'File not found.'
-            ts_password = read_password('', '.*', 'Password for TrustStore:', 'Invalid characters in password')
+                    hasAnswer = ((options.trust_store_path is not None) and options.trust_store_path)
+                    quit_if_has_answer(hasAnswer)
+            ts_password = read_password('', '.*', 'Password for TrustStore:', 'Invalid characters in password', options.trust_store_password)
             ldap_property_value_map[SSL_TRUSTSTORE_TYPE_PROPERTY] = ts_type
             ldap_property_value_map[SSL_TRUSTSTORE_PATH_PROPERTY] = ts_path
             ldap_property_value_map[SSL_TRUSTSTORE_PASSWORD_PROPERTY] = ts_password
@@ -52,7 +56,7 @@ def setup_ldap():
             print ((('  ' + SSL_TRUSTSTORE_TYPE_PROPERTY) + ' = ') + properties.get_property(SSL_TRUSTSTORE_TYPE_PROPERTY))
             print ((('  ' + SSL_TRUSTSTORE_PATH_PROPERTY) + ' = ') + properties.get_property(SSL_TRUSTSTORE_PATH_PROPERTY))
             print ((('  ' + SSL_TRUSTSTORE_PASSWORD_PROPERTY) + ' = ') + properties.get_property(SSL_TRUSTSTORE_PASSWORD_PROPERTY))
-            if get_YN_input('Do you want to remove these properties [y/n] (y)? ', True):
+            if get_YN_input('Do you want to remove these properties [y/n] (y)? ', True, options.trust_store_reconfigure):
                 properties.removeOldProp(SSL_TRUSTSTORE_TYPE_PROPERTY)
                 properties.removeOldProp(SSL_TRUSTSTORE_PATH_PROPERTY)
                 properties.removeOldProp(SSL_TRUSTSTORE_PASSWORD_PROPERTY)
@@ -70,17 +74,17 @@ def setup_ldap():
                 print ('%s: %s' % (property, ldap_property_value_map[property]))
             else:
                 print ('%s: %s' % (property, BLIND_PASSWORD))
-    save_settings = get_YN_input('Save settings [y/n] (y)? ', True)
+    save_settings = (True if (options.ldap_save_settings is not None) else get_YN_input('Save settings [y/n] (y)? ', True))
     if save_settings:
         ldap_property_value_map[CLIENT_SECURITY_KEY] = 'ldap'
         if isSecure:
             if mgr_password:
-                encrypted_passwd = encrypt_password(LDAP_MGR_PASSWORD_ALIAS, mgr_password)
+                encrypted_passwd = encrypt_password(LDAP_MGR_PASSWORD_ALIAS, mgr_password, options)
                 if (mgr_password != encrypted_passwd):
                     ldap_property_value_map[LDAP_MGR_PASSWORD_PROPERTY] = encrypted_passwd
             pass
             if ts_password:
-                encrypted_passwd = encrypt_password(SSL_TRUSTSTORE_PASSWORD_ALIAS, ts_password)
+                encrypted_passwd = encrypt_password(SSL_TRUSTSTORE_PASSWORD_ALIAS, ts_password, options)
                 if (ts_password != encrypted_passwd):
                     ldap_property_value_map[SSL_TRUSTSTORE_PASSWORD_PROPERTY] = encrypted_passwd
             pass

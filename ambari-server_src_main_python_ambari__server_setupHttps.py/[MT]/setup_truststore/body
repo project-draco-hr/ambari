@@ -1,23 +1,27 @@
-def setup_truststore(import_cert=False):
+def setup_truststore(options, import_cert=False):
     if (not get_silent()):
         jdk_path = find_jdk()
         if (jdk_path is None):
             err = ('No JDK found, please run the "ambari-server setup" command to install a JDK automatically or install any JDK manually to ' + configDefaults.JDK_INSTALL_DIR)
             raise FatalException(1, err)
         properties = get_ambari_properties()
-        if get_YN_input('Do you want to configure a truststore [y/n] (y)? ', True):
-            if ((not import_cert) and properties.get_property(SSL_TRUSTSTORE_TYPE_PROPERTY) and get_YN_input('The truststore is already configured. Do you want to re-configure the truststore [y/n] (y)? ', True)):
+        truststore_confirm = (True if ((options.trust_store_path is not None) and options.trust_store_path) else False)
+        truststore_reconfigure = (True if (options.trust_store_reconfigure is not None) else False)
+        if (truststore_confirm or get_YN_input('Do you want to configure a truststore [y/n] (y)? ', True)):
+            if ((not import_cert) and properties.get_property(SSL_TRUSTSTORE_TYPE_PROPERTY) and (truststore_reconfigure or get_YN_input('The truststore is already configured. Do you want to re-configure the truststore [y/n] (y)? ', True))):
                 properties.removeProp(SSL_TRUSTSTORE_TYPE_PROPERTY)
                 properties.removeProp(SSL_TRUSTSTORE_PATH_PROPERTY)
                 properties.removeProp(SSL_TRUSTSTORE_PASSWORD_PROPERTY)
-            truststore_type = get_and_persist_truststore_type(properties)
-            truststore_path = get_and_persist_truststore_path(properties)
-            truststore_password = get_and_persist_truststore_password(properties)
+            truststore_type = get_and_persist_truststore_type(properties, options)
+            truststore_path = get_and_persist_truststore_path(properties, options)
+            truststore_password = get_and_persist_truststore_password(properties, options)
             if import_cert:
-                if get_YN_input('Do you want to import a certificate [y/n] (y)? ', True):
-                    alias = get_validated_string_input('Please enter an alias for the certificate: ', '', None, None, False, False)
+                import_cert_confirm = (True if (options.import_cert_path is not None) else get_YN_input('Do you want to import a certificate [y/n] (y)? ', True))
+                if import_cert_confirm:
+                    aliasOption = (options.import_cert_alias if ((options.import_cert_alias is not None) and options.import_cert_alias) else None)
+                    alias = (aliasOption if (aliasOption is not None) else get_validated_string_input('Please enter an alias for the certificate: ', '', None, None, False, False))
                     run_os_command(get_delete_cert_command(jdk_path, alias, truststore_path, truststore_password))
-                    import_cert_path = get_validated_filepath_input('Enter path to certificate: ', 'Certificate not found')
+                    import_cert_path = get_validated_filepath_input('Enter path to certificate: ', 'Certificate not found', answer=options.import_cert_path)
                     run_component_https_cmd(get_import_cert_command(jdk_path, alias, truststore_type, import_cert_path, truststore_path, truststore_password))
         else:
             return
