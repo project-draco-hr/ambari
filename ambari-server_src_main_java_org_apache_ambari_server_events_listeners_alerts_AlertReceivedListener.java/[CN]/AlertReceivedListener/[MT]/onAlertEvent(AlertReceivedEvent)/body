@@ -3,10 +3,10 @@
     LOG.debug(event.toString());
   }
   List<Alert> alerts=event.getAlerts();
-  Map<Alert,AlertCurrentEntity> toCreate=new HashMap<Alert,AlertCurrentEntity>();
-  Map<Alert,AlertCurrentEntity> toMerge=new HashMap<Alert,AlertCurrentEntity>();
-  Map<Alert,AlertCurrentEntity> toCreateHistoryAndMerge=new HashMap<Alert,AlertCurrentEntity>();
-  Map<Alert,AlertState> oldStates=new HashMap<Alert,AlertState>();
+  List<AlertCurrentEntity> toCreate=new ArrayList<>();
+  List<AlertCurrentEntity> toMerge=new ArrayList<>();
+  List<AlertCurrentEntity> toCreateHistoryAndMerge=new ArrayList<>();
+  List<AlertEvent> alertEvents=new ArrayList<>(20);
   for (  Alert alert : alerts) {
     if (!isValid(alert)) {
       continue;
@@ -49,15 +49,24 @@
       current.setAlertHistory(history);
       current.setLatestTimestamp(alert.getTimestamp());
       current.setOriginalTimestamp(alert.getTimestamp());
-      toCreate.put(alert,current);
+      current.setFirmness(AlertFirmness.HARD);
+      toCreate.add(current);
+      alertEvents.add(new InitialAlertEvent(clusterId,alert,current));
     }
  else     if (alertState == current.getAlertHistory().getAlertState() || alertState == AlertState.SKIPPED) {
       current.setLatestTimestamp(alert.getTimestamp());
       if (alertState != AlertState.SKIPPED) {
         current.setLatestText(alert.getText());
-        current.setOccurrences(current.getOccurrences() + 1);
+        long occurrences=current.getOccurrences() + 1;
+        current.setOccurrences(occurrences);
+        AlertFirmness currentFirmness=current.getFirmness();
+        int repeatTolerance=definition.getRepeatTolerance();
+        if (currentFirmness == AlertFirmness.SOFT && occurrences >= repeatTolerance) {
+          current.setFirmness(AlertFirmness.HARD);
+          alertEvents.add(new AlertStateChangeEvent(clusterId,alert,current,alertState));
+        }
       }
-      toMerge.put(alert,current);
+      toMerge.add(current);
     }
  else {
       if (LOG.isDebugEnabled()) {
@@ -88,31 +97,14 @@ case WARNING:
 default :
 break;
 }
-toCreateHistoryAndMerge.put(alert,current);
-oldStates.put(alert,oldState);
+AlertFirmness firmness=calculateFirmnessForStateChange(definition,alertState,current.getOccurrences());
+current.setFirmness(firmness);
+toCreateHistoryAndMerge.add(current);
+alertEvents.add(new AlertStateChangeEvent(clusterId,alert,current,oldState));
 }
 }
 saveEntities(toCreate,toMerge,toCreateHistoryAndMerge);
-for (Map.Entry<Alert,AlertCurrentEntity> entry : toCreate.entrySet()) {
-Alert alert=entry.getKey();
-AlertCurrentEntity entity=entry.getValue();
-Long clusterId=getClusterIdByName(alert.getCluster());
-if (clusterId == null) {
-LOG.error("Unable to process alert {} for an invalid cluster named {}",alert.getName(),alert.getCluster());
-continue;
-}
-InitialAlertEvent initialAlertEvent=new InitialAlertEvent(clusterId,alert,entity);
-m_alertEventPublisher.publish(initialAlertEvent);
-}
-for (Map.Entry<Alert,AlertCurrentEntity> entry : toCreateHistoryAndMerge.entrySet()) {
-Alert alert=entry.getKey();
-AlertCurrentEntity entity=entry.getValue();
-Long clusterId=getClusterIdByName(alert.getCluster());
-if (clusterId == null) {
-LOG.error("Unable to process alert {} for an invalid cluster named {}",alert.getName(),alert.getCluster());
-continue;
-}
-AlertStateChangeEvent alertChangedEvent=new AlertStateChangeEvent(clusterId,alert,entity,oldStates.get(alert));
-m_alertEventPublisher.publish(alertChangedEvent);
+for (AlertEvent eventToFire : alertEvents) {
+m_alertEventPublisher.publish(eventToFire);
 }
 }
