@@ -1,0 +1,37 @@
+def _llap_start(self, env, cleanup=False):
+    import params
+    env.set_params(params)
+    Logger.info('Starting LLAP')
+    stack_home = '/usr/hdp'
+    cmd = format('{stack_home}/current/hive-server2-hive2/bin/hive --service llap --instances 1 -slider-am-container-mb {slider_am_container_mb} --loglevel INFO')
+    run_file_path = None
+    try:
+        Logger.info(format('Command: {cmd}'))
+        cmd = cmd.split()
+        (code, output, error) = shell.checked_call(cmd, user=params.hive_user, stderr=subprocess.PIPE, logoutput=True)
+        if ((code != 0) or (output is None)):
+            raise Fail('Command failed with either non-zero return code or no output.')
+        exp = 'Prepared (.*?run.sh) for running LLAP'
+        m = re.match(exp, output, re.I)
+        if (m and (len(m.groups()) == 1)):
+            run_file_name = m.group(1)
+            run_file_path = os.path.join(params.hive_user_home_dir, run_file_name)
+        else:
+            raise Fail(('Did not find run.sh file in output: ' + str(output)))
+        Logger.info(format('Run file path: {run_file_path}'))
+        if os.path.isfile(run_file_path):
+            Execute(run_file_path, user=params.hive_user)
+            Logger.info('Sleeping for 30 secs')
+            time.sleep(30)
+            Logger.info('LLAP app deployed successfully.')
+        else:
+            raise Fail(format('Did not find run file {run_file_path}'))
+    except:
+        if ((run_file_path is not None) and cleanup):
+            try:
+                parent_dir = os.path.dirname(run_file_path)
+                if os.path.isdir(parent_dir):
+                    shutil.rmtree(parent_dir)
+            except Exception as e:
+                Logger.error(('Could not cleanup LLAP app package. Error: ' + str(e)))
+        raise
