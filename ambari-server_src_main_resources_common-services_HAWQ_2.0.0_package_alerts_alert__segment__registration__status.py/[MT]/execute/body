@@ -1,0 +1,23 @@
+def execute(configurations={}, parameters={}, host_name=None):
+    '\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  configurations (dictionary): a mapping of configuration key to value\n  parameters (dictionary): a mapping of script parameter key to value\n  host_name (string): the name of this host where the alert is running\n  '
+    if (configurations is None):
+        logger.error('[Alert HAWQ] Configurations file is either not accessible or not present.')
+        return (RESULT_STATE_UNKNOWN, ['There were no configurations supplied to the script.'])
+    logger.debug('Configuration File found')
+    if (not os.path.isfile(HAWQ_SLAVES_FILE)):
+        logger.error('[Alert HAWQ] Slaves file is not present in {0}'.format(HAWQ_SLAVES_FILE))
+        return (RESULT_STATE_SKIPPED, ['Slaves file is not present in /usr/local/hawq/etc'])
+    try:
+        db_segment_list = get_segment_list_db(configurations[HAWQMASTER_PORT])
+        ambari_segment_list = get_segment_list_ambari()
+        segment_diff = (set(db_segment_list) ^ set(ambari_segment_list))
+        segment_diff_len = len(segment_diff)
+        if (not segment_diff_len):
+            return (RESULT_STATE_OK, ['All HAWQ Segments are registered.'])
+        msg = ('{0} HAWQ Segments are not registered with HAWQ Master.'.format(segment_diff_len) if (segment_diff_len > 1) else '1 HAWQ Segment is not registered with HAWQ Master.')
+        logger.error(' [Alert HAWQ] Segments Unregistered: {0} are unregistered/down.'.format(list(segment_diff)))
+        return (RESULT_STATE_WARNING, [(msg + ' Try restarting HAWQ service if a segment has been added/removed. Check the log file in /var/log/ambari-agent/ambari-alerts.log for more details on unregistered hosts.')])
+    except Exception as ex:
+        logger.error('[Alert HAWQ]  Could not find HAWQ Segments registration status on {0}'.format(host_name))
+        logger.exception(str(ex))
+    return (RESULT_STATE_UNKNOWN, ['HAWQ Segments Registration Status cannot be determined.'])
