@@ -1,4 +1,61 @@
 {
+  final Map<String,String> hdfsVisibilityMap=new HashMap<String,String>(){
+{
+      put("mergeHaMetrics","HIDDEN");
+      put("appId","HIDDEN");
+      put("metricName","HIDDEN");
+    }
+  }
+;
+  final Map<String,String> defaultKeytabVisibilityMap=new HashMap<String,String>(){
+{
+      put("default.smoke.principal","HIDDEN");
+      put("default.smoke.keytab","HIDDEN");
+    }
+  }
+;
+  Map<String,Map<String,String>> visibilityMap=new HashMap<String,Map<String,String>>(){
+{
+      put("hive_webhcat_server_status",new HashMap<String,String>(){
+{
+          put("default.smoke.user","HIDDEN");
+        }
+      }
+);
+      put("hive_metastore_process",defaultKeytabVisibilityMap);
+      put("hive_server_process",defaultKeytabVisibilityMap);
+      put("namenode_service_rpc_queue_latency_hourly",hdfsVisibilityMap);
+      put("namenode_client_rpc_queue_latency_hourly",hdfsVisibilityMap);
+      put("namenode_service_rpc_processing_latency_hourly",hdfsVisibilityMap);
+      put("namenode_client_rpc_processing_latency_hourly",hdfsVisibilityMap);
+      put("increase_nn_heap_usage_daily",hdfsVisibilityMap);
+      put("namenode_service_rpc_processing_latency_daily",hdfsVisibilityMap);
+      put("namenode_client_rpc_processing_latency_daily",hdfsVisibilityMap);
+      put("namenode_service_rpc_queue_latency_daily",hdfsVisibilityMap);
+      put("namenode_client_rpc_queue_latency_daily",hdfsVisibilityMap);
+      put("namenode_increase_in_storage_capacity_usage_daily",hdfsVisibilityMap);
+      put("increase_nn_heap_usage_weekly",hdfsVisibilityMap);
+      put("namenode_increase_in_storage_capacity_usage_weekly",hdfsVisibilityMap);
+    }
+  }
+;
+  List<String> alertNamesForPropertyUpdates=new ArrayList<String>(){
+{
+      add("namenode_service_rpc_queue_latency_hourly");
+      add("namenode_client_rpc_queue_latency_hourly");
+      add("namenode_service_rpc_processing_latency_hourly");
+      add("namenode_client_rpc_processing_latency_hourly");
+      add("increase_nn_heap_usage_daily");
+      add("namenode_service_rpc_processing_latency_daily");
+      add("namenode_client_rpc_processing_latency_daily");
+      add("namenode_service_rpc_queue_latency_daily");
+      add("namenode_client_rpc_queue_latency_daily");
+      add("namenode_increase_in_storage_capacity_usage_daily");
+      add("increase_nn_heap_usage_weekly");
+      add("namenode_increase_in_storage_capacity_usage_weekly");
+    }
+  }
+;
   LOG.info("Updating alert definitions.");
   AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
   AlertDefinitionDAO alertDefinitionDAO=injector.getInstance(AlertDefinitionDAO.class);
@@ -23,10 +80,28 @@
     checkedPutToMap(alertDefinitionParams,hiveServerProcessAlertDefinitionEntity,Lists.newArrayList("default.smoke.user","default.smoke.principal","default.smoke.keytab"));
     checkedPutToMap(alertDefinitionParams,hiveWebhcatServerStatusAlertDefinitionEntity,Lists.newArrayList("default.smoke.user","connection.timeout"));
     checkedPutToMap(alertDefinitionParams,flumeAgentStatusAlertDefinitionEntity,Lists.newArrayList("run.directory"));
+    List<AlertDefinitionEntity> definitionsForPropertyUpdates=new ArrayList<>();
     for (    Map.Entry<AlertDefinitionEntity,List<String>> entry : alertDefinitionParams.entrySet()) {
       AlertDefinitionEntity alertDefinition=entry.getKey();
       String source=alertDefinition.getSource();
       alertDefinition.setSource(addParam(source,entry.getValue()));
+      definitionsForPropertyUpdates.add(alertDefinition);
+    }
+    for (    String name : alertNamesForPropertyUpdates) {
+      AlertDefinitionEntity alertDefinition=alertDefinitionDAO.findByName(clusterID,name);
+      if (alertDefinition != null) {
+        definitionsForPropertyUpdates.add(alertDefinition);
+      }
+    }
+    for (    AlertDefinitionEntity alertDefinition : definitionsForPropertyUpdates) {
+      if (visibilityMap.containsKey(alertDefinition.getDefinitionName())) {
+        for (        Map.Entry<String,String> entry : visibilityMap.get(alertDefinition.getDefinitionName()).entrySet()) {
+          String paramName=entry.getKey();
+          String visibilityValue=entry.getValue();
+          String source=alertDefinition.getSource();
+          alertDefinition.setSource(addParamOption(source,paramName,"visibility",visibilityValue));
+        }
+      }
       alertDefinition.setHash(UUID.randomUUID().toString());
       alertDefinitionDAO.merge(alertDefinition);
     }
