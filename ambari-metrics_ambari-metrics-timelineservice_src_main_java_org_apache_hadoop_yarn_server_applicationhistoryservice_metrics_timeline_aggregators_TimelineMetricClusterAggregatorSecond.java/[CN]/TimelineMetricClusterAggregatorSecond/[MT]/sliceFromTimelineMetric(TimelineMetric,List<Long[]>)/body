@@ -8,6 +8,10 @@
     LOG.debug("Invalid time shift found, possible discrepancy in clocks. " + "timeShift = " + timeShift);
     timeShift=0l;
   }
+  Long prevTimestamp=-1l;
+  TimelineClusterMetric prevMetric=null;
+  int count=0;
+  double sum=0.0;
   Map<Long,Double> timeSliceValueMap=new HashMap<>();
   for (  Map.Entry<Long,Double> metric : timelineMetric.getMetricValues().entrySet()) {
     if (metric.getValue() == null) {
@@ -16,23 +20,28 @@
     Long timestamp=getSliceTimeForMetric(timeSlices,Long.parseLong(metric.getKey().toString()));
     if (timestamp != -1) {
       TimelineClusterMetric clusterMetric=new TimelineClusterMetric(timelineMetric.getMetricName(),timelineMetric.getAppId(),timelineMetric.getInstanceId(),timestamp,timelineMetric.getType());
-      int count=1;
-      Double sum=0.0;
-      if (!timelineClusterMetricMap.containsKey(clusterMetric)) {
-        sum=metric.getValue();
-      }
- else {
+      if (prevTimestamp < 0 || timestamp.equals(prevTimestamp)) {
         Double newValue=metric.getValue();
         if (newValue > 0.0) {
+          sum+=newValue;
           count++;
-          Double oldValue=timelineClusterMetricMap.get(clusterMetric);
-          sum=oldValue + newValue;
         }
       }
-      double metricValue=sum / count;
-      timelineClusterMetricMap.put(clusterMetric,metricValue);
-      timeSliceValueMap.put(timestamp,metricValue);
+ else {
+        double metricValue=(count > 0) ? (sum / count) : 0.0;
+        timelineClusterMetricMap.put(prevMetric,metricValue);
+        timeSliceValueMap.put(prevMetric.getTimestamp(),metricValue);
+        sum=metric.getValue();
+        count=sum > 0.0 ? 1 : 0;
+      }
+      prevTimestamp=timestamp;
+      prevMetric=clusterMetric;
     }
+  }
+  if (prevTimestamp > 0) {
+    double metricValue=(count > 0) ? (sum / count) : 0.0;
+    timelineClusterMetricMap.put(prevMetric,metricValue);
+    timeSliceValueMap.put(prevTimestamp,metricValue);
   }
   if (interpolationEnabled) {
     interpolateMissingPeriods(timelineClusterMetricMap,timelineMetric,timeSlices,timeSliceValueMap);
