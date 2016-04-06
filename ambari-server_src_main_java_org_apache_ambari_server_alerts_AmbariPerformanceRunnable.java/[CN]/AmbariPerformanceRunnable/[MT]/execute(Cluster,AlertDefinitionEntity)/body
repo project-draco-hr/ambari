@@ -1,0 +1,53 @@
+{
+  AlertDefinition definition=m_definitionFactory.coerce(entity);
+  ServerSource serverSource=(ServerSource)definition.getSource();
+  List<AlertParameter> parameters=serverSource.getParameters();
+  List<String> results=new ArrayList<>();
+  AlertState alertState=AlertState.OK;
+  for (  PerformanceArea performanceArea : PerformanceArea.values()) {
+    PerformanceResult performanceResult;
+    try {
+      long startTime=System.currentTimeMillis();
+      performanceArea.execute(this,cluster);
+      long totalTime=System.currentTimeMillis() - startTime;
+      performanceResult=calculatePerformanceResult(performanceArea,totalTime,parameters);
+    }
+ catch (    Exception exception) {
+      String result=MessageFormat.format(PERFORMANCE_AREA_FAILURE_TEMPLATE,performanceArea,AlertState.UNKNOWN);
+      LOG.error(result,exception);
+      performanceResult=new PerformanceResult(result,AlertState.UNKNOWN);
+    }
+    String result=performanceResult.getResult();
+    AlertState resultAlertState=performanceResult.getAlertState();
+    results.add(result);
+switch (resultAlertState) {
+case CRITICAL:
+      alertState=AlertState.CRITICAL;
+    break;
+case OK:
+  break;
+case SKIPPED:
+break;
+case UNKNOWN:
+if (alertState == AlertState.OK) {
+alertState=AlertState.UNKNOWN;
+}
+break;
+case WARNING:
+if (alertState != AlertState.CRITICAL) {
+alertState=AlertState.WARNING;
+}
+break;
+default :
+break;
+}
+}
+String allResults=StringUtils.join(results,System.lineSeparator());
+String overview=MessageFormat.format(PERFORMANCE_OVERVIEW_TEMPLATE,allResults);
+Alert alert=new Alert(entity.getDefinitionName(),null,entity.getServiceName(),entity.getComponentName(),null,alertState);
+alert.setLabel(entity.getLabel());
+alert.setText(overview);
+alert.setTimestamp(System.currentTimeMillis());
+alert.setCluster(cluster.getClusterName());
+return Collections.singletonList(alert);
+}

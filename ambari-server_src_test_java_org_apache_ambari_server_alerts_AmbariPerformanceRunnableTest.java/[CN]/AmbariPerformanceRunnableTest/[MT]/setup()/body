@@ -1,0 +1,35 @@
+{
+  m_injector=Guice.createInjector(new MockModule());
+  m_alertsDao=m_injector.getInstance(AlertsDAO.class);
+  m_definitionDao=m_injector.getInstance(AlertDefinitionDAO.class);
+  m_clusters=m_injector.getInstance(Clusters.class);
+  m_cluster=m_injector.getInstance(Cluster.class);
+  m_eventPublisher=m_injector.getInstance(AlertEventPublisher.class);
+  m_listener=m_injector.getInstance(MockEventListener.class);
+  m_definition=EasyMock.createNiceMock(AlertDefinitionEntity.class);
+  m_synchronizedBus=new EventBus();
+  Field field=AlertEventPublisher.class.getDeclaredField("m_eventBus");
+  field.setAccessible(true);
+  field.set(m_eventPublisher,m_synchronizedBus);
+  m_synchronizedBus.register(m_listener);
+  Map<String,Cluster> clusterMap=new HashMap<String,Cluster>();
+  clusterMap.put(CLUSTER_NAME,m_cluster);
+  expect(m_definition.getDefinitionName()).andReturn(DEFINITION_NAME).atLeastOnce();
+  expect(m_definition.getServiceName()).andReturn(DEFINITION_SERVICE).atLeastOnce();
+  expect(m_definition.getComponentName()).andReturn(DEFINITION_COMPONENT).atLeastOnce();
+  expect(m_definition.getLabel()).andReturn(DEFINITION_LABEL).atLeastOnce();
+  expect(m_definition.getEnabled()).andReturn(true).atLeastOnce();
+  expect(m_definition.getScheduleInterval()).andReturn(DEFINITION_INTERVAL).atLeastOnce();
+  expect(m_cluster.getClusterId()).andReturn(CLUSTER_ID).atLeastOnce();
+  expect(m_clusters.getClusters()).andReturn(clusterMap).atLeastOnce();
+  expect(m_definitionDao.findByName(CLUSTER_ID,DEFINITION_NAME)).andReturn(m_definition).atLeastOnce();
+  expect(m_alertsDao.findCurrentByCluster(CLUSTER_ID)).andReturn(m_currentAlerts).atLeastOnce();
+  AlertDefinition definition=new AlertDefinition();
+  definition.setDefinitionId(1L);
+  definition.setName(DEFINITION_NAME);
+  ServerSource source=new ServerSource();
+  definition.setSource(source);
+  AlertDefinitionFactory factory=m_injector.getInstance(AlertDefinitionFactory.class);
+  expect(factory.coerce(EasyMock.anyObject(AlertDefinitionEntity.class))).andReturn(definition).atLeastOnce();
+  replay(m_definition,m_cluster,m_clusters,m_definitionDao,m_alertsDao,factory);
+}

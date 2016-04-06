@@ -8,19 +8,26 @@
   int interval=definition.getInterval();
   try {
     Class<?> clazz=Class.forName(sourceClass);
-    if (!Runnable.class.isAssignableFrom(clazz)) {
-      LOG.warn("Unable to schedule a server side alert for {} because it is not a Runnable",sourceClass);
+    if (!AlertRunnable.class.isAssignableFrom(clazz)) {
+      LOG.warn("Unable to schedule a server side alert for {} because it is not an {}",sourceClass,AlertRunnable.class);
       return;
     }
-    Runnable runnable=(Runnable)clazz.newInstance();
-    m_injector.injectMembers(runnable);
-    ScheduledFuture<?> scheduledFuture=m_scheduledExecutorService.scheduleWithFixedDelay(runnable,interval,interval,TimeUnit.MINUTES);
+    Constructor<? extends AlertRunnable> constructor=clazz.asSubclass(AlertRunnable.class).getConstructor(String.class);
+    AlertRunnable alertRunnable=constructor.newInstance(entity.getDefinitionName());
+    m_injector.injectMembers(alertRunnable);
+    ScheduledFuture<?> scheduledFuture=m_scheduledExecutorService.scheduleWithFixedDelay(alertRunnable,interval,interval,TimeUnit.MINUTES);
     String definitionName=entity.getDefinitionName();
     ScheduledAlert scheduledAlert=new ScheduledAlert(scheduledFuture,interval);
     m_futureMap.put(definitionName,scheduledAlert);
     LOG.info("Scheduled server alert {} to run every {} minutes",definitionName,interval);
   }
  catch (  ClassNotFoundException cnfe) {
-    LOG.warn("Unable to schedule a server side alert for {} because it could not be found in the classpath",sourceClass);
+    LOG.error("Unable to schedule a server side alert for {} because it could not be found in the classpath",sourceClass);
+  }
+catch (  NoSuchMethodException nsme) {
+    LOG.error("Unable to schedule a server side alert for {} because it does not have a constructor which takes the proper arguments.",sourceClass);
+  }
+catch (  InvocationTargetException ite) {
+    LOG.error("Unable to schedule a server side alert for {} because an exception occurred while constructing the instance.",sourceClass,ite);
   }
 }
