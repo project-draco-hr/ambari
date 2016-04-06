@@ -1,0 +1,45 @@
+{
+  if (!AndPredicate.class.isInstance(predicate)) {
+    return null;
+  }
+  AndPredicate ap=(AndPredicate)predicate;
+  if (2 != ap.getPropertyIds().size()) {
+    return null;
+  }
+  if (!ap.getPropertyIds().contains(REPOSITORY_VERSION_STACK_NAME_PROPERTY_ID) && !ap.getPropertyIds().contains(REPOSITORY_VERSION_STACK_VERSION_PROPERTY_ID)) {
+    return null;
+  }
+  Predicate[] predicates=ap.getPredicates();
+  if (!EqualsPredicate.class.isInstance(predicates[0]) || !EqualsPredicate.class.isInstance(predicates[1])) {
+    return null;
+  }
+  EqualsPredicate pred1=(EqualsPredicate)predicates[0];
+  EqualsPredicate pred2=(EqualsPredicate)predicates[1];
+  StackId stackId=null;
+  if (pred1.getPropertyId().equals(REPOSITORY_VERSION_STACK_NAME_PROPERTY_ID)) {
+    stackId=new StackId(pred1.getValue().toString(),pred2.getValue().toString());
+  }
+ else {
+    stackId=new StackId(pred2.getValue().toString(),pred1.getValue().toString());
+  }
+  Map<String,UpgradePack> packs=s_ambariMetaInfo.get().getUpgradePacks(stackId.getStackName(),stackId.getStackVersion());
+  Set<String> stackIds=new HashSet<>();
+  for (  Entry<String,UpgradePack> entry : packs.entrySet()) {
+    UpgradePack pack=entry.getValue();
+    String packStack=pack.getTargetStack();
+    if (null == packStack || !packStack.equals(stackId.toString())) {
+      stackIds.add(packStack);
+    }
+  }
+  List<Predicate> usable=new ArrayList<>();
+  usable.add(predicate);
+  for (  String requiredStack : stackIds) {
+    StackId targetStack=new StackId(requiredStack);
+    Predicate p=new PredicateBuilder().property(REPOSITORY_VERSION_STACK_NAME_PROPERTY_ID).equals(targetStack.getStackName()).and().property(REPOSITORY_VERSION_STACK_VERSION_PROPERTY_ID).equals(targetStack.getStackVersion()).toPredicate();
+    usable.add(p);
+  }
+  Predicate p=new PredicateBuilder().property(REPOSITORY_STACK_VALUE).equals(stackId.toString()).toPredicate();
+  usable.add(p);
+  p=new OrPredicate(usable.toArray(new Predicate[usable.size()]));
+  return p;
+}
