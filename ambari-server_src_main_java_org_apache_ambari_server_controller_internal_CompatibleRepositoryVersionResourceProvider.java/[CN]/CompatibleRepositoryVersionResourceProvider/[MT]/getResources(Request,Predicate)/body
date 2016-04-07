@@ -74,6 +74,32 @@
     setResourceProperty(resource,REPOSITORY_VERSION_DISPLAY_NAME_PROPERTY_ID,repositoryVersionEntity.getDisplayName(),requestedIds);
     setResourceProperty(resource,REPOSITORY_VERSION_REPOSITORY_VERSION_PROPERTY_ID,repositoryVersionEntity.getVersion(),requestedIds);
     setResourceProperty(resource,REPOSITORY_UPGRADES_SUPPORTED_TYPES_ID,entity.getSupportedTypes(),requestedIds);
+    final VersionDefinitionXml xml;
+    try {
+      xml=repositoryVersionEntity.getRepositoryXml();
+    }
+ catch (    Exception e) {
+      throw new SystemException(String.format("Could not load xml for Repository %s",repositoryVersionEntity.getId()),e);
+    }
+    final StackInfo stack;
+    try {
+      stack=s_ambariMetaInfo.get().getStack(repositoryVersionEntity.getStackName(),repositoryVersionEntity.getStackVersion());
+    }
+ catch (    AmbariException e) {
+      throw new SystemException(String.format("Could not load stack %s for Repository %s",repositoryVersionEntity.getStackId().toString(),repositoryVersionEntity.getId()));
+    }
+    final List<ManifestServiceInfo> stackServices;
+    if (null != xml) {
+      setResourceProperty(resource,REPOSITORY_VERSION_SERVICES,xml.getAvailableServices(stack),requestedIds);
+      stackServices=xml.getStackServices(stack);
+    }
+ else {
+      stackServices=new ArrayList<>();
+      for (      ServiceInfo si : stack.getServices()) {
+        stackServices.add(new ManifestServiceInfo(si.getName(),si.getDisplayName(),si.getComment(),Collections.singleton(si.getVersion())));
+      }
+    }
+    setResourceProperty(resource,REPOSITORY_VERSION_STACK_SERVICES,stackServices,requestedIds);
     resources.add(resource);
   }
   return resources;
