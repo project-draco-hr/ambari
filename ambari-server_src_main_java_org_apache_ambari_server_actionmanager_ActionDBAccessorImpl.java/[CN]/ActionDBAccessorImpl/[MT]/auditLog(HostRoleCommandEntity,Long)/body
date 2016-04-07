@@ -3,14 +3,18 @@
     return;
   }
   if (requestId != null) {
-    HostRoleStatus calculatedStatus=calculateStatus(commandEntity,requestId);
-    if (!temporaryStatusCache.containsKey(requestId) || temporaryStatusCache.get(requestId) != calculatedStatus) {
-      RequestEntity request=requestDAO.findByPK(requestId);
-      String context=request != null ? request.getRequestContext() : null;
-      AuditEvent auditEvent=OperationStatusAuditEvent.builder().withRequestId(String.valueOf(requestId)).withStatus(String.valueOf(calculatedStatus)).withRequestContext(context).withTimestamp(System.currentTimeMillis()).build();
-      auditLogger.log(auditEvent);
-      temporaryStatusCache.put(requestId,calculatedStatus);
+    HostRoleStatus lastTaskStatus=updateAuditlogCache(commandEntity,requestId);
+    RequestDetails details=auditlogRequestCache.getIfPresent(requestId);
+    if (details != null) {
+      HostRoleStatus calculatedStatus=calculateStatus(requestId,details.getNumberOfTasks());
+      if (details.getLastStatus() != calculatedStatus) {
+        RequestEntity request=requestDAO.findByPK(requestId);
+        String context=request != null ? request.getRequestContext() : null;
+        AuditEvent auditEvent=OperationStatusAuditEvent.builder().withRequestId(String.valueOf(requestId)).withStatus(String.valueOf(calculatedStatus)).withRequestContext(context).withUserName(details.getUserName()).withTimestamp(System.currentTimeMillis()).build();
+        auditLogger.log(auditEvent);
+        details.setLastStatus(calculatedStatus);
+      }
     }
+    logTask(commandEntity,requestId,lastTaskStatus);
   }
-  logTask(commandEntity,requestId);
 }
