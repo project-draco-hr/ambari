@@ -1,0 +1,45 @@
+{
+  return new Runnable(){
+    @Override public void run(){
+      try {
+        while (true) {
+          WatchKey key=watchService.take();
+          LOG.info("Watcher Key was signalled");
+          for (          WatchEvent<?> event : key.pollEvents()) {
+            LOG.info("Watcher recieved poll event");
+            WatchEvent<Path> ev=cast(event);
+            Path resolvedPath=path.resolve(ev.context());
+            LOG.info(String.format("Event %s: %s\n",ev.kind(),resolvedPath));
+            if (!canBlockTillFileAvailable(resolvedPath)) {
+              LOG.info("Watcher detected that the file was either empty or corrupt");
+              continue;
+            }
+            if (!verify(resolvedPath)) {
+              LOG.info("The uploaded file was 1> Empty 2> Not a regular file or 3> Not a valid Jar archive file");
+              continue;
+            }
+            try {
+              LOG.info("Starting view extraction");
+              viewRegistry.readViewArchive(resolvedPath);
+              for (              Function<Path,Boolean> hook : hooks) {
+                hook.apply(resolvedPath);
+              }
+            }
+ catch (            Exception e) {
+              LOG.error("Cannot read the view archive, offending file: " + resolvedPath,e);
+            }
+          }
+          if (!key.reset()) {
+            LOG.error("The watch key could not be reset, Directory watcher will not run anymore");
+            break;
+          }
+        }
+      }
+ catch (      InterruptedException x) {
+        LOG.info("Cancelling the directory watcher",x);
+        return;
+      }
+    }
+  }
+;
+}
