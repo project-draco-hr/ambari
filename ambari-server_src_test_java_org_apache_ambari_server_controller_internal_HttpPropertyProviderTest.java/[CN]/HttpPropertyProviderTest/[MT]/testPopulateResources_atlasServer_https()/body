@@ -1,0 +1,22 @@
+{
+  TestStreamProvider streamProvider=new TestStreamProvider("{\"Status\":\"ACTIVE\"}",false);
+  Clusters clusters=createNiceMock(Clusters.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  Config config1=createNiceMock(Config.class);
+  Map<String,String> map=new HashMap<>();
+  map.put("atlas.enableTLS","true");
+  map.put("atlas.server.https.port","21443");
+  expect(clusters.getCluster("testCluster")).andReturn(cluster);
+  expect(cluster.getDesiredConfigByType("application-properties")).andReturn(config1).anyTimes();
+  expect(config1.getProperties()).andReturn(map).anyTimes();
+  replay(clusters,cluster,config1);
+  HttpPropertyProvider propProvider=new HttpPropertyProvider(streamProvider,clusters,PROPERTY_ID_CLUSTER_NAME,PROPERTY_ID_HOST_NAME,PROPERTY_ID_COMPONENT_NAME,HTTP_PROPERTY_REQUESTS);
+  Resource resource=new ResourceImpl(Resource.Type.HostComponent);
+  resource.setProperty(PROPERTY_ID_CLUSTER_NAME,"testCluster");
+  resource.setProperty(PROPERTY_ID_HOST_NAME,"ec2-54-234-33-50.compute-1.amazonaws.com");
+  resource.setProperty(PROPERTY_ID_COMPONENT_NAME,"ATLAS_SERVER");
+  Request request=PropertyHelper.getReadRequest(Collections.<String>emptySet());
+  propProvider.populateResources(Collections.singleton(resource),request,null);
+  Assert.assertEquals("ACTIVE",resource.getPropertiesMap().get("HostRoles").get("ha_state"));
+  Assert.assertEquals("https://ec2-54-234-33-50.compute-1.amazonaws.com:21443/api/atlas/admin/status",streamProvider.getLastSpec());
+}
