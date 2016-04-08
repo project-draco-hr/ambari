@@ -8,7 +8,7 @@ def upgrade_schema(self, env):
         kinit_command = format('{kinit_path_local} -kt {smoke_user_keytab} {smokeuser_principal}; ')
         Execute(kinit_command, user=params.smokeuser)
     if (params.hive_jdbc_driver in params.hive_jdbc_drivers_list):
-        target_directory = format('/usr/hdp/{version}/hive/lib')
+        target_directory = format('{stack_root}/{version}/hive/lib')
         if (not os.path.exists(params.source_jdbc_file)):
             jdbc_connector()
         target_directory_and_filename = os.path.join(target_directory, os.path.basename(params.source_jdbc_file))
@@ -21,11 +21,11 @@ def upgrade_schema(self, env):
         elif (not os.path.exists(target_directory_and_filename)):
             Execute(('cp', params.source_jdbc_file, target_directory), path=['/bin', '/usr/bin/'], sudo=True)
         File(target_directory_and_filename, mode=420)
-    binary = format('/usr/hdp/{version}/hive/bin/schematool')
+    binary = format('{stack_root}/{version}/hive/bin/schematool')
     schematool_hive_server_conf_dir = params.hive_server_conf_dir
     if (params.current_version is not None):
         current_version = format_stack_version(params.current_version)
-        if (compare_versions(current_version, '2.3') < 0):
+        if (not check_stack_feature(StackFeature.CONFIG_VERSIONING, current_version)):
             schematool_hive_server_conf_dir = LEGACY_HIVE_SERVER_CONF
     env_dict = {'HIVE_CONF_DIR': schematool_hive_server_conf_dir, }
     command = format('{binary} -dbType {hive_metastore_db_type} -upgradeSchema')
