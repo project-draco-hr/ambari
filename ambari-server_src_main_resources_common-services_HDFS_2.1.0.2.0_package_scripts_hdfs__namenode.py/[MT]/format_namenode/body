@@ -15,7 +15,14 @@ def format_namenode(force=None):
     elif ((params.dfs_ha_namenode_active is not None) and (params.hostname == params.dfs_ha_namenode_active)):
         if force:
             ExecuteHadoop('namenode -format', bin_dir=params.hadoop_bin_dir, conf_dir=hadoop_conf_dir)
-        elif (not is_namenode_formatted(params)):
-            Execute(format('yes Y | hdfs --config {hadoop_conf_dir} namenode -format'), user=params.hdfs_user, path=[params.hadoop_bin_dir])
-            for m_dir in mark_dir:
-                Directory(m_dir, create_parents=True)
+        else:
+            nn_name_dirs = params.dfs_name_dir.split(',')
+            if (not is_namenode_formatted(params)):
+                try:
+                    Execute(format('yes Y | hdfs --config {hadoop_conf_dir} namenode -format'), user=params.hdfs_user, path=[params.hadoop_bin_dir])
+                except Fail:
+                    for nn_name_dir in nn_name_dirs:
+                        Execute(format('rm -rf {nn_name_dir}/*'), user=params.hdfs_user)
+                    raise
+                for m_dir in mark_dir:
+                    Directory(m_dir, create_parents=True)
