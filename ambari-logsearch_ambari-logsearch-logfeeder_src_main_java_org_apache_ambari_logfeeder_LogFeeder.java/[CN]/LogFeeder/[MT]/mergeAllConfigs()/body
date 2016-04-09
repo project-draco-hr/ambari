@@ -1,0 +1,129 @@
+{
+  globalMap=mergeConfigs(globalConfigList);
+  sortBlocks(filterConfigList);
+  for (  Map<String,Object> map : outputConfigList) {
+    if (map == null) {
+      continue;
+    }
+    mergeBlocks(globalMap,map);
+    String value=(String)map.get("destination");
+    Output output;
+    if (value == null || value.isEmpty()) {
+      logger.error("Output block doesn't have destination element");
+      continue;
+    }
+    String classFullName=AliasUtil.getInstance().readAlias(value,ALIAS_TYPE.OUTPUT,ALIAS_PARAM.KLASS);
+    if (classFullName == null || classFullName.isEmpty()) {
+      logger.error("Destination block doesn't have output element");
+      continue;
+    }
+    output=(Output)LogFeederUtil.getClassInstance(classFullName,ALIAS_TYPE.OUTPUT);
+    if (output == null) {
+      logger.error("Destination Object is null");
+      continue;
+    }
+    output.setDestination(value);
+    output.loadConfig(map);
+    boolean isEnabled=output.getBooleanValue("is_enabled",true);
+    if (isEnabled) {
+      outputList.add(output);
+      output.logConfgs(Level.INFO);
+    }
+ else {
+      logger.info("Output is disabled. So ignoring it. " + output.getShortDescription());
+    }
+  }
+  for (  Map<String,Object> map : inputConfigList) {
+    if (map == null) {
+      continue;
+    }
+    mergeBlocks(globalMap,map);
+    String value=(String)map.get("source");
+    Input input;
+    if (value == null || value.isEmpty()) {
+      logger.error("Input block doesn't have source element");
+      continue;
+    }
+    String classFullName=AliasUtil.getInstance().readAlias(value,ALIAS_TYPE.INPUT,ALIAS_PARAM.KLASS);
+    if (classFullName == null || classFullName.isEmpty()) {
+      logger.error("Source block doesn't have source element");
+      continue;
+    }
+    input=(Input)LogFeederUtil.getClassInstance(classFullName,ALIAS_TYPE.INPUT);
+    if (input == null) {
+      logger.error("Source Object is null");
+      continue;
+    }
+    input.setType(value);
+    input.loadConfig(map);
+    if (input.isEnabled()) {
+      input.setOutputMgr(outMgr);
+      input.setInputMgr(inputMgr);
+      inputMgr.add(input);
+      input.logConfgs(Level.INFO);
+    }
+ else {
+      logger.info("Input is disabled. So ignoring it. " + input.getShortDescription());
+    }
+  }
+  List<Input> toRemoveInputList=new ArrayList<Input>();
+  for (  Input input : inputMgr.getInputList()) {
+    Filter prevFilter=null;
+    for (    Map<String,Object> map : filterConfigList) {
+      if (map == null) {
+        continue;
+      }
+      mergeBlocks(globalMap,map);
+      String value=(String)map.get("filter");
+      Filter filter;
+      if (value == null || value.isEmpty()) {
+        logger.error("Filter block doesn't have filter element");
+        continue;
+      }
+      String classFullName=AliasUtil.getInstance().readAlias(value,ALIAS_TYPE.FILTER,ALIAS_PARAM.KLASS);
+      if (classFullName == null || classFullName.isEmpty()) {
+        logger.error("Filter block doesn't have filter element");
+        continue;
+      }
+      filter=(Filter)LogFeederUtil.getClassInstance(classFullName,ALIAS_TYPE.FILTER);
+      if (filter == null) {
+        logger.error("Filter Object is null");
+        continue;
+      }
+      filter.loadConfig(map);
+      filter.setInput(input);
+      if (filter.isEnabled()) {
+        filter.setOutputMgr(outMgr);
+        if (prevFilter == null) {
+          input.setFirstFilter(filter);
+        }
+ else {
+          prevFilter.setNextFilter(filter);
+        }
+        prevFilter=filter;
+        filter.logConfgs(Level.INFO);
+      }
+ else {
+        logger.debug("Ignoring filter " + filter.getShortDescription() + " for input "+ input.getShortDescription());
+      }
+    }
+    if (input.getFirstFilter() == null) {
+      toRemoveInputList.add(input);
+    }
+  }
+  Set<Output> usedOutputSet=new HashSet<Output>();
+  for (  Input input : inputMgr.getInputList()) {
+    for (    Output output : outputList) {
+      boolean ret=LogFeederUtil.isEnabled(output.getConfigs(),input.getConfigs());
+      if (ret) {
+        usedOutputSet.add(output);
+        input.addOutput(output);
+      }
+    }
+  }
+  outputList=usedOutputSet;
+  for (  Input toRemoveInput : toRemoveInputList) {
+    logger.warn("There are no filters, we will ignore this input. " + toRemoveInput.getShortDescription());
+    inputMgr.removeInput(toRemoveInput);
+  }
+}

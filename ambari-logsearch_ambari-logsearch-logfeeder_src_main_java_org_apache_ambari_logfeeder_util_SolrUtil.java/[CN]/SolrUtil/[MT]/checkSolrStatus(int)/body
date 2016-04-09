@@ -1,0 +1,36 @@
+{
+  boolean status=false;
+  try {
+    long beginTimeMS=System.currentTimeMillis();
+    long waitIntervalMS=2000;
+    int pingCount=0;
+    while (true) {
+      pingCount++;
+      CollectionAdminResponse response=null;
+      try {
+        CollectionAdminRequest.List colListReq=new CollectionAdminRequest.List();
+        response=colListReq.process(solrClient);
+      }
+ catch (      Exception ex) {
+        logger.error("Con't connect to Solr. solrDetail=" + solrDetail,ex);
+      }
+      if (response != null && response.getStatus() == 0) {
+        logger.info("Solr getCollections() is success. solr=" + solrDetail);
+        status=true;
+        break;
+      }
+      if (System.currentTimeMillis() - beginTimeMS > waitDurationMS) {
+        logger.error("Solr is not reachable even after " + (System.currentTimeMillis() - beginTimeMS) + " ms. If you are using alias, then you might have to restart LogSearch after Solr is up and running. solr="+ solrDetail+ ", response="+ response);
+        break;
+      }
+ else {
+        logger.warn("Solr is not not reachable yet. getCollections() attempt count=" + pingCount + ". Will sleep for "+ waitIntervalMS+ " ms and try again."+ " solr="+ solrDetail+ ", response="+ response);
+      }
+      Thread.sleep(waitIntervalMS);
+    }
+  }
+ catch (  Throwable t) {
+    logger.error("Seems Solr is not up. solrDetail=" + solrDetail);
+  }
+  return status;
+}

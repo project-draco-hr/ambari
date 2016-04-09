@@ -1,0 +1,35 @@
+{
+  SolrQuery solrQuery=queryGenerator.commonAuditFilterQuery(searchCriteria);
+  try {
+    queryGenerator.setFacetField(solrQuery,LogSearchConstants.AUDIT_REQUEST_USER);
+    queryGenerator.setFacetSort(solrQuery,LogSearchConstants.FACET_INDEX);
+    List<FacetField> facetFields=null;
+    List<Count> componentsCount=new ArrayList<Count>();
+    FacetField facetField=null;
+    QueryResponse queryResponse=auditSolrDao.process(solrQuery);
+    if (queryResponse == null) {
+      queryResponse=new QueryResponse();
+    }
+    facetFields=queryResponse.getFacetFields();
+    if (facetFields == null) {
+      return new SolrDocumentList();
+    }
+    if (!facetFields.isEmpty()) {
+      facetField=facetFields.get(0);
+    }
+    if (facetField != null) {
+      componentsCount=facetField.getValues();
+    }
+    SolrDocumentList docList=new SolrDocumentList();
+    for (    Count compnonet : componentsCount) {
+      SolrDocument solrDocument=new SolrDocument();
+      solrDocument.addField("type",compnonet.getName());
+      docList.add(solrDocument);
+    }
+    return docList;
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error("Error during solrQuery=" + solrQuery,e);
+    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

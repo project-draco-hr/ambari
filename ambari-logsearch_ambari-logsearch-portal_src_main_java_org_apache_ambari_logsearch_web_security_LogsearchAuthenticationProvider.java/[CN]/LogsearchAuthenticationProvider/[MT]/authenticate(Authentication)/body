@@ -1,0 +1,55 @@
+{
+  logger.info("Authenticating user:" + authentication.getName() + ", userDetail="+ authentication.toString());
+  Authentication inAuthentication=authentication;
+  AuthenticationException authException=null;
+  HashMap<String,Object> auditRecord=new HashMap<String,Object>();
+  auditRecord.put("user",authentication.getName());
+  auditRecord.put("principal",authentication.getPrincipal().toString());
+  auditRecord.put("auth_class",authentication.getClass().getName());
+  logger.info("authentication.class=" + authentication.getClass().getName());
+  if (inAuthentication instanceof UsernamePasswordAuthenticationToken) {
+    UsernamePasswordAuthenticationToken authClass=(UsernamePasswordAuthenticationToken)inAuthentication;
+    Object details=authClass.getDetails();
+    if (details instanceof WebAuthenticationDetails) {
+      WebAuthenticationDetails webAuthentication=(WebAuthenticationDetails)details;
+      auditRecord.put("remote_ip",webAuthentication.getRemoteAddress());
+      auditRecord.put("session",webAuthentication.getSessionId());
+    }
+  }
+  boolean isSuccess=false;
+  try {
+    for (    AUTH_METHOD authMethod : AUTH_METHOD.values()) {
+      try {
+        authentication=doAuth(authentication,authMethod);
+        if (authentication != null && authentication.isAuthenticated()) {
+          logger.info("Authenticated using method=" + authMethod.name() + ", user="+ authentication.getName());
+          auditRecord.put("result","allowed");
+          isSuccess=true;
+          auditRecord.put("authType",authMethod.name());
+          return authentication;
+        }
+      }
+ catch (      AuthenticationException ex) {
+        if (authException == null) {
+          authException=ex;
+        }
+      }
+    }
+    auditRecord.put("result","denied");
+    logger.warn("Authentication failed for user=" + inAuthentication.getName() + ", userDetail="+ inAuthentication.toString());
+    if (authException != null) {
+      auditRecord.put("reason",authException.getMessage());
+      throw authException;
+    }
+    return authentication;
+  }
+  finally {
+    String jsonStr=jsonUtil.mapToJSON(auditRecord);
+    if (isSuccess) {
+      auditLogger.info(jsonStr);
+    }
+ else {
+      auditLogger.warn(jsonStr);
+    }
+  }
+}

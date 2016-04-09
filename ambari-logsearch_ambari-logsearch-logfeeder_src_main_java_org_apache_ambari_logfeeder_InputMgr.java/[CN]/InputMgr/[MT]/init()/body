@@ -1,0 +1,48 @@
+{
+  filesCountMetric.metricsName="input.files.count";
+  filesCountMetric.isPointInTime=true;
+  checkPointExtension=LogFeederUtil.getStringProperty("logfeeder.checkpoint.extension",checkPointExtension);
+  for (  Input input : inputList) {
+    try {
+      input.init();
+      if (input.isTail()) {
+        isAnyInputTail=true;
+      }
+    }
+ catch (    Exception e) {
+      logger.error("Error initializing input. " + input.getShortDescription(),e);
+    }
+  }
+  if (isAnyInputTail) {
+    logger.info("Determining valid checkpoint folder");
+    boolean isCheckPointFolderValid=false;
+    String checkPointFolder=LogFeederUtil.getStringProperty("logfeeder.checkpoint.folder");
+    if (checkPointFolder != null && !checkPointFolder.isEmpty()) {
+      checkPointFolderFile=new File(checkPointFolder);
+      isCheckPointFolderValid=verifyCheckPointFolder(checkPointFolderFile);
+    }
+    if (!isCheckPointFolderValid) {
+      String userHome=LogFeederUtil.getStringProperty("user.home");
+      if (userHome != null) {
+        checkPointFolderFile=new File(userHome,checkPointSubFolderName);
+        logger.info("Checking if home folder can be used for checkpoints. Folder=" + checkPointFolderFile);
+        isCheckPointFolderValid=verifyCheckPointFolder(checkPointFolderFile);
+      }
+    }
+    if (!isCheckPointFolderValid) {
+      String tmpFolder=LogFeederUtil.getStringProperty("java.io.tmpdir");
+      if (tmpFolder == null) {
+        tmpFolder="/tmp";
+      }
+      checkPointFolderFile=new File(tmpFolder,checkPointSubFolderName);
+      logger.info("Checking if tmps folder can be used for checkpoints. Folder=" + checkPointFolderFile);
+      isCheckPointFolderValid=verifyCheckPointFolder(checkPointFolderFile);
+      if (isCheckPointFolderValid) {
+        logger.warn("Using tmp folder " + checkPointFolderFile + " to store check points. This is not recommended."+ "Please set logfeeder.checkpoint.folder property");
+      }
+    }
+    if (isCheckPointFolderValid) {
+      logger.warn("Using folder " + checkPointFolderFile + " for storing checkpoints");
+    }
+  }
+}

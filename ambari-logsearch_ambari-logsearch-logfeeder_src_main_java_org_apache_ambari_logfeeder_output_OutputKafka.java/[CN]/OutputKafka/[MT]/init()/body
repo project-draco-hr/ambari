@@ -1,0 +1,67 @@
+{
+  super.init();
+  statMetric.metricsName="output.kafka.write_logs";
+  writeBytesMetric.metricsName="output.kafka.write_bytes";
+  brokerList=getStringValue("broker_list");
+  topic=getStringValue("topic");
+  isAsync=getBooleanValue("is_async",true);
+  batchSize=getIntValue("batch_size",batchSize);
+  lingerMS=getIntValue("linger_ms",lingerMS);
+  Map<String,Object> kafkaCustomProperties=new HashMap<String,Object>();
+  for (  String key : configs.keySet()) {
+    if (key.startsWith("kafka.")) {
+      Object value=configs.get(key);
+      if (value == null || value.toString().length() == 0) {
+        continue;
+      }
+      String kafkaKey=key.substring("kafka.".length());
+      kafkaCustomProperties.put(kafkaKey,value);
+    }
+  }
+  if (StringUtils.isEmpty(brokerList)) {
+    throw new Exception("For kafka output, bootstrap broker_list is needed");
+  }
+  if (StringUtils.isEmpty(topic)) {
+    throw new Exception("For kafka output, topic is needed");
+  }
+  Properties props=new Properties();
+  props.put("bootstrap.servers",brokerList);
+  props.put("client.id","logfeeder_producer");
+  props.put("key.serializer",StringSerializer.class.getName());
+  props.put("value.serializer",StringSerializer.class.getName());
+  props.put("compression.type","snappy");
+  props.put("batch.size",batchSize);
+  props.put("linger.ms",lingerMS);
+  for (  String kafkaKey : kafkaCustomProperties.keySet()) {
+    logger.info("Adding custom Kafka property. " + kafkaKey + "="+ kafkaCustomProperties.get(kafkaKey));
+    props.put(kafkaKey,kafkaCustomProperties.get(kafkaKey));
+  }
+  producer=new KafkaProducer<String,String>(props);
+  Thread retryThread=new Thread("kafka-writer-retry,topic=" + topic){
+    @Override public void run(){
+      KafkaCallBack kafkaCallBack=null;
+      logger.info("Started thread to monitor failed messsages. " + getShortDescription());
+      while (true) {
+        try {
+          if (kafkaCallBack == null) {
+            kafkaCallBack=failedMessages.take();
+          }
+          if (publishMessage(kafkaCallBack.message,kafkaCallBack.inputMarker)) {
+            kafkaCallBack=null;
+          }
+ else {
+            logger.error("Kafka is down. messageNumber=" + kafkaCallBack.thisMessageNumber + ". Going to sleep for "+ FAILED_RETRY_INTERVAL+ " seconds");
+            Thread.sleep(FAILED_RETRY_INTERVAL * 1000);
+          }
+        }
+ catch (        Throwable t) {
+          final String LOG_MESSAGE_KEY=this.getClass().getSimpleName() + "_KAFKA_RETRY_WRITE_ERROR";
+          LogFeederUtil.logErrorMessageByInterval(LOG_MESSAGE_KEY,"Error sending message to Kafka during retry. message=" + (kafkaCallBack == null ? null : kafkaCallBack.message),t,logger,Level.ERROR);
+        }
+      }
+    }
+  }
+;
+  retryThread.setDaemon(true);
+  retryThread.start();
+}

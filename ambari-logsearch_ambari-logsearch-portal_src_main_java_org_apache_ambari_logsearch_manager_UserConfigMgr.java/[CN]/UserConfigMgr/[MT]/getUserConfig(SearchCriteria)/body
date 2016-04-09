@@ -1,0 +1,56 @@
+{
+  SolrDocumentList solrList=new SolrDocumentList();
+  VUserConfigList userConfigList=new VUserConfigList();
+  String rowType=(String)searchCriteria.getParamValue(LogSearchConstants.ROW_TYPE);
+  if (stringUtil.isEmpty(rowType)) {
+    throw restErrorUtil.createRESTException("row type was not specified",MessageEnums.INVALID_INPUT_DATA);
+  }
+  String userName=(String)searchCriteria.getParamValue(LogSearchConstants.USER_NAME);
+  if (stringUtil.isEmpty(userName)) {
+    throw restErrorUtil.createRESTException("user name was not specified",MessageEnums.INVALID_INPUT_DATA);
+  }
+  String filterName=(String)searchCriteria.getParamValue(LogSearchConstants.FILTER_NAME);
+  filterName=stringUtil.isEmpty(filterName) ? "*" : "*" + filterName + "*";
+  try {
+    SolrQuery userConfigQuery=new SolrQuery();
+    queryGenerator.setMainQuery(userConfigQuery,null);
+    queryGenerator.setPagination(userConfigQuery,searchCriteria);
+    queryGenerator.setSingleIncludeFilter(userConfigQuery,LogSearchConstants.ROW_TYPE,rowType);
+    queryGenerator.setSingleORFilter(userConfigQuery,LogSearchConstants.USER_NAME,userName,LogSearchConstants.SHARE_NAME_LIST,userName);
+    queryGenerator.setSingleIncludeFilter(userConfigQuery,LogSearchConstants.FILTER_NAME,filterName);
+    if (stringUtil.isEmpty(searchCriteria.getSortBy()) || searchCriteria.getSortBy().equals("historyName"))     searchCriteria.setSortBy(LogSearchConstants.FILTER_NAME);
+    if (stringUtil.isEmpty(searchCriteria.getSortType()))     searchCriteria.setSortType("" + SolrQuery.ORDER.asc);
+    queryGenerator.setSingleSortOrder(userConfigQuery,searchCriteria);
+    solrList=userConfigSolrDao.process(userConfigQuery).getResults();
+    Collection<VUserConfig> configList=new ArrayList<VUserConfig>();
+    for (    SolrDocument solrDoc : solrList) {
+      VUserConfig userConfig=new VUserConfig();
+      userConfig.setFilterName("" + solrDoc.get(LogSearchConstants.FILTER_NAME));
+      userConfig.setId("" + solrDoc.get(LogSearchConstants.ID));
+      userConfig.setValues("" + solrDoc.get(LogSearchConstants.VALUES));
+      userConfig.setRowType("" + solrDoc.get(LogSearchConstants.ROW_TYPE));
+      try {
+        List<String> shareNameList=(List<String>)solrDoc.get(LogSearchConstants.SHARE_NAME_LIST);
+        userConfig.setShareNameList(shareNameList);
+      }
+ catch (      Exception e) {
+      }
+      userConfig.setUserName("" + solrDoc.get(LogSearchConstants.USER_NAME));
+      configList.add(userConfig);
+    }
+    userConfigList.setName("historyList");
+    userConfigList.setUserConfigList(configList);
+    userConfigList.setStartIndex(searchCriteria.getStartIndex());
+    userConfigList.setPageSize((int)searchCriteria.getMaxRows());
+    userConfigList.setTotalCount((long)solrList.getNumFound());
+    userConfigList.setResultSize((int)(configList.size() - searchCriteria.getStartIndex()));
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+  }
+  try {
+    return convertObjToString(userConfigList);
+  }
+ catch (  IOException e) {
+    return "";
+  }
+}

@@ -1,0 +1,57 @@
+{
+  VLogFileList logFileList=new VLogFileList();
+  List<VLogFile> logFiles=new ArrayList<VLogFile>();
+  String componentName=(String)searchCriteria.getParamValue("component");
+  String host=(String)searchCriteria.getParamValue("host");
+  int minCount=1;
+  SolrQuery solrQuery=new SolrQuery();
+  queryGenrator.setMainQuery(solrQuery,null);
+  queryGenrator.setFacetField(solrQuery,LogSearchConstants.SOLR_PATH,minCount);
+  queryGenrator.setSingleIncludeFilter(solrQuery,LogSearchConstants.SOLR_COMPONENT,componentName);
+  queryGenrator.setSingleIncludeFilter(solrQuery,LogSearchConstants.SOLR_HOST,host);
+  try {
+    String logType=(String)searchCriteria.getParamValue("logType");
+    if (stringUtil.isEmpty(logType)) {
+      logType=LOG_TYPE.SERVICE.name();
+    }
+    SolrDaoBase daoMgr=null;
+    if (logType.equalsIgnoreCase(LOG_TYPE.SERVICE.name())) {
+      daoMgr=serviceLogsSolrDao;
+    }
+ else     if (logType.equalsIgnoreCase(LOG_TYPE.AUDIT.name())) {
+      daoMgr=auditSolrDao;
+    }
+ else {
+      throw restErrorUtil.createRESTException(logType + " is not a valid logType",MessageEnums.INVALID_INPUT_DATA);
+    }
+    QueryResponse queryResponse=daoMgr.process(solrQuery);
+    if (queryResponse.getFacetField(LogSearchConstants.SOLR_PATH) != null) {
+      FacetField queryFacetField=queryResponse.getFacetField(LogSearchConstants.SOLR_PATH);
+      if (queryFacetField != null) {
+        List<Count> countList=queryFacetField.getValues();
+        for (        Count count : countList) {
+          VLogFile vLogFile=new VLogFile();
+          String filePath=count.getName();
+          String fileName=FilenameUtils.getName(filePath);
+          vLogFile.setPath(filePath);
+          vLogFile.setName(fileName);
+          logFiles.add(vLogFile);
+        }
+      }
+    }
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error("Error in solr query  :" + e.getLocalizedMessage() + "\n Query :"+ solrQuery.toQueryString(),e.getCause());
+    throw restErrorUtil.createRESTException("Please try later.",MessageEnums.ERROR_SYSTEM);
+  }
+  logFileList.setLogFiles(logFiles);
+  String jsonStr="";
+  try {
+    jsonStr=convertObjToString(logFileList);
+  }
+ catch (  IOException e) {
+    logger.error(e);
+    throw restErrorUtil.createRESTException("Please try later.",MessageEnums.ERROR_SYSTEM);
+  }
+  return jsonStr;
+}

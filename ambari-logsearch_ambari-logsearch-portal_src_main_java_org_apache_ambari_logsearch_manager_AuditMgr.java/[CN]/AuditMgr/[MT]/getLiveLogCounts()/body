@@ -1,0 +1,30 @@
+{
+  SolrQuery solrQuery=new SolrQuery();
+  solrQuery.setParam("event","/getLiveLogsCount");
+  try {
+    String startDate=dateUtil.convertGivenDateFormatToSolrDateFormat(ManageStartEndTime.startDate);
+    String endDate=dateUtil.convertGivenDateFormatToSolrDateFormat(ManageStartEndTime.endDate);
+    queryGenerator.setMainQuery(solrQuery,null);
+    queryGenerator.setFacetRange(solrQuery,LogSearchConstants.AUDIT_EVTTIME,startDate,endDate,"+2MINUTE");
+    List<RangeFacet.Count> listCount;
+    QueryResponse response=auditSolrDao.process(solrQuery);
+    @SuppressWarnings("rawtypes") List<RangeFacet> rangeFacet=response.getFacetRanges();
+    if (rangeFacet == null)     return convertObjToString(new VNameValueList());
+    listCount=rangeFacet.get(0).getCounts();
+    List<VNameValue> nameValues=new ArrayList<VNameValue>();
+    int count=0;
+    for (    RangeFacet.Count cnt : listCount) {
+      VNameValue nameValue=new VNameValue();
+      nameValue.setName("" + count);
+      nameValue.setValue("" + cnt.getCount());
+      nameValues.add(nameValue);
+      count++;
+    }
+    VNameValueList nameValueList=new VNameValueList(nameValues);
+    return convertObjToString(nameValueList);
+  }
+ catch (  SolrException|SolrServerException|ParseException|IOException e) {
+    logger.error("Error during solrQuery=" + solrQuery,e);
+    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

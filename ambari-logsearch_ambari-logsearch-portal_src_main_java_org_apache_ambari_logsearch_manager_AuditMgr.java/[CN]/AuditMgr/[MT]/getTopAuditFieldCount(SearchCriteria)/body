@@ -1,0 +1,32 @@
+{
+  Integer top=(Integer)searchCriteria.getParamValue("top");
+  String facetField=(String)searchCriteria.getParamValue("field");
+  if (top == null)   top=new Integer(10);
+  SolrQuery solrQuery=queryGenerator.commonAuditFilterQuery(searchCriteria);
+  try {
+    List<VNameValue> nameValues=new ArrayList<VNameValue>();
+    VNameValueList nameValueList=new VNameValueList(nameValues);
+    queryGenerator.setFacetField(solrQuery,facetField);
+    queryGenerator.setFacetSort(solrQuery,"count");
+    queryGenerator.setFacetLimit(solrQuery,top.intValue());
+    List<Count> countList=new ArrayList<FacetField.Count>();
+    QueryResponse queryResponse=auditSolrDao.process(solrQuery);
+    if (queryResponse.getFacetField(facetField) != null) {
+      FacetField queryFacetField=queryResponse.getFacetField(facetField);
+      if (queryFacetField != null) {
+        countList=queryFacetField.getValues();
+      }
+    }
+    for (    Count cnt : countList) {
+      VNameValue nameValue=new VNameValue();
+      nameValue.setName(cnt.getName());
+      nameValue.setValue("" + cnt.getCount());
+      nameValues.add(nameValue);
+    }
+    return convertObjToString(nameValueList);
+  }
+ catch (  SolrException|IOException|SolrServerException e) {
+    logger.error("Error during solrQuery=" + solrQuery,e);
+    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

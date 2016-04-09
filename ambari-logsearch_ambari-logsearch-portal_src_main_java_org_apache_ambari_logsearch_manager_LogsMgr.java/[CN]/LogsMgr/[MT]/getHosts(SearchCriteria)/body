@@ -1,0 +1,28 @@
+{
+  SolrQuery solrQuery=new SolrQuery();
+  queryGenerator.setMainQuery(solrQuery,null);
+  queryGenerator.setFacetField(solrQuery,LogSearchConstants.SOLR_HOST);
+  try {
+    QueryResponse response=serviceLogsSolrDao.process(solrQuery);
+    FacetField hostFacetField=response.getFacetField(LogSearchConstants.SOLR_HOST);
+    if (hostFacetField == null)     return convertObjToString(new SolrDocumentList());
+    List<Count> hostList=hostFacetField.getValues();
+    if (hostList == null)     return convertObjToString(new SolrDocumentList());
+    SolrDocumentList docList=response.getResults();
+    String hostName="";
+    for (    Count host : hostList) {
+      SolrDocument solrDoc=new SolrDocument();
+      hostName=host.getName();
+      solrDoc.put(LogSearchConstants.SOLR_HOST,hostName);
+      docList.add(solrDoc);
+    }
+    VGroupList collection=new VGroupList(docList);
+    collection.setStartIndex((int)docList.getStart());
+    collection.setTotalCount(docList.getNumFound());
+    return convertObjToString(collection);
+  }
+ catch (  IOException|SolrServerException|SolrException e) {
+    logger.error(e);
+    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

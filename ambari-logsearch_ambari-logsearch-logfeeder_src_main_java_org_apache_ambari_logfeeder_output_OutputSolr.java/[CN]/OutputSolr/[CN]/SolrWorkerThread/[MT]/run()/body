@@ -1,0 +1,111 @@
+{
+  logger.info("SolrWriter thread started");
+  long lastDispatchTime=System.currentTimeMillis();
+  while (true) {
+    long currTimeMS=System.currentTimeMillis();
+    OutputData outputData=null;
+    try {
+      long nextDispatchDuration=maxIntervalMS - (currTimeMS - lastDispatchTime);
+      outputData=outgoingBuffer.poll();
+      if (outputData == null && !isDrain() && nextDispatchDuration > 0) {
+        outputData=outgoingBuffer.poll(nextDispatchDuration,TimeUnit.MILLISECONDS);
+      }
+      if (isDrain() && outputData == null && outgoingBuffer.size() == 0) {
+        break;
+      }
+      if (outputData != null) {
+        if (outputData.jsonObj.get("id") == null) {
+          outputData.jsonObj.put("id",UUID.randomUUID().toString());
+        }
+        SolrInputDocument document=new SolrInputDocument();
+        for (        String name : outputData.jsonObj.keySet()) {
+          Object obj=outputData.jsonObj.get(name);
+          document.addField(name,obj);
+          try {
+            localBufferBytesSize+=obj.toString().length();
+          }
+ catch (          Throwable t) {
+            final String LOG_MESSAGE_KEY=this.getClass().getSimpleName() + "_BYTE_COUNT_ERROR";
+            LogFeederUtil.logErrorMessageByInterval(LOG_MESSAGE_KEY,"Error calculating byte size. object=" + obj,t,logger,Level.ERROR);
+          }
+        }
+        latestInputMarkerList.put(outputData.inputMarker.base64FileKey,outputData.inputMarker);
+        localBuffer.add(document);
+      }
+      if (localBuffer.size() > 0 && ((outputData == null && isDrain()) || (nextDispatchDuration <= 0 || localBuffer.size() >= maxBufferSize))) {
+        try {
+          if (isComputeCurrentCollection) {
+            int weekDay=Calendar.getInstance().get(Calendar.DAY_OF_WEEK);
+            int currHour=Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+            int currMin=Calendar.getInstance().get(Calendar.MINUTE);
+            int minOfWeek=(weekDay - 1) * 24 * 60 + currHour * 60 + currMin;
+            int slotByMin=minOfWeek / splitInterval % numberOfShards;
+            String shard="shard" + slotByMin;
+            if (lastSlotByMin != slotByMin) {
+              logger.info("Switching to shard " + shard + ", output="+ getShortDescription());
+              lastSlotByMin=slotByMin;
+            }
+            for (            SolrInputDocument solrInputDocument : localBuffer) {
+              solrInputDocument.addField(ROUTER_FIELD,shard);
+            }
+          }
+          UpdateResponse response=solrClient.add(localBuffer);
+          if (response.getStatus() != 0) {
+            final String LOG_MESSAGE_KEY=this.getClass().getSimpleName() + "_SOLR_UPDATE_ERROR";
+            LogFeederUtil.logErrorMessageByInterval(LOG_MESSAGE_KEY,"Error writing to Solr. response=" + response.toString() + ", log="+ (outputData == null ? null : outputData.toString()),null,logger,Level.ERROR);
+          }
+          statMetric.count+=localBuffer.size();
+          writeBytesMetric.count+=localBufferBytesSize;
+          for (          InputMarker inputMarker : latestInputMarkerList.values()) {
+            inputMarker.input.checkIn(inputMarker);
+          }
+          resetLocalBuffer();
+          lastDispatchTime=System.currentTimeMillis();
+        }
+ catch (        IOException ioException) {
+          while (!isDrain()) {
+            try {
+              logger.warn("Solr is down. Going to sleep for " + RETRY_INTERVAL + " seconds. output="+ getShortDescription());
+              Thread.sleep(RETRY_INTERVAL * 1000);
+            }
+ catch (            Throwable t) {
+              break;
+            }
+            if (isDrain()) {
+              break;
+            }
+            try {
+              SolrPingResponse pingResponse=solrClient.ping();
+              if (pingResponse.getStatus() == 0) {
+                logger.info("Solr seems to be up now. Resuming... output=" + getShortDescription());
+                break;
+              }
+            }
+ catch (            Throwable t) {
+            }
+          }
+        }
+catch (        Throwable serverException) {
+          resetLocalBuffer();
+          final String LOG_MESSAGE_KEY=this.getClass().getSimpleName() + "_SOLR_UPDATE_EXCEPTION";
+          LogFeederUtil.logErrorMessageByInterval(LOG_MESSAGE_KEY,"Error sending log message to server. " + (outputData == null ? null : outputData.toString()),serverException,logger,Level.ERROR);
+        }
+      }
+    }
+ catch (    InterruptedException e) {
+    }
+catch (    Throwable t) {
+      final String LOG_MESSAGE_KEY=this.getClass().getSimpleName() + "_SOLR_MAINLOOP_EXCEPTION";
+      LogFeederUtil.logErrorMessageByInterval(LOG_MESSAGE_KEY,"Caught exception in main loop. " + outputData,t,logger,Level.ERROR);
+    }
+  }
+  if (solrClient != null) {
+    try {
+      solrClient.close();
+    }
+ catch (    IOException e) {
+    }
+  }
+  resetLocalBuffer();
+  logger.info("Exiting Solr writer thread. output=" + getShortDescription());
+}

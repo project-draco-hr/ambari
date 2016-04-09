@@ -1,0 +1,25 @@
+{
+  String from=(String)searchCriteria.getParamValue("startTime");
+  String to=(String)searchCriteria.getParamValue("endTime");
+  String unit=(String)searchCriteria.getParamValue("unit");
+  SolrQuery solrQuery=queryGenerator.commonAuditFilterQuery(searchCriteria);
+  VBarDataList dataList=new VBarDataList();
+  List<VBarGraphData> histogramData=new ArrayList<VBarGraphData>();
+  queryGenerator.setFacetSort(solrQuery,LogSearchConstants.FACET_INDEX);
+  String jsonHistogramQuery=queryGenerator.buildJSONFacetTermTimeRangeQuery(LogSearchConstants.AUDIT_REQUEST_USER,LogSearchConstants.AUDIT_EVTTIME,from,to,unit).replace("\\","");
+  try {
+    solrQuery.set("json.facet",jsonHistogramQuery);
+    queryGenerator.setRowCount(solrQuery,0);
+    QueryResponse response=auditSolrDao.process(solrQuery);
+    if (response == null)     response=new QueryResponse();
+    SimpleOrderedMap<Object> jsonFacetResponse=(SimpleOrderedMap<Object>)response.getResponse().get("facets");
+    if (jsonFacetResponse == null || jsonFacetResponse.toString().equals("{count=0}"))     return convertObjToString(dataList);
+    extractValuesFromBucket(jsonFacetResponse,"x","y",histogramData);
+    dataList.setGraphData(histogramData);
+    return convertObjToString(dataList);
+  }
+ catch (  SolrException|IOException|SolrServerException e) {
+    logger.error("Error during solrQuery=" + solrQuery,e);
+    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

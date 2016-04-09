@@ -1,0 +1,46 @@
+{
+  try {
+    Authentication auth=SecurityContextHolder.getContext().getAuthentication();
+    if (auth instanceof AnonymousAuthenticationToken) {
+    }
+ else {
+      HttpServletRequest httpRequest=(HttpServletRequest)request;
+      HttpSession httpSession=httpRequest.getSession(false);
+      Cookie[] cookieList=httpRequest.getCookies();
+      String msaCookie=null;
+      for (int i=0; cookieList != null && i < cookieList.length; i++) {
+        if (cookieList[i].getName().equalsIgnoreCase("msa")) {
+          msaCookie=cookieList[i].getValue();
+        }
+      }
+      if (msaCookie == null) {
+        HttpServletResponse httpResponse=(HttpServletResponse)response;
+        msaCookie=CommonUtil.genGUI();
+        Cookie cookie=new Cookie("msa",msaCookie);
+        cookie.setMaxAge(Integer.MAX_VALUE);
+        httpResponse.addCookie(cookie);
+      }
+      LogsearchSecurityContext context=(LogsearchSecurityContext)httpSession.getAttribute(LOGSEARCH_SC_SESSION_KEY);
+      if (context == null) {
+        context=new LogsearchSecurityContext();
+        httpSession.setAttribute(LOGSEARCH_SC_SESSION_KEY,context);
+      }
+      String userAgent=httpRequest.getHeader(USER_AGENT);
+      RequestContext requestContext=new RequestContext();
+      String reqIP=httpRequest.getRemoteAddr();
+      requestContext.setIpAddress(reqIP);
+      requestContext.setMsaCookie(msaCookie);
+      requestContext.setUserAgent(userAgent);
+      requestContext.setServerRequestId(CommonUtil.genGUI());
+      requestContext.setRequestURL(httpRequest.getRequestURI());
+      context.setRequestContext(requestContext);
+      LogsearchContextHolder.setSecurityContext(context);
+      UserSessionInfo userSession=sessionMgr.processSuccessLogin(0,userAgent);
+      context.setUserSession(userSession);
+    }
+    chain.doFilter(request,response);
+  }
+  finally {
+    LogsearchContextHolder.resetSecurityContext();
+  }
+}

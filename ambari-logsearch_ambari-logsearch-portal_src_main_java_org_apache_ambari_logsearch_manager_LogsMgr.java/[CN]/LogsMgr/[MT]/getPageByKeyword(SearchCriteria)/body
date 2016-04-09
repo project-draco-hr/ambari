@@ -1,0 +1,213 @@
+{
+  String keyword=solrUtil.makeSolrSearchString((String)searchCriteria.getParamValue("keyword"));
+  String keyType=(String)searchCriteria.getParamValue("keywordType");
+  if (!(boolean)"0".equals(keyType)) {
+    try {
+      int currentPageNumber=searchCriteria.getPage();
+      int maxRows=searchCriteria.getMaxRows();
+      String nextPageLogID="";
+      int lastLogIndexNumber=((currentPageNumber + 1) * maxRows);
+      String nextPageLogTime="";
+      SolrQuery nextPageLogTimeQuery=queryGenerator.commonFilterQuery(searchCriteria);
+      nextPageLogTimeQuery.remove("start");
+      nextPageLogTimeQuery.remove("rows");
+      nextPageLogTimeQuery.setStart(lastLogIndexNumber);
+      nextPageLogTimeQuery.setRows(1);
+      SolrDocumentList docList=serviceLogsSolrDao.process(nextPageLogTimeQuery).getResults();
+      SolrDocument solrDoc=docList.get(0);
+      Date logDate=(Date)solrDoc.get(LogSearchConstants.LOGTIME);
+      nextPageLogTime=dateUtil.convertDateWithMillisecondsToSolrDate(logDate);
+      nextPageLogID="" + solrDoc.get(LogSearchConstants.ID);
+      if (stringUtil.isEmpty(nextPageLogID))       nextPageLogID="0";
+      String filterQueryListIds="";
+      SolrQuery listRemoveIds=queryGenerator.commonFilterQuery(searchCriteria);
+      listRemoveIds.remove("start");
+      listRemoveIds.remove("rows");
+      queryGenerator.setSingleIncludeFilter(listRemoveIds,LogSearchConstants.LOGTIME,"\"" + nextPageLogTime + "\"");
+      queryGenerator.setSingleExcludeFilter(listRemoveIds,LogSearchConstants.ID,nextPageLogID);
+      listRemoveIds.set("fl",LogSearchConstants.ID);
+      SolrDocumentList docListIds=serviceLogsSolrDao.process(listRemoveIds).getResults();
+      boolean isFirst=true;
+      for (      SolrDocument solrDocId : docListIds) {
+        String id="" + solrDocId.get(LogSearchConstants.ID);
+        if (isFirst) {
+          filterQueryListIds+="-" + LogSearchConstants.ID + ":"+ id;
+          isFirst=false;
+        }
+ else {
+          filterQueryListIds+=" AND " + "-" + LogSearchConstants.ID + ":"+ id;
+        }
+      }
+      String endTime=(String)searchCriteria.getParamValue("to");
+      String startTime=(String)searchCriteria.getParamValue("from");
+      SolrQuery logTimeThroughRangeQuery=queryGenerator.commonFilterQuery(searchCriteria);
+      logTimeThroughRangeQuery.remove("start");
+      logTimeThroughRangeQuery.remove("rows");
+      logTimeThroughRangeQuery.setRows(1);
+      if (!stringUtil.isEmpty(filterQueryListIds))       logTimeThroughRangeQuery.setFilterQueries(filterQueryListIds);
+      String sortByType=searchCriteria.getSortType();
+      if (!stringUtil.isEmpty(sortByType) && sortByType.equalsIgnoreCase(LogSearchConstants.ASCENDING_ORDER)) {
+        queryGenerator.setSingleRangeFilter(logTimeThroughRangeQuery,LogSearchConstants.LOGTIME,nextPageLogTime,endTime);
+        logTimeThroughRangeQuery.set("sort",LogSearchConstants.LOGTIME + " " + LogSearchConstants.ASCENDING_ORDER);
+      }
+ else {
+        queryGenerator.setSingleRangeFilter(logTimeThroughRangeQuery,LogSearchConstants.LOGTIME,startTime,nextPageLogTime);
+        logTimeThroughRangeQuery.set("sort",LogSearchConstants.LOGTIME + " " + LogSearchConstants.DESCENDING_ORDER);
+      }
+      queryGenerator.setSingleIncludeFilter(logTimeThroughRangeQuery,LogSearchConstants.SOLR_LOG_MESSAGE,keyword);
+      SolrDocumentList documentList=serviceLogsSolrDao.process(logTimeThroughRangeQuery).getResults();
+      SolrDocument solrDocument=new SolrDocument();
+      if (!documentList.isEmpty())       solrDocument=documentList.get(0);
+      Date keywordLogDate=(Date)solrDocument.get(LogSearchConstants.LOGTIME);
+      String originalKeywordDate=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
+      String keywordId="" + solrDocument.get(LogSearchConstants.ID);
+      SolrQuery rangeLogQuery=nextPageLogTimeQuery.getCopy();
+      rangeLogQuery.remove("start");
+      rangeLogQuery.remove("rows");
+      if (!stringUtil.isEmpty(sortByType) && sortByType.equalsIgnoreCase(LogSearchConstants.ASCENDING_ORDER)) {
+        keywordLogDate=dateUtil.addMilliSecondsToDate(keywordLogDate,1);
+        String keywordDateTime=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
+        queryGenerator.setSingleRangeFilter(rangeLogQuery,LogSearchConstants.LOGTIME,startTime,keywordDateTime);
+      }
+ else {
+        keywordLogDate=dateUtil.addMilliSecondsToDate(keywordLogDate,-1);
+        String keywordDateTime=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
+        queryGenerator.setSingleRangeFilter(rangeLogQuery,LogSearchConstants.LOGTIME,keywordDateTime,endTime);
+      }
+      long countNumberLogs=countQuery(rangeLogQuery) - 1;
+      try {
+        SolrQuery sameIdQuery=queryGenerator.commonFilterQuery(searchCriteria);
+        queryGenerator.setSingleIncludeFilter(sameIdQuery,LogSearchConstants.LOGTIME,"\"" + originalKeywordDate + "\"");
+        sameIdQuery.set("fl",LogSearchConstants.ID);
+        SolrDocumentList sameQueryDocList=serviceLogsSolrDao.process(sameIdQuery).getResults();
+        for (        SolrDocument solrDocumenent : sameQueryDocList) {
+          String id=(String)solrDocumenent.getFieldValue(LogSearchConstants.ID);
+          countNumberLogs++;
+          if (id.equals(keywordId))           break;
+        }
+      }
+ catch (      SolrException|SolrServerException|IOException e) {
+        logger.error(e);
+      }
+      int start=(int)((countNumberLogs / maxRows) * maxRows);
+      SolrQuery logIdQuery=nextPageLogTimeQuery.getCopy();
+      rangeLogQuery.remove("start");
+      rangeLogQuery.remove("rows");
+      logIdQuery.setStart(start);
+      logIdQuery.setRows(searchCriteria.getMaxRows());
+      VSolrLogList vSolrLogList=getLogAsPaginationProvided(logIdQuery,serviceLogsSolrDao);
+      return convertObjToString(vSolrLogList);
+    }
+ catch (    Exception e) {
+    }
+  }
+ else {
+    try {
+      int currentPageNumber=searchCriteria.getPage();
+      int maxRows=searchCriteria.getMaxRows();
+      String sequenceNumber="";
+      if (currentPageNumber == 0) {
+        throw restErrorUtil.createRESTException("This is first Page Not",MessageEnums.ERROR_SYSTEM);
+      }
+      int firstLogCurrentPage=(currentPageNumber * maxRows);
+      String lastLogsLogTime="";
+      SolrQuery lastLogTime=queryGenerator.commonFilterQuery(searchCriteria);
+      lastLogTime.remove("start");
+      lastLogTime.remove("rows");
+      lastLogTime.setStart(firstLogCurrentPage);
+      lastLogTime.setRows(1);
+      SolrDocumentList docList=serviceLogsSolrDao.process(lastLogTime).getResults();
+      SolrDocument solrDoc=docList.get(0);
+      Date logDate=(Date)solrDoc.get(LogSearchConstants.LOGTIME);
+      String sortByType=searchCriteria.getSortType();
+      lastLogsLogTime=dateUtil.convertDateWithMillisecondsToSolrDate(logDate);
+      String lastLogsLogId="" + solrDoc.get(LogSearchConstants.SEQUNCE_ID);
+      if (stringUtil.isEmpty(sequenceNumber))       sequenceNumber="0";
+      String filterQueryListIds="";
+      SolrQuery listRemoveIds=queryGenerator.commonFilterQuery(searchCriteria);
+      listRemoveIds.remove("start");
+      listRemoveIds.remove("rows");
+      queryGenerator.setSingleIncludeFilter(listRemoveIds,LogSearchConstants.LOGTIME,"\"" + lastLogsLogTime + "\"");
+      queryGenerator.setSingleExcludeFilter(listRemoveIds,LogSearchConstants.ID,lastLogsLogId);
+      listRemoveIds.set("fl",LogSearchConstants.ID);
+      SolrDocumentList docListIds=serviceLogsSolrDao.process(listRemoveIds).getResults();
+      boolean isFirst=true;
+      for (      SolrDocument solrDocId : docListIds) {
+        String id="" + solrDocId.get(LogSearchConstants.ID);
+        if (isFirst) {
+          filterQueryListIds+="-" + LogSearchConstants.ID + ":"+ id;
+          isFirst=false;
+        }
+ else {
+          filterQueryListIds+=" AND " + "-" + LogSearchConstants.ID + ":"+ id;
+        }
+      }
+      String endTime=(String)searchCriteria.getParamValue("to");
+      String startTime=(String)searchCriteria.getParamValue("from");
+      SolrQuery logTimeThroughRangeQuery=queryGenerator.commonFilterQuery(searchCriteria);
+      logTimeThroughRangeQuery.remove("start");
+      logTimeThroughRangeQuery.remove("rows");
+      logTimeThroughRangeQuery.setRows(1);
+      queryGenerator.setSingleExcludeFilter(logTimeThroughRangeQuery,LogSearchConstants.ID,lastLogsLogId);
+      if (!stringUtil.isEmpty(filterQueryListIds))       logTimeThroughRangeQuery.setFilterQueries(filterQueryListIds);
+      if (!stringUtil.isEmpty(sortByType) && sortByType.equalsIgnoreCase(LogSearchConstants.ASCENDING_ORDER)) {
+        sequenceNumber="" + (Integer.parseInt(sequenceNumber) - 1);
+        logTimeThroughRangeQuery.remove("sort");
+        logTimeThroughRangeQuery.set("sort",LogSearchConstants.LOGTIME + " " + LogSearchConstants.DESCENDING_ORDER);
+        queryGenerator.setSingleRangeFilter(logTimeThroughRangeQuery,LogSearchConstants.LOGTIME,startTime,lastLogsLogTime);
+      }
+ else {
+        sequenceNumber="" + (Integer.parseInt(sequenceNumber) + 1);
+        logTimeThroughRangeQuery.remove("sort");
+        logTimeThroughRangeQuery.set("sort",LogSearchConstants.LOGTIME + " " + LogSearchConstants.ASCENDING_ORDER);
+        queryGenerator.setSingleRangeFilter(logTimeThroughRangeQuery,LogSearchConstants.LOGTIME,lastLogsLogTime,endTime);
+      }
+      queryGenerator.setSingleIncludeFilter(logTimeThroughRangeQuery,LogSearchConstants.SOLR_LOG_MESSAGE,keyword);
+      SolrDocumentList documentList=serviceLogsSolrDao.process(logTimeThroughRangeQuery).getResults();
+      SolrDocument solrDocument=new SolrDocument();
+      if (!documentList.isEmpty())       solrDocument=documentList.get(0);
+      Date keywordLogDate=(Date)solrDocument.get(LogSearchConstants.LOGTIME);
+      String originalKeywordDate=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
+      String keywordId="" + solrDocument.get(LogSearchConstants.ID);
+      SolrQuery rangeLogQuery=lastLogTime.getCopy();
+      rangeLogQuery.remove("start");
+      rangeLogQuery.remove("rows");
+      if (!stringUtil.isEmpty(sortByType) && sortByType.equalsIgnoreCase(LogSearchConstants.ASCENDING_ORDER)) {
+        keywordLogDate=dateUtil.addMilliSecondsToDate(keywordLogDate,1);
+        String keywordDateTime=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
+        queryGenerator.setSingleRangeFilter(rangeLogQuery,LogSearchConstants.LOGTIME,startTime,keywordDateTime);
+      }
+ else {
+        keywordLogDate=dateUtil.addMilliSecondsToDate(keywordLogDate,-1);
+        String keywordDateTime=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
+        queryGenerator.setSingleRangeFilter(rangeLogQuery,LogSearchConstants.LOGTIME,keywordDateTime,endTime);
+      }
+      long countNumberLogs=countQuery(rangeLogQuery) - 1;
+      try {
+        SolrQuery sameIdQuery=queryGenerator.commonFilterQuery(searchCriteria);
+        queryGenerator.setSingleIncludeFilter(sameIdQuery,LogSearchConstants.LOGTIME,"\"" + originalKeywordDate + "\"");
+        sameIdQuery.set("fl",LogSearchConstants.ID);
+        SolrDocumentList sameQueryDocList=serviceLogsSolrDao.process(sameIdQuery).getResults();
+        for (        SolrDocument solrDocumenent : sameQueryDocList) {
+          String id=(String)solrDocumenent.getFieldValue(LogSearchConstants.ID);
+          countNumberLogs++;
+          if (id.equals(keywordId))           break;
+        }
+      }
+ catch (      SolrException|SolrServerException|IOException e) {
+        logger.error(e);
+      }
+      int start=(int)((countNumberLogs / maxRows) * maxRows);
+      SolrQuery logIdQuery=lastLogTime.getCopy();
+      rangeLogQuery.remove("start");
+      rangeLogQuery.remove("rows");
+      logIdQuery.setStart(start);
+      logIdQuery.setRows(searchCriteria.getMaxRows());
+      VSolrLogList vSolrLogList=getLogAsPaginationProvided(logIdQuery,serviceLogsSolrDao);
+      return convertObjToString(vSolrLogList);
+    }
+ catch (    Exception e) {
+    }
+  }
+  throw restErrorUtil.createRESTException("keyword not found",MessageEnums.ERROR_SYSTEM);
+}

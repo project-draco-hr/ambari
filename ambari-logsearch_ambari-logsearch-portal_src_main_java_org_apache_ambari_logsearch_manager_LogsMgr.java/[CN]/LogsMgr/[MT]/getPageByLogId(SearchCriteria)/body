@@ -1,0 +1,55 @@
+{
+  String endLogTime=(String)searchCriteria.getParamValue("to");
+  long startIndex=0l;
+  String logId=(String)searchCriteria.getParamValue("sourceLogId");
+  SolrQuery solrQuery=queryGenerator.commonFilterQuery(searchCriteria);
+  String endTimeMinusOneMilli="";
+  String logTime="";
+  try {
+    SolrQuery logTimeByIdQuery=new SolrQuery();
+    queryGenerator.setMainQuery(logTimeByIdQuery,null);
+    queryGenerator.setSingleIncludeFilter(logTimeByIdQuery,LogSearchConstants.ID,logId);
+    queryGenerator.setRowCount(solrQuery,1);
+    SolrDocumentList docList=serviceLogsSolrDao.process(logTimeByIdQuery).getResults();
+    Date dateOfLogId=(Date)docList.get(0).get(LogSearchConstants.LOGTIME);
+    logTime=dateUtil.convertDateWithMillisecondsToSolrDate(dateOfLogId);
+    Date endDate=dateUtil.addMilliSecondsToDate(dateOfLogId,1);
+    endTimeMinusOneMilli=(String)dateUtil.convertDateWithMillisecondsToSolrDate(endDate);
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error(e);
+  }
+  try {
+    solrQuery.remove(LogSearchConstants.ID);
+    solrQuery.remove(LogSearchConstants.LOGTIME);
+    queryGenerator.setSingleRangeFilter(solrQuery,LogSearchConstants.LOGTIME,endTimeMinusOneMilli,endLogTime);
+    queryGenerator.setRowCount(solrQuery,0);
+    startIndex=countQuery(solrQuery);
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error(e);
+  }
+  try {
+    SolrQuery sameIdQuery=queryGenerator.commonFilterQuery(searchCriteria);
+    queryGenerator.setSingleIncludeFilter(sameIdQuery,LogSearchConstants.LOGTIME,"\"" + logTime + "\"");
+    sameIdQuery.set("fl",LogSearchConstants.ID);
+    SolrDocumentList docList=serviceLogsSolrDao.process(sameIdQuery).getResults();
+    for (    SolrDocument solrDocumenent : docList) {
+      String id=(String)solrDocumenent.getFieldValue(LogSearchConstants.ID);
+      startIndex++;
+      if (id.equals(logId))       break;
+    }
+    SolrQuery logIdQuery=queryGenerator.commonFilterQuery(searchCriteria);
+    logIdQuery.remove("rows");
+    logIdQuery.remove("start");
+    int start=(int)((startIndex / searchCriteria.getMaxRows()) * searchCriteria.getMaxRows());
+    logIdQuery.setStart(start);
+    logIdQuery.setRows(searchCriteria.getMaxRows());
+    VSolrLogList vSolrLogList=getLogAsPaginationProvided(logIdQuery,serviceLogsSolrDao);
+    return convertObjToString(vSolrLogList);
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error(e);
+  }
+  throw restErrorUtil.createRESTException("LogId not Found",MessageEnums.ERROR_SYSTEM);
+}

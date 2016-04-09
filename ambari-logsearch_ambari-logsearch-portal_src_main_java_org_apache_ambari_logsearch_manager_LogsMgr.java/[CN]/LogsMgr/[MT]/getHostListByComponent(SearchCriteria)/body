@@ -1,0 +1,41 @@
+{
+  SolrQuery solrQuery=queryGenerator.commonFilterQuery(searchCriteria);
+  solrQuery.setParam("event","/getHostListByComponent");
+  if (searchCriteria.getSortBy() == null) {
+    searchCriteria.setSortBy(LogSearchConstants.SOLR_HOST);
+    searchCriteria.setSortType(SolrQuery.ORDER.asc.toString());
+  }
+  queryGenerator.setFilterFacetSort(solrQuery,searchCriteria);
+  String componentName="" + ((searchCriteria.getParamValue("componentName") == null) ? "" : searchCriteria.getParamValue("componentName"));
+  if (!"".equals(componentName))   solrQuery.addFilterQuery(LogSearchConstants.SOLR_COMPONENT + ":" + componentName);
+ else   try {
+    return convertObjToString(new VNodeList());
+  }
+ catch (  IOException e1) {
+    logger.error(e1);
+  }
+  String firstHirarchy="type,host,level";
+  String secondHirarchy="type,level";
+  VNodeList list=new VNodeList();
+  try {
+    queryGenerator.setFacetPivot(solrQuery,1,firstHirarchy,secondHirarchy);
+    QueryResponse response=serviceLogsSolrDao.process(solrQuery);
+    List<List<PivotField>> firstHirarchicalPivotFields=null;
+    List<List<PivotField>> secondHirarchicalPivotFields=null;
+    NamedList<List<PivotField>> firstNamedList=response.getFacetPivot();
+    if (firstNamedList != null) {
+      firstHirarchicalPivotFields=firstNamedList.getAll(firstHirarchy);
+      secondHirarchicalPivotFields=firstNamedList.getAll(secondHirarchy);
+    }
+    if (firstHirarchicalPivotFields == null || secondHirarchicalPivotFields == null) {
+      return convertObjToString(new ArrayList<VNode>());
+    }
+    List<VNode> dataList=buidTreeData(firstHirarchicalPivotFields.get(0),secondHirarchicalPivotFields.get(0),solrQuery,LogSearchConstants.COMPONENT,LogSearchConstants.HOST);
+    list.setvNodeList(dataList);
+    return convertObjToString(list);
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error("Error during solrQuery=" + solrQuery,e);
+    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

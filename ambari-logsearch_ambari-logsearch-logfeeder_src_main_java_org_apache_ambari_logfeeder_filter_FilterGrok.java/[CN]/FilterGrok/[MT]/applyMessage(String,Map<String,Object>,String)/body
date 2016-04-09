@@ -1,0 +1,33 @@
+{
+  String jsonStr=grokParse(inputStr);
+  boolean parseError=false;
+  if ("{}".equals(jsonStr)) {
+    parseError=true;
+    logParseError(inputStr);
+    if (multilineJsonStr == null) {
+      return;
+    }
+  }
+  if (parseError) {
+    jsonStr=multilineJsonStr;
+  }
+  Map<String,String> jsonSrc=LogFeederUtil.getGson().fromJson(jsonStr,jsonType);
+  for (  String namedParam : namedParamList) {
+    if (jsonSrc.get(namedParam) != null) {
+      jsonObj.put(namedParam,jsonSrc.get(namedParam));
+    }
+  }
+  if (parseError) {
+    @SuppressWarnings("unchecked") List<String> tagsList=(List<String>)jsonObj.get("tags");
+    if (tagsList == null) {
+      tagsList=new ArrayList<String>();
+      jsonObj.put("tags",tagsList);
+    }
+    tagsList.add("error_grok_parsing");
+    if (sourceField == null) {
+      jsonObj.put("log_message",inputStr);
+    }
+  }
+  super.apply(jsonObj,savedInputMarker);
+  statMetric.count++;
+}

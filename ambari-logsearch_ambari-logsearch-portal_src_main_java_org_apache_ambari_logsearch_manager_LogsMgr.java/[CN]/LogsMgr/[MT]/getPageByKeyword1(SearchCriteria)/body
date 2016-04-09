@@ -1,0 +1,61 @@
+{
+  SolrQuery query=queryGenerator.commonFilterQuery(searchCriteria);
+  String keyword=solrUtil.makeSearcableString((String)searchCriteria.getParamValue("keyword"));
+  String uniqueId=(String)searchCriteria.getParamValue("token");
+  if (uniqueId != null && !uniqueId.equals(""))   cancelByDate.add(uniqueId);
+  Long numberPages=0l;
+  int currentPageNumber=searchCriteria.getPage();
+  try {
+    numberPages=countQuery(query) / searchCriteria.getMaxRows();
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error(e);
+  }
+  if ((boolean)searchCriteria.getParamValue("keywordType").equals("0")) {
+    for (int i=currentPageNumber - 1; i >= 0 && !cancelRequest(uniqueId); i--) {
+      mapUniqueId.put(uniqueId,"" + i);
+      query.remove("rows");
+      query.remove("start");
+      query.setStart(i * searchCriteria.getMaxRows());
+      query.setRows(searchCriteria.getMaxRows());
+      VSolrLogList vSolrLogList=getLogAsPaginationProvided(query,serviceLogsSolrDao);
+      SolrDocumentList documentList=vSolrLogList.getList();
+      for (      SolrDocument solrDoc : documentList) {
+        String log_message=solrUtil.makeSearcableString((String)solrDoc.getFieldValue(LogSearchConstants.SOLR_LOG_MESSAGE));
+        if (log_message != null && log_message.toLowerCase(Locale.ENGLISH).contains(keyword.toLowerCase(Locale.ENGLISH))) {
+          cancelByDate.remove(uniqueId);
+          try {
+            return convertObjToString(vSolrLogList);
+          }
+ catch (          IOException e) {
+            logger.error(e);
+          }
+        }
+      }
+    }
+  }
+ else {
+    for (int i=currentPageNumber + 1; i <= numberPages && !cancelRequest(uniqueId); i++) {
+      mapUniqueId.put(uniqueId,"" + i);
+      query.remove("rows");
+      query.remove("start");
+      query.setStart(i * searchCriteria.getMaxRows());
+      query.setRows(searchCriteria.getMaxRows());
+      VSolrLogList vSolrLogList=getLogAsPaginationProvided(query,serviceLogsSolrDao);
+      SolrDocumentList solrDocumentList=vSolrLogList.getList();
+      for (      SolrDocument solrDocument : solrDocumentList) {
+        String logMessage=solrUtil.makeSearcableString((String)solrDocument.getFieldValue(LogSearchConstants.SOLR_LOG_MESSAGE));
+        if (logMessage != null && logMessage.toLowerCase(Locale.ENGLISH).contains(keyword.toLowerCase(Locale.ENGLISH))) {
+          cancelByDate.remove(uniqueId);
+          try {
+            return convertObjToString(vSolrLogList);
+          }
+ catch (          SolrException|IOException e) {
+            logger.error(e);
+          }
+        }
+      }
+    }
+  }
+  throw restErrorUtil.createRESTException("keyword not found",MessageEnums.ERROR_SYSTEM);
+}

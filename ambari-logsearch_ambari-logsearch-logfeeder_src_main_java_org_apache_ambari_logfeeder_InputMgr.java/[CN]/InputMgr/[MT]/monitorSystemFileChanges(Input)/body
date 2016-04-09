@@ -1,0 +1,37 @@
+{
+  try {
+    File fileToMonitor=new File(inputToMonitor.getFilePath());
+    if (filesToMonitor.containsKey(fileToMonitor.getAbsolutePath())) {
+      logger.info("Already monitoring file " + fileToMonitor + ". So ignoring this request");
+      return;
+    }
+    if (folderWatcher == null) {
+      folderWatcher=FileSystems.getDefault().newWatchService();
+      Thread th=new Thread(new FileSystemMonitor(),"FileSystemWatcher");
+      th.setDaemon(true);
+      th.start();
+    }
+    File folderToWatch=fileToMonitor.getParentFile();
+    if (folderToWatch != null) {
+      if (foldersToMonitor.contains(folderToWatch.getAbsolutePath())) {
+        logger.info("Already monitoring folder " + folderToWatch + ". So ignoring this request.");
+      }
+ else {
+        logger.info("Configuring to monitor folder " + folderToWatch + " for file "+ fileToMonitor);
+        Path toWatch=Paths.get(folderToWatch.getAbsolutePath());
+        if (toWatch == null) {
+          throw new UnsupportedOperationException("Directory not found. folder=" + folderToWatch);
+        }
+        toWatch.register(folderWatcher,ENTRY_CREATE);
+        foldersToMonitor.add(folderToWatch);
+      }
+      filesToMonitor.put(fileToMonitor.getAbsolutePath(),inputToMonitor);
+    }
+ else {
+      logger.error("File doesn't have parent folder." + fileToMonitor);
+    }
+  }
+ catch (  IOException e) {
+    logger.error("Error while trying to set watcher for file:" + inputToMonitor);
+  }
+}

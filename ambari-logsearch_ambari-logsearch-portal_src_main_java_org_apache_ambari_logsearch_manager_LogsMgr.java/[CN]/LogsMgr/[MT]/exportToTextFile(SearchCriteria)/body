@@ -1,0 +1,87 @@
+{
+  SolrQuery solrQuery=queryGenerator.commonFilterQuery(searchCriteria);
+  String from=(String)searchCriteria.getParamValue("from");
+  from=from.replace("T"," ");
+  from=from.replace(".",",");
+  String to=(String)searchCriteria.getParamValue("to");
+  to=to.replace("T"," ");
+  to=to.replace(".",",");
+  String utcOffset=(String)searchCriteria.getParamValue("utcOffset");
+  to=dateUtil.addOffsetToDate(to,Long.parseLong(utcOffset),"yyyy-MM-dd HH:mm:ss,SSS");
+  from=dateUtil.addOffsetToDate(from,Long.parseLong(utcOffset),"yyyy-MM-dd HH:mm:ss,SSS");
+  String fileName=dateUtil.getCurrentDateInString();
+  if (searchCriteria.getParamValue("hostLogFile") != null && searchCriteria.getParamValue("compLogFile") != null) {
+    fileName=searchCriteria.getParamValue("hostLogFile") + "_" + searchCriteria.getParamValue("compLogFile");
+  }
+  String format=(String)searchCriteria.getParamValue("format");
+  format="text".equalsIgnoreCase(format) && format != null ? ".txt" : ".json";
+  String textToSave="";
+  try {
+    QueryResponse response=serviceLogsSolrDao.process(solrQuery);
+    SolrDocumentList docList=response.getResults();
+    VSummary vsummary=bizUtil.buildSummaryForLogFile(docList);
+    vsummary.setFormat(format);
+    vsummary.setFrom(from);
+    vsummary.setTo(to);
+    try {
+      String include[]=((String)searchCriteria.getParamValue("iMessage")).split(LogSearchConstants.I_E_SEPRATOR);
+      String includeString="";
+      for (      String inc : include) {
+        includeString=includeString + ",\"" + inc+ "\"";
+      }
+      includeString=includeString.replaceFirst(",","");
+      if (!stringUtil.isEmpty(includeString)) {
+        vsummary.setIncludeString(includeString);
+      }
+    }
+ catch (    Exception e) {
+    }
+    String excludeString="";
+    boolean isNormalExcluded=false;
+    try {
+      String exclude[]=((String)searchCriteria.getParamValue("eMessage")).split(LogSearchConstants.I_E_SEPRATOR);
+      for (      String exc : exclude) {
+        excludeString=excludeString + ",\"" + exc+ "\"";
+      }
+      excludeString=excludeString.replaceFirst(",","");
+      if (!stringUtil.isEmpty(excludeString)) {
+        vsummary.setExcludeString(excludeString);
+        isNormalExcluded=true;
+      }
+    }
+ catch (    Exception ne) {
+    }
+    try {
+      String globalExclude[]=((String)searchCriteria.getParamValue("gEMessage")).split(LogSearchConstants.I_E_SEPRATOR);
+      for (      String exc : globalExclude) {
+        excludeString=excludeString + ",\"" + exc+ "\"";
+      }
+      if (!stringUtil.isEmpty(excludeString)) {
+        if (!isNormalExcluded)         excludeString=excludeString.replaceFirst(",","");
+        vsummary.setExcludeString(excludeString);
+      }
+    }
+ catch (    Exception ne) {
+    }
+    for (    SolrDocument solrDoc : docList) {
+      Date logTimeDateObj=(Date)solrDoc.get(LogSearchConstants.LOGTIME);
+      String logTime=dateUtil.convertSolrDateToNormalDateFormat(logTimeDateObj.getTime(),Long.parseLong(utcOffset));
+      solrDoc.remove(LogSearchConstants.LOGTIME);
+      solrDoc.addField(LogSearchConstants.LOGTIME,logTime);
+    }
+    if (format.toLowerCase(Locale.ENGLISH).equals(".txt")) {
+      textToSave=bizUtil.convertObjectToNormalText(docList);
+    }
+ else     if (format.toLowerCase(Locale.ENGLISH).equals(".json")) {
+      textToSave=convertObjToString(docList);
+    }
+ else {
+      throw restErrorUtil.createRESTException("unsoported format either should be json or text",MessageEnums.ERROR_SYSTEM);
+    }
+    return fileUtil.saveToFile(textToSave,fileName,vsummary);
+  }
+ catch (  SolrException|SolrServerException|IOException|ParseException e) {
+    logger.error("Error during solrQuery=" + solrQuery,e);
+    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

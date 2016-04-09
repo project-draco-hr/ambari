@@ -1,0 +1,38 @@
+{
+  if (reloadLdapServerProperties()) {
+    logger.info("LDAP Properties changed - rebuilding Context");
+    LdapContextSource springSecurityContextSource=new LdapContextSource();
+    List<String> ldapUrls=ldapServerProperties.getLdapUrls();
+    logStatement="ldapUrls=" + ldapUrls;
+    if (ldapUrls == null || ldapUrls.size() == 0) {
+      logger.info("LDAP URL is empty. So won't initialize LDAP provider");
+      return null;
+    }
+    springSecurityContextSource.setUrls(ldapUrls.toArray(new String[ldapUrls.size()]));
+    springSecurityContextSource.setBase(ldapServerProperties.getBaseDN());
+    logStatement=logStatement + ", baseDN=" + ldapServerProperties.getBaseDN();
+    if (!ldapServerProperties.isAnonymousBind()) {
+      springSecurityContextSource.setUserDn(ldapServerProperties.getManagerDn());
+      logStatement=logStatement + ", managerDN=" + ldapServerProperties.getManagerDn();
+      springSecurityContextSource.setPassword(ldapServerProperties.getManagerPassword());
+    }
+    try {
+      springSecurityContextSource.afterPropertiesSet();
+    }
+ catch (    Exception e) {
+      logger.error("LDAP Context Source not loaded ",e);
+      throw new UsernameNotFoundException("LDAP Context Source not loaded. ldapDetails=" + logStatement,e);
+    }
+    String userSearchBase=ldapServerProperties.getUserSearchBase();
+    logStatement=logStatement + ", userSearchBase=" + userSearchBase;
+    String userSearchFilter=ldapServerProperties.getUserSearchFilter();
+    logStatement=logStatement + ", userSearchFilter=" + userSearchFilter;
+    logger.info("LDAP properties=" + logStatement);
+    FilterBasedLdapUserSearch userSearch=new FilterBasedLdapUserSearch(userSearchBase,userSearchFilter,springSecurityContextSource);
+    LogsearchLdapBindAuthenticator bindAuthenticator=new LogsearchLdapBindAuthenticator(springSecurityContextSource,ldapServerProperties);
+    bindAuthenticator.setUserSearch(userSearch);
+    LdapAuthenticationProvider authenticationProvider=new LdapAuthenticationProvider(bindAuthenticator);
+    ldapAuthProvider=authenticationProvider;
+  }
+  return ldapAuthProvider;
+}

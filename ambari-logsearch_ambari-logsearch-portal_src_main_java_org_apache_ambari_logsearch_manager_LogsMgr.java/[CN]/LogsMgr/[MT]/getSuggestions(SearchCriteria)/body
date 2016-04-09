@@ -1,0 +1,37 @@
+{
+  SolrQuery solrQuery=new SolrQuery();
+  queryGenerator.setMainQuery(solrQuery,null);
+  String field="" + searchCriteria.getParamValue("fieldName");
+  String originalFieldName=ConfigUtil.serviceLogsColumnMapping.get(field + LogSearchConstants.UI_SUFFIX);
+  if (originalFieldName == null)   originalFieldName=field;
+  originalFieldName=LogSearchConstants.NGRAM_SUFFIX + originalFieldName;
+  String value="" + searchCriteria.getParamValue("valueToSuggest");
+  String jsonQuery=queryGenerator.buidlJSONFacetRangeQueryForSuggestion(originalFieldName,value);
+  try {
+    List<String> valueList=new ArrayList<String>();
+    queryGenerator.setJSONFacet(solrQuery,jsonQuery);
+    QueryResponse queryResponse=serviceLogsSolrDao.process(solrQuery);
+    if (queryResponse == null)     return convertObjToString(valueList);
+    SimpleOrderedMap<Object> jsonFacetResponse=(SimpleOrderedMap<Object>)queryResponse.getResponse().get("facets");
+    if (jsonFacetResponse == null || jsonFacetResponse.equals("{count=0}"))     return convertObjToString(valueList);
+    SimpleOrderedMap<Object> stack=(SimpleOrderedMap<Object>)jsonFacetResponse.get("y");
+    if (stack == null || stack.equals("{count=0}"))     return convertObjToString(valueList);
+    SimpleOrderedMap<Object> buckets=(SimpleOrderedMap<Object>)stack.get("x");
+    if (buckets == null || buckets.equals("{count=0}"))     return convertObjToString(valueList);
+    ArrayList<Object> bucketList=(ArrayList<Object>)buckets.get("buckets");
+    for (    Object object : bucketList) {
+      SimpleOrderedMap<Object> simpleOrderdMap=(SimpleOrderedMap<Object>)object;
+      String val="" + simpleOrderdMap.getVal(0);
+      valueList.add(val);
+    }
+    return convertObjToString(valueList);
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    try {
+      return convertObjToString(new ArrayList<String>());
+    }
+ catch (    IOException e1) {
+      throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+    }
+  }
+}

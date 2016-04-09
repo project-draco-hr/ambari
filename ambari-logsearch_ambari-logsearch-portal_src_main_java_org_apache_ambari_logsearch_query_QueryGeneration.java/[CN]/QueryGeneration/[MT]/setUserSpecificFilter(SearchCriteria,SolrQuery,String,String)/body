@@ -1,0 +1,57 @@
+{
+  String queryString=(String)searchCriteria.getParamValue(paramName);
+  String columnQuery=(String)searchCriteria.getParamValue(LogSearchConstants.COLUMN_QUERY);
+  if (!stringUtil.isEmpty(queryString) && "[]".equals(queryString))   queryString=null;
+  if (!stringUtil.isEmpty(columnQuery) && stringUtil.isEmpty(queryString) && !paramName.equals(LogSearchConstants.EXCLUDE_QUERY))   queryString=columnQuery;
+  List<String> conditionQuries=new ArrayList<String>();
+  List<String> referalConditionQuries=new ArrayList<String>();
+  List<String> elments=new ArrayList<String>();
+  if (!stringUtil.isEmpty(queryString)) {
+    List<HashMap<String,Object>> queryList=jsonUtil.jsonToMapObjectList(queryString);
+    if (!stringUtil.isEmpty(columnQuery) && !columnQuery.equals(queryString) && !paramName.equals(LogSearchConstants.EXCLUDE_QUERY)) {
+      List<HashMap<String,Object>> columnQueryList=jsonUtil.jsonToMapObjectList(columnQuery);
+      queryList.addAll(columnQueryList);
+    }
+    for (    HashMap<String,Object> columnListMap : queryList) {
+      String orQuery="";
+      String field="";
+      for (      String key : columnListMap.keySet()) {
+        String originalKey=getOriginalKey(key);
+        String value=getOriginalValue(originalKey,"" + columnListMap.get(key));
+        orQuery=originalKey + ":" + putWildCardByType(value,originalKey);
+        boolean isSame=false;
+        for (        String temp : elments) {
+          if (key.equals(temp))           isSame=true;
+        }
+        if (isSame && !operation.equals(LogSearchConstants.EXCLUDE_QUERY)) {
+          for (          String tempCondition : conditionQuries) {
+            if (tempCondition.contains(originalKey)) {
+              String newCondtion=tempCondition + " OR " + orQuery;
+              referalConditionQuries.remove(tempCondition);
+              referalConditionQuries.add(newCondtion);
+            }
+          }
+          conditionQuries.removeAll(conditionQuries);
+          conditionQuries.addAll(referalConditionQuries);
+        }
+ else {
+          conditionQuries.add(orQuery);
+          referalConditionQuries.add(orQuery);
+        }
+        field=key;
+        elments.add(field);
+      }
+    }
+  }
+  if (!referalConditionQuries.isEmpty()) {
+    if (operation.equals(LogSearchConstants.INCLUDE_QUERY) || operation.equals(LogSearchConstants.COLUMN_QUERY)) {
+      for (      String filter : referalConditionQuries)       solrQuery.addFilterQuery(filter);
+    }
+ else     if (operation.equals(LogSearchConstants.EXCLUDE_QUERY)) {
+      for (      String filter : referalConditionQuries) {
+        filter="-" + filter;
+        solrQuery.addFilterQuery(filter);
+      }
+    }
+  }
+}

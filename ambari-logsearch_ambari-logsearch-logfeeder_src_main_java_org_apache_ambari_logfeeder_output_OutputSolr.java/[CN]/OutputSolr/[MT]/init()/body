@@ -1,0 +1,81 @@
+{
+  super.init();
+  statMetric.metricsName="output.solr.write_logs";
+  writeBytesMetric.metricsName="output.solr.write_bytes";
+  solrUrl=getStringValue("url");
+  zkHosts=getStringValue("zk_hosts");
+  splitMode=getStringValue("splits_interval_mins",splitMode);
+  if (!splitMode.equalsIgnoreCase("none")) {
+    splitInterval=getIntValue("split_interval_mins",30);
+  }
+  numberOfShards=getIntValue("number_of_shards",numberOfShards);
+  maxBufferSize=getIntValue("flush_size",maxBufferSize);
+  if (maxBufferSize < 1) {
+    logger.warn("maxBufferSize is less than 1. Making it 1");
+  }
+  maxIntervalMS=getIntValue("idle_flush_time_ms",maxIntervalMS);
+  workers=getIntValue("workers",workers);
+  logger.info("Config: Number of workers=" + workers + ", splitMode="+ splitMode+ ", splitInterval="+ splitInterval+ ", numberOfShards="+ numberOfShards+ ". "+ getShortDescription());
+  if (StringUtils.isEmpty(solrUrl) && StringUtils.isEmpty(zkHosts)) {
+    throw new Exception("For solr output, either url or zk_hosts property need to be set");
+  }
+  int bufferSize=maxBufferSize * (workers + 3);
+  logger.info("Creating blocking queue with bufferSize=" + bufferSize);
+  outgoingBuffer=new LinkedBlockingQueue<OutputData>(bufferSize);
+  for (int count=0; count < workers; count++) {
+    SolrClient solrClient=null;
+    CloudSolrClient solrClouldClient=null;
+    if (zkHosts != null) {
+      logger.info("Using zookeepr. zkHosts=" + zkHosts);
+      collection=getStringValue("collection");
+      if (StringUtils.isEmpty(collection)) {
+        throw new Exception("For solr cloud property collection is mandatory");
+      }
+      logger.info("Using collection=" + collection);
+      solrClouldClient=new CloudSolrClient(zkHosts);
+      solrClouldClient.setDefaultCollection(collection);
+      solrClient=solrClouldClient;
+      if (splitMode.equalsIgnoreCase("none")) {
+        isComputeCurrentCollection=false;
+      }
+ else {
+        isComputeCurrentCollection=true;
+      }
+    }
+ else {
+      String[] solrUrls=StringUtils.split(solrUrl,",");
+      if (solrUrls.length == 1) {
+        logger.info("Using SolrURL=" + solrUrl);
+        solrClient=new HttpSolrClient(solrUrl);
+      }
+ else {
+        logger.info("Using load balance solr client. solrUrls=" + solrUrl);
+        logger.info("Initial URL for LB solr=" + solrUrls[0]);
+        @SuppressWarnings("resource") LBHttpSolrClient lbSolrClient=new LBHttpSolrClient(solrUrls[0]);
+        for (int i=1; i < solrUrls.length; i++) {
+          logger.info("Adding URL for LB solr=" + solrUrls[i]);
+          lbSolrClient.addSolrServer(solrUrls[i]);
+        }
+        solrClient=lbSolrClient;
+      }
+    }
+    try {
+      logger.info("Pinging Solr server. zkHosts=" + zkHosts + ", urls="+ solrUrl);
+      SolrPingResponse response=solrClient.ping();
+      if (response.getStatus() == 0) {
+        logger.info("Ping to Solr server is successful for writer=" + count);
+      }
+ else {
+        logger.warn("Ping to Solr server failed. It would check again. writer=" + count + ", solrUrl="+ solrUrl+ ", zkHosts="+ zkHosts+ ", collection="+ collection+ ", response="+ response);
+      }
+    }
+ catch (    Throwable t) {
+      logger.warn("Ping to Solr server failed. It would check again. writer=" + count + ", solrUrl="+ solrUrl+ ", zkHosts="+ zkHosts+ ", collection="+ collection,t);
+    }
+    SolrWorkerThread solrWriterThread=new SolrWorkerThread(solrClient);
+    solrWriterThread.setName(getNameForThread() + "," + collection+ ",writer="+ count);
+    solrWriterThread.setDaemon(true);
+    solrWriterThread.start();
+    writerThreadList.add(solrWriterThread);
+  }
+}
