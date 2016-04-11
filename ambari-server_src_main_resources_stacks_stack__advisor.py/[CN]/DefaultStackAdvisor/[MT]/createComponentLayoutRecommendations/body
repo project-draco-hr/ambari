@@ -1,6 +1,7 @@
 def createComponentLayoutRecommendations(self, services, hosts):
     recommendations = {'blueprint': {'host_groups': [], }, 'blueprint_cluster_binding': {'host_groups': [], }, }
-    hostsList = [host['Hosts']['host_name'] for host in hosts['items']]
+    hostsList = self.getActiveHosts([host['Hosts'] for host in hosts['items']])
+    hostsSet = set(hostsList)
     hostsComponentsMap = {}
     for hostName in hostsList:
         if (hostName not in hostsComponentsMap):
@@ -26,7 +27,8 @@ def createComponentLayoutRecommendations(self, services, hosts):
             else:
                 hostsForComponent = [self.getHostForComponent(component, hostsList)]
             for hostName in hostsForComponent:
-                hostsComponentsMap[hostName].append({'name': componentName, })
+                if (hostName in hostsSet):
+                    hostsComponentsMap[hostName].append({'name': componentName, })
     componentsListList = [service['components'] for service in services['services']]
     componentsList = [item for sublist in componentsListList for item in sublist]
     usedHostsListList = [component['StackServiceComponents']['hostnames'] for component in componentsList if (not self.isComponentNotValuable(component))]
@@ -66,9 +68,10 @@ def createComponentLayoutRecommendations(self, services, hosts):
                     if (not hostsForComponent):
                         hostsForComponent = hostsList[(-1):]
             for hostName in hostsForComponent:
-                if (hostName not in hostsComponentsMap):
+                if ((hostName not in hostsComponentsMap) and (hostName in hostsSet)):
                     hostsComponentsMap[hostName] = []
-                hostsComponentsMap[hostName].append({'name': componentName, })
+                if (hostName in hostsSet):
+                    hostsComponentsMap[hostName].append({'name': componentName, })
     host_groups = recommendations['blueprint']['host_groups']
     bindings = recommendations['blueprint_cluster_binding']['host_groups']
     index = 0

@@ -1,8 +1,8 @@
 def getComponentLayoutValidations(self, services, hosts):
     'Returns array of Validation objects about issues with hostnames components assigned to'
     items = []
-    hostsList = [host['Hosts']['host_name'] for host in hosts['items']]
-    hostsCount = len(hostsList)
+    hostsSet = set(super(HDPWIN21StackAdvisor, self).getActiveHosts([host['Hosts'] for host in hosts['items']]))
+    hostsCount = len(hostsSet)
     componentsListList = [service['components'] for service in services['services']]
     componentsList = [item for sublist in componentsListList for item in sublist]
     nameNodeHosts = [component['StackServiceComponents']['hostnames'] for component in componentsList if (component['StackServiceComponents']['component_name'] == 'NAMENODE')]
@@ -11,9 +11,10 @@ def getComponentLayoutValidations(self, services, hosts):
         if (component['StackServiceComponents']['cardinality'] is not None):
             componentName = component['StackServiceComponents']['component_name']
             componentDisplayName = component['StackServiceComponents']['display_name']
-            componentHostsCount = 0
+            componentHosts = []
             if (component['StackServiceComponents']['hostnames'] is not None):
-                componentHostsCount = len(component['StackServiceComponents']['hostnames'])
+                componentHosts = [componentHost for componentHost in component['StackServiceComponents']['hostnames'] if (componentHost in hostsSet)]
+            componentHostsCount = len(componentHosts)
             cardinality = str(component['StackServiceComponents']['cardinality'])
             message = None
             if ('+' in cardinality):
@@ -35,7 +36,7 @@ def getComponentLayoutValidations(self, services, hosts):
                 items.append({'type': 'host-component', 'level': 'ERROR', 'message': message, 'component-name': componentName, })
     usedHostsListList = [component['StackServiceComponents']['hostnames'] for component in componentsList if (not self.isComponentNotValuable(component))]
     usedHostsList = [item for sublist in usedHostsListList for item in sublist]
-    nonUsedHostsList = [item for item in hostsList if (item not in usedHostsList)]
+    nonUsedHostsList = [item for item in hostsSet if (item not in usedHostsList)]
     for host in nonUsedHostsList:
         items.append({'type': 'host-component', 'level': 'ERROR', 'message': 'Host is not used', 'host': str(host), })
     return items
