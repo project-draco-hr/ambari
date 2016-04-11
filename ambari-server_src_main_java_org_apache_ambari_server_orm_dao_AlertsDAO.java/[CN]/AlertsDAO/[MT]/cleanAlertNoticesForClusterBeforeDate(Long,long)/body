@@ -1,3 +1,17 @@
 {
-  return executeQuery("AlertNoticeEntity.removeByAlertHistoryBeforeDate",AlertNoticeEntity.class,clusterId,beforeDateMillis);
+  LOG.info("Deleting AlertNotice entities before date " + new Date(beforeDateMillis));
+  EntityManager entityManager=m_entityManagerProvider.get();
+  List<Integer> ids=findAllAlertHistoryIdsBeforeDate(clusterId,beforeDateMillis);
+  int affectedRows=0;
+  TypedQuery<AlertNoticeEntity> noticeQuery=entityManager.createNamedQuery("AlertNoticeEntity.removeByHistoryIds",AlertNoticeEntity.class);
+  if (ids != null && !ids.isEmpty()) {
+    for (int i=0; i < ids.size(); i+=BATCH_SIZE) {
+      int endIndex=(i + BATCH_SIZE) > ids.size() ? ids.size() : (i + BATCH_SIZE);
+      List<Integer> idsSubList=ids.subList(i,endIndex);
+      LOG.info("Deleting AlertNotice entity batch with history ids: " + idsSubList.get(0) + " - "+ idsSubList.get(idsSubList.size() - 1));
+      noticeQuery.setParameter("historyIds",idsSubList);
+      affectedRows+=noticeQuery.executeUpdate();
+    }
+  }
+  return affectedRows;
 }

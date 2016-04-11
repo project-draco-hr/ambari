@@ -1,7 +1,19 @@
 {
+  LOG.info("Deleting AlertNotice entities by definition id.");
   EntityManager entityManager=entityManagerProvider.get();
-  TypedQuery<AlertNoticeEntity> currentQuery=entityManager.createNamedQuery("AlertNoticeEntity.removeByDefinitionId",AlertNoticeEntity.class);
-  currentQuery.setParameter("definitionId",definitionId);
-  currentQuery.executeUpdate();
+  TypedQuery<Integer> historyIdQuery=entityManager.createNamedQuery("AlertHistoryEntity.findHistoryIdsByDefinitionId",Integer.class);
+  historyIdQuery.setParameter("definitionId",definitionId);
+  List<Integer> ids=daoUtils.selectList(historyIdQuery);
+  int BATCH_SIZE=999;
+  TypedQuery<AlertNoticeEntity> noticeQuery=entityManager.createNamedQuery("AlertNoticeEntity.removeByHistoryIds",AlertNoticeEntity.class);
+  if (ids != null && !ids.isEmpty()) {
+    for (int i=0; i < ids.size(); i+=BATCH_SIZE) {
+      int endIndex=(i + BATCH_SIZE) > ids.size() ? ids.size() : (i + BATCH_SIZE);
+      List<Integer> idsSubList=ids.subList(i,endIndex);
+      LOG.info("Deleting AlertNotice entity batch with history ids: " + idsSubList.get(0) + " - "+ idsSubList.get(idsSubList.size() - 1));
+      noticeQuery.setParameter("historyIds",idsSubList);
+      noticeQuery.executeUpdate();
+    }
+  }
   entityManager.clear();
 }
