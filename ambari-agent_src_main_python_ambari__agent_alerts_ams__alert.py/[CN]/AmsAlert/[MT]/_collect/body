@@ -1,0 +1,31 @@
+def _collect(self):
+    '\n    Low level function to collect alert data.  The result is a tuple as:\n    res[0] = the result code\n    res[1] = the list of arguments supplied to the reporting text for the result code\n    '
+    if (self.metric_info is None):
+        raise Exception('Could not determine result. Specific metric collector is not defined.')
+    if (self.uri_property_keys is None):
+        raise Exception('Could not determine result. URL(s) were not defined.')
+    alert_uri = self._get_uri_from_structure(self.uri_property_keys)
+    logger.debug('[Alert][{0}] Calculated metric URI to be {1} (ssl={2})'.format(self.get_name(), alert_uri.uri, str(alert_uri.is_ssl_enabled)))
+    host = BaseAlert.get_host_from_url(alert_uri.uri)
+    if (host is None):
+        host = self.host_name
+    try:
+        port = int(get_port_from_url(alert_uri.uri))
+    except:
+        port = 6188
+    collect_result = None
+    value_list = []
+    if isinstance(self.metric_info, AmsMetric):
+        (raw_data_points, http_code) = self._load_metric(alert_uri.is_ssl_enabled, host, port, self.metric_info)
+        if ((not raw_data_points) and (http_code in [200, 307])):
+            collect_result = self.RESULT_UNKNOWN
+            value_list.append('HTTP {0} response (metrics unavailable)'.format(str(http_code)))
+        elif ((not raw_data_points) and (http_code not in [200, 307])):
+            raise Exception('[Alert][{0}] Unable to extract JSON from HTTP response'.format(self.get_name()))
+        else:
+            data_points = self.metric_info.calculate_value(raw_data_points)
+            compute_result = self.metric_info.calculate_compute(data_points)
+            value_list.append(compute_result)
+            collect_result = self._get_result((value_list[0] if (compute_result is None) else compute_result))
+            logger.debug('[Alert][{0}] Computed result = {1}'.format(self.get_name(), str(value_list)))
+    return (collect_result, value_list)

@@ -1,0 +1,44 @@
+def _load_metric(self, ssl, host, port, ams_metric):
+    ' creates a AmsMetric object that holds info about ams-based metrics '
+    if ('0.0.0.0' in str(host)):
+        host = self.host_name
+    current_time = (int(time.time()) * 1000)
+    interval = ams_metric.interval
+    get_metrics_parameters = {'metricNames': ','.join(ams_metric.metric_list), 'appId': ams_metric.app_id, 'hostname': self.host_name, 'startTime': (current_time - ((60 * 1000) * interval)), 'endTime': current_time, 'precision': 'seconds', 'grouped': 'true', }
+    encoded_get_metrics_parameters = urllib.urlencode(get_metrics_parameters)
+    url = (AMS_METRICS_GET_URL % encoded_get_metrics_parameters)
+    try:
+        try:
+            conn = httplib.HTTPConnection(host, port, timeout=self.connection_timeout)
+            conn.request('GET', url)
+            response = conn.getresponse()
+            data = response.read()
+        except Exception as exception:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.exception('[Alert][{0}] Unable to retrieve metrics from AMS: {1}'.format(self.get_name(), str(exception)))
+    finally:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug('\n        AMS request parameters - {0}\n        AMS response - {1}\n        '.format(encoded_get_metrics_parameters, data))
+        if (conn is not None):
+            try:
+                conn.close()
+            except:
+                logger.debug('[Alert][{0}] Unable to close URL connection to {1}'.format(self.get_name(), url))
+    json_is_valid = True
+    try:
+        data_json = json.loads(data)
+    except Exception as exception:
+        json_is_valid = False
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception("[Alert][{0}] Convert response to json failed or json doesn't contain needed data: {1}".format(self.get_name(), str(exception)))
+    metrics = []
+    if json_is_valid:
+        metric_dict = {}
+        for metrics_data in data_json['metrics']:
+            metric_dict[metrics_data['metricname']] = metrics_data['metrics']
+        for metric_name in self.metric_info.metric_list:
+            if (metric_name in metric_dict):
+                sorted_data_points = metric_dict[metric_name]
+                metrics.append(sorted_data_points)
+        pass
+    return (metrics, response.status)
