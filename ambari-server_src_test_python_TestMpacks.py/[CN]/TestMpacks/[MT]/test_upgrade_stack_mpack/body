@@ -1,0 +1,33 @@
+@patch('os.path.exists')
+@patch('shutil.move')
+@patch('os.mkdir')
+@patch('ambari_server.setupMpacks.create_symlink')
+@patch('ambari_server.setupMpacks.get_ambari_version')
+@patch('ambari_server.setupMpacks.get_ambari_properties')
+@patch('ambari_server.setupMpacks.add_replay_log')
+@patch('ambari_server.setupMpacks.uninstall_mpack')
+@patch('ambari_server.setupMpacks.purge_stacks_and_mpacks')
+@patch('ambari_server.setupMpacks.expand_mpack')
+@patch('ambari_server.setupMpacks.download_mpack')
+def test_upgrade_stack_mpack(self, download_mpack_mock, expand_mpack_mock, purge_stacks_and_mpacks_mock, uninstall_mpack_mock, add_replay_log_mock, get_ambari_properties_mock, get_ambari_version_mock, create_symlink_mock, os_mkdir_mock, shutil_move_mock, os_path_exists_mock):
+    options = self._create_empty_options_mock()
+    options.mpack_path = '/path/to/mystack-1.0.0.1.tar.gz'
+    download_mpack_mock.return_value = '/tmp/mystack-1.0.0.1.tar.gz'
+    expand_mpack_mock.return_value = 'mpacks/mystack-ambari-mpack-1.0.0.1'
+    get_ambari_version_mock.return_value = '2.4.0.0'
+    "\n    os_path_exists_calls = [call('/tmp/mystack-1.0.0.1.tar.gz'),\n                            call('mpacks/mystack-ambari-mpack-1.0.0.1/mpack.json'),\n                            call('/var/lib/ambari-server/resources/stacks'),\n                            call('/var/lib/ambari-server/resources/common-services'),\n                            call(mpacks_directory),\n                            call(mpacks_directory + '/cache'),\n                            call(mpacks_directory + '/mystack-ambari-mpack-1.0.0.1'),\n                            call('/var/lib/ambari-server/resources/common-services/SERVICEA'),\n                            call('/var/lib/ambari-server/resources/common-services/SERVICEB'),\n                            call('/var/lib/ambari-server/resources/common-services/SERVICEC'),\n                            call('/var/lib/ambari-server/resources/stacks/MYSTACK'),\n                            call('/var/lib/ambari-server/resources/stacks/MYSTACK/1.0'),\n                            call('/var/lib/ambari-server/resources/stacks/MYSTACK/1.0/services'),\n                            call('/var/lib/ambari-server/resources/stacks/MYSTACK/1.1'),\n                            call('/var/lib/ambari-server/resources/stacks/MYSTACK/1.1/services'),\n                            call('/var/lib/ambari-server/resources/stacks/MYSTACK/2.0'),\n                            call('/var/lib/ambari-server/resources/stacks/MYSTACK/2.0/services')]\n                            call('/var/lib/ambari-server/resources/stacks/MYSTACK/3.0'),\n                            call('/var/lib/ambari-server/resources/stacks/MYSTACK/3.0/services'),\n                            call(mpacks_directory),\n                            call(mpacks_directory + '/myservice-ambari-mpack-1.0.0.0/mpack.json'),\n                            call(mpacks_directory + '/mystack-ambari-mpack-1.0.0.0/mpack.json'),\n                            call(mpacks_directory + '/mystack-ambari-mpack-1.0.0.1/mpack.json')]\n   "
+    os_path_exists_mock.side_effect = [True, True, True, True, True, True, False, True, True, False, True, True, True, True, True, True, True, False, False, True, True, True, True]
+    get_ambari_properties_mock.return_value = configs
+    shutil_move_mock.return_value = True
+    upgrade_mpack(options)
+    stacks_directory = configs[STACK_LOCATION_KEY]
+    common_services_directory = configs[COMMON_SERVICES_PATH_PROPERTY]
+    mpacks_directory = configs[MPACKS_STAGING_PATH_PROPERTY]
+    mpacks_staging_directory = os.path.join(mpacks_directory, 'mystack-ambari-mpack-1.0.0.1')
+    os_mkdir_calls = [call(os.path.join(common_services_directory, 'SERVICEC')), call(os.path.join(stacks_directory, 'MYSTACK/3.0')), call(os.path.join(stacks_directory, 'MYSTACK/3.0/services'))]
+    create_symlink_calls = [call(os.path.join(mpacks_staging_directory, 'common-services/SERVICEA'), os.path.join(common_services_directory, 'SERVICEA'), '1.0', True), call(os.path.join(mpacks_staging_directory, 'common-services/SERVICEA'), os.path.join(common_services_directory, 'SERVICEA'), '2.0', True), call(os.path.join(mpacks_staging_directory, 'common-services/SERVICEB'), os.path.join(common_services_directory, 'SERVICEB'), '1.0.0', True), call(os.path.join(mpacks_staging_directory, 'common-services/SERVICEB'), os.path.join(common_services_directory, 'SERVICEB'), '2.0.0', True), call(os.path.join(mpacks_staging_directory, 'common-services/SERVICEC'), os.path.join(common_services_directory, 'SERVICEC'), '1.0.0', True), call(os.path.join(mpacks_staging_directory, 'common-services/SERVICEC'), os.path.join(common_services_directory, 'SERVICEC'), '2.0.0', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/1.0'), os.path.join(stacks_directory, 'MYSTACK/1.0'), 'metainfo.xml', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/1.0/services'), os.path.join(stacks_directory, 'MYSTACK/1.0/services'), 'SERVICEA', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/1.1'), os.path.join(stacks_directory, 'MYSTACK/1.1'), 'metainfo.xml', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/1.1/services'), os.path.join(stacks_directory, 'MYSTACK/1.1/services'), 'SERVICEA', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/2.0'), os.path.join(stacks_directory, 'MYSTACK/2.0'), 'metainfo.xml', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/2.0/services'), os.path.join(stacks_directory, 'MYSTACK/2.0/services'), 'SERVICEA', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/2.0/services'), os.path.join(stacks_directory, 'MYSTACK/2.0/services'), 'SERVICEB', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/3.0'), os.path.join(stacks_directory, 'MYSTACK/3.0'), 'metainfo.xml', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/3.0/services'), os.path.join(stacks_directory, 'MYSTACK/3.0/services'), 'SERVICEA', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/3.0/services'), os.path.join(stacks_directory, 'MYSTACK/3.0/services'), 'SERVICEB', True), call(os.path.join(mpacks_staging_directory, 'stacks/MYSTACK/3.0/services'), os.path.join(stacks_directory, 'MYSTACK/3.0/services'), 'SERVICEC', True)]
+    self.assertFalse(purge_stacks_and_mpacks_mock.called)
+    os_mkdir_mock.assert_has_calls(os_mkdir_calls)
+    create_symlink_mock.assert_has_calls(create_symlink_calls)
+    uninstall_mpack_mock.assert_has_calls([call('mystack-ambari-mpack', '1.0.0.0')])
+    self.assertTrue(add_replay_log_mock.called)
