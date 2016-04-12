@@ -1,4 +1,18 @@
 {
+  Collection<TopologyHostGroupEntity> hostGroupEntities=requestEntity.getTopologyRequestEntity().getTopologyHostGroupEntities();
+  Map<String,Set<String>> allReservedHostNamesByHostGroups=getReservedHostNamesByHostGroupName(hostGroupEntities);
+  Map<String,Set<String>> pendingReservedHostNamesByHostGroups=new HashMap<>(allReservedHostNamesByHostGroups);
+  for (  TopologyHostRequestEntity hostRequestEntity : requestEntity.getTopologyHostRequestEntities()) {
+    TopologyHostGroupEntity hostGroupEntity=hostRequestEntity.getTopologyHostGroupEntity();
+    String hostGroupName=hostGroupEntity.getName();
+    String hostName=hostRequestEntity.getHostName();
+    if (hostName != null && pendingReservedHostNamesByHostGroups.containsKey(hostGroupName)) {
+      Set<String> pendingReservedHostNamesInHostGroup=pendingReservedHostNamesByHostGroups.get(hostGroupName);
+      if (pendingReservedHostNamesInHostGroup != null) {
+        pendingReservedHostNamesInHostGroup.remove(hostName);
+      }
+    }
+  }
   for (  TopologyHostRequestEntity hostRequestEntity : requestEntity.getTopologyHostRequestEntities()) {
     Long hostRequestId=hostRequestEntity.getId();
 synchronized (hostIdCounter) {
@@ -7,12 +21,14 @@ synchronized (hostIdCounter) {
       }
     }
     TopologyHostGroupEntity hostGroupEntity=hostRequestEntity.getTopologyHostGroupEntity();
-    String reservedHostName=hostGroupEntity.getTopologyHostInfoEntities().iterator().next().getFqdn();
+    Set<String> pendingReservedHostsInGroup=pendingReservedHostNamesByHostGroups.get(hostGroupEntity.getName());
+    String reservedHostName=Iterables.getFirst(pendingReservedHostsInGroup,null);
     HostRequest hostRequest=new HostRequest(getRequestId(),hostRequestId,reservedHostName,topology,hostRequestEntity);
     allHostRequests.add(hostRequest);
     if (!hostRequest.isCompleted()) {
       if (reservedHostName != null) {
         requestsWithReservedHosts.put(reservedHostName,hostRequest);
+        pendingReservedHostsInGroup.remove(reservedHostName);
         LOG.info("LogicalRequest.createHostRequests: created new request for a reserved request ID = {} for host name = {}",hostRequest.getId(),reservedHostName);
       }
  else {

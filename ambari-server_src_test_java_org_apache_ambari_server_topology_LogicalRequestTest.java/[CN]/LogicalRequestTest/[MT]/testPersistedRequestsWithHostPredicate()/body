@@ -1,0 +1,60 @@
+{
+  Long requestId=1L;
+  TopologyHostInfoEntity host=new TopologyHostInfoEntity();
+  host.setId(800L);
+  host.setPredicate("Hosts/host_name.in(host[1-4])");
+  TopologyHostGroupEntity hostGroupEntity2=new TopologyHostGroupEntity();
+  hostGroupEntity2.setTopologyHostInfoEntities(ImmutableSet.of(host));
+  hostGroupEntity2.setName("host_group_2");
+  TopologyHostRequestEntity hostRequestEntityHost1Matched=new TopologyHostRequestEntity();
+  hostRequestEntityHost1Matched.setId(1L);
+  hostRequestEntityHost1Matched.setHostName("host1");
+  hostRequestEntityHost1Matched.setTopologyHostGroupEntity(hostGroupEntity2);
+  hostRequestEntityHost1Matched.setTopologyHostTaskEntities(Collections.<TopologyHostTaskEntity>emptySet());
+  expect(ambariContext.isHostRegisteredWithCluster(eq(clusterId),eq("host1"))).andReturn(true).anyTimes();
+  TopologyHostRequestEntity hostRequestEntityHost2Matched=new TopologyHostRequestEntity();
+  hostRequestEntityHost2Matched.setId(2L);
+  hostRequestEntityHost2Matched.setHostName("host2");
+  hostRequestEntityHost2Matched.setTopologyHostGroupEntity(hostGroupEntity2);
+  hostRequestEntityHost2Matched.setTopologyHostTaskEntities(Collections.<TopologyHostTaskEntity>emptySet());
+  expect(ambariContext.isHostRegisteredWithCluster(eq(clusterId),eq("host2"))).andReturn(true).anyTimes();
+  TopologyHostRequestEntity hostRequestEntityHost3NotMatched=new TopologyHostRequestEntity();
+  hostRequestEntityHost3NotMatched.setId(3L);
+  hostRequestEntityHost3NotMatched.setTopologyHostGroupEntity(hostGroupEntity2);
+  hostRequestEntityHost3NotMatched.setTopologyHostTaskEntities(Collections.<TopologyHostTaskEntity>emptySet());
+  expect(ambariContext.isHostRegisteredWithCluster(eq(clusterId),eq("host3"))).andReturn(false).anyTimes();
+  TopologyHostRequestEntity hostRequestEntityHost4NotMatched=new TopologyHostRequestEntity();
+  hostRequestEntityHost4NotMatched.setId(4L);
+  hostRequestEntityHost4NotMatched.setTopologyHostGroupEntity(hostGroupEntity2);
+  hostRequestEntityHost4NotMatched.setTopologyHostTaskEntities(Collections.<TopologyHostTaskEntity>emptySet());
+  expect(ambariContext.isHostRegisteredWithCluster(eq(clusterId),eq("host4"))).andReturn(false).anyTimes();
+  Collection<TopologyHostRequestEntity> reservedHostRequestEntities=ImmutableSet.of(hostRequestEntityHost1Matched,hostRequestEntityHost2Matched,hostRequestEntityHost3NotMatched,hostRequestEntityHost4NotMatched);
+  hostGroupEntity2.setTopologyHostRequestEntities(reservedHostRequestEntities);
+  TopologyRequestEntity topologyRequestEntity=new TopologyRequestEntity();
+  topologyRequestEntity.setTopologyHostGroupEntities(Collections.singleton(hostGroupEntity2));
+  expect(logicalRequestEntity.getTopologyHostRequestEntities()).andReturn(reservedHostRequestEntities).atLeastOnce();
+  expect(logicalRequestEntity.getTopologyRequestEntity()).andReturn(topologyRequestEntity).atLeastOnce();
+  expect(blueprint.getHostGroup(eq("host_group_2"))).andReturn(hostGroup2).atLeastOnce();
+  expect(hostGroup2.containsMasterComponent()).andReturn(false).atLeastOnce();
+  replayAll();
+  LogicalRequest req=new LogicalRequest(requestId,replayedTopologyRequest,clusterTopology,logicalRequestEntity);
+  verifyAll();
+  Collection<String> actualReservedHosts=req.getReservedHosts();
+  Collection<String> expectedReservedHosts=Collections.emptySet();
+  assertEquals(expectedReservedHosts,actualReservedHosts);
+  Collection<HostRequest> actualCompletedHostReqs=req.getCompletedHostRequests();
+  assertEquals(2,actualCompletedHostReqs.size());
+  Optional<HostRequest> completedHostReq1=Iterables.tryFind(actualCompletedHostReqs,new Predicate<HostRequest>(){
+    @Override public boolean apply(    @Nullable HostRequest input){
+      return "host1".equals(input.getHostName());
+    }
+  }
+);
+  Optional<HostRequest> completedHostReq2=Iterables.tryFind(actualCompletedHostReqs,new Predicate<HostRequest>(){
+    @Override public boolean apply(    @Nullable HostRequest input){
+      return "host2".equals(input.getHostName());
+    }
+  }
+);
+  assertTrue(completedHostReq1.isPresent() && completedHostReq2.isPresent());
+}
