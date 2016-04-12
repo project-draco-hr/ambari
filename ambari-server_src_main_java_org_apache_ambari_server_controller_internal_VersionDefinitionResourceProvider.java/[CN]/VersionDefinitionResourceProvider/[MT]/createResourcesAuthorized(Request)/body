@@ -10,8 +10,16 @@
   if (properties.containsKey(VERSION_DEF_DEFINITION_URL) && properties.containsKey(VERSION_DEF_DEFINITION_BASE64)) {
     throw new IllegalArgumentException(String.format("Specify ONLY the url with %s or upload the file directly",VERSION_DEF_DEFINITION_URL));
   }
-  RepositoryVersionEntity entity=createResources(new Command<RepositoryVersionEntity>(){
-    @Override public RepositoryVersionEntity invoke() throws AmbariException {
+  Map<String,String> requestInfo=request.getRequestInfoProperties();
+  final boolean dryRun;
+  if (requestInfo.containsKey(DIRECTIVE_DRY_RUN)) {
+    dryRun=Boolean.parseBoolean(requestInfo.get(DIRECTIVE_DRY_RUN));
+  }
+ else {
+    dryRun=false;
+  }
+  XmlHolder xmlHolder=createResources(new Command<XmlHolder>(){
+    @Override public XmlHolder invoke() throws AmbariException {
       String definitionUrl=(String)properties.get(VERSION_DEF_DEFINITION_URL);
       String definitionBase64=(String)properties.get(VERSION_DEF_DEFINITION_BASE64);
       String definitionName=(String)properties.get(VERSION_DEF_AVAILABLE_DEFINITION);
@@ -39,15 +47,28 @@
  else {
         throw new AmbariException("Cannot determine creation method");
       }
-      RepositoryVersionEntity entity=toRepositoryVersionEntity(holder);
-      RepositoryVersionResourceProvider.validateRepositoryVersion(s_repoVersionDAO,s_metaInfo.get(),entity);
-      checkForParent(holder,entity);
-      s_repoVersionDAO.create(entity);
-      return entity;
+      toRepositoryVersionEntity(holder);
+      if (!dryRun) {
+        RepositoryVersionResourceProvider.validateRepositoryVersion(s_repoVersionDAO,s_metaInfo.get(),holder.entity);
+      }
+      checkForParent(holder);
+      if (!dryRun) {
+        s_repoVersionDAO.create(holder.entity);
+      }
+      return holder;
     }
   }
 );
-  notifyCreate(Resource.Type.VersionDefinition,request);
-  RequestStatusImpl status=new RequestStatusImpl(null,Collections.singleton(toResource(entity,Collections.<String>emptySet())));
+  final Resource res;
+  if (dryRun) {
+    Set<String> ids=Sets.newHashSet(VERSION_DEF_TYPE_PROPERTY_ID,VERSION_DEF_FULL_VERSION,VERSION_DEF_RELEASE_BUILD,VERSION_DEF_RELEASE_COMPATIBLE_WITH,VERSION_DEF_RELEASE_NOTES,VERSION_DEF_RELEASE_VERSION,VERSION_DEF_AVAILABLE_SERVICES,VERSION_DEF_STACK_SERVICES);
+    res=toResource(null,xmlHolder.xml,ids,false);
+    addSubresources(res,xmlHolder.entity);
+  }
+ else {
+    res=toResource(xmlHolder.entity,Collections.<String>emptySet());
+    notifyCreate(Resource.Type.VersionDefinition,request);
+  }
+  RequestStatusImpl status=new RequestStatusImpl(null,Collections.singleton(res));
   return status;
 }
