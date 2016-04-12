@@ -1,0 +1,30 @@
+{
+  AmbariManagementController controller=controllerFactory.getAmbariManagementController();
+  for (  Resource resource : resources) {
+    final String componentName=(String)resource.getPropertyValue(PropertyHelper.getPropertyId("HostRoles","component_name"));
+    final String hostName=(String)resource.getPropertyValue(PropertyHelper.getPropertyId("HostRoles","host_name"));
+    final String clusterName=(String)resource.getPropertyValue(PropertyHelper.getPropertyId("HostRoles","cluster_name"));
+    final String mappedComponentNameForLogSearch=getMappedComponentNameForSearch(clusterName,componentName,controller);
+    if (mappedComponentNameForLogSearch != null) {
+      HostComponentLoggingInfo loggingInfo=new HostComponentLoggingInfo();
+      LoggingRequestHelper requestHelper=requestHelperFactory.getHelper(controller,clusterName);
+      Set<String> logFileNames=requestHelper.sendGetLogFileNamesRequest(mappedComponentNameForLogSearch,hostName);
+      if ((logFileNames != null) && (!logFileNames.isEmpty())) {
+        loggingInfo.setComponentName(mappedComponentNameForLogSearch);
+        List<LogFileDefinitionInfo> listOfFileDefinitions=new LinkedList<LogFileDefinitionInfo>();
+        for (        String fileName : logFileNames) {
+          final String searchEngineURI=controller.getAmbariServerURI(getFullPathToSearchEngine(clusterName));
+          final String logFileTailURI=createLogFileTailURI(searchEngineURI,mappedComponentNameForLogSearch,hostName);
+          listOfFileDefinitions.add(new LogFileDefinitionInfo(fileName,LogFileType.SERVICE,searchEngineURI,logFileTailURI));
+        }
+        loggingInfo.setListOfLogFileDefinitions(listOfFileDefinitions);
+        LOG.info("Adding logging info for component name = " + componentName + " on host name = "+ hostName);
+        resource.setProperty("logging",loggingInfo);
+      }
+ else {
+        LOG.error("Error occurred while making request to LogSearch service, unable to populate logging properties on this resource");
+      }
+    }
+  }
+  return resources;
+}

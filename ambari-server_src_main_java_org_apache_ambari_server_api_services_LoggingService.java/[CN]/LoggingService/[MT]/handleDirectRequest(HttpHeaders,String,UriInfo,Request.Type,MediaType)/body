@@ -1,0 +1,32 @@
+{
+  MultivaluedMap<String,String> queryParameters=uriInfo.getQueryParameters();
+  Map<String,String> enumeratedQueryParameters=new HashMap<String,String>();
+  for (  String queryName : queryParameters.keySet()) {
+    List<String> queryValue=queryParameters.get(queryName);
+    for (    String value : queryValue) {
+      enumeratedQueryParameters.put(queryName,value);
+    }
+  }
+  AmbariManagementController controller=controllerFactory.getController();
+  LoggingRequestHelper requestHelper=helperFactory.getHelper(controller,clusterName);
+  LogQueryResponse response=requestHelper.sendQueryRequest(enumeratedQueryParameters);
+  if (response != null) {
+    ResultSerializer serializer=mediaType == null ? getResultSerializer() : getResultSerializer(mediaType);
+    Result result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.OK));
+    Resource loggingResource=new ResourceImpl(Resource.Type.LoggingQuery);
+    loggingResource.setProperty("startIndex",response.getStartIndex());
+    loggingResource.setProperty("pageSize",response.getPageSize());
+    loggingResource.setProperty("resultSize",response.getResultSize());
+    loggingResource.setProperty("queryTimeMMS",response.getQueryTimeMS());
+    loggingResource.setProperty("totalCount",response.getTotalCount());
+    loggingResource.setProperty("logList",response.getListOfResults());
+    result.getResultTree().addChild(loggingResource,"logging");
+    Response.ResponseBuilder builder=Response.status(result.getStatus().getStatusCode()).entity(serializer.serialize(result));
+    if (mediaType != null) {
+      builder.type(mediaType);
+    }
+    RetryHelper.clearAffectedClusters();
+    return builder.build();
+  }
+  return null;
+}
