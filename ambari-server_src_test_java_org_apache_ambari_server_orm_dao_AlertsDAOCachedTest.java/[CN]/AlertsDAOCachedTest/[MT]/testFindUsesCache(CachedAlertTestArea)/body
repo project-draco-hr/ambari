@@ -1,0 +1,27 @@
+{
+  EntityManager entityManager=m_injector.getInstance(EntityManager.class);
+  DaoUtils daoUtils=m_injector.getInstance(DaoUtils.class);
+  AlertHistoryEntity history=EasyMock.createNiceMock(AlertHistoryEntity.class);
+  AlertDefinitionEntity definition=EasyMock.createNiceMock(AlertDefinitionEntity.class);
+  mock(definition,history);
+  AlertCurrentEntity jpaCurrent=new AlertCurrentEntity();
+  jpaCurrent.setAlertHistory(history);
+  jpaCurrent.setOriginalTimestamp(1L);
+  jpaCurrent.setLatestTimestamp(2L);
+  AlertCurrentEntity memoryCurrent=new AlertCurrentEntity();
+  memoryCurrent.setAlertHistory(history);
+  memoryCurrent.setOriginalTimestamp(1L);
+  memoryCurrent.setLatestTimestamp(3L);
+  EasyMock.expect(entityManager.merge(memoryCurrent)).andReturn(memoryCurrent).atLeastOnce();
+  TypedQuery<AlertCurrentEntity> typedQuery=EasyMock.createNiceMock(TypedQuery.class);
+  EasyMock.expect(entityManager.createNamedQuery(testArea.getNamedQuery(),AlertCurrentEntity.class)).andReturn(typedQuery).atLeastOnce();
+  List<AlertCurrentEntity> jpaCurrentAlerts=Lists.newArrayList(jpaCurrent);
+  EasyMock.expect(daoUtils.selectList(typedQuery)).andReturn(jpaCurrentAlerts).atLeastOnce();
+  EasyMock.replay(entityManager,daoUtils,typedQuery);
+  AlertsDAO alertsDAO=m_injector.getInstance(AlertsDAO.class);
+  alertsDAO.merge(memoryCurrent);
+  List<AlertCurrentEntity> testCurrentAlerts=testArea.execute(alertsDAO);
+  Assert.assertEquals(1,testCurrentAlerts.size());
+  Assert.assertEquals(Long.valueOf(3),testCurrentAlerts.get(0).getLatestTimestamp());
+  EasyMock.verify(definition,history,entityManager,daoUtils);
+}
