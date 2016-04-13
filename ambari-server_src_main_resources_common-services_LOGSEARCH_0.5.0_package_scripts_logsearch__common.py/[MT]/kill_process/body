@@ -1,0 +1,16 @@
+def kill_process(pid_file, user, log_dir):
+    import params
+    '\n  Kill the process by pid file, then check the process is running or not. If the process is still running after the kill\n  command, it will try to kill with -9 option (hard kill)\n  '
+    pid = get_user_call_output(format('cat {pid_file}'), user=user, is_checked_call=False)[1]
+    process_id_exists_command = format('ls {pid_file} >/dev/null 2>&1 && ps -p {pid} >/dev/null 2>&1')
+    kill_cmd = format('{sudo} kill {pid}')
+    Execute(kill_cmd, not_if=format('! ({process_id_exists_command})'))
+    wait_time = 5
+    hard_kill_cmd = format('{sudo} kill -9 {pid}')
+    Execute(hard_kill_cmd, not_if=format('! ({process_id_exists_command}) || ( sleep {wait_time} && ! ({process_id_exists_command}) )'))
+    try:
+        Execute(format('! ({process_id_exists_command})'), tries=20, try_sleep=3)
+    except:
+        show_logs(log_dir, user)
+        raise
+    File(pid_file, action='delete')
