@@ -1,5 +1,5 @@
 def select(stack_name, package, version, try_create=True, ignore_errors=False):
-    '\n  Selects a config version for the specified package.\n  :param stack_name: the name of the stack\n  :param package: the name of the package, as-used by <conf-selector-tool>\n  :param version: the version number to create\n  :param try_create: optional argument to attempt to create the directory before setting it\n  :param ignore_errors: optional argument to ignore any error and simply log a warning\n  '
+    '\n  Selects a config version for the specified package. If this detects that\n  the stack supports configuration versioning but /etc/<component>/conf is a\n  directory, then it will attempt to bootstrap the conf.backup directory and change\n  /etc/<component>/conf into a symlink.\n\n  :param stack_name: the name of the stack\n  :param package: the name of the package, as-used by <conf-selector-tool>\n  :param version: the version number to create\n  :param try_create: optional argument to attempt to create the directory before setting it\n  :param ignore_errors: optional argument to ignore any error and simply log a warning\n  '
     try:
         if (not _valid(stack_name, package, version)):
             return
@@ -16,10 +16,12 @@ def select(stack_name, package, version, try_create=True, ignore_errors=False):
                 if (not os.path.islink(conf_dir)):
                     if os.path.exists(conf_dir):
                         parent_directory = os.path.dirname(conf_dir)
-                        conf_install_dir = os.path.join(parent_directory, 'conf.backup')
-                        Execute(('cp', '-R', '-p', conf_dir, conf_install_dir), not_if=format('test -e {conf_install_dir}'), sudo=True)
+                        conf_backup_dir = os.path.join(parent_directory, 'conf.backup')
+                        Execute(('cp', '-R', '-p', conf_dir, conf_backup_dir), not_if=format('test -e {conf_backup_dir}'), sudo=True)
                         Directory(conf_dir, action='delete')
-                    Link(conf_dir, to=current_dir)
+                        Link(conf_dir, to=conf_backup_dir)
+                    else:
+                        Link(conf_dir, to=current_dir)
     except Exception as exception:
         if (ignore_errors is True):
             Logger.warning('Could not select the directory for package {0}. Error: {1}'.format(package, str(exception)))
