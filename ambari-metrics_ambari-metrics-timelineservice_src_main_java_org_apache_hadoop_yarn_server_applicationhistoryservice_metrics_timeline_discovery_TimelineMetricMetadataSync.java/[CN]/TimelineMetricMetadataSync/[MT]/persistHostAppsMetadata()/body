@@ -1,0 +1,28 @@
+{
+  if (cacheManager.syncHostedAppsMetadata()) {
+    Map<String,Set<String>> persistedData=null;
+    try {
+      persistedData=cacheManager.getHostedAppsFromStore();
+    }
+ catch (    SQLException e) {
+      LOG.warn("Failed on fetching hosted apps data from store.",e);
+      return;
+    }
+    Map<String,Set<String>> cachedData=cacheManager.getHostedAppsCache();
+    Map<String,Set<String>> dataToSync=new HashMap<>();
+    if (cachedData != null && !cachedData.isEmpty()) {
+      for (      Map.Entry<String,Set<String>> cacheEntry : cachedData.entrySet()) {
+        if (persistedData == null || persistedData.isEmpty() || !persistedData.containsKey(cacheEntry.getKey()) || !persistedData.get(cacheEntry.getKey()).containsAll(cacheEntry.getValue())) {
+          dataToSync.put(cacheEntry.getKey(),cacheEntry.getValue());
+        }
+      }
+      try {
+        cacheManager.persistHostedAppsMetadata(dataToSync);
+        cacheManager.markSuccessOnSyncHostedAppsMetadata();
+      }
+ catch (      SQLException e) {
+        LOG.warn("Error persisting hosted apps metadata.",e);
+      }
+    }
+  }
+}

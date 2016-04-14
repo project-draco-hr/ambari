@@ -1,0 +1,36 @@
+{
+  Configuration configuration=createNiceMock(Configuration.class);
+  PhoenixHBaseAccessor hBaseAccessor=createNiceMock(PhoenixHBaseAccessor.class);
+  final TimelineMetricMetadata testMetadata1=new TimelineMetricMetadata("m1","a1","",GAUGE.name(),System.currentTimeMillis(),true);
+  final TimelineMetricMetadata testMetadata2=new TimelineMetricMetadata("m2","a2","",GAUGE.name(),System.currentTimeMillis(),true);
+  Map<TimelineMetricMetadataKey,TimelineMetricMetadata> metadata=new HashMap<TimelineMetricMetadataKey,TimelineMetricMetadata>(){
+{
+      put(new TimelineMetricMetadataKey("m1","a1"),testMetadata1);
+      put(new TimelineMetricMetadataKey("m2","a2"),testMetadata2);
+    }
+  }
+;
+  Map<String,Set<String>> hostedApps=new HashMap<String,Set<String>>(){
+{
+      put("h1",new HashSet<>(Arrays.asList("a1")));
+      put("h2",new HashSet<>(Arrays.asList("a1","a2")));
+    }
+  }
+;
+  expect(configuration.get("timeline.metrics.service.operation.mode","")).andReturn("distributed");
+  expect(hBaseAccessor.getTimelineMetricMetadata()).andReturn(metadata);
+  expect(hBaseAccessor.getHostedAppsMetadata()).andReturn(hostedApps);
+  replay(configuration,hBaseAccessor);
+  TimelineMetricMetadataManager metadataManager=new TimelineMetricMetadataManager(hBaseAccessor,configuration);
+  metadataManager.metricMetadataSync=new TimelineMetricMetadataSync(metadataManager);
+  metadataManager.metricMetadataSync.run();
+  verify(configuration,hBaseAccessor);
+  metadata=metadataManager.getMetadataCache();
+  Assert.assertEquals(2,metadata.size());
+  Assert.assertTrue(metadata.containsKey(new TimelineMetricMetadataKey("m1","a1")));
+  Assert.assertTrue(metadata.containsKey(new TimelineMetricMetadataKey("m2","a2")));
+  hostedApps=metadataManager.getHostedAppsCache();
+  Assert.assertEquals(2,hostedApps.size());
+  Assert.assertEquals(1,hostedApps.get("h1").size());
+  Assert.assertEquals(2,hostedApps.get("h2").size());
+}
