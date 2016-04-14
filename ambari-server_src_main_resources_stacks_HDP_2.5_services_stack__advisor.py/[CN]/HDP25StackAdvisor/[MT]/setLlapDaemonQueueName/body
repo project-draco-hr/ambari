@@ -1,0 +1,17 @@
+def setLlapDaemonQueueName(self, services, configurations):
+    putHiveInteractiveSitePropertyAttribute = self.putPropertyAttribute(configurations, 'hive-interactive-site')
+    capacitySchedulerProperties = dict()
+    if (('capacity-scheduler' in configurations) and ('capacity-scheduler' in configurations['capacity-scheduler']['properties'])):
+        properties = str(configurations['capacity-scheduler']['properties']['capacity-scheduler']).split('\n')
+        for property in properties:
+            (key, sep, value) = property.partition('=')
+            capacitySchedulerProperties[key] = value
+    else:
+        capacitySchedulerProperties = self.getCapacitySchedulerProperties(services)
+    leafQueueNames = self.getAllYarnLeafQueues(capacitySchedulerProperties)
+    if leafQueueNames:
+        leafQueues = [{'label': str(queueName), 'value': queueName, } for queueName in leafQueueNames]
+        leafQueues = sorted(leafQueues, key=(lambda q: q['value']))
+        putHiveInteractiveSitePropertyAttribute('hive.llap.daemon.queue.name', 'entries', leafQueues)
+    else:
+        Logger.error("Problem retrieving YARN queues. Skipping updating HIVE Server Interactve 'hive.server2.tez.default.queues' property.")

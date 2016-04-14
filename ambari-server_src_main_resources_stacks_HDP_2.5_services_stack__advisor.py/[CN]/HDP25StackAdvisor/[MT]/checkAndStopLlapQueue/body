@@ -1,0 +1,44 @@
+def checkAndStopLlapQueue(self, services, configurations, llap_queue_name):
+    putCapSchedProperty = self.putProperty(configurations, 'capacity-scheduler', services)
+    putHiveInteractiveSiteProperty = self.putProperty(configurations, 'hive-interactive-site', services)
+    capacitySchedulerProperties = self.getCapacitySchedulerProperties(services)
+    updated_default_queue_configs = ''
+    updated_llap_queue_configs = ''
+    if capacitySchedulerProperties:
+        leafQueueNames = self.getAllYarnLeafQueues(capacitySchedulerProperties)
+        if ((len(leafQueueNames) == 2) and (llap_queue_name in leafQueueNames) and ('default' in leafQueueNames)):
+            currLlapQueueState = 'STOPPED'
+            if ((('yarn.scheduler.capacity.root.' + llap_queue_name) + '.state') in capacitySchedulerProperties.keys()):
+                currLlapQueueState = capacitySchedulerProperties.get((('yarn.scheduler.capacity.root.' + llap_queue_name) + '.state'))
+            else:
+                Logger.error("{0} queue 'state' property not present in capacity scheduler. Skipping adjusting queues.".format(llap_queue_name))
+                return
+            if (currLlapQueueState == 'RUNNING'):
+                DEFAULT_MAX_CAPACITY = '100'
+                for (prop, val) in capacitySchedulerProperties.items():
+                    if (llap_queue_name not in prop):
+                        if (prop == 'yarn.scheduler.capacity.root.default.capacity'):
+                            updated_default_queue_configs = ((((updated_default_queue_configs + prop) + '=') + DEFAULT_MAX_CAPACITY) + '\n')
+                        elif (prop == 'yarn.scheduler.capacity.root.default.maximum-capacity'):
+                            updated_default_queue_configs = ((((updated_default_queue_configs + prop) + '=') + DEFAULT_MAX_CAPACITY) + '\n')
+                        elif prop.startswith('yarn.'):
+                            updated_default_queue_configs = ((((updated_default_queue_configs + prop) + '=') + val) + '\n')
+                    elif (prop == (('yarn.scheduler.capacity.root.' + llap_queue_name) + '.state')):
+                        updated_llap_queue_configs = ((updated_llap_queue_configs + prop) + '=STOPPED\n')
+                    elif (prop == (('yarn.scheduler.capacity.root.' + llap_queue_name) + '.capacity')):
+                        updated_llap_queue_configs = ((updated_llap_queue_configs + prop) + '=0\n')
+                    elif (prop == (('yarn.scheduler.capacity.root.' + llap_queue_name) + '.maximum-capacity')):
+                        updated_llap_queue_configs = ((updated_llap_queue_configs + prop) + '=0\n')
+                    elif prop.startswith('yarn.'):
+                        updated_llap_queue_configs = ((((updated_llap_queue_configs + prop) + '=') + val) + '\n')
+            else:
+                Logger.debug('{0} queue state is : {1}. Skipping adjusting queues.'.format(llap_queue_name, currLlapQueueState))
+                return
+            if (updated_default_queue_configs and updated_llap_queue_configs):
+                putCapSchedProperty('capacity-scheduler', (updated_default_queue_configs + updated_llap_queue_configs))
+                Logger.info("Changed YARN '{0}' queue state to 'STOPPED', and capacity to 0%. Adjusted 'default' queue capacity to : {1}%".format(llap_queue_name, DEFAULT_MAX_CAPACITY))
+                putHiveInteractiveSiteProperty('hive.llap.daemon.queue.name', 'default')
+        else:
+            Logger.debug("Not removing '{0}' queue as number of Queues not equal to 2. Current YARN queues : {1}".format(llap_queue_name, list(leafQueueNames)))
+    else:
+        Logger.error("Couldn't retrieve 'capacity-scheduler' properties while doing YARN queue adjustment for Hive Server Interactive.")
