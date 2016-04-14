@@ -23,17 +23,11 @@ def setup_usersync(upgrade_type=None):
         File(params.usgsync_log4j_file, owner=params.unix_user, group=params.unix_group)
     if os.path.isfile(params.cred_validator_file):
         File(params.cred_validator_file, group=params.unix_group, mode=2413)
-    cred_file = format('{ranger_home}/ranger_credential_helper.py')
-    if os.path.isfile(format('{usersync_home}/ranger_credential_helper.py')):
-        cred_file = format('{usersync_home}/ranger_credential_helper.py')
     cred_lib = os.path.join(usersync_home, 'lib', '*')
-    cred_setup_prefix = (cred_file, '-l', cred_lib)
-    cred_setup = (cred_setup_prefix + ('-f', params.ugsync_jceks_path, '-k', 'usersync.ssl.key.password', '-v', PasswordString(params.ranger_usersync_keystore_password), '-c', '1'))
-    Execute(cred_setup, environment={'JAVA_HOME': params.java_home, }, logoutput=True, sudo=True)
-    cred_setup = (cred_setup_prefix + ('-f', params.ugsync_jceks_path, '-k', 'ranger.usersync.ldap.bindalias', '-v', PasswordString(params.ranger_usersync_ldap_ldapbindpassword), '-c', '1'))
-    Execute(cred_setup, environment={'JAVA_HOME': params.java_home, }, logoutput=True, sudo=True)
-    cred_setup = (cred_setup_prefix + ('-f', params.ugsync_jceks_path, '-k', 'usersync.ssl.truststore.password', '-v', PasswordString(params.ranger_usersync_truststore_password), '-c', '1'))
-    Execute(cred_setup, environment={'JAVA_HOME': params.java_home, }, logoutput=True, sudo=True)
+    ranger_credential_helper(cred_lib, 'usersync.ssl.key.password', params.ranger_usersync_keystore_password, params.ugsync_jceks_path)
+    if ((not is_empty(params.ranger_usersync_ldap_ldapbindpassword)) and (params.ug_sync_source == 'org.apache.ranger.ldapusersync.process.LdapUserGroupBuilder')):
+        ranger_credential_helper(cred_lib, 'ranger.usersync.ldap.bindalias', params.ranger_usersync_ldap_ldapbindpassword, params.ugsync_jceks_path)
+    ranger_credential_helper(cred_lib, 'usersync.ssl.truststore.password', params.ranger_usersync_truststore_password, params.ugsync_jceks_path)
     File(params.ugsync_jceks_path, owner=params.unix_user, group=params.unix_group, mode=416)
     File([params.usersync_start, params.usersync_stop], owner=params.unix_user, group=params.unix_group)
     File(params.usersync_services_file, mode=493)
