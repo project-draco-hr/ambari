@@ -6,54 +6,55 @@
   StackId stackId=cluster.getCurrentStackVersion();
   for (  Map.Entry<String,Service> serviceEntry : cluster.getServices().entrySet()) {
     final Service service=serviceEntry.getValue();
-    if (!service.isClientOnlyService()) {
-      Map<String,ServiceComponent> serviceComponents=service.getServiceComponents();
-      for (      Map.Entry<String,ServiceComponent> component : serviceComponents.entrySet()) {
-        boolean ignoreComponent=false;
-        boolean checkThreshold=false;
-        ServiceComponent serviceComponent=component.getValue();
-        if (serviceComponent.isClientComponent()) {
-          ignoreComponent=true;
+    if (service.isClientOnlyService()) {
+      continue;
+    }
+    Map<String,ServiceComponent> serviceComponents=service.getServiceComponents();
+    for (    Map.Entry<String,ServiceComponent> component : serviceComponents.entrySet()) {
+      ServiceComponent serviceComponent=component.getValue();
+      if (serviceComponent.isClientComponent()) {
+        continue;
+      }
+      if (!serviceComponent.isVersionAdvertised()) {
+        continue;
+      }
+      List<HostComponentSummary> hostComponentSummaries=HostComponentSummary.getHostComponentSummaries(service.getName(),serviceComponent.getName());
+      if (hostComponentSummaries.isEmpty()) {
+        continue;
+      }
+      boolean checkThreshold=false;
+      if (!serviceComponent.isMasterComponent()) {
+        ComponentInfo componentInfo=ambariMetaInfo.get().getComponent(stackId.getStackName(),stackId.getStackVersion(),serviceComponent.getServiceName(),serviceComponent.getName());
+        String cardinality=componentInfo.getCardinality();
+        if (null != cardinality && (cardinality.equals("ALL") || cardinality.matches("[1-9].*"))) {
+          checkThreshold=true;
         }
-        if (!ignoreComponent && !serviceComponent.isMasterComponent()) {
-          ComponentInfo componentInfo=ambariMetaInfo.get().getComponent(stackId.getStackName(),stackId.getStackVersion(),serviceComponent.getServiceName(),serviceComponent.getName());
-          String cardinality=componentInfo.getCardinality();
-          if (null != cardinality && (cardinality.equals("ALL") || cardinality.matches("[1-9].*"))) {
-            checkThreshold=true;
-          }
-        }
-        if (!serviceComponent.isVersionAdvertised()) {
-          ignoreComponent=true;
-        }
-        if (!ignoreComponent) {
-          List<HostComponentSummary> hostComponentSummaries=HostComponentSummary.getHostComponentSummaries(service.getName(),serviceComponent.getName());
-          if (checkThreshold && !hostComponentSummaries.isEmpty()) {
-            int total=hostComponentSummaries.size();
-            int up=0;
-            int down=0;
-            for (            HostComponentSummary s : hostComponentSummaries) {
-              if ((s.getDesiredState() == State.INSTALLED || s.getDesiredState() == State.STARTED) && State.STARTED != s.getCurrentState()) {
-                down++;
-              }
- else {
-                up++;
-              }
-            }
-            if ((float)down / total > SLAVE_THRESHOLD) {
-              failedServiceNames.add(service.getName());
-              String message=MessageFormat.format("{0}: {1} out of {2} {3} are started; there should be {4,number,percent} started before upgrading.",service.getName(),up,total,serviceComponent.getName(),SLAVE_THRESHOLD);
-              errorMessages.add(message);
-            }
+      }
+      if (checkThreshold) {
+        int total=hostComponentSummaries.size();
+        int up=0;
+        int down=0;
+        for (        HostComponentSummary summary : hostComponentSummaries) {
+          if (isConsideredDown(cluster,serviceComponent,summary)) {
+            down++;
           }
  else {
-            for (            HostComponentSummary s : hostComponentSummaries) {
-              if ((s.getDesiredState() == State.INSTALLED || s.getDesiredState() == State.STARTED) && State.STARTED != s.getCurrentState()) {
-                failedServiceNames.add(service.getName());
-                String message=MessageFormat.format("{0}: {1} (in {2} on host {3})",service.getName(),serviceComponent.getName(),s.getCurrentState(),s.getHostName());
-                errorMessages.add(message);
-                break;
-              }
-            }
+            up++;
+          }
+        }
+        if ((float)down / total > SLAVE_THRESHOLD) {
+          failedServiceNames.add(service.getName());
+          String message=MessageFormat.format("{0}: {1} out of {2} {3} are started; there should be {4,number,percent} started before upgrading.",service.getName(),up,total,serviceComponent.getName(),SLAVE_THRESHOLD);
+          errorMessages.add(message);
+        }
+      }
+ else {
+        for (        HostComponentSummary summary : hostComponentSummaries) {
+          if (isConsideredDown(cluster,serviceComponent,summary)) {
+            failedServiceNames.add(service.getName());
+            String message=MessageFormat.format("{0}: {1} (in {2} on host {3})",service.getName(),serviceComponent.getName(),summary.getCurrentState(),summary.getHostName());
+            errorMessages.add(message);
+            break;
           }
         }
       }
