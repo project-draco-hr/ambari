@@ -1,0 +1,35 @@
+{
+  statMetric.metricsName="output.kafka.write_logs";
+  writeBytesMetric.metricsName="output.kafka.write_bytes";
+  String brokerList=getStringValue("broker_list");
+  if (StringUtils.isEmpty(brokerList)) {
+    throw new Exception("For kafka output, bootstrap broker_list is needed");
+  }
+  topic=getStringValue("topic");
+  if (StringUtils.isEmpty(topic)) {
+    throw new Exception("For kafka output, topic is needed");
+  }
+  isAsync=getBooleanValue("is_async",true);
+  int batchSize=getIntValue("batch_size",DEFAULT_BATCH_SIZE);
+  int lingerMS=getIntValue("linger_ms",DEFAULT_LINGER_MS);
+  Properties props=new Properties();
+  props.put("bootstrap.servers",brokerList);
+  props.put("client.id","logfeeder_producer");
+  props.put("key.serializer",StringSerializer.class.getName());
+  props.put("value.serializer",StringSerializer.class.getName());
+  props.put("compression.type","snappy");
+  props.put("batch.size",batchSize);
+  props.put("linger.ms",lingerMS);
+  for (  String key : configs.keySet()) {
+    if (key.startsWith("kafka.")) {
+      Object value=configs.get(key);
+      if (value == null || value.toString().length() == 0) {
+        continue;
+      }
+      String kafkaKey=key.substring("kafka.".length());
+      LOG.info("Adding custom Kafka property. " + kafkaKey + "="+ value);
+      props.put(kafkaKey,value);
+    }
+  }
+  return props;
+}

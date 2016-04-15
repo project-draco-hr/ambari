@@ -1,0 +1,19 @@
+{
+  LOG.info("testOutputKafka_uploadData()");
+  Map<String,Object> config=new HashMap<String,Object>();
+  config.put("broker_list","some broker list");
+  config.put("topic",TEST_TOPIC);
+  outputKafka.loadConfig(config);
+  outputKafka.init();
+  @SuppressWarnings("unchecked") Future<RecordMetadata> mockFuture=EasyMock.mock(Future.class);
+  EasyMock.expect(mockKafkaProducer.send(new ProducerRecord<String,String>(TEST_TOPIC,"value0"))).andReturn(mockFuture);
+  EasyMock.expect(mockFuture.get()).andReturn(null);
+  for (int i=1; i < 10; i++)   EasyMock.expect(mockKafkaProducer.send(EasyMock.eq(new ProducerRecord<String,String>(TEST_TOPIC,"value" + i)),EasyMock.anyObject(KafkaCallBack.class))).andReturn(null);
+  EasyMock.replay(mockKafkaProducer);
+  for (int i=0; i < 10; i++) {
+    InputMarker inputMarker=new InputMarker();
+    inputMarker.input=EasyMock.mock(Input.class);
+    outputKafka.write("value" + i,inputMarker);
+  }
+  EasyMock.verify(mockKafkaProducer);
+}

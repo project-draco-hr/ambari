@@ -1,0 +1,29 @@
+{
+  Thread retryThread=new Thread("kafka-writer-retry,topic=" + topic){
+    @Override public void run(){
+      KafkaCallBack kafkaCallBack=null;
+      LOG.info("Started thread to monitor failed messsages. " + getShortDescription());
+      while (true) {
+        try {
+          if (kafkaCallBack == null) {
+            kafkaCallBack=failedMessages.take();
+          }
+          if (publishMessage(kafkaCallBack.message,kafkaCallBack.inputMarker)) {
+            kafkaCallBack=null;
+          }
+ else {
+            LOG.error("Kafka is down. messageNumber=" + kafkaCallBack.thisMessageNumber + ". Going to sleep for "+ FAILED_RETRY_INTERVAL+ " seconds");
+            Thread.sleep(FAILED_RETRY_INTERVAL * 1000);
+          }
+        }
+ catch (        Throwable t) {
+          String logMessageKey=this.getClass().getSimpleName() + "_KAFKA_RETRY_WRITE_ERROR";
+          LogFeederUtil.logErrorMessageByInterval(logMessageKey,"Error sending message to Kafka during retry. message=" + (kafkaCallBack == null ? null : kafkaCallBack.message),t,LOG,Level.ERROR);
+        }
+      }
+    }
+  }
+;
+  retryThread.setDaemon(true);
+  retryThread.start();
+}

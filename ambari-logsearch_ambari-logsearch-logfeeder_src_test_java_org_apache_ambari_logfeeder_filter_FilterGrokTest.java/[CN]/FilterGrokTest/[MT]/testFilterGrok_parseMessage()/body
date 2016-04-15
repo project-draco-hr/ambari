@@ -1,0 +1,19 @@
+{
+  LOG.info("testFilterGrok_parseMessage()");
+  Map<String,Object> config=new HashMap<String,Object>();
+  config.put("message_pattern","(?m)^%{TIMESTAMP_ISO8601:logtime}%{SPACE}%{LOGLEVEL:level}%{SPACE}%{GREEDYDATA:log_message}");
+  config.put("multiline_pattern","^(%{TIMESTAMP_ISO8601:logtime})");
+  init(config);
+  mockOutputMgr.write(EasyMock.capture(capture),EasyMock.anyObject(InputMarker.class));
+  EasyMock.expectLastCall();
+  EasyMock.replay(mockOutputMgr);
+  filterGrok.apply("2016-04-08 15:55:23,548 INFO This is a test",new InputMarker());
+  filterGrok.apply("2016-04-08 15:55:24,548 WARN Next message",new InputMarker());
+  EasyMock.verify(mockOutputMgr);
+  Map<String,Object> jsonParams=capture.getValue();
+  assertNotNull(jsonParams);
+  assertEquals("Incorrect parsing: log time","2016-04-08 15:55:23,548",jsonParams.remove("logtime"));
+  assertEquals("Incorrect parsing: log level","INFO",jsonParams.remove("level"));
+  assertEquals("Incorrect parsing: log message","This is a test",jsonParams.remove("log_message"));
+  assertTrue("jsonParams are not empty!",jsonParams.isEmpty());
+}

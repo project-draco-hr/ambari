@@ -1,0 +1,21 @@
+{
+  LOG.info("testFilterGrok_parseMultiLineMessage()");
+  Map<String,Object> config=new HashMap<String,Object>();
+  config.put("message_pattern","(?m)^%{TIMESTAMP_ISO8601:logtime}%{SPACE}%{LOGLEVEL:level}%{SPACE}%{GREEDYDATA:log_message}");
+  config.put("multiline_pattern","^(%{TIMESTAMP_ISO8601:logtime})");
+  init(config);
+  mockOutputMgr.write(EasyMock.capture(capture),EasyMock.anyObject(InputMarker.class));
+  EasyMock.expectLastCall();
+  EasyMock.replay(mockOutputMgr);
+  String multiLineMessage="This is a multiline test message\r\n" + "having multiple lines\r\n" + "as one may expect";
+  String[] messageLines=multiLineMessage.split("\r\n");
+  for (int i=0; i < messageLines.length; i++)   filterGrok.apply((i == 0 ? "2016-04-08 15:55:23,548 INFO " : "") + messageLines[i],new InputMarker());
+  filterGrok.flush();
+  EasyMock.verify(mockOutputMgr);
+  Map<String,Object> jsonParams=capture.getValue();
+  assertNotNull(jsonParams);
+  assertEquals("Incorrect parsing: log time","2016-04-08 15:55:23,548",jsonParams.remove("logtime"));
+  assertEquals("Incorrect parsing: log level","INFO",jsonParams.remove("level"));
+  assertEquals("Incorrect parsing: log message",multiLineMessage,jsonParams.remove("log_message"));
+  assertTrue("jsonParams are not empty!",jsonParams.isEmpty());
+}
