@@ -1,5 +1,5 @@
 {
-  String badUrl="http://hortonworks.com";
+  String badUrl="http://some_custom.url";
   RepositoryInfo repo=ambariMetaInfo.getRepository(STACK_NAME,STACK_VERSION,OS_TYPE,REPO_ID);
   RepositoryRequest request=new RepositoryRequest(STACK_NAME,STACK_VERSION,OS_TYPE,REPO_ID);
   request.setBaseUrl(badUrl);
@@ -18,10 +18,23 @@
   Assert.assertEquals(request.getBaseUrl(),repo.getBaseUrl());
   requests.clear();
   request=new RepositoryRequest(STACK_NAME,STACK_VERSION,OS_TYPE,REPO_ID);
-  request.setBaseUrl("https://hortonworks.com");
+  request.setBaseUrl("https://some_custom.url");
   request.setVerifyBaseUrl(false);
   requests.add(request);
-  controller.updateRepositories(requests);
+  HostnameVerifier defaultHostnameVerifier=HttpsURLConnection.getDefaultHostnameVerifier();
+  HttpsURLConnection.setDefaultHostnameVerifier(new HostnameVerifier(){
+    public boolean verify(    String hostName,    SSLSession session){
+      return true;
+    }
+  }
+);
+  try {
+    controller.updateRepositories(requests);
+  }
+ catch (  Exception e) {
+    assertTrue(e.getCause() instanceof UnknownHostException);
+  }
+  HttpsURLConnection.setDefaultHostnameVerifier(defaultHostnameVerifier);
   requests.clear();
   request=new RepositoryRequest(STACK_NAME,STACK_VERSION,OS_TYPE,REPO_ID);
   request.setBaseUrl("pro://hortonworks.com");
