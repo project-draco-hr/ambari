@@ -117,7 +117,7 @@ hive_database_name = config['configurations']['hive-env']['hive_database_name']
 hive_database = config['configurations']['hive-env']['hive_database']
 hive_use_existing_db = hive_database.startswith('Existing')
 sqla_db_used = False
-target = None
+target_hive = None
 if (hive_jdbc_driver == 'com.microsoft.sqlserver.jdbc.SQLServerDriver'):
     jdbc_jar_name = default('/hostLevelParams/custom_mssql_jdbc_name', None)
 elif (hive_jdbc_driver == 'com.mysql.jdbc.Driver'):
@@ -134,10 +134,10 @@ default_mysql_target = format('{hive_lib}/{default_mysql_jar_name}')
 if (not hive_use_existing_db):
     jdbc_jar_name = default_mysql_jar_name
 downloaded_custom_connector = format('{tmp_dir}/{jdbc_jar_name}')
-target = format('{hive_lib}/{jdbc_jar_name}')
+target_hive = format('{hive_lib}/{jdbc_jar_name}')
 driver_curl_source = format('{jdk_location}/{jdbc_jar_name}')
 if (not (stack_version_formatted_major and check_stack_feature(StackFeature.ROLLING_UPGRADE, stack_version_formatted_major))):
-    source_jdbc_file = target
+    source_jdbc_file = target_hive
 else:
     source_jdbc_file = format('{stack_root}/{current_version}/hive/lib/{jdbc_jar_name}')
 check_db_connection_jar_name = 'DBConnectionVerification.jar'
@@ -152,12 +152,14 @@ if sqla_db_used:
     libs_path_in_archive = format('{tmp_dir}/sqla-client-jdbc/native/lib64/*')
     downloaded_custom_connector = format('{tmp_dir}/sqla-client-jdbc.tar.gz')
     libs_in_hive_lib = format('{jdbc_libs_dir}/*')
-hive_metastore_hosts = config['clusterHostInfo']['hive_metastore_host']
-hive_metastore_host = hive_metastore_hosts[0]
-hive_metastore_port = get_port_from_url(config['configurations']['hive-site']['hive.metastore.uris'])
 ambari_server_hostname = config['clusterHostInfo']['ambari_server_host'][0]
-hive_server_host = config['clusterHostInfo']['hive_server_host'][0]
-hive_server_hosts = config['clusterHostInfo']['hive_server_host']
+hive_metastore_hosts = default('/clusterHostInfo/hive_metastore_host', [])
+hive_metastore_host = (hive_metastore_hosts[0] if (len(hive_metastore_hosts) > 0) else None)
+hive_metastore_port = get_port_from_url(config['configurations']['hive-site']['hive.metastore.uris'])
+hive_server_hosts = default('/clusterHostInfo/hive_server_host', [])
+hive_server_host = (hive_server_hosts[0] if (len(hive_server_hosts) > 0) else None)
+hive_server_interactive_hosts = default('/clusterHostInfo/hive_server_interactive_hosts', [])
+hive_server_interactive_host = (hive_server_interactive_hosts[0] if (len(hive_server_interactive_hosts) > 0) else None)
 hive_transport_mode = config['configurations']['hive-site']['hive.server2.transport.mode']
 if (hive_transport_mode.lower() == 'http'):
     hive_server_port = config['configurations']['hive-site']['hive.server2.thrift.http.port']
@@ -185,8 +187,12 @@ hive_pid_dir = status_params.hive_pid_dir
 hive_pid = status_params.hive_pid
 hive_interactive_pid = status_params.hive_interactive_pid
 hive_conf_dirs_list = [hive_client_conf_dir]
-if ((hostname in hive_metastore_hosts) or (hostname in hive_server_hosts)):
+if ((status_params.role == 'HIVE_METASTORE') and (hive_metastore_hosts is not None) and (hostname in hive_metastore_hosts)):
     hive_conf_dirs_list.append(hive_server_conf_dir)
+elif ((status_params.role == 'HIVE_SERVER') and (hive_server_hosts is not None) and (hostname in hive_server_host)):
+    hive_conf_dirs_list.append(hive_server_conf_dir)
+elif ((status_params.role == 'HIVE_SERVER_INTERACTIVE') and (hive_server_interactive_hosts is not None) and (hostname in hive_server_interactive_hosts)):
+    hive_conf_dirs_list.append(status_params.hive_server_interactive_conf_dir)
 start_hiveserver2_script = 'startHiveserver2.sh.j2'
 start_metastore_script = 'startMetastore.sh'
 hive_metastore_pid = status_params.hive_metastore_pid
@@ -196,7 +202,7 @@ yarn_user = config['configurations']['yarn-env']['yarn_user']
 user_group = config['configurations']['cluster-env']['user_group']
 artifact_dir = format('{tmp_dir}/AMBARI-artifacts/')
 yarn_log_dir_prefix = config['configurations']['yarn-env']['yarn_log_dir_prefix']
-target = format('{hive_lib}/{jdbc_jar_name}')
+target_hive = format('{hive_lib}/{jdbc_jar_name}')
 target_hive_interactive = format('{hive_interactive_lib}/{jdbc_jar_name}')
 jars_in_hive_lib = format('{hive_lib}/*.jar')
 start_hiveserver2_path = format('{tmp_dir}/start_hiveserver2_script')
