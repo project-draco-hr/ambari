@@ -1,5 +1,7 @@
-def convert_conf_directories_to_symlinks(package, version, dirs, skip_existing_links=True, link_to='current'):
+def convert_conf_directories_to_symlinks(package, version, dirs, skip_existing_links=True, link_to=DIRECTORY_TYPE_CURRENT):
     '\n  Assumes HDP 2.3+, moves around directories and creates the conf symlink for the given package.\n  If the package does not exist, then no work is performed.\n\n  - Creates a /etc/<component>/conf.backup directory\n  - Copies all configs from /etc/<component>/conf to conf.backup\n  - Removes /etc/<component>/conf\n  - Creates /etc/<component>/<version>/0 via <conf-selector-tool>\n  - <stack-root>/current/<component>-client/conf -> /etc/<component>/<version>/0 via <conf-selector-tool>\n  - Links /etc/<component>/conf to <something> depending on function paramter\n  -- /etc/<component>/conf -> <stack-root>/current/[component]-client/conf (usually)\n  -- /etc/<component>/conf -> /etc/<component>/conf.backup (only when supporting < HDP 2.3)\n\n  :param package: the package to create symlinks for (zookeeper, falcon, etc)\n  :param version: the version number to use with <conf-selector-tool> (2.3.0.0-1234)\n  :param dirs: the directories associated with the package (from get_package_dirs())\n  :param skip_existing_links: True to not do any work if already a symlink\n  :param link_to: link to "current" or "backup"\n  '
+    if (link_to not in [DIRECTORY_TYPE_CURRENT, DIRECTORY_TYPE_BACKUP]):
+        raise Fail("Unsupported 'link_to' argument. Could not link package {0}".format(package))
     stack_name = Script.get_stack_name()
     bad_dirs = []
     for dir_def in dirs:
@@ -13,15 +15,23 @@ def convert_conf_directories_to_symlinks(package, version, dirs, skip_existing_l
         for dir_def in dirs:
             old_conf = dir_def['conf_dir']
             if os.path.islink(old_conf):
-                Logger.info('{0} is already linked to {1}'.format(old_conf, os.path.realpath(old_conf)))
+                if (link_to == DIRECTORY_TYPE_BACKUP):
+                    target_conf_dir = _get_backup_conf_directory(old_conf)
+                else:
+                    target_conf_dir = dir_def['current_dir']
+                if (os.readlink(old_conf) != target_conf_dir):
+                    Logger.info('Re-linking symlink {0} to {1}'.format(old_conf, target_conf_dir))
+                    Link(old_conf, action='delete')
+                    Link(old_conf, to=target_conf_dir)
+                else:
+                    Logger.info('{0} is already linked to {1}'.format(old_conf, os.path.realpath(old_conf)))
                 bad_dirs.append(old_conf)
     if (len(bad_dirs) > 0):
         return
     backup_dir = None
     for dir_def in dirs:
         old_conf = dir_def['conf_dir']
-        old_parent = os.path.abspath(os.path.join(old_conf, os.pardir))
-        backup_dir = os.path.join(old_parent, 'conf.backup')
+        backup_dir = _get_backup_conf_directory(old_conf)
         Logger.info("Backing up {0} to {1} if destination doesn't exist already.".format(old_conf, backup_dir))
         Execute(('cp', '-R', '-p', old_conf, backup_dir), not_if=format('test -e {backup_dir}'), sudo=True)
     versioned_confs = create(stack_name, package, version, dry_run=True)
@@ -49,12 +59,11 @@ def convert_conf_directories_to_symlinks(package, version, dirs, skip_existing_l
             new_symlink = dir_def['conf_dir']
             if (not os.path.islink(new_symlink)):
                 Directory(new_symlink, action='delete')
-            if (link_to in ['current', 'backup']):
-                if (link_to == 'backup'):
-                    Link(new_symlink, to=backup_dir)
-                else:
-                    Link(new_symlink, to=dir_def['current_dir'])
             else:
-                Logger.error("Unsupported 'link_to' argument. Could not link package {0}".format(package))
+                Link(new_symlink, action='delete')
+            if (link_to == DIRECTORY_TYPE_BACKUP):
+                Link(new_symlink, to=backup_dir)
+            else:
+                Link(new_symlink, to=dir_def['current_dir'])
     except Exception as e:
         Logger.warning('Could not change symlink for package {0} to point to {1} directory. Error: {2}'.format(package, link_to, e))
