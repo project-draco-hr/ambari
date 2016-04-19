@@ -1,38 +1,41 @@
 {
   CommandReport commandReport=null;
-  boolean processPrincipal;
-  boolean regenerateKeytabs="true".equalsIgnoreCase(getCommandParameterValue(getCommandParameters(),REGENERATE_ALL));
-  if (regenerateKeytabs) {
-    processPrincipal=true;
-  }
- else {
-    KerberosPrincipalEntity kerberosPrincipalEntity=kerberosPrincipalDAO.find(evaluatedPrincipal);
-    if (kerberosPrincipalEntity == null) {
+  if (!seenPrincipals.contains(evaluatedPrincipal)) {
+    seenPrincipals.add(evaluatedPrincipal);
+    boolean processPrincipal;
+    boolean regenerateKeytabs="true".equalsIgnoreCase(getCommandParameterValue(getCommandParameters(),REGENERATE_ALL));
+    if (regenerateKeytabs) {
       processPrincipal=true;
     }
- else     if (!StringUtils.isEmpty(kerberosPrincipalEntity.getCachedKeytabPath())) {
-      processPrincipal=false;
-    }
- else     if (kerberosPrincipalHostDAO.exists(evaluatedPrincipal)) {
-      processPrincipal=false;
-    }
  else {
-      processPrincipal=true;
-    }
-  }
-  if (processPrincipal) {
-    Map<String,String> principalPasswordMap=getPrincipalPasswordMap(requestSharedDataContext);
-    Map<String,Integer> principalKeyNumberMap=getPrincipalKeyNumberMap(requestSharedDataContext);
-    String password=principalPasswordMap.get(evaluatedPrincipal);
-    if (password == null) {
-      boolean servicePrincipal="service".equalsIgnoreCase(identityRecord.get(KerberosIdentityDataFileReader.PRINCIPAL_TYPE));
-      CreatePrincipalResult result=createPrincipal(evaluatedPrincipal,servicePrincipal,kerberosConfiguration,operationHandler,actionLog);
-      if (result == null) {
-        commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
+      KerberosPrincipalEntity kerberosPrincipalEntity=kerberosPrincipalDAO.find(evaluatedPrincipal);
+      if (kerberosPrincipalEntity == null) {
+        processPrincipal=true;
+      }
+ else       if (!StringUtils.isEmpty(kerberosPrincipalEntity.getCachedKeytabPath())) {
+        processPrincipal=false;
+      }
+ else       if (kerberosPrincipalHostDAO.exists(evaluatedPrincipal)) {
+        processPrincipal=false;
       }
  else {
-        principalPasswordMap.put(evaluatedPrincipal,result.getPassword());
-        principalKeyNumberMap.put(evaluatedPrincipal,result.getKeyNumber());
+        processPrincipal=true;
+      }
+    }
+    if (processPrincipal) {
+      Map<String,String> principalPasswordMap=getPrincipalPasswordMap(requestSharedDataContext);
+      String password=principalPasswordMap.get(evaluatedPrincipal);
+      if (password == null) {
+        boolean servicePrincipal="service".equalsIgnoreCase(identityRecord.get(KerberosIdentityDataFileReader.PRINCIPAL_TYPE));
+        CreatePrincipalResult result=createPrincipal(evaluatedPrincipal,servicePrincipal,kerberosConfiguration,operationHandler,regenerateKeytabs,actionLog);
+        if (result == null) {
+          commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
+        }
+ else {
+          Map<String,Integer> principalKeyNumberMap=getPrincipalKeyNumberMap(requestSharedDataContext);
+          principalPasswordMap.put(evaluatedPrincipal,result.getPassword());
+          principalKeyNumberMap.put(evaluatedPrincipal,result.getKeyNumber());
+        }
       }
     }
   }

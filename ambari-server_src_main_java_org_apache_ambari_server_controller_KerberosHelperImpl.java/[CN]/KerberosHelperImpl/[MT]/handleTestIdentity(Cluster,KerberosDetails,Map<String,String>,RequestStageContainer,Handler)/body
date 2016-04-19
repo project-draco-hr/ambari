@@ -3,128 +3,83 @@
     if (commandParameters == null) {
       throw new AmbariException("The properties map must not be null.  It is needed to store data related to the service check identity");
     }
-    Map<String,Service> services=cluster.getServices();
-    if ((services != null) && !services.isEmpty()) {
-      String clusterName=cluster.getClusterName();
-      Map<String,Host> hosts=clusters.getHostsForCluster(clusterName);
-      if ((hosts != null) && !hosts.isEmpty()) {
-        List<ServiceComponentHost> serviceComponentHostsToProcess=new ArrayList<ServiceComponentHost>();
-        KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
-        KerberosIdentityDataFileWriter kerberosIdentityDataFileWriter=null;
-        Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
-        Set<String> hostsWithValidKerberosClient=getHostsWithValidKerberosClient(cluster);
-        File dataDirectory=createTemporaryDirectory();
-        File identityDataFile=new File(dataDirectory,KerberosIdentityDataFileWriter.DATA_FILE_NAME);
-        KerberosIdentityDescriptor identity=new KerberosIdentityDescriptor(new HashMap<String,Object>(){
-{
-            put("principal",new HashMap<String,Object>(){
-{
-                put("value","${kerberos-env/service_check_principal_name}@${realm}");
-                put("type","user");
-              }
-            }
-);
-            put("keytab",new HashMap<String,Object>(){
-{
-                put("file","${keytab_dir}/kerberos.service_check.${short_date}.keytab");
-                put("owner",new HashMap<String,Object>(){
-{
-                    put("name","${cluster-env/smokeuser}");
-                    put("access","rw");
-                  }
-                }
-);
-                put("group",new HashMap<String,Object>(){
-{
-                    put("name","${cluster-env/user_group}");
-                    put("access","r");
-                  }
-                }
-);
-                put("cachable","false");
-              }
-            }
-);
+    List<ServiceComponentHost> serviceComponentHostsToProcess=new ArrayList<ServiceComponentHost>();
+    KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
+    KerberosIdentityDataFileWriter kerberosIdentityDataFileWriter=null;
+    Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
+    Set<String> hostsWithValidKerberosClient=getHostsWithValidKerberosClient(cluster);
+    File dataDirectory=createTemporaryDirectory();
+    File identityDataFile=new File(dataDirectory,KerberosIdentityDataFileWriter.DATA_FILE_NAME);
+    Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,null,kerberosDescriptorProperties);
+    String principal=variableReplacementHelper.replaceVariables("${kerberos-env/service_check_principal_name}@${realm}",configurations);
+    String principalType="user";
+    String keytabFilePath=variableReplacementHelper.replaceVariables("${keytab_dir}/kerberos.service_check.${short_date}.keytab",configurations);
+    String keytabFileOwnerName=variableReplacementHelper.replaceVariables("${cluster-env/smokeuser}",configurations);
+    String keytabFileOwnerAccess="rw";
+    String keytabFileGroupName=variableReplacementHelper.replaceVariables("${cluster-env/user_group}",configurations);
+    String keytabFileGroupAccess="r";
+    commandParameters.put("principal_name",principal);
+    commandParameters.put("keytab_file",keytabFilePath);
+    try {
+      List<ServiceComponentHost> serviceComponentHosts=cluster.getServiceComponentHosts(Service.Type.KERBEROS.name(),Role.KERBEROS_CLIENT.name());
+      if ((serviceComponentHosts != null) && !serviceComponentHosts.isEmpty()) {
+        kerberosIdentityDataFileWriter=kerberosIdentityDataFileWriterFactory.createKerberosIdentityDataFileWriter(identityDataFile);
+        for (        ServiceComponentHost sch : serviceComponentHosts) {
+          if (sch.getState() == State.INSTALLED) {
+            String hostname=sch.getHostName();
+            kerberosIdentityDataFileWriter.writeRecord(hostname,Service.Type.KERBEROS.name(),Role.KERBEROS_CLIENT.name(),principal,principalType,keytabFilePath,keytabFileOwnerName,keytabFileOwnerAccess,keytabFileGroupName,keytabFileGroupAccess,"false");
+            hostsWithValidKerberosClient.add(hostname);
+            serviceComponentHostsToProcess.add(sch);
           }
         }
-);
-        try {
-          for (          Host host : hosts.values()) {
-            String hostname=host.getHostName();
-            List<ServiceComponentHost> serviceComponentHosts=cluster.getServiceComponentHosts(hostname);
-            if ((serviceComponentHosts != null) && !serviceComponentHosts.isEmpty()) {
-              Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,hostname,kerberosDescriptorProperties);
-              configurations.get("").put("short_date",new SimpleDateFormat("MMddyy").format(new Date()));
-              for (              ServiceComponentHost sch : serviceComponentHosts) {
-                String serviceName=sch.getServiceName();
-                String componentName=sch.getServiceComponentName();
-                if (Service.Type.KERBEROS.name().equals(serviceName) && Role.KERBEROS_CLIENT.name().equals(componentName) && (sch.getState() == State.INSTALLED)) {
-                  hostsWithValidKerberosClient.add(hostname);
-                  int identitiesAdded=0;
-                  if (kerberosIdentityDataFileWriter == null) {
-                    kerberosIdentityDataFileWriter=kerberosIdentityDataFileWriterFactory.createKerberosIdentityDataFileWriter(identityDataFile);
-                  }
-                  identitiesAdded+=addIdentities(kerberosIdentityDataFileWriter,Collections.singleton(identity),null,hostname,serviceName,componentName,null,configurations);
-                  if (identitiesAdded > 0) {
-                    if (!commandParameters.containsKey("principal_name") || !commandParameters.containsKey("keytab_file")) {
-                      commandParameters.put("principal_name",variableReplacementHelper.replaceVariables(identity.getPrincipalDescriptor().getValue(),configurations));
-                      commandParameters.put("keytab_file",variableReplacementHelper.replaceVariables(identity.getKeytabDescriptor().getFile(),configurations));
-                    }
-                    serviceComponentHostsToProcess.add(sch);
-                  }
-                }
-              }
-            }
-          }
-        }
- catch (        IOException e) {
-          String message=String.format("Failed to write index file - %s",identityDataFile.getAbsolutePath());
-          LOG.error(message);
-          throw new AmbariException(message,e);
-        }
-catch (        Exception e) {
-          LOG.error("Failed " + e);
-          throw e;
-        }
- finally {
-          if (kerberosIdentityDataFileWriter != null) {
-            try {
-              kerberosIdentityDataFileWriter.close();
-            }
- catch (            IOException e) {
-              LOG.warn("Failed to close the index file writer",e);
-            }
-          }
-        }
-        if (!serviceComponentHostsToProcess.isEmpty()) {
-          try {
-            validateKDCCredentials(kerberosDetails,cluster);
-          }
- catch (          Exception e) {
-            LOG.error("Cannot validate credentials: " + e);
-            try {
-              FileUtils.deleteDirectory(dataDirectory);
-            }
- catch (            Throwable t) {
-              LOG.warn(String.format("The data directory (%s) was not deleted due to an error condition - {%s}",dataDirectory.getAbsolutePath(),t.getMessage()),t);
-            }
-            throw e;
-          }
-        }
-        Map<String,Set<String>> clusterHostInfo=StageUtils.getClusterHostInfo(cluster);
-        String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
-        Map<String,String> hostParams=customCommandExecutionHelper.createDefaultHostParams(cluster);
-        String hostParamsJson=StageUtils.getGson().toJson(hostParams);
-        String ambariServerHostname=StageUtils.getHostName();
-        ServiceComponentHostServerActionEvent event=new ServiceComponentHostServerActionEvent("AMBARI_SERVER",ambariServerHostname,System.currentTimeMillis());
-        RoleCommandOrder roleCommandOrder=ambariManagementController.getRoleCommandOrder(cluster);
-        if (requestStageContainer == null) {
-          requestStageContainer=new RequestStageContainer(actionManager.getNextRequestId(),null,requestFactory,actionManager);
-        }
-        handler.createStages(cluster,clusterHostInfoJson,hostParamsJson,event,roleCommandOrder,kerberosDetails,dataDirectory,requestStageContainer,serviceComponentHostsToProcess,Collections.<String,Collection<String>>emptyMap(),null,null,hostsWithValidKerberosClient);
-        handler.addFinalizeOperationStage(cluster,clusterHostInfoJson,hostParamsJson,event,dataDirectory,roleCommandOrder,requestStageContainer);
       }
     }
+ catch (    IOException e) {
+      String message=String.format("Failed to write index file - %s",identityDataFile.getAbsolutePath());
+      LOG.error(message);
+      throw new AmbariException(message,e);
+    }
+catch (    Exception e) {
+      LOG.error("Failed " + e);
+      throw e;
+    }
+ finally {
+      if (kerberosIdentityDataFileWriter != null) {
+        try {
+          kerberosIdentityDataFileWriter.close();
+        }
+ catch (        IOException e) {
+          LOG.warn("Failed to close the index file writer",e);
+        }
+      }
+    }
+    if (!serviceComponentHostsToProcess.isEmpty()) {
+      try {
+        validateKDCCredentials(kerberosDetails,cluster);
+      }
+ catch (      Exception e) {
+        LOG.error("Cannot validate credentials: " + e);
+        try {
+          FileUtils.deleteDirectory(dataDirectory);
+        }
+ catch (        Throwable t) {
+          LOG.warn(String.format("The data directory (%s) was not deleted due to an error condition - {%s}",dataDirectory.getAbsolutePath(),t.getMessage()),t);
+        }
+        throw e;
+      }
+    }
+    Map<String,Set<String>> clusterHostInfo=StageUtils.getClusterHostInfo(cluster);
+    String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
+    Map<String,String> hostParams=customCommandExecutionHelper.createDefaultHostParams(cluster);
+    String hostParamsJson=StageUtils.getGson().toJson(hostParams);
+    String ambariServerHostname=StageUtils.getHostName();
+    ServiceComponentHostServerActionEvent event=new ServiceComponentHostServerActionEvent("AMBARI_SERVER",ambariServerHostname,System.currentTimeMillis());
+    RoleCommandOrder roleCommandOrder=ambariManagementController.getRoleCommandOrder(cluster);
+    if (requestStageContainer == null) {
+      requestStageContainer=new RequestStageContainer(actionManager.getNextRequestId(),null,requestFactory,actionManager);
+    }
+    handler.createStages(cluster,clusterHostInfoJson,hostParamsJson,event,roleCommandOrder,kerberosDetails,dataDirectory,requestStageContainer,serviceComponentHostsToProcess,Collections.<String,Collection<String>>emptyMap(),null,null,hostsWithValidKerberosClient);
+    handler.addFinalizeOperationStage(cluster,clusterHostInfoJson,hostParamsJson,event,dataDirectory,roleCommandOrder,requestStageContainer);
   }
   return requestStageContainer;
 }

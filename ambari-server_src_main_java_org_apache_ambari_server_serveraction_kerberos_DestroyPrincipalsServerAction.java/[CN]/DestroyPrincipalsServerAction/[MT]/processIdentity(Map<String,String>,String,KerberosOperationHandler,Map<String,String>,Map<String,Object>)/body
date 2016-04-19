@@ -1,48 +1,51 @@
 {
-  String message=String.format("Destroying identity, %s",evaluatedPrincipal);
-  LOG.info(message);
-  actionLog.writeStdOut(message);
-  DestroyPrincipalKerberosAuditEvent.DestroyPrincipalKerberosAuditEventBuilder auditEventBuilder=DestroyPrincipalKerberosAuditEvent.builder().withTimestamp(System.currentTimeMillis()).withRequestId(getHostRoleCommand().getRequestId()).withTaskId(getHostRoleCommand().getTaskId()).withPrincipal(evaluatedPrincipal);
-  try {
+  if (!seenPrincipals.contains(evaluatedPrincipal)) {
+    seenPrincipals.add(evaluatedPrincipal);
+    String message=String.format("Destroying identity, %s",evaluatedPrincipal);
+    LOG.info(message);
+    actionLog.writeStdOut(message);
+    DestroyPrincipalKerberosAuditEvent.DestroyPrincipalKerberosAuditEventBuilder auditEventBuilder=DestroyPrincipalKerberosAuditEvent.builder().withTimestamp(System.currentTimeMillis()).withRequestId(getHostRoleCommand().getRequestId()).withTaskId(getHostRoleCommand().getTaskId()).withPrincipal(evaluatedPrincipal);
     try {
-      operationHandler.removePrincipal(evaluatedPrincipal);
-    }
- catch (    KerberosOperationException e) {
-      message=String.format("Failed to remove identity for %s from the KDC - %s",evaluatedPrincipal,e.getMessage());
-      LOG.warn(message);
-      actionLog.writeStdErr(message);
-      auditEventBuilder.withReasonOfFailure(message);
-    }
-    try {
-      KerberosPrincipalEntity principalEntity=kerberosPrincipalDAO.find(evaluatedPrincipal);
-      if (principalEntity != null) {
-        String cachedKeytabPath=principalEntity.getCachedKeytabPath();
-        kerberosPrincipalDAO.remove(principalEntity);
-        if (cachedKeytabPath != null) {
-          if (!new File(cachedKeytabPath).delete()) {
-            LOG.debug(String.format("Failed to remove cached keytab for %s",evaluatedPrincipal));
+      try {
+        operationHandler.removePrincipal(evaluatedPrincipal);
+      }
+ catch (      KerberosOperationException e) {
+        message=String.format("Failed to remove identity for %s from the KDC - %s",evaluatedPrincipal,e.getMessage());
+        LOG.warn(message);
+        actionLog.writeStdErr(message);
+        auditEventBuilder.withReasonOfFailure(message);
+      }
+      try {
+        KerberosPrincipalEntity principalEntity=kerberosPrincipalDAO.find(evaluatedPrincipal);
+        if (principalEntity != null) {
+          String cachedKeytabPath=principalEntity.getCachedKeytabPath();
+          kerberosPrincipalDAO.remove(principalEntity);
+          if (cachedKeytabPath != null) {
+            if (!new File(cachedKeytabPath).delete()) {
+              LOG.debug(String.format("Failed to remove cached keytab for %s",evaluatedPrincipal));
+            }
+          }
+        }
+        String hostName=identityRecord.get(KerberosIdentityDataFileReader.HOSTNAME);
+        if (hostName != null && hostName.equalsIgnoreCase(KerberosHelper.AMBARI_SERVER_HOST_NAME)) {
+          String keytabFilePath=identityRecord.get(KerberosIdentityDataFileReader.KEYTAB_FILE_PATH);
+          if (keytabFilePath != null) {
+            if (!new File(keytabFilePath).delete()) {
+              LOG.debug(String.format("Failed to remove ambari keytab for %s",evaluatedPrincipal));
+            }
           }
         }
       }
-      String hostName=identityRecord.get(KerberosIdentityDataFileReader.HOSTNAME);
-      if (hostName != null && hostName.equalsIgnoreCase(KerberosHelper.AMBARI_SERVER_HOST_NAME)) {
-        String keytabFilePath=identityRecord.get(KerberosIdentityDataFileReader.KEYTAB_FILE_PATH);
-        if (keytabFilePath != null) {
-          if (!new File(keytabFilePath).delete()) {
-            LOG.debug(String.format("Failed to remove ambari keytab for %s",evaluatedPrincipal));
-          }
-        }
+ catch (      Throwable t) {
+        message=String.format("Failed to remove identity for %s from the Ambari database - %s",evaluatedPrincipal,t.getMessage());
+        LOG.warn(message);
+        actionLog.writeStdErr(message);
+        auditEventBuilder.withReasonOfFailure(message);
       }
     }
- catch (    Throwable t) {
-      message=String.format("Failed to remove identity for %s from the Ambari database - %s",evaluatedPrincipal,t.getMessage());
-      LOG.warn(message);
-      actionLog.writeStdErr(message);
-      auditEventBuilder.withReasonOfFailure(message);
-    }
-  }
   finally {
-    auditLog(auditEventBuilder.build());
+      auditLog(auditEventBuilder.build());
+    }
   }
   return null;
 }

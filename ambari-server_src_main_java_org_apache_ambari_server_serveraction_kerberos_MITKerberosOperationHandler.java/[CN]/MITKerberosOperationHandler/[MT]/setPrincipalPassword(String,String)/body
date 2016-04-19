@@ -9,7 +9,17 @@
     throw new KerberosOperationException("Failed to set password - no password specified");
   }
  else {
-    invokeKAdmin(String.format("change_password -pw \"%s\" %s",password,principal));
-    return getKeyNumber(principal);
+    ShellCommandUtil.Result result=invokeKAdmin(String.format("change_password -pw \"%s\" %s",password,principal));
+    String stdOut=result.getStdout();
+    if ((stdOut != null) && stdOut.contains(String.format("Password for \"%s\" changed",principal))) {
+      return getKeyNumber(principal);
+    }
+ else     if ((stdOut != null) && stdOut.contains("Principal does not exist")) {
+      throw new KerberosPrincipalDoesNotExistException(principal);
+    }
+ else {
+      LOG.error("Failed to execute kadmin query: change_password -pw \"********\" {} \nSTDOUT: {}\nSTDERR: {}",principal,stdOut,result.getStderr());
+      throw new KerberosOperationException(String.format("Failed to update password for %s\nSTDOUT: %s\nSTDERR: %s",principal,stdOut,result.getStderr()));
+    }
   }
 }
