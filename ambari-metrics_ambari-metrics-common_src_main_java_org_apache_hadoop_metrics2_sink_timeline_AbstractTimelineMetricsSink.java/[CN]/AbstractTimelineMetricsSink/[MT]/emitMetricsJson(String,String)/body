@@ -1,0 +1,48 @@
+{
+  int timeout=getTimeoutSeconds() * 1000;
+  HttpURLConnection connection=null;
+  try {
+    if (connectUrl == null) {
+      throw new IOException("Unknown URL. Unable to connect to metrics collector.");
+    }
+    connection=connectUrl.startsWith("https") ? getSSLConnection(connectUrl) : getConnection(connectUrl);
+    connection.setRequestMethod("POST");
+    connection.setRequestProperty("Content-Type","application/json");
+    connection.setRequestProperty("Connection","Keep-Alive");
+    connection.setConnectTimeout(timeout);
+    connection.setReadTimeout(timeout);
+    connection.setDoOutput(true);
+    if (jsonData != null) {
+      try (OutputStream os=connection.getOutputStream()){
+        os.write(jsonData.getBytes("UTF-8"));
+      }
+     }
+    int statusCode=connection.getResponseCode();
+    if (statusCode != 200) {
+      LOG.info("Unable to POST metrics to collector, " + connectUrl + ", "+ "statusCode = "+ statusCode);
+    }
+ else {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Metrics posted to Collector " + connectUrl);
+      }
+    }
+    cleanupInputStream(connection.getInputStream());
+  }
+ catch (  IOException ioe) {
+    StringBuilder errorMessage=new StringBuilder("Unable to connect to collector, " + connectUrl + "\n");
+    try {
+      if ((connection != null)) {
+        errorMessage.append(cleanupInputStream(connection.getErrorStream()));
+      }
+    }
+ catch (    IOException e) {
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug(errorMessage,ioe);
+    }
+ else {
+      LOG.info(errorMessage);
+    }
+    throw new UnableToConnectException(ioe).setConnectUrl(connectUrl);
+  }
+}
