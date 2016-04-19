@@ -1,0 +1,54 @@
+{
+  final Cluster cluster=EasyMock.createNiceMock(Cluster.class);
+  final KerberosIdentityDataFileWriter kerberosIdentityDataFileWriter=EasyMock.createNiceMock(KerberosIdentityDataFileWriter.class);
+  final KerberosDescriptor kerberosDescriptor=EasyMock.createNiceMock(KerberosDescriptor.class);
+  final ServiceComponentHost serviceComponentHostHDFS=EasyMock.createNiceMock(ServiceComponentHost.class);
+  final ServiceComponentHost serviceComponentHostZK=EasyMock.createNiceMock(ServiceComponentHost.class);
+  final KerberosServiceDescriptor serviceDescriptor=EasyMock.createNiceMock(KerberosServiceDescriptor.class);
+  final KerberosComponentDescriptor componentDescriptor=EasyMock.createNiceMock(KerberosComponentDescriptor.class);
+  final String hdfsService="HDFS";
+  final String zookeeperService="ZOOKEEPER";
+  final String hostName="host1";
+  final String hdfsComponent="DATANODE";
+  final String zkComponent="ZK";
+  Collection<String> identityFilter=new ArrayList<>();
+  Map<String,Map<String,String>> kerberosConfigurations=new HashMap<>();
+  Map<String,Map<String,String>> propertiesToInsert=new HashMap<>();
+  Map<String,Set<String>> propertiesToRemove=new HashMap<>();
+  Map<String,String> descriptorProperties=new HashMap<>();
+  Map<String,Map<String,String>> configurations=new HashMap<>();
+  List<ServiceComponentHost> serviceComponentHosts=new ArrayList<ServiceComponentHost>(){
+{
+      add(serviceComponentHostHDFS);
+      add(serviceComponentHostZK);
+    }
+  }
+;
+  Map<String,Service> clusterServices=new HashMap<String,Service>(){
+{
+      put(hdfsService,null);
+      put(zookeeperService,null);
+    }
+  }
+;
+  Capture<Set<String>> serviceCapture=Capture.newInstance(CaptureType.LAST);
+  expect(kerberosDescriptor.getProperties()).andReturn(descriptorProperties).atLeastOnce();
+  expect(kerberosHelper.calculateConfigurations((Cluster)anyObject(),anyString(),(Map<String,String>)anyObject())).andReturn(configurations).atLeastOnce();
+  expect(kerberosIdentityDataFileWriterFactory.createKerberosIdentityDataFileWriter((File)anyObject())).andReturn(kerberosIdentityDataFileWriter);
+  expect(cluster.getServices()).andReturn(new HashMap<>(clusterServices)).atLeastOnce();
+  expect(serviceComponentHostHDFS.getHostName()).andReturn(hostName).atLeastOnce();
+  expect(serviceComponentHostHDFS.getServiceName()).andReturn(hdfsService).atLeastOnce();
+  expect(serviceComponentHostHDFS.getServiceComponentName()).andReturn(hdfsComponent).atLeastOnce();
+  expect(serviceComponentHostZK.getHostName()).andReturn(hostName).atLeastOnce();
+  expect(serviceComponentHostZK.getServiceName()).andReturn(zookeeperService).atLeastOnce();
+  expect(serviceComponentHostZK.getServiceComponentName()).andReturn(zkComponent).atLeastOnce();
+  expect(kerberosDescriptor.getService(hdfsService)).andReturn(serviceDescriptor).once();
+  expect(serviceDescriptor.getComponent(hdfsComponent)).andReturn(componentDescriptor).once();
+  expect(componentDescriptor.getConfigurations(anyBoolean())).andReturn(null);
+  expect(kerberosHelper.applyStackAdvisorUpdates((Cluster)anyObject(),capture(serviceCapture),(Map<String,Map<String,String>>)anyObject(),(Map<String,Map<String,String>>)anyObject(),(Map<String,Set<String>>)anyObject(),(Map<String,Map<String,String>>)anyObject(),(Map<String,Set<String>>)anyObject(),anyBoolean())).andReturn(null).atLeastOnce();
+  replay(kerberosDescriptor,kerberosHelper,kerberosIdentityDataFileWriterFactory,cluster,serviceComponentHostHDFS,serviceComponentHostZK,serviceDescriptor,componentDescriptor);
+  prepareKerberosServerAction.processServiceComponentHosts(cluster,kerberosDescriptor,serviceComponentHosts,identityFilter,"",kerberosConfigurations,propertiesToInsert,propertiesToRemove,false,false);
+  verify(kerberosHelper);
+  Set<String> resultServices=serviceCapture.getValue();
+  Assert.assertEquals(clusterServices.keySet(),resultServices);
+}
