@@ -207,7 +207,7 @@
     final AlertDefinitionEntity hiveWebhcatServerStatusAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"hive_webhcat_server_status");
     final AlertDefinitionEntity flumeAgentStatusAlertDefinitionEntity=alertDefinitionDAO.findByName(clusterID,"flume_agent_status");
     Map<AlertDefinitionEntity,List<String>> alertDefinitionParams=new HashMap<>();
-    checkedPutToMap(alertDefinitionParams,namenodeLastCheckpointAlertDefinitionEntity,Lists.newArrayList("connection.timeout","checkpoint.time.warning.threshold","checkpoint.time.critical.threshold"));
+    checkedPutToMap(alertDefinitionParams,namenodeLastCheckpointAlertDefinitionEntity,Lists.newArrayList("connection.timeout","checkpoint.time.warning.threshold","checkpoint.time.critical.threshold","checkpoint.txns.multiplier.warning.threshold","checkpoint.txns.multiplier.critical.threshold"));
     checkedPutToMap(alertDefinitionParams,namenodeHAHealthAlertDefinitionEntity,Lists.newArrayList("connection.timeout"));
     checkedPutToMap(alertDefinitionParams,nodemanagerHealthAlertDefinitionEntity,Lists.newArrayList("connection.timeout"));
     checkedPutToMap(alertDefinitionParams,nodemanagerHealthSummaryAlertDefinitionEntity,Lists.newArrayList("connection.timeout"));
@@ -215,20 +215,20 @@
     checkedPutToMap(alertDefinitionParams,hiveServerProcessAlertDefinitionEntity,Lists.newArrayList("default.smoke.user","default.smoke.principal","default.smoke.keytab"));
     checkedPutToMap(alertDefinitionParams,hiveWebhcatServerStatusAlertDefinitionEntity,Lists.newArrayList("default.smoke.user","connection.timeout"));
     checkedPutToMap(alertDefinitionParams,flumeAgentStatusAlertDefinitionEntity,Lists.newArrayList("run.directory"));
-    List<AlertDefinitionEntity> definitionsForPropertyUpdates=new ArrayList<>();
+    Map<Long,AlertDefinitionEntity> definitionsForPropertyUpdates=new HashMap<>();
     for (    Map.Entry<AlertDefinitionEntity,List<String>> entry : alertDefinitionParams.entrySet()) {
       AlertDefinitionEntity alertDefinition=entry.getKey();
       String source=alertDefinition.getSource();
       alertDefinition.setSource(addParam(source,entry.getValue()));
-      definitionsForPropertyUpdates.add(alertDefinition);
+      definitionsForPropertyUpdates.put(alertDefinition.getDefinitionId(),alertDefinition);
     }
     for (    String name : alertNamesForPropertyUpdates) {
       AlertDefinitionEntity alertDefinition=alertDefinitionDAO.findByName(clusterID,name);
-      if (alertDefinition != null) {
-        definitionsForPropertyUpdates.add(alertDefinition);
+      if (alertDefinition != null && !definitionsForPropertyUpdates.containsKey(alertDefinition.getDefinitionId())) {
+        definitionsForPropertyUpdates.put(alertDefinition.getDefinitionId(),alertDefinition);
       }
     }
-    for (    AlertDefinitionEntity alertDefinition : definitionsForPropertyUpdates) {
+    for (    AlertDefinitionEntity alertDefinition : definitionsForPropertyUpdates.values()) {
       if (visibilityMap.containsKey(alertDefinition.getDefinitionName())) {
         for (        Map.Entry<String,String> entry : visibilityMap.get(alertDefinition.getDefinitionName()).entrySet()) {
           String paramName=entry.getKey();

@@ -1,0 +1,10 @@
+@patch('urllib2.urlopen')
+def test_uncommitted_txn_exceeded(self, urlopen_mock):
+    current_time = int(round((time.time() * 1000)))
+    jmx_output = {'beans': [{'LastCheckpointTime': (current_time - 3600000), 'JournalTransactionInfo': '{"MostRecentCheckpointTxId":"2000","LastAppliedOrWrittenTxId":"3000"}', }], }
+    response = MagicMock()
+    response.read.return_value = json.dumps(jmx_output)
+    urlopen_mock.return_value = response
+    [status, messages] = alert.execute(configurations=configs, parameters=parameters)
+    self.assertEqual(status, RESULT_STATE_CRITICAL)
+    self.assertEqual(messages[0], 'Last Checkpoint: [1 hours, 0 minutes, 1000 transactions]')
