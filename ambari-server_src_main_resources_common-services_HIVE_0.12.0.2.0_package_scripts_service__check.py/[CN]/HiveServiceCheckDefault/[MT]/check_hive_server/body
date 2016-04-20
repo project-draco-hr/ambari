@@ -1,0 +1,28 @@
+def check_hive_server(self, env, server_component_name, kinit_cmd, address_list, server_port):
+    import params
+    env.set_params(params)
+    Logger.info('Server Address List : {0}, Port : {1}'.format(address_list, server_port))
+    if (not address_list):
+        raise Fail((('Can not find any ' + server_component_name) + ' ,host. Please check configuration.'))
+    SOCKET_WAIT_SECONDS = 290
+    start_time = time.time()
+    end_time = (start_time + SOCKET_WAIT_SECONDS)
+    Logger.info('Waiting for the {0} to start...'.format(server_component_name))
+    workable_server_available = False
+    i = 0
+    while ((time.time() < end_time) and (not workable_server_available)):
+        address = address_list[i]
+        try:
+            check_thrift_port_sasl(address, server_port, params.hive_server2_authentication, params.hive_server_principal, kinit_cmd, params.smokeuser, transport_mode=params.hive_transport_mode, http_endpoint=params.hive_http_endpoint, ssl=params.hive_ssl, ssl_keystore=params.hive_ssl_keystore_path, ssl_password=params.hive_ssl_keystore_password)
+            Logger.info('Successfully connected to {0} on port {1}'.format(address, server_port))
+            workable_server_available = True
+        except:
+            Logger.info('Connection to {0} on port {1} failed'.format(address, server_port))
+            time.sleep(5)
+        i += 1
+        if (i == len(address_list)):
+            i = 0
+    elapsed_time = (time.time() - start_time)
+    if (not workable_server_available):
+        raise Fail("Connection to '{0}' on host: {1} and port {2} failed after {3} seconds".format(server_component_name, params.hostname, server_port, elapsed_time))
+    Logger.info("Successfully stayed connected to '{0}' on host: {1} and port {2} after {3} seconds".format(server_component_name, params.hostname, server_port, elapsed_time))
