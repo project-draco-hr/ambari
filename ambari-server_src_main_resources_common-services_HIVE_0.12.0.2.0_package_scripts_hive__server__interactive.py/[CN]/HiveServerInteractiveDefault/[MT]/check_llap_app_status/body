@@ -1,0 +1,52 @@
+def check_llap_app_status(self, llap_app_name, num_retries):
+    curr_time = time.time()
+    if (num_retries <= 0):
+        num_retries = 2
+    if (num_retries > 20):
+        num_retries = 20
+
+    @retry(times=num_retries, sleep_time=15, err_class=Fail)
+    def do_retries():
+        live_instances = 0
+        desired_instances = 0
+        percent_desired_instances_to_be_up = 80
+        llap_app_info = self._get_llap_app_status_info(llap_app_name)
+        if ((llap_app_info is None) or ('state' not in llap_app_info)):
+            Logger.error('Malformed JSON data received for LLAP app. Exiting ....')
+            return False
+        if (llap_app_info['state'].upper() in ['RUNNING_ALL', 'LAUNCHING']):
+            Logger.info("LLAP app '{0}' in '{1}' state.".format(llap_app_name, llap_app_info['state']))
+            return True
+        elif (llap_app_info['state'].upper() == 'RUNNING_PARTIAL'):
+            if (('liveInstances' in llap_app_info) and ('desiredInstances' in llap_app_info)):
+                live_instances = llap_app_info['liveInstances']
+                desired_instances = llap_app_info['desiredInstances']
+            else:
+                Logger.info("LLAP app '{0}' is in '{1}' state, but 'instances' information not available in JSON received. Exiting ....".format(llap_app_name, llap_app_info['state']))
+                Logger.info(llap_app_info)
+                return False
+            if (desired_instances == 0):
+                Logger.info("LLAP app '{0}' desired instance are set to 0. Exiting ....".format(llap_app_name))
+                return False
+            percentInstancesUp = 0
+            if (live_instances > 0):
+                percentInstancesUp = ((float(live_instances) / desired_instances) * 100)
+            if (percentInstancesUp >= percent_desired_instances_to_be_up):
+                Logger.info("Slider app '{0}' in '{1}' state. Live Instances : '{2}'  >= {3}% of Desired Instances : '{4}'".format(llap_app_name, llap_app_info['state'], llap_app_info['liveInstances'], percent_desired_instances_to_be_up, llap_app_info['desiredInstances']))
+                return True
+            else:
+                Logger.info("Slider app '{0}' in '{1}' state. Live Instances : '{2}'. Desired Instances : '{3}' after {4} secs.".format(llap_app_name, llap_app_info['state'], llap_app_info['liveInstances'], llap_app_info['desiredInstances'], (time.time() - curr_time)))
+                raise Fail('App state is RUNNING_PARTIAL.')
+        elif (llap_app_info['state'].upper() == 'APP_NOT_FOUND'):
+            status_str = format("Slider app '{0}' current state is {1}.".format(llap_app_name, llap_app_info['state']))
+            Logger.info(status_str)
+            raise Fail(status_str)
+        else:
+            Logger.info("Slider app '{0}' current state is '{1}'. Expected : 'RUNNING'".format(llap_app_name, llap_app_info['state']))
+            return False
+    try:
+        status = do_retries()
+        return status
+    except Exception as e:
+        Logger.info("App '{0}' did not come up after a wait of {1} seconds".format(llap_app_name, (time.time() - curr_time)))
+        return False
