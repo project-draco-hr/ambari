@@ -1,53 +1,50 @@
 {
   AmbariManagementController controller=getManagementController();
   Clusters clusters=controller.getClusters();
-  List<HostRequest> okToRemove=new ArrayList<HostRequest>();
+  DeleteStatusMetaData deleteStatusMetaData=new DeleteStatusMetaData();
+  List<HostRequest> okToRemove=new ArrayList<>();
   for (  HostRequest hostRequest : requests) {
     String hostName=hostRequest.getHostname();
     if (null == hostName) {
       continue;
     }
-    Set<String> clusterNamesForHost=new HashSet<String>();
-    if (null != hostRequest.getClusterName()) {
-      clusterNamesForHost.add(hostRequest.getClusterName());
+    try {
+      validateHostInDeleteFriendlyState(hostRequest,clusters);
+      okToRemove.add(hostRequest);
     }
- else {
-      Set<Cluster> clustersForHost=clusters.getClustersForHost(hostRequest.getHostname());
-      if (null != clustersForHost) {
-        for (        Cluster c : clustersForHost) {
-          clusterNamesForHost.add(c.getClusterName());
-        }
-      }
+ catch (    Exception ex) {
+      deleteStatusMetaData.addException(hostName,ex);
     }
-    for (    String clusterName : clusterNamesForHost) {
-      Cluster cluster=clusters.getCluster(clusterName);
-      List<ServiceComponentHost> list=cluster.getServiceComponentHosts(hostName);
-      if (!list.isEmpty()) {
-        List<String> componentsToRemove=new ArrayList<String>();
-        for (        ServiceComponentHost sch : list) {
-          Service s=cluster.getService(sch.getServiceName());
-          ServiceComponent sc=s.getServiceComponent(sch.getServiceComponentName());
-          if (!sc.isClientComponent()) {
-            componentsToRemove.add(sch.getServiceComponentName());
-          }
-        }
-        if (!componentsToRemove.isEmpty()) {
-          StringBuilder reason=new StringBuilder("Cannot remove host ").append(hostName).append(" from ").append(hostRequest.getClusterName()).append(".  The following roles exist, and these components must be stopped if running, and then deleted: ");
-          reason.append(StringUtils.join(componentsToRemove,", "));
-          throw new AmbariException(reason.toString());
-        }
-      }
-    }
-    okToRemove.add(hostRequest);
   }
   for (  HostRequest hostRequest : okToRemove) {
-    clusters.deleteHost(hostRequest.getHostname());
-    removeHostFromClusterTopology(clusters,hostRequest);
+    String hostname=hostRequest.getHostname();
+    try {
+      clusters.deleteHost(hostname);
+      deleteStatusMetaData.addDeletedKey(hostname);
+    }
+ catch (    Exception ex) {
+      deleteStatusMetaData.addException(hostname,ex);
+    }
     for (    LogicalRequest logicalRequest : topologyManager.getRequests(Collections.<Long>emptyList())) {
-      logicalRequest.removeHostRequestByHostName(hostRequest.getHostname());
+      logicalRequest.removeHostRequestByHostName(hostname);
     }
     if (null != hostRequest.getClusterName()) {
       clusters.getCluster(hostRequest.getClusterName()).recalculateAllClusterVersionStates();
     }
   }
+  if (deleteStatusMetaData.getDeletedKeys().size() + deleteStatusMetaData.getExceptionForKeys().size() == 1) {
+    if (deleteStatusMetaData.getDeletedKeys().size() == 1) {
+      return null;
+    }
+    for (    Map.Entry<String,Exception> entry : deleteStatusMetaData.getExceptionForKeys().entrySet()) {
+      Exception ex=entry.getValue();
+      if (ex instanceof AmbariException) {
+        throw (AmbariException)ex;
+      }
+ else {
+        throw new AmbariException(ex.getMessage(),ex);
+      }
+    }
+  }
+  return deleteStatusMetaData;
 }
