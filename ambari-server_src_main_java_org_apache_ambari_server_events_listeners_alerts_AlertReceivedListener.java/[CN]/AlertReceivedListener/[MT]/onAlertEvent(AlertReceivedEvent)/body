@@ -60,11 +60,18 @@
         current.setLatestText(alert.getText());
         long occurrences=current.getOccurrences() + 1;
         current.setOccurrences(occurrences);
-        AlertFirmness currentFirmness=current.getFirmness();
+        AlertFirmness firmness=current.getFirmness();
         int repeatTolerance=getRepeatTolerance(definition,clusterName);
-        if (currentFirmness == AlertFirmness.SOFT && occurrences >= repeatTolerance) {
+        if (firmness == AlertFirmness.SOFT && occurrences >= repeatTolerance) {
           current.setFirmness(AlertFirmness.HARD);
-          alertEvents.add(new AlertStateChangeEvent(clusterId,alert,current,alertState));
+          AlertStateChangeEvent stateChangedEvent=new AlertStateChangeEvent(clusterId,alert,current,alertState,firmness);
+          alertEvents.add(stateChangedEvent);
+        }
+      }
+      if (alertState == AlertState.SKIPPED) {
+        String alertText=alert.getText();
+        if (StringUtils.isNotBlank(alertText)) {
+          current.setLatestText(alertText);
         }
       }
       toMerge.add(current);
@@ -75,6 +82,7 @@
       }
       AlertHistoryEntity oldHistory=current.getAlertHistory();
       AlertState oldState=oldHistory.getAlertState();
+      AlertFirmness oldFirmness=current.getFirmness();
       AlertHistoryEntity history=createHistory(clusterId,oldHistory.getAlertDefinition(),alert);
       current.setLatestTimestamp(alert.getTimestamp());
       current.setOriginalTimestamp(alert.getTimestamp());
@@ -101,7 +109,7 @@ break;
 AlertFirmness firmness=calculateFirmnessForStateChange(clusterName,definition,alertState,current.getOccurrences());
 current.setFirmness(firmness);
 toCreateHistoryAndMerge.add(current);
-alertEvents.add(new AlertStateChangeEvent(clusterId,alert,current,oldState));
+alertEvents.add(new AlertStateChangeEvent(clusterId,alert,current,oldState,oldFirmness));
 }
 }
 saveEntities(toCreate,toMerge,toCreateHistoryAndMerge);

@@ -11,6 +11,9 @@ def execute(configurations={}, parameters={}, host_name=None):
     metric_name = METRIC_NAME_PARAM_DEFAULT
     if (METRIC_NAME_PARAM_KEY in parameters):
         metric_name = parameters[METRIC_NAME_PARAM_KEY]
+    metric_units = METRIC_UNITS_DEFAULT
+    if (METRIC_UNITS_PARAM_KEY in parameters):
+        metric_units = parameters[METRIC_UNITS_PARAM_KEY]
     app_id = APP_ID_PARAM_DEFAULT
     if (APP_ID_PARAM_KEY in parameters):
         app_id = parameters[APP_ID_PARAM_KEY]
@@ -104,12 +107,12 @@ def execute(configurations={}, parameters={}, host_name=None):
                             namenode_service_rpc_address = hdfs_site[nn_service_rpc_address_key]
                     pass
                 except:
-                    logger.exception('Unable to determine active NameNode')
+                    logger.exception('Unable to determine the active NameNode')
         pass
         if merge_ha_metrics:
             hostnames = ','.join(namenodes)
             if (host_name not in active_namenodes):
-                return (RESULT_STATE_SKIPPED, ['Another host will report this alert'])
+                return (RESULT_STATE_SKIPPED, ['This alert will be reported by another host.'])
         pass
     if ((not namenode_service_rpc_address) and ('rpc.rpc.datanode' in metric_name)):
         return (RESULT_STATE_SKIPPED, ['Service RPC port is not enabled.'])
@@ -122,30 +125,43 @@ def execute(configurations={}, parameters={}, host_name=None):
         data = response.read()
         conn.close()
     except Exception:
-        return (RESULT_STATE_UNKNOWN, ['Unable to retrieve metrics from AMS.'])
+        return (RESULT_STATE_UNKNOWN, ['Unable to retrieve metrics from the Ambari Metrics service.'])
     if (response.status != 200):
-        return (RESULT_STATE_UNKNOWN, ['Unable to retrieve metrics from AMS.'])
+        return (RESULT_STATE_UNKNOWN, ['Unable to retrieve metrics from the Ambari Metrics service.'])
     data_json = json.loads(data)
     metrics = []
     for metrics_data in data_json['metrics']:
         metrics += metrics_data['metrics'].values()
     pass
     if ((not metrics) or (len(metrics) < 2)):
-        return (RESULT_STATE_SKIPPED, ['Unable to calculate the standard deviation for {0} datapoints'.format(len(metrics))])
+        number_of_data_points = (len(metrics) if metrics else 0)
+        return (RESULT_STATE_SKIPPED, ['There are not enough data points to calculate the standard deviation ({0} sampled)'.format(number_of_data_points)])
     if minimum_value_threshold:
         metrics = [metric for metric in metrics if (metric > (minimum_value_threshold * 1000))]
         if (len(metrics) < 2):
-            return (RESULT_STATE_OK, ['No datapoints found above the minimum threshold of {0} seconds'.format(minimum_value_threshold)])
+            return (RESULT_STATE_OK, ['There were no data points above the minimum threshold of {0} seconds'.format(minimum_value_threshold)])
     mean_value = mean(metrics)
     stddev = sample_standard_deviation(metrics)
-    max_value = (max(metrics) / 1000)
     try:
-        deviation_percent = ((stddev / mean_value) * 100)
+        deviation_percent = ((stddev / float(mean_value)) * 100)
     except ZeroDivisionError:
-        return (RESULT_STATE_SKIPPED, ['Unable to calculate the standard deviation percentage. The mean value is 0'])
-    logger.debug('\n  AMS request parameters - {0}\n  AMS response - {1}\n  Mean - {2}\n  Standard deviation - {3}\n  Percentage standard deviation - {4}\n  '.format(encoded_get_metrics_parameters, data_json, mean_value, stddev, deviation_percent))
+        return (RESULT_STATE_SKIPPED, ['Unable to calculate the standard deviation because the mean value is 0'])
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug('\n    AMS request parameters - {0}\n    AMS response - {1}\n    Mean - {2}\n    Standard deviation - {3}\n    Percentage standard deviation - {4}\n    '.format(encoded_get_metrics_parameters, data_json, mean_value, stddev, deviation_percent))
+    mean_value_localized = locale.format('%.0f', mean_value, grouping=True)
+    variance_value = ((deviation_percent / 100.0) * mean_value)
+    variance_value_localized = locale.format('%.0f', variance_value, grouping=True)
     if (deviation_percent > critical_threshold):
-        return (RESULT_STATE_CRITICAL, ['CRITICAL. Percentage standard deviation value {0}% is beyond the critical threshold of {1}% (growing {2} seconds to {3} seconds)'.format(('%.2f' % deviation_percent), ('%.2f' % critical_threshold), minimum_value_threshold, ('%.2f' % max_value))])
+        threshold_value = ((critical_threshold / 100.0) * mean_value)
+        threshold_value_localized = locale.format('%.0f', threshold_value, grouping=True)
+        message = DEVIATION_THRESHOLD_MESSAGE.format(variance_value_localized, metric_units, deviation_percent, mean_value_localized, metric_units, threshold_value_localized, metric_units)
+        return (RESULT_STATE_CRITICAL, [message])
     if (deviation_percent > warning_threshold):
-        return (RESULT_STATE_WARNING, ['WARNING. Percentage standard deviation value {0}% is beyond the warning threshold of {1}% (growing {2} seconds to {3} seconds)'.format(('%.2f' % deviation_percent), ('%.2f' % warning_threshold), minimum_value_threshold, ('%.2f' % max_value))])
-    return (RESULT_STATE_OK, ['OK. Percentage standard deviation value is {0}%'.format(('%.2f' % deviation_percent))])
+        threshold_value = ((warning_threshold / 100.0) * mean_value)
+        threshold_value_localized = locale.format('%.0f', threshold_value, grouping=True)
+        message = DEVIATION_THRESHOLD_MESSAGE.format(variance_value_localized, metric_units, deviation_percent, mean_value_localized, metric_units, threshold_value_localized, metric_units)
+        return (RESULT_STATE_WARNING, [message])
+    threshold_value = ((warning_threshold / 100.0) * mean_value)
+    threshold_value_localized = locale.format('%.0f', threshold_value, grouping=True)
+    message = DEVIATION_OK_MESSAGE.format(variance_value_localized, metric_units, warning_threshold, mean_value_localized, metric_units, threshold_value_localized, metric_units)
+    return (RESULT_STATE_OK, [message])
