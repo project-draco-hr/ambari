@@ -1,0 +1,30 @@
+{
+  dbAccessor.executeQuery("UPDATE " + HOST_VERSION_TABLE + " SET state = 'INSTALLED' WHERE state IN ('UPGRADING', 'UPGRADE_FAILED', 'UPGRADED')");
+  dbAccessor.executeQuery("UPDATE " + CLUSTER_VERSION_TABLE + " SET state = 'INSTALLED' WHERE state IN ('UPGRADING', 'UPGRADE_FAILED', 'UPGRADED')");
+  Statement statement=null;
+  ResultSet resultSet=null;
+  try {
+    statement=dbAccessor.getConnection().createStatement();
+    if (statement != null) {
+      String selectSQL=String.format("SELECT repo_version_id, cluster_id FROM %s WHERE state = 'CURRENT'",CLUSTER_VERSION_TABLE);
+      resultSet=statement.executeQuery(selectSQL);
+      Set<Long> clusterIds=new HashSet<>();
+      while (null != resultSet && resultSet.next()) {
+        Long clusterId=resultSet.getLong("cluster_id");
+        if (clusterIds.contains(clusterId)) {
+          throw new AmbariException(String.format("Database is in a bad state. Cluster %s contains multiple CURRENT version",clusterId));
+        }
+        clusterIds.add(clusterId);
+        Long repoVersionId=resultSet.getLong("repo_version_id");
+        String updateHostVersionSQL=String.format("UPDATE %s SET state = 'CURRENT' WHERE repo_version_id = %s",HOST_VERSION_TABLE,repoVersionId);
+        String updateClusterVersionSQL=String.format("UPDATE %s SET state = 'CURRENT' WHERE repo_version_id = %s",CLUSTER_VERSION_TABLE,repoVersionId);
+        dbAccessor.executeQuery(updateHostVersionSQL);
+        dbAccessor.executeQuery(updateClusterVersionSQL);
+      }
+    }
+  }
+  finally {
+    JdbcUtils.closeResultSet(resultSet);
+    JdbcUtils.closeStatement(statement);
+  }
+}
