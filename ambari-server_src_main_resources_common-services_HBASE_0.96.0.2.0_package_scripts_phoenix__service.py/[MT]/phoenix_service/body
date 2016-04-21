@@ -10,4 +10,10 @@ def phoenix_service(action='start'):
             Execute(daemon_cmd, user=format('{hbase_user}'), environment=env)
         elif (action == 'stop'):
             Execute(daemon_cmd, timeout=30, on_timeout=format('! ( {no_op_test} ) || {sudo} -H -E kill -9 `cat {pid_file}`'), user=format('{hbase_user}'), environment=env)
-            File(pid_file, action='delete')
+            try:
+                File(pid_file, action='delete')
+            except OSError as exc:
+                if (exc.errno == errno.ENOENT):
+                    Logger.info("Did not remove '{0}' as it did not exist".format(pid_file))
+                else:
+                    raise
