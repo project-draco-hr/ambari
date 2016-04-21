@@ -1,5 +1,5 @@
 def execute_db_connection_check(self, config, tmp_dir):
-    print 'DB connection check started.'
+    Logger.info('DB connection check started.')
     ambari_server_hostname = config['commandParams']['ambari_server_host']
     check_db_connection_jar_name = 'DBConnectionVerification.jar'
     jdk_location = config['commandParams']['jdk_location']
@@ -51,7 +51,7 @@ def execute_db_connection_check(self, config, tmp_dir):
     java_exec = os.path.join(java_home, 'bin', java_bin)
     if ((('jdk_name' not in config['commandParams']) or (config['commandParams']['jdk_name'] == None) or (config['commandParams']['jdk_name'] == '')) and (not os.path.isfile(java_exec))):
         message = 'Custom java is not available on host. Please install it. Java home should be the same as on server. \n'
-        print message
+        Logger.warning(message)
         db_connection_check_structured_output = {'exit_code': 1, 'message': message, }
         return db_connection_check_structured_output
     environment = {'no_proxy': format('{ambari_server_hostname}'), }
@@ -64,7 +64,7 @@ def execute_db_connection_check(self, config, tmp_dir):
             download_file(jdk_url, jdk_download_target)
         except Exception as e:
             message = ('Error downloading JDK from Ambari Server resources. Check network access to Ambari Server.\n' + str(e))
-            print message
+            Logger.exception(message)
             db_connection_check_structured_output = {'exit_code': 1, 'message': message, }
             return db_connection_check_structured_output
         if jdk_name.endswith('.exe'):
@@ -74,7 +74,7 @@ def execute_db_connection_check(self, config, tmp_dir):
                 Execute(install_cmd, path=install_path)
             except Exception as e:
                 message = ('Error installing java.\n' + str(e))
-                print message
+                Logger.exception(message)
                 db_connection_check_structured_output = {'exit_code': 1, 'message': message, }
                 return db_connection_check_structured_output
         else:
@@ -96,7 +96,7 @@ def execute_db_connection_check(self, config, tmp_dir):
                     Execute(('chmod', '-R', '755', java_home), sudo=True)
                 except Exception as e:
                     message = ('Error installing java.\n' + str(e))
-                    print message
+                    Logger.exception(message)
                     db_connection_check_structured_output = {'exit_code': 1, 'message': message, }
                     return db_connection_check_structured_output
             finally:
@@ -105,7 +105,7 @@ def execute_db_connection_check(self, config, tmp_dir):
         download_file(check_db_connection_url, check_db_connection_path)
     except Exception as e:
         message = ('Error downloading DBConnectionVerification.jar from Ambari Server resources. Check network access to Ambari Server.\n' + str(e))
-        print message
+        Logger.exception(message)
         db_connection_check_structured_output = {'exit_code': 1, 'message': message, }
         return db_connection_check_structured_output
     try:
@@ -119,7 +119,7 @@ def execute_db_connection_check(self, config, tmp_dir):
             Execute(untar_sqla_type2_driver, sudo=True)
     except Exception as e:
         message = (format('Error: Ambari Server cannot download the database JDBC driver and is unable to test the database connection. You must run ambari-server setup --jdbc-db={db_name} --jdbc-driver=/path/to/your/{db_name}/driver.jar on the Ambari Server host to make the JDBC driver available for download and to enable testing the database connection.\n') + str(e))
-        print message
+        Logger.exception(message)
         db_connection_check_structured_output = {'exit_code': 1, 'message': message, }
         return db_connection_check_structured_output
     if ((db_name == DB_ORACLE) and (user_name.upper() == 'SYS')):
@@ -132,4 +132,5 @@ def execute_db_connection_check(self, config, tmp_dir):
         db_connection_check_structured_output = {'exit_code': 0, 'message': 'DB connection check completed successfully!', }
     else:
         db_connection_check_structured_output = {'exit_code': 1, 'message': out, }
+    Logger.info('DB connection check completed.')
     return db_connection_check_structured_output
