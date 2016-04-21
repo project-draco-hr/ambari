@@ -1,0 +1,24 @@
+{
+  List<String> diffs=new ArrayList<>();
+  if (!base.tableNames().equals(other.tableNames())) {
+    Set<String> missingTables=Sets.difference(base.tableNames(),other.tableNames());
+    if (!missingTables.isEmpty()) {
+      diffs.add("Missing tables: " + Joiner.on(", ").join(missingTables));
+    }
+    Set<String> extraTables=Sets.difference(other.tableNames(),base.tableNames());
+    if (!extraTables.isEmpty()) {
+      diffs.add("Extra tables: " + Joiner.on(", ").join(extraTables));
+    }
+  }
+  Set<String> commonTables=Sets.intersection(base.tableNames(),other.tableNames());
+  for (  String tableName : commonTables) {
+    Table baseTable=base.tables.get(tableName);
+    Table otherTable=other.tables.get(tableName);
+    diffs.addAll(compareSets(String.format("Comparing columns of table %s.",tableName),baseTable.columns,otherTable.columns));
+    diffs.addAll(DDLTests.<FKConstraintContent>compareConstraints(tableName,"FK",baseTable.foreignKeys,otherTable.foreignKeys,false));
+    diffs.addAll(DDLTests.<Set<String>>compareConstraints(tableName,"UQ",baseTable.uniqueConstraints,otherTable.uniqueConstraints,false));
+    boolean comparePKName=!tableName.contains("qrtz");
+    diffs.addAll(DDLTests.<Set<String>>compareConstraints(tableName,"PK",toSet(baseTable.primaryKey),toSet(otherTable.primaryKey),comparePKName));
+  }
+  return diffs;
+}

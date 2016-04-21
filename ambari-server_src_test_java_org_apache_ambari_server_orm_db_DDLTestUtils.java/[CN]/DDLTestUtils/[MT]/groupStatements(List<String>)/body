@@ -1,0 +1,25 @@
+{
+  List<String> statements=new ArrayList<>();
+  Optional<ArrayList<String>> currentStmt=Optional.absent();
+  for (  String line : ddlFile) {
+    if (CommentLine.matcher(line).matches() || EmptyLine.matcher(line).matches() || CommitLine.matcher(line).matches())     ;
+ else     if (CreateTable.matcher(line).matches() || AlterTable.matcher(line).matches() || CreateIndex.matcher(line).matches()) {
+      if (currentStmt.isPresent())       throw new IllegalStateException("Unfinished statement: " + currentStmt.get() + "\nnew statement: "+ line);
+      currentStmt=Optional.of(new ArrayList<String>());
+      currentStmt.get().add(stripComment(line));
+      if (line.contains(";")) {
+        statements.add(Joiner.on(' ').join(currentStmt.get()));
+        currentStmt=Optional.absent();
+      }
+    }
+ else     if (currentStmt.isPresent() && EndStatement.matcher(line).matches()) {
+      currentStmt.get().add(stripComment(line));
+      statements.add(Joiner.on(' ').join(currentStmt.get()));
+      currentStmt=Optional.absent();
+    }
+ else     if (currentStmt.isPresent()) {
+      currentStmt.get().add(stripComment(line));
+    }
+  }
+  return statements;
+}

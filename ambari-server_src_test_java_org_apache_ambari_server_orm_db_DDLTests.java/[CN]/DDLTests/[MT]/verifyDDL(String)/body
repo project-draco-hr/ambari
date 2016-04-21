@@ -1,0 +1,21 @@
+{
+  LOG.info("Checking DDL for {}",dbType);
+  DDL ddl=DDLTestUtils.getDdl(dbType);
+  printDDLMetrics(ddl);
+  Assert.assertEquals("Expected count of alter tables mismatch. Please include all constraint definitions in " + "the create table statement, only use alter table in exceptional cases, such as to work around a circular " + "FK dependency. Would another such case occur, please document it in the DDL's and adjust the "+ "EXPECTED_ALTER_TABLE_COUNT in this test.",EXPECTED_ALTER_TABLE_COUNT,ddl.alterTables.size());
+  for (  String tableName : ddl.tableNames()) {
+    Assert.assertTrue("Table name exceeds the 30 character limit: " + tableName,tableName.length() <= 30);
+  }
+  for (  Table table : ddl.tables.values()) {
+    Assert.assertTrue("PK name exceeds the 30 character limit: " + table.primaryKey,!table.primaryKey.isPresent() || table.primaryKey.get().name().length() <= 30);
+    for (    Constraint constr : Sets.union(table.foreignKeys,table.uniqueConstraints)) {
+      Assert.assertTrue("Constraint name exceeds the 30 character limit: " + constr,constr.name().length() <= 30);
+    }
+  }
+  for (  Table table : ddl.tables.values()) {
+    Assert.assertFalse("Unnamed PK exists for table: " + table.name,!table.name.startsWith("qrtz") && table.primaryKey.isPresent() && table.primaryKey.get().name().equals("<default>"));
+    for (    Constraint constr : Sets.union(table.foreignKeys,table.uniqueConstraints)) {
+      Assert.assertTrue("Constraint name exceeds the 30 character limit: " + constr,constr.name().length() <= 30);
+    }
+  }
+}

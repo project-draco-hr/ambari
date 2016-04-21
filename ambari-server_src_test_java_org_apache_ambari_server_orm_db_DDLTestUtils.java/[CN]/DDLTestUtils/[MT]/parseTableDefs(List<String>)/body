@@ -1,0 +1,85 @@
+{
+  List<String> createTables=new ArrayList<>();
+  for (  String stmt : statements) {
+    if (stmt.matches(".*create\\s+table.*")) {
+      String content=stmt.substring(stmt.indexOf('(') + 1,stmt.lastIndexOf(')'));
+      Matcher m=InnerList.matcher(content);
+      while (m.find()) {
+        String innerList=m.group();
+        stmt=stmt.replace(innerList,innerList.replaceAll("\\,","|"));
+      }
+      createTables.add(stmt);
+    }
+  }
+  List<Table> tables=new ArrayList<>();
+  for (  String ct : createTables) {
+    String tableName=stripPrefixQuotationAndBrackets(firstMatchingGroup(TableName,ct).get());
+    List<String> columns=new ArrayList<>();
+    Optional<SimpleConstraint> pk=Optional.absent();
+    List<FKConstraint> fks=new ArrayList<>();
+    List<SimpleConstraint> uqs=new ArrayList<>();
+    final String innerPart=ct.substring(ct.indexOf('(') + 1,ct.lastIndexOf(')'));
+    for (    String definition : Splitter.on(',').split(innerPart)) {
+      definition=definition.trim();
+      assertNounnamedConstraint(tableName,definition);
+      Matcher pkMatcher=PK.matcher(definition);
+      Matcher pkClustMatcher=PKClustered.matcher(definition);
+      Matcher unnamedPkMatcher=UnnamedPK.matcher(definition);
+      Matcher pkColumnMatcher=PKColumn.matcher(definition);
+      Matcher fkMatcher=FK.matcher(definition);
+      Matcher uqMatcher=UQ.matcher(definition);
+      Matcher unnamedFkMatcher=UnnamedFK.matcher(definition);
+      Matcher unnamedUqMatcher=UnnamedUQ.matcher(definition);
+      Matcher uqColumnMatcher=UQColumn.matcher(definition);
+      Matcher colMatcher=Col.matcher(definition);
+      if (pkMatcher.matches()) {
+        pk=Optional.of(Constraint.pk(pkMatcher.group(1),toColumns(pkMatcher.group(2))));
+      }
+ else       if (pkMatcher.matches()) {
+        pk=Optional.of(Constraint.pk(stripPrefixQuotationAndBrackets(pkMatcher.group(1)),toColumns(pkMatcher.group(2))));
+      }
+ else       if (pkClustMatcher.matches()) {
+        pk=Optional.of(Constraint.pk(stripPrefixQuotationAndBrackets(pkClustMatcher.group(1)),toColumns(pkClustMatcher.group(2))));
+      }
+ else       if (unnamedPkMatcher.matches()) {
+        pk=Optional.of(Constraint.pk("<default>",toColumns(unnamedPkMatcher.group(1))));
+      }
+ else       if (fkMatcher.matches()) {
+        fks.add(Constraint.fk(fkMatcher.group(1),toColumns(fkMatcher.group(2)),stripPrefixQuotationAndBrackets(fkMatcher.group(3)),toColumns(fkMatcher.group(4))));
+      }
+ else       if (unnamedFkMatcher.matches()) {
+        fks.add(Constraint.fk("<default>",toColumns(unnamedFkMatcher.group(1)),stripPrefixQuotationAndBrackets(unnamedFkMatcher.group(2)),toColumns(unnamedFkMatcher.group(3))));
+      }
+ else       if (uqMatcher.matches()) {
+        uqs.add(Constraint.uq(stripPrefixQuotationAndBrackets(uqMatcher.group(1)),toColumns(uqMatcher.group(2))));
+      }
+ else       if (unnamedUqMatcher.matches()) {
+        uqs.add(Constraint.uq("<default>",toColumns(unnamedUqMatcher.group(1))));
+      }
+ else       if (colMatcher.matches()) {
+        String colName=stripPrefixQuotationAndBrackets(colMatcher.group(1));
+        columns.add(colName);
+        if (pkColumnMatcher.matches()) {
+          pk=Optional.of(Constraint.pk("<default>",Collections.singleton(colName)));
+        }
+ else         if (uqColumnMatcher.matches()) {
+          uqs.add(Constraint.uq("<default>",Collections.singleton(colName)));
+        }
+      }
+ else {
+        LOG.warn("Unexpected definition: {}, context: {}",definition,ct);
+      }
+    }
+    if (columns.isEmpty()) {
+      throw new IllegalStateException("No columns found in table " + tableName);
+    }
+    checkDupes("columns of table " + tableName,columns);
+    tables.add(new Table(tableName,ImmutableSet.copyOf(columns),pk,ImmutableSet.copyOf(fks),ImmutableSet.copyOf(uqs)));
+  }
+  Map<String,Table> tableMap=Maps.newHashMap();
+  for (  Table t : tables) {
+    if (tableMap.containsKey(t.name))     throw new IllegalStateException("Duplicate table definition: " + t.name);
+    tableMap.put(t.name,t);
+  }
+  return tableMap;
+}
