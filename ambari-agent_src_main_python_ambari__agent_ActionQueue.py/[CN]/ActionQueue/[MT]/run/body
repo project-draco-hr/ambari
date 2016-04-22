@@ -1,26 +1,31 @@
 def run(self):
-    while (not self.stopped()):
-        self.processBackgroundQueueSafeEmpty()
-        self.processStatusCommandQueueSafeEmpty()
-        try:
-            if (self.parallel_execution == 0):
-                command = self.commandQueue.get(True, self.EXECUTION_COMMAND_WAIT_TIME)
-                self.process_command(command)
-            else:
-                while True:
+    try:
+        while (not self.stopped()):
+            self.processBackgroundQueueSafeEmpty()
+            self.processStatusCommandQueueSafeEmpty()
+            try:
+                if (self.parallel_execution == 0):
                     command = self.commandQueue.get(True, self.EXECUTION_COMMAND_WAIT_TIME)
-                    retryAble = False
-                    if (('commandParams' in command) and ('command_retry_enabled' in command['commandParams'])):
-                        retryAble = (command['commandParams']['command_retry_enabled'] == 'true')
-                    if retryAble:
-                        logger.info(((('Kicking off a thread for the command, id=' + str(command['commandId'])) + ' taskId=') + str(command['taskId'])))
-                        t = threading.Thread(target=self.process_command, args=(command,))
-                        t.daemon = True
-                        t.start()
-                    else:
-                        self.process_command(command)
-                        break
+                    self.process_command(command)
+                else:
+                    while True:
+                        command = self.commandQueue.get(True, self.EXECUTION_COMMAND_WAIT_TIME)
+                        retryAble = False
+                        if (('commandParams' in command) and ('command_retry_enabled' in command['commandParams'])):
+                            retryAble = (command['commandParams']['command_retry_enabled'] == 'true')
+                        if retryAble:
+                            logger.info(((('Kicking off a thread for the command, id=' + str(command['commandId'])) + ' taskId=') + str(command['taskId'])))
+                            t = threading.Thread(target=self.process_command, args=(command,))
+                            t.daemon = True
+                            t.start()
+                        else:
+                            self.process_command(command)
+                            break
+                        pass
                     pass
+            except Queue.Empty:
                 pass
-        except Queue.Empty:
-            pass
+    except:
+        logger.exception('ActionQueue thread failed with exception:')
+        raise
+    logger.info('ActionQueue thread has successfully finished')
