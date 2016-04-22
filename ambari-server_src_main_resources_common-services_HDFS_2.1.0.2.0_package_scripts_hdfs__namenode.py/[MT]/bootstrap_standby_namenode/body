@@ -1,22 +1,31 @@
 def bootstrap_standby_namenode(params, use_path=False):
+    mark_dirs = params.namenode_bootstrapped_mark_dirs
     bin_path = (os.path.join(params.hadoop_bin_dir, '') if use_path else '')
     try:
         iterations = 50
+        bootstrapped = False
         bootstrap_cmd = format('{bin_path}hdfs namenode -bootstrapStandby -nonInteractive')
         if (params.command_phase == 'INITIAL_START'):
             bootstrap_cmd = format('{bin_path}hdfs namenode -bootstrapStandby -nonInteractive -force')
+        elif is_namenode_bootstrapped(params):
+            return True
         Logger.info(('Boostrapping standby namenode: %s' % bootstrap_cmd))
         for i in range(iterations):
             Logger.info(('Try %d out of %d' % ((i + 1), iterations)))
             (code, out) = shell.call(bootstrap_cmd, logoutput=False, user=params.hdfs_user)
             if (code == 0):
                 Logger.info('Standby namenode bootstrapped successfully')
-                return True
+                bootstrapped = True
+                break
             elif (code == 5):
                 Logger.info('Standby namenode already bootstrapped')
-                return True
+                bootstrapped = True
+                break
             else:
                 Logger.warning(('Bootstrap standby namenode failed with %d error code. Will retry' % code))
     except Exception as ex:
         Logger.error(('Bootstrap standby namenode threw an exception. Reason %s' % str(ex)))
-    return False
+    if bootstrapped:
+        for mark_dir in mark_dirs:
+            Directory(mark_dir, create_parents=True)
+    return bootstrapped
