@@ -1,13 +1,17 @@
 {
-  setupClusterWithHosts("c1","HDP-2.0.6",new ArrayList<String>(){
+  final String cluster1=getUniqueName();
+  final String host1="a" + getUniqueName();
+  final String host2="b" + getUniqueName();
+  final String host3="c" + getUniqueName();
+  setupClusterWithHosts(cluster1,"HDP-2.0.6",new ArrayList<String>(){
 {
-      add("h1");
-      add("h2");
-      add("h3");
+      add(host1);
+      add(host2);
+      add(host3);
     }
   }
 ,"centos6");
-  Cluster cluster=clusters.getCluster("c1");
+  Cluster cluster=clusters.getCluster(cluster1);
   cluster.setDesiredStackVersion(new StackId("HDP-2.0.6"));
   cluster.setCurrentStackVersion(new StackId("HDP-2.0.6"));
   ConfigFactory cf=injector.getInstance(ConfigFactory.class);
@@ -43,13 +47,15 @@
   hdfs.addServiceComponent(Role.NAMENODE.name()).persist();
   hdfs.addServiceComponent(Role.DATANODE.name()).persist();
   mapred.addServiceComponent(Role.RESOURCEMANAGER.name()).persist();
-  hdfs.getServiceComponent(Role.HDFS_CLIENT.name()).addServiceComponentHost("h1").persist();
-  hdfs.getServiceComponent(Role.NAMENODE.name()).addServiceComponentHost("h1").persist();
-  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h1").persist();
-  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h2").persist();
-  ActionDefinition a1=new ActionDefinition("a1",ActionType.SYSTEM,"test,[optional1]","","","Does file exist",TargetHostType.SPECIFIC,Short.valueOf("100"));
+  hdfs.getServiceComponent(Role.HDFS_CLIENT.name()).addServiceComponentHost(host1).persist();
+  hdfs.getServiceComponent(Role.NAMENODE.name()).addServiceComponentHost(host1).persist();
+  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost(host1).persist();
+  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost(host2).persist();
+  String actionDef1=getUniqueName();
+  String actionDef2=getUniqueName();
+  ActionDefinition a1=new ActionDefinition(actionDef1,ActionType.SYSTEM,"test,[optional1]","","","Does file exist",TargetHostType.SPECIFIC,Short.valueOf("100"));
   controller.getAmbariMetaInfo().addActionDefinition(a1);
-  controller.getAmbariMetaInfo().addActionDefinition(new ActionDefinition("a2",ActionType.SYSTEM,"","HDFS","DATANODE","Does file exist",TargetHostType.ALL,Short.valueOf("1000")));
+  controller.getAmbariMetaInfo().addActionDefinition(new ActionDefinition(actionDef2,ActionType.SYSTEM,"","HDFS","DATANODE","Does file exist",TargetHostType.ALL,Short.valueOf("1000")));
   Map<String,String> params=new HashMap<String,String>(){
 {
       put("test","test");
@@ -62,28 +68,28 @@
   requestProperties.put("datanode","abc");
   ArrayList<String> hosts=new ArrayList<String>(){
 {
-      add("h1");
+      add(host1);
     }
   }
 ;
   RequestResourceFilter resourceFilter=new RequestResourceFilter("HDFS","DATANODE",hosts);
   List<RequestResourceFilter> resourceFilters=new ArrayList<RequestResourceFilter>();
   resourceFilters.add(resourceFilter);
-  ExecuteActionRequest actionRequest=new ExecuteActionRequest("c1",null,"a1",resourceFilters,null,params,false);
+  ExecuteActionRequest actionRequest=new ExecuteActionRequest(cluster1,null,actionDef1,resourceFilters,null,params,false);
   RequestStatusResponse response=controller.createAction(actionRequest,requestProperties);
   assertEquals(1,response.getTasks().size());
   ShortTaskStatus taskStatus=response.getTasks().get(0);
-  Assert.assertEquals("h1",taskStatus.getHostName());
+  Assert.assertEquals(host1,taskStatus.getHostName());
   List<HostRoleCommand> storedTasks=actionDB.getRequestTasks(response.getRequestId());
   Stage stage=actionDB.getAllStages(response.getRequestId()).get(0);
   Assert.assertNotNull(stage);
   Assert.assertEquals(1,storedTasks.size());
   HostRoleCommand task=storedTasks.get(0);
   Assert.assertEquals(RoleCommand.ACTIONEXECUTE,task.getRoleCommand());
-  Assert.assertEquals("a1",task.getRole().name());
-  Assert.assertEquals("h1",task.getHostName());
+  Assert.assertEquals(actionDef1,task.getRole().name());
+  Assert.assertEquals(host1,task.getHostName());
   ExecutionCommand cmd=task.getExecutionCommandWrapper().getExecutionCommand();
-  Assert.assertEquals("h1",cmd.getHostname());
+  Assert.assertEquals(host1,cmd.getHostname());
   Assert.assertFalse(cmd.getLocalComponents().isEmpty());
   Assert.assertTrue(cmd.getLocalComponents().contains(Role.DATANODE.name()));
   Assert.assertTrue(cmd.getLocalComponents().contains(Role.NAMENODE.name()));
@@ -103,7 +109,7 @@
   Assert.assertEquals("900",cmd.getCommandParams().get("command_timeout"));
   Assert.assertEquals(requestProperties.get(REQUEST_CONTEXT_PROPERTY),response.getRequestContext());
   a1.setDefaultTimeout((short)1800);
-  actionRequest=new ExecuteActionRequest("c1",null,"a1",resourceFilters,null,params,false);
+  actionRequest=new ExecuteActionRequest(cluster1,null,actionDef1,resourceFilters,null,params,false);
   response=controller.createAction(actionRequest,requestProperties);
   List<HostRoleCommand> storedTasks1=actionDB.getRequestTasks(response.getRequestId());
   cmd=storedTasks1.get(0).getExecutionCommandWrapper().getExecutionCommand();
@@ -111,17 +117,17 @@
   resourceFilters.clear();
   resourceFilter=new RequestResourceFilter("","",null);
   resourceFilters.add(resourceFilter);
-  actionRequest=new ExecuteActionRequest("c1",null,"a2",resourceFilters,null,params,false);
+  actionRequest=new ExecuteActionRequest(cluster1,null,actionDef2,resourceFilters,null,params,false);
   response=controller.createAction(actionRequest,requestProperties);
   assertEquals(2,response.getTasks().size());
   final List<HostRoleCommand> storedTasks2=actionDB.getRequestTasks(response.getRequestId());
   task=storedTasks2.get(1);
   Assert.assertEquals(RoleCommand.ACTIONEXECUTE,task.getRoleCommand());
-  Assert.assertEquals("a2",task.getRole().name());
+  Assert.assertEquals(actionDef2,task.getRole().name());
   HashSet<String> expectedHosts=new HashSet<String>(){
 {
-      add("h2");
-      add("h1");
+      add(host2);
+      add(host1);
     }
   }
 ;
@@ -141,7 +147,7 @@
   Assert.assertEquals("HDFS",cmd.getServiceName());
   Assert.assertEquals("DATANODE",cmd.getComponentName());
   Assert.assertEquals(requestProperties.get(REQUEST_CONTEXT_PROPERTY),response.getRequestContext());
-  Assert.assertEquals("h2",cmd.getHostname());
+  Assert.assertEquals(host2,cmd.getHostname());
   Assert.assertFalse(cmd.getLocalComponents().isEmpty());
   Assert.assertTrue(cmd.getLocalComponents().contains(Role.DATANODE.name()));
   Assert.assertFalse(cmd.getLocalComponents().contains(Role.NAMENODE.name()));
@@ -149,17 +155,17 @@
   Assert.assertFalse(cmd.getLocalComponents().contains(Role.RESOURCEMANAGER.name()));
   hosts=new ArrayList<String>(){
 {
-      add("h3");
+      add(host3);
     }
   }
 ;
   resourceFilters.clear();
   resourceFilter=new RequestResourceFilter("","",hosts);
   resourceFilters.add(resourceFilter);
-  actionRequest=new ExecuteActionRequest("c1",null,"a1",resourceFilters,null,params,false);
+  actionRequest=new ExecuteActionRequest(cluster1,null,actionDef1,resourceFilters,null,params,false);
   response=controller.createAction(actionRequest,requestProperties);
   assertEquals(1,response.getTasks().size());
   taskStatus=response.getTasks().get(0);
-  Assert.assertEquals("h3",taskStatus.getHostName());
+  Assert.assertEquals(host3,taskStatus.getHostName());
   Assert.assertEquals(requestProperties.get(REQUEST_CONTEXT_PROPERTY),response.getRequestContext());
 }

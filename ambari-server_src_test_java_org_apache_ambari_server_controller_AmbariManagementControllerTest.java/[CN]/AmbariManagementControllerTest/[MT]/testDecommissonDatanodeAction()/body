@@ -1,44 +1,44 @@
 {
-  String clusterName="foo1";
-  createCluster(clusterName);
-  Cluster cluster=clusters.getCluster(clusterName);
+  String cluster1=getUniqueName();
+  createCluster(cluster1);
+  Cluster cluster=clusters.getCluster(cluster1);
   cluster.setDesiredStackVersion(new StackId("HDP-2.0.7"));
   String serviceName="HDFS";
-  createService(clusterName,serviceName,null);
+  createService(cluster1,serviceName,null);
   String componentName1="NAMENODE";
   String componentName2="DATANODE";
   String componentName3="HDFS_CLIENT";
-  createServiceComponent(clusterName,serviceName,componentName1,State.INIT);
-  createServiceComponent(clusterName,serviceName,componentName2,State.INIT);
-  createServiceComponent(clusterName,serviceName,componentName3,State.INIT);
-  String host1="h1";
-  String host2="h2";
-  addHostToCluster(host1,clusterName);
-  addHostToCluster(host2,clusterName);
-  createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName2,host2,null);
-  createServiceComponentHost(clusterName,serviceName,componentName3,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName3,host2,null);
-  RequestOperationLevel level=new RequestOperationLevel(Resource.Type.HostComponent,clusterName,null,null,null);
-  installService(clusterName,serviceName,false,false);
+  createServiceComponent(cluster1,serviceName,componentName1,State.INIT);
+  createServiceComponent(cluster1,serviceName,componentName2,State.INIT);
+  createServiceComponent(cluster1,serviceName,componentName3,State.INIT);
+  final String host1="d" + getUniqueName();
+  final String host2="e" + getUniqueName();
+  addHostToCluster(host1,cluster1);
+  addHostToCluster(host2,cluster1);
+  createServiceComponentHost(cluster1,serviceName,componentName1,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName2,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName2,host2,null);
+  createServiceComponentHost(cluster1,serviceName,componentName3,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName3,host2,null);
+  RequestOperationLevel level=new RequestOperationLevel(Resource.Type.HostComponent,cluster1,null,null,null);
+  installService(cluster1,serviceName,false,false);
   Map<String,String> configs=new HashMap<String,String>();
   configs.put("a","b");
   ConfigurationRequest cr1;
-  cr1=new ConfigurationRequest(clusterName,"hdfs-site","version1",configs,null);
-  ClusterRequest crReq=new ClusterRequest(cluster.getClusterId(),clusterName,null,null);
+  cr1=new ConfigurationRequest(cluster1,"hdfs-site","version1",configs,null);
+  ClusterRequest crReq=new ClusterRequest(cluster.getClusterId(),cluster1,null,null);
   crReq.setDesiredConfig(Collections.singletonList(cr1));
   controller.updateClusters(Collections.singleton(crReq),null);
-  startService(clusterName,serviceName,false,false);
-  cluster=clusters.getCluster(clusterName);
+  startService(cluster1,serviceName,false,false);
+  cluster=clusters.getCluster(cluster1);
   Service s=cluster.getService(serviceName);
   Assert.assertEquals(State.STARTED,s.getDesiredState());
-  ServiceComponentHost scHost=s.getServiceComponent("DATANODE").getServiceComponentHost("h2");
+  ServiceComponentHost scHost=s.getServiceComponent("DATANODE").getServiceComponentHost(host2);
   Assert.assertEquals(HostComponentAdminState.INSERVICE,scHost.getComponentAdminState());
   Map<String,String> params=new HashMap<String,String>(){
 {
       put("test","test");
-      put("excluded_hosts","h2");
+      put("excluded_hosts",host2);
       put("align_maintenance_state","true");
     }
   }
@@ -46,7 +46,7 @@
   RequestResourceFilter resourceFilter=new RequestResourceFilter("HDFS","NAMENODE",null);
   ArrayList<RequestResourceFilter> filters=new ArrayList<RequestResourceFilter>();
   filters.add(resourceFilter);
-  ExecuteActionRequest request=new ExecuteActionRequest(clusterName,"DECOMMISSION",null,filters,level,params,false);
+  ExecuteActionRequest request=new ExecuteActionRequest(cluster1,"DECOMMISSION",null,filters,level,params,false);
   Map<String,String> requestProperties=new HashMap<String,String>();
   requestProperties.put(REQUEST_CONTEXT_PROPERTY,"Called from a test");
   RequestStatusResponse response=controller.createAction(request,requestProperties);
@@ -65,7 +65,7 @@
   params=new HashMap<String,String>(){
 {
       put("test","test");
-      put("excluded_hosts","h1");
+      put("excluded_hosts",host1);
       put("align_maintenance_state","true");
     }
   }
@@ -73,7 +73,7 @@
   resourceFilter=new RequestResourceFilter("HDFS","NAMENODE",null);
   filters=new ArrayList<RequestResourceFilter>();
   filters.add(resourceFilter);
-  request=new ExecuteActionRequest(clusterName,"DECOMMISSION",null,filters,level,params,false);
+  request=new ExecuteActionRequest(cluster1,"DECOMMISSION",null,filters,level,params,false);
   response=controller.createAction(request,requestProperties);
   storedTasks=actionDB.getRequestTasks(response.getRequestId());
   execCmd=storedTasks.get(0).getExecutionCommandWrapper().getExecutionCommand();
@@ -86,13 +86,13 @@
   Assert.assertEquals(MaintenanceState.ON,scHost.getMaintenanceState());
   Assert.assertEquals("DECOMMISSION",execCmd.getHostLevelParams().get("custom_command"));
   Assert.assertEquals(requestProperties.get(REQUEST_CONTEXT_PROPERTY),response.getRequestContext());
-  createServiceComponentHost(clusterName,serviceName,componentName1,host2,null);
-  ServiceComponentHostRequest r=new ServiceComponentHostRequest(clusterName,serviceName,componentName1,host2,State.INSTALLED.toString());
+  createServiceComponentHost(cluster1,serviceName,componentName1,host2,null);
+  ServiceComponentHostRequest r=new ServiceComponentHostRequest(cluster1,serviceName,componentName1,host2,State.INSTALLED.toString());
   Set<ServiceComponentHostRequest> requests=new HashSet<ServiceComponentHostRequest>();
   requests.add(r);
   updateHostComponents(requests,Collections.<String,String>emptyMap(),true);
   s.getServiceComponent(componentName1).getServiceComponentHost(host2).setState(State.INSTALLED);
-  r=new ServiceComponentHostRequest(clusterName,serviceName,componentName1,host2,State.STARTED.toString());
+  r=new ServiceComponentHostRequest(cluster1,serviceName,componentName1,host2,State.STARTED.toString());
   requests.clear();
   requests.add(r);
   updateHostComponents(requests,Collections.<String,String>emptyMap(),true);
@@ -100,7 +100,7 @@
   params=new HashMap<String,String>(){
 {
       put("test","test");
-      put("included_hosts","h1 , h2");
+      put("included_hosts",host1 + " , " + host2);
       put("align_maintenance_state","true");
     }
   }
@@ -108,11 +108,11 @@
   resourceFilter=new RequestResourceFilter("HDFS","NAMENODE",null);
   filters=new ArrayList<RequestResourceFilter>();
   filters.add(resourceFilter);
-  request=new ExecuteActionRequest(clusterName,"DECOMMISSION",null,filters,level,params,false);
+  request=new ExecuteActionRequest(cluster1,"DECOMMISSION",null,filters,level,params,false);
   response=controller.createAction(request,requestProperties);
   storedTasks=actionDB.getRequestTasks(response.getRequestId());
   Assert.assertNotNull(storedTasks);
-  scHost=s.getServiceComponent("DATANODE").getServiceComponentHost("h2");
+  scHost=s.getServiceComponent("DATANODE").getServiceComponentHost(host2);
   Assert.assertEquals(HostComponentAdminState.INSERVICE,scHost.getComponentAdminState());
   Assert.assertEquals(MaintenanceState.OFF,scHost.getMaintenanceState());
   execCmd=storedTasks.get(0).getExecutionCommandWrapper().getExecutionCommand();
@@ -120,8 +120,10 @@
   Assert.assertEquals(2,storedTasks.size());
   int countRefresh=0;
   for (  HostRoleCommand hrc : storedTasks) {
-    Assert.assertTrue("DECOMMISSION, Included: h1,h2".equals(hrc.getCommandDetail()));
-    Assert.assertTrue("DECOMMISSION".equals(hrc.getCustomCommandName()));
+    Assert.assertEquals("DECOMMISSION",hrc.getCustomCommandName());
+    Assert.assertTrue(hrc.getCommandDetail().contains("DECOMMISSION, Included: "));
+    Assert.assertTrue(hrc.getCommandDetail().contains(host1));
+    Assert.assertTrue(hrc.getCommandDetail().contains(host2));
     cmdParams=hrc.getExecutionCommandWrapper().getExecutionCommand().getCommandParams();
     if (!cmdParams.containsKey("update_exclude_file_only") || !cmdParams.get("update_exclude_file_only").equals("true")) {
       countRefresh++;

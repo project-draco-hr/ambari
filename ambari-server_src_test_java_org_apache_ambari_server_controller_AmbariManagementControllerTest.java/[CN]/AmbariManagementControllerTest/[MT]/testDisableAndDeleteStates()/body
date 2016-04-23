@@ -1,232 +1,212 @@
 {
   Map<String,String> mapRequestProps=new HashMap<String,String>();
-  Injector injector=Guice.createInjector(new AuditLoggerModule(),new AbstractModule(){
-    @Override protected void configure(){
-      Properties properties=new Properties();
-      properties.setProperty(Configuration.SERVER_PERSISTENCE_TYPE_KEY,"in-memory");
-      properties.setProperty(Configuration.METADATA_DIR_PATH,"src/test/resources/stacks");
-      properties.setProperty(Configuration.SERVER_VERSION_FILE,"src/test/resources/version");
-      properties.setProperty(Configuration.OS_VERSION_KEY,"centos5");
-      properties.setProperty(Configuration.SHARED_RESOURCES_DIR_KEY,"src/test/resources/");
-      try {
-        install(new ControllerModule(properties));
-        bind(AmbariEventPublisher.class).toInstance(EasyMock.createMock(AmbariEventPublisher.class));
-      }
- catch (      Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
+  String cluster1=getUniqueName();
+  AmbariManagementController amc=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=injector.getInstance(Clusters.class);
+  Gson gson=new Gson();
+  String host1=getUniqueName();
+  String host2=getUniqueName();
+  String host3=getUniqueName();
+  clusters.addHost(host1);
+  clusters.addHost(host2);
+  clusters.addHost(host3);
+  Host host=clusters.getHost("host1");
+  setOsFamily(host,"redhat","5.9");
+  host.persist();
+  host=clusters.getHost("host2");
+  setOsFamily(host,"redhat","5.9");
+  host.persist();
+  host=clusters.getHost("host3");
+  setOsFamily(host,"redhat","5.9");
+  host.persist();
+  ClusterRequest clusterRequest=new ClusterRequest(null,cluster1,"HDP-1.2.0",null);
+  amc.createCluster(clusterRequest);
+  Set<ServiceRequest> serviceRequests=new HashSet<ServiceRequest>();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS",null));
+  serviceRequests.add(new ServiceRequest(cluster1,"HIVE",null));
+  ServiceResourceProviderTest.createServices(amc,serviceRequests);
+  Type confType=new TypeToken<Map<String,String>>(){
   }
-);
-  injector.getInstance(GuiceJpaInitializer.class);
-  try {
-    AmbariManagementController amc=injector.getInstance(AmbariManagementController.class);
-    Clusters clusters=injector.getInstance(Clusters.class);
-    Gson gson=new Gson();
-    clusters.addHost("host1");
-    clusters.addHost("host2");
-    clusters.addHost("host3");
-    Host host=clusters.getHost("host1");
-    setOsFamily(host,"redhat","5.9");
-    host.persist();
-    host=clusters.getHost("host2");
-    setOsFamily(host,"redhat","5.9");
-    host.persist();
-    host=clusters.getHost("host3");
-    setOsFamily(host,"redhat","5.9");
-    host.persist();
-    ClusterRequest clusterRequest=new ClusterRequest(null,"c1","HDP-1.2.0",null);
-    amc.createCluster(clusterRequest);
-    Set<ServiceRequest> serviceRequests=new HashSet<ServiceRequest>();
-    serviceRequests.add(new ServiceRequest("c1","HDFS",null));
-    serviceRequests.add(new ServiceRequest("c1","HIVE",null));
-    ServiceResourceProviderTest.createServices(amc,serviceRequests);
-    Type confType=new TypeToken<Map<String,String>>(){
-    }
 .getType();
-    ConfigurationRequest configurationRequest=new ConfigurationRequest("c1","core-site","version1",gson.<Map<String,String>>fromJson("{ \"fs.default.name\" : \"localhost:8020\"}",confType),null);
-    amc.createConfiguration(configurationRequest);
-    configurationRequest=new ConfigurationRequest("c1","hdfs-site","version1",gson.<Map<String,String>>fromJson("{ \"dfs.datanode.data.dir.perm\" : \"750\"}",confType),null);
-    amc.createConfiguration(configurationRequest);
-    configurationRequest=new ConfigurationRequest("c1","global","version1",gson.<Map<String,String>>fromJson("{ \"hive.server2.enable.doAs\" : \"true\"}",confType),null);
-    amc.createConfiguration(configurationRequest);
-    Assert.assertTrue(clusters.getCluster("c1").getDesiredConfigs().containsKey("hive-site"));
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1","HDFS",null));
-    ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
-    Set<ServiceComponentRequest> serviceComponentRequests=new HashSet<ServiceComponentRequest>();
-    serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","NAMENODE",null));
-    serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","SECONDARY_NAMENODE",null));
-    serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","DATANODE",null));
-    serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","HDFS_CLIENT",null));
-    ComponentResourceProviderTest.createComponents(amc,serviceComponentRequests);
-    Set<HostRequest> hostRequests=new HashSet<HostRequest>();
-    hostRequests.add(new HostRequest("host1","c1",null));
-    hostRequests.add(new HostRequest("host2","c1",null));
-    hostRequests.add(new HostRequest("host3","c1",null));
-    HostResourceProviderTest.createHosts(amc,hostRequests);
-    Set<ServiceComponentHostRequest> componentHostRequests=new HashSet<ServiceComponentHostRequest>();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"DATANODE","host1",null));
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1",null));
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"SECONDARY_NAMENODE","host1",null));
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"DATANODE","host2",null));
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"DATANODE","host3",null));
-    amc.createHostComponents(componentHostRequests);
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1","HDFS","INSTALLED"));
-    ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
-    Cluster cluster=clusters.getCluster("c1");
-    Map<String,ServiceComponentHost> namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
-    org.junit.Assert.assertEquals(1,namenodes.size());
-    ServiceComponentHost componentHost=namenodes.get("host1");
-    Map<String,ServiceComponentHost> hostComponents=cluster.getService("HDFS").getServiceComponent("DATANODE").getServiceComponentHosts();
-    for (    Map.Entry<String,ServiceComponentHost> entry : hostComponents.entrySet()) {
-      ServiceComponentHost cHost=entry.getValue();
-      cHost.handleEvent(new ServiceComponentHostInstallEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
-      cHost.handleEvent(new ServiceComponentHostOpSucceededEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis()));
-    }
-    hostComponents=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
-    for (    Map.Entry<String,ServiceComponentHost> entry : hostComponents.entrySet()) {
-      ServiceComponentHost cHost=entry.getValue();
-      cHost.handleEvent(new ServiceComponentHostInstallEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
-      cHost.handleEvent(new ServiceComponentHostOpSucceededEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis()));
-    }
-    hostComponents=cluster.getService("HDFS").getServiceComponent("SECONDARY_NAMENODE").getServiceComponentHosts();
-    for (    Map.Entry<String,ServiceComponentHost> entry : hostComponents.entrySet()) {
-      ServiceComponentHost cHost=entry.getValue();
-      cHost.handleEvent(new ServiceComponentHostInstallEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
-      cHost.handleEvent(new ServiceComponentHostOpSucceededEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis()));
-    }
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1","DISABLED"));
-    updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
-    Assert.assertEquals(State.DISABLED,componentHost.getState());
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1","INSTALLED"));
-    updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
-    Assert.assertEquals(State.INSTALLED,componentHost.getState());
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1","DISABLED"));
-    updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
-    Assert.assertEquals(State.DISABLED,componentHost.getState());
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host2",null));
-    amc.createHostComponents(componentHostRequests);
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host2","INSTALLED"));
-    updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
-    namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
-    Assert.assertEquals(2,namenodes.size());
-    componentHost=namenodes.get("host2");
-    componentHost.handleEvent(new ServiceComponentHostInstallEvent(componentHost.getServiceComponentName(),componentHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
-    componentHost.handleEvent(new ServiceComponentHostOpSucceededEvent(componentHost.getServiceComponentName(),componentHost.getHostName(),System.currentTimeMillis()));
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1","HDFS","STARTED"));
-    RequestStatusResponse response=ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
-    for (    ShortTaskStatus shortTaskStatus : response.getTasks()) {
-      assertFalse("host1".equals(shortTaskStatus.getHostName()) && "NAMENODE".equals(shortTaskStatus.getRole()));
-    }
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1",null));
-    amc.deleteHostComponents(componentHostRequests);
-    namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
-    org.junit.Assert.assertEquals(1,namenodes.size());
-    testRunSmokeTestFlag(mapRequestProps,amc,serviceRequests);
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1",null));
-    amc.createHostComponents(componentHostRequests);
-    namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
-    assertEquals(2,namenodes.size());
-    componentHost=namenodes.get("host1");
-    componentHost.handleEvent(new ServiceComponentHostInstallEvent(componentHost.getServiceComponentName(),componentHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
-    componentHost.handleEvent(new ServiceComponentHostOpSucceededEvent(componentHost.getServiceComponentName(),componentHost.getHostName(),System.currentTimeMillis()));
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1","INSTALLED"));
-    updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
-    assertEquals(State.INSTALLED,namenodes.get("host1").getState());
-    ServiceComponentHost sch=null;
-    for (    ServiceComponentHost tmp : cluster.getServiceComponentHosts("host2")) {
-      if (tmp.getServiceComponentName().equals("DATANODE")) {
-        tmp.setState(State.UNKNOWN);
-        sch=tmp;
-      }
-    }
-    assertNotNull(sch);
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"DATANODE","host2","DISABLED"));
-    updateHostComponents(amc,componentHostRequests,mapRequestProps,false);
-    org.junit.Assert.assertEquals(State.DISABLED,sch.getState());
-    componentHostRequests.clear();
-    mapRequestProps.put(RequestOperationLevel.OPERATION_CLUSTER_ID,"c1");
-    updateHostComponents(amc,componentHostRequests,mapRequestProps,false);
-    org.junit.Assert.assertEquals(State.DISABLED,sch.getState());
-    mapRequestProps.clear();
-    assertEquals(sch.getServiceComponentName(),"DATANODE");
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1","HDFS","INSTALLED"));
-    ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
-    assertEquals(State.DISABLED,sch.getState());
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1","HDFS","STARTED"));
-    ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
-    assertEquals(State.DISABLED,sch.getState());
-    componentHostRequests.clear();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"DATANODE","host2",null));
-    amc.deleteHostComponents(componentHostRequests);
-    sch=null;
-    for (    ServiceComponentHost tmp : cluster.getServiceComponentHosts("host2")) {
-      if (tmp.getServiceComponentName().equals("DATANODE")) {
-        sch=tmp;
-      }
-    }
-    org.junit.Assert.assertNull(sch);
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1","HDFS","INSTALLED"));
-    ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1",null,null));
-    org.junit.Assert.assertEquals(2,ServiceResourceProviderTest.getServices(amc,serviceRequests).size());
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1","HDFS",null));
-    serviceRequests.add(new ServiceRequest("c1","HIVE",null));
-    ServiceResourceProviderTest.deleteServices(amc,serviceRequests);
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1",null,null));
-    org.junit.Assert.assertEquals(0,ServiceResourceProviderTest.getServices(amc,serviceRequests).size());
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1","HDFS",null));
-    ServiceResourceProviderTest.createServices(amc,serviceRequests);
-    org.junit.Assert.assertEquals(1,ServiceResourceProviderTest.getServices(amc,serviceRequests).size());
-    configurationRequest=new ConfigurationRequest("c1","core-site","version2",gson.<Map<String,String>>fromJson("{ \"fs.default.name\" : \"localhost:8020\"}",confType),null);
-    amc.createConfiguration(configurationRequest);
-    configurationRequest=new ConfigurationRequest("c1","hdfs-site","version2",gson.<Map<String,String>>fromJson("{ \"dfs.datanode.data.dir.perm\" : \"750\"}",confType),null);
-    amc.createConfiguration(configurationRequest);
-    configurationRequest=new ConfigurationRequest("c1","global","version2",gson.<Map<String,String>>fromJson("{ \"hbase_hdfs_root_dir\" : \"/apps/hbase/\"}",confType),null);
-    amc.createConfiguration(configurationRequest);
-    serviceRequests.clear();
-    serviceRequests.add(new ServiceRequest("c1","HDFS",null));
-    ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
-    serviceComponentRequests=new HashSet<ServiceComponentRequest>();
-    serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","NAMENODE",null));
-    serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","SECONDARY_NAMENODE",null));
-    serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","DATANODE",null));
-    serviceComponentRequests.add(new ServiceComponentRequest("c1","HDFS","HDFS_CLIENT",null));
-    ComponentResourceProviderTest.createComponents(amc,serviceComponentRequests);
-    componentHostRequests=new HashSet<ServiceComponentHostRequest>();
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"DATANODE","host1",null));
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"NAMENODE","host1",null));
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"SECONDARY_NAMENODE","host1",null));
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"DATANODE","host2",null));
-    componentHostRequests.add(new ServiceComponentHostRequest("c1",null,"DATANODE","host3",null));
-    amc.createHostComponents(componentHostRequests);
-    namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
-    org.junit.Assert.assertEquals(1,namenodes.size());
-    Map<String,ServiceComponentHost> datanodes=cluster.getService("HDFS").getServiceComponent("DATANODE").getServiceComponentHosts();
-    org.junit.Assert.assertEquals(3,datanodes.size());
-    Map<String,ServiceComponentHost> namenodes2=cluster.getService("HDFS").getServiceComponent("SECONDARY_NAMENODE").getServiceComponentHosts();
-    org.junit.Assert.assertEquals(1,namenodes2.size());
+  ConfigurationRequest configurationRequest=new ConfigurationRequest(cluster1,"core-site","version1",gson.<Map<String,String>>fromJson("{ \"fs.default.name\" : \"localhost:8020\"}",confType),null);
+  amc.createConfiguration(configurationRequest);
+  configurationRequest=new ConfigurationRequest(cluster1,"hdfs-site","version1",gson.<Map<String,String>>fromJson("{ \"dfs.datanode.data.dir.perm\" : \"750\"}",confType),null);
+  amc.createConfiguration(configurationRequest);
+  configurationRequest=new ConfigurationRequest(cluster1,"global","version1",gson.<Map<String,String>>fromJson("{ \"hive.server2.enable.doAs\" : \"true\"}",confType),null);
+  amc.createConfiguration(configurationRequest);
+  Assert.assertTrue(clusters.getCluster(cluster1).getDesiredConfigs().containsKey("hive-site"));
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS",null));
+  ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
+  Set<ServiceComponentRequest> serviceComponentRequests=new HashSet<ServiceComponentRequest>();
+  serviceComponentRequests.add(new ServiceComponentRequest(cluster1,"HDFS","NAMENODE",null));
+  serviceComponentRequests.add(new ServiceComponentRequest(cluster1,"HDFS","SECONDARY_NAMENODE",null));
+  serviceComponentRequests.add(new ServiceComponentRequest(cluster1,"HDFS","DATANODE",null));
+  serviceComponentRequests.add(new ServiceComponentRequest(cluster1,"HDFS","HDFS_CLIENT",null));
+  ComponentResourceProviderTest.createComponents(amc,serviceComponentRequests);
+  Set<HostRequest> hostRequests=new HashSet<HostRequest>();
+  hostRequests.add(new HostRequest(host1,cluster1,null));
+  hostRequests.add(new HostRequest(host2,cluster1,null));
+  hostRequests.add(new HostRequest(host3,cluster1,null));
+  HostResourceProviderTest.createHosts(amc,hostRequests);
+  Set<ServiceComponentHostRequest> componentHostRequests=new HashSet<ServiceComponentHostRequest>();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"DATANODE",host1,null));
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE",host1,null));
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"SECONDARY_NAMENODE",host1,null));
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"DATANODE",host2,null));
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"DATANODE",host3,null));
+  amc.createHostComponents(componentHostRequests);
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS","INSTALLED"));
+  ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
+  Cluster cluster=clusters.getCluster(cluster1);
+  Map<String,ServiceComponentHost> namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
+  org.junit.Assert.assertEquals(1,namenodes.size());
+  ServiceComponentHost componentHost=namenodes.get(host1);
+  Map<String,ServiceComponentHost> hostComponents=cluster.getService("HDFS").getServiceComponent("DATANODE").getServiceComponentHosts();
+  for (  Map.Entry<String,ServiceComponentHost> entry : hostComponents.entrySet()) {
+    ServiceComponentHost cHost=entry.getValue();
+    cHost.handleEvent(new ServiceComponentHostInstallEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
+    cHost.handleEvent(new ServiceComponentHostOpSucceededEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis()));
   }
-  finally {
-    injector.getInstance(PersistService.class).stop();
+  hostComponents=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
+  for (  Map.Entry<String,ServiceComponentHost> entry : hostComponents.entrySet()) {
+    ServiceComponentHost cHost=entry.getValue();
+    cHost.handleEvent(new ServiceComponentHostInstallEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
+    cHost.handleEvent(new ServiceComponentHostOpSucceededEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis()));
   }
+  hostComponents=cluster.getService("HDFS").getServiceComponent("SECONDARY_NAMENODE").getServiceComponentHosts();
+  for (  Map.Entry<String,ServiceComponentHost> entry : hostComponents.entrySet()) {
+    ServiceComponentHost cHost=entry.getValue();
+    cHost.handleEvent(new ServiceComponentHostInstallEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
+    cHost.handleEvent(new ServiceComponentHostOpSucceededEvent(cHost.getServiceComponentName(),cHost.getHostName(),System.currentTimeMillis()));
+  }
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE",host1,"DISABLED"));
+  updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
+  Assert.assertEquals(State.DISABLED,componentHost.getState());
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE",host1,"INSTALLED"));
+  updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
+  Assert.assertEquals(State.INSTALLED,componentHost.getState());
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE",host1,"DISABLED"));
+  updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
+  Assert.assertEquals(State.DISABLED,componentHost.getState());
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE",host2,null));
+  amc.createHostComponents(componentHostRequests);
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE",host2,"INSTALLED"));
+  updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
+  namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
+  Assert.assertEquals(2,namenodes.size());
+  componentHost=namenodes.get(host2);
+  componentHost.handleEvent(new ServiceComponentHostInstallEvent(componentHost.getServiceComponentName(),componentHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
+  componentHost.handleEvent(new ServiceComponentHostOpSucceededEvent(componentHost.getServiceComponentName(),componentHost.getHostName(),System.currentTimeMillis()));
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS","STARTED"));
+  RequestStatusResponse response=ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
+  for (  ShortTaskStatus shortTaskStatus : response.getTasks()) {
+    assertFalse(host1.equals(shortTaskStatus.getHostName()) && "NAMENODE".equals(shortTaskStatus.getRole()));
+  }
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE",host1,null));
+  amc.deleteHostComponents(componentHostRequests);
+  namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
+  org.junit.Assert.assertEquals(1,namenodes.size());
+  testRunSmokeTestFlag(mapRequestProps,amc,serviceRequests);
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE",host1,null));
+  amc.createHostComponents(componentHostRequests);
+  namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
+  assertEquals(2,namenodes.size());
+  componentHost=namenodes.get(host1);
+  componentHost.handleEvent(new ServiceComponentHostInstallEvent(componentHost.getServiceComponentName(),componentHost.getHostName(),System.currentTimeMillis(),"HDP-1.2.0"));
+  componentHost.handleEvent(new ServiceComponentHostOpSucceededEvent(componentHost.getServiceComponentName(),componentHost.getHostName(),System.currentTimeMillis()));
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE",host1,"INSTALLED"));
+  updateHostComponents(amc,componentHostRequests,mapRequestProps,true);
+  assertEquals(State.INSTALLED,namenodes.get(host1).getState());
+  ServiceComponentHost sch=null;
+  for (  ServiceComponentHost tmp : cluster.getServiceComponentHosts(host2)) {
+    if (tmp.getServiceComponentName().equals("DATANODE")) {
+      tmp.setState(State.UNKNOWN);
+      sch=tmp;
+    }
+  }
+  assertNotNull(sch);
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"DATANODE",host2,"DISABLED"));
+  updateHostComponents(amc,componentHostRequests,mapRequestProps,false);
+  org.junit.Assert.assertEquals(State.DISABLED,sch.getState());
+  componentHostRequests.clear();
+  mapRequestProps.put(RequestOperationLevel.OPERATION_CLUSTER_ID,cluster1);
+  updateHostComponents(amc,componentHostRequests,mapRequestProps,false);
+  org.junit.Assert.assertEquals(State.DISABLED,sch.getState());
+  mapRequestProps.clear();
+  assertEquals(sch.getServiceComponentName(),"DATANODE");
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS","INSTALLED"));
+  ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
+  assertEquals(State.DISABLED,sch.getState());
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS","STARTED"));
+  ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
+  assertEquals(State.DISABLED,sch.getState());
+  componentHostRequests.clear();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"DATANODE",host2,null));
+  amc.deleteHostComponents(componentHostRequests);
+  sch=null;
+  for (  ServiceComponentHost tmp : cluster.getServiceComponentHosts(host2)) {
+    if (tmp.getServiceComponentName().equals("DATANODE")) {
+      sch=tmp;
+    }
+  }
+  org.junit.Assert.assertNull(sch);
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS","INSTALLED"));
+  ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,null,null));
+  org.junit.Assert.assertEquals(2,ServiceResourceProviderTest.getServices(amc,serviceRequests).size());
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS",null));
+  serviceRequests.add(new ServiceRequest(cluster1,"HIVE",null));
+  ServiceResourceProviderTest.deleteServices(amc,serviceRequests);
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,null,null));
+  org.junit.Assert.assertEquals(0,ServiceResourceProviderTest.getServices(amc,serviceRequests).size());
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS",null));
+  ServiceResourceProviderTest.createServices(amc,serviceRequests);
+  org.junit.Assert.assertEquals(1,ServiceResourceProviderTest.getServices(amc,serviceRequests).size());
+  configurationRequest=new ConfigurationRequest(cluster1,"core-site","version2",gson.<Map<String,String>>fromJson("{ \"fs.default.name\" : \"localhost:8020\"}",confType),null);
+  amc.createConfiguration(configurationRequest);
+  configurationRequest=new ConfigurationRequest(cluster1,"hdfs-site","version2",gson.<Map<String,String>>fromJson("{ \"dfs.datanode.data.dir.perm\" : \"750\"}",confType),null);
+  amc.createConfiguration(configurationRequest);
+  configurationRequest=new ConfigurationRequest(cluster1,"global","version2",gson.<Map<String,String>>fromJson("{ \"hbase_hdfs_root_dir\" : \"/apps/hbase/\"}",confType),null);
+  amc.createConfiguration(configurationRequest);
+  serviceRequests.clear();
+  serviceRequests.add(new ServiceRequest(cluster1,"HDFS",null));
+  ServiceResourceProviderTest.updateServices(amc,serviceRequests,mapRequestProps,true,false);
+  serviceComponentRequests=new HashSet<ServiceComponentRequest>();
+  serviceComponentRequests.add(new ServiceComponentRequest(cluster1,"HDFS","NAMENODE",null));
+  serviceComponentRequests.add(new ServiceComponentRequest(cluster1,"HDFS","SECONDARY_NAMENODE",null));
+  serviceComponentRequests.add(new ServiceComponentRequest(cluster1,"HDFS","DATANODE",null));
+  serviceComponentRequests.add(new ServiceComponentRequest(cluster1,"HDFS","HDFS_CLIENT",null));
+  ComponentResourceProviderTest.createComponents(amc,serviceComponentRequests);
+  componentHostRequests=new HashSet<ServiceComponentHostRequest>();
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"DATANODE","host1",null));
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"NAMENODE","host1",null));
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"SECONDARY_NAMENODE",host1,null));
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"DATANODE","host2",null));
+  componentHostRequests.add(new ServiceComponentHostRequest(cluster1,null,"DATANODE","host3",null));
+  amc.createHostComponents(componentHostRequests);
+  namenodes=cluster.getService("HDFS").getServiceComponent("NAMENODE").getServiceComponentHosts();
+  org.junit.Assert.assertEquals(1,namenodes.size());
+  Map<String,ServiceComponentHost> datanodes=cluster.getService("HDFS").getServiceComponent("DATANODE").getServiceComponentHosts();
+  org.junit.Assert.assertEquals(3,datanodes.size());
+  Map<String,ServiceComponentHost> namenodes2=cluster.getService("HDFS").getServiceComponent("SECONDARY_NAMENODE").getServiceComponentHosts();
+  org.junit.Assert.assertEquals(1,namenodes2.size());
 }

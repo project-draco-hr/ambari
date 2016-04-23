@@ -1,13 +1,17 @@
 {
-  setupClusterWithHosts("c1","HDP-2.0.6",new ArrayList<String>(){
+  String cluster1=getUniqueName();
+  final String host1=getUniqueName();
+  final String host2=getUniqueName();
+  final String host3=getUniqueName();
+  setupClusterWithHosts(cluster1,"HDP-2.0.6",new ArrayList<String>(){
 {
-      add("h1");
-      add("h2");
-      add("h3");
+      add(host1);
+      add(host2);
+      add(host3);
     }
   }
 ,"centos6");
-  Cluster cluster=clusters.getCluster("c1");
+  Cluster cluster=clusters.getCluster(cluster1);
   cluster.setDesiredStackVersion(new StackId("HDP-2.0.6"));
   cluster.setCurrentStackVersion(new StackId("HDP-2.0.6"));
   ConfigFactory cf=injector.getInstance(ConfigFactory.class);
@@ -35,11 +39,11 @@
   hdfs.addServiceComponent(Role.NAMENODE.name()).persist();
   hdfs.addServiceComponent(Role.DATANODE.name()).persist();
   mapred.addServiceComponent(Role.RESOURCEMANAGER.name()).persist();
-  hdfs.getServiceComponent(Role.HDFS_CLIENT.name()).addServiceComponentHost("h1").persist();
-  hdfs.getServiceComponent(Role.NAMENODE.name()).addServiceComponentHost("h1").persist();
-  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h1").persist();
-  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h2").persist();
-  mapred.getServiceComponent(Role.RESOURCEMANAGER.name()).addServiceComponentHost("h2").persist();
+  hdfs.getServiceComponent(Role.HDFS_CLIENT.name()).addServiceComponentHost(host1).persist();
+  hdfs.getServiceComponent(Role.NAMENODE.name()).addServiceComponentHost(host1).persist();
+  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost(host1).persist();
+  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost(host2).persist();
+  mapred.getServiceComponent(Role.RESOURCEMANAGER.name()).addServiceComponentHost(host2).persist();
   Map<String,String> params=new HashMap<String,String>(){
 {
       put("test","test");
@@ -51,20 +55,20 @@
   List<RequestResourceFilter> resourceFilters=new ArrayList<RequestResourceFilter>();
   RequestResourceFilter resourceFilter=new RequestResourceFilter("HDFS",Role.DATANODE.name(),new ArrayList<String>(){
 {
-      add("h1");
-      add("h2");
+      add(host1);
+      add(host2);
     }
   }
 );
   resourceFilters.add(resourceFilter);
   resourceFilter=new RequestResourceFilter("YARN",Role.RESOURCEMANAGER.name(),new ArrayList<String>(){
 {
-      add("h2");
+      add(host2);
     }
   }
 );
   resourceFilters.add(resourceFilter);
-  ExecuteActionRequest request=new ExecuteActionRequest("c1","RESTART",null,resourceFilters,null,params,false);
+  ExecuteActionRequest request=new ExecuteActionRequest(cluster1,"RESTART",null,resourceFilters,null,params,false);
   RequestStatusResponse response=controller.createAction(request,requestProperties);
   Assert.assertEquals(3,response.getTasks().size());
   List<HostRoleCommand> storedTasks=actionDB.getRequestTasks(response.getRequestId());
@@ -72,10 +76,10 @@
   int expectedRestartCount=0;
   for (  HostRoleCommand hrc : storedTasks) {
     Assert.assertEquals("RESTART",hrc.getCustomCommandName());
-    if (hrc.getHostName().equals("h1") && hrc.getRole().equals(Role.DATANODE)) {
+    if (hrc.getHostName().equals(host1) && hrc.getRole().equals(Role.DATANODE)) {
       expectedRestartCount++;
     }
- else     if (hrc.getHostName().equals("h2")) {
+ else     if (hrc.getHostName().equals(host2)) {
       if (hrc.getRole().equals(Role.DATANODE)) {
         expectedRestartCount++;
       }
@@ -89,17 +93,17 @@
   resourceFilters.clear();
   resourceFilter=new RequestResourceFilter("HDFS",null,new ArrayList<String>(){
 {
-      add("h1");
+      add(host1);
     }
   }
 );
   resourceFilters.add(resourceFilter);
-  request=new ExecuteActionRequest("c1",Role.HDFS_SERVICE_CHECK.name(),null,resourceFilters,null,null,false);
+  request=new ExecuteActionRequest(cluster1,Role.HDFS_SERVICE_CHECK.name(),null,resourceFilters,null,null,false);
   response=controller.createAction(request,requestProperties);
   Assert.assertEquals(1,response.getTasks().size());
   storedTasks=actionDB.getRequestTasks(response.getRequestId());
   Assert.assertNotNull(storedTasks);
   Assert.assertEquals(Role.HDFS_SERVICE_CHECK.name(),storedTasks.get(0).getRole().name());
-  Assert.assertEquals("h1",storedTasks.get(0).getHostName());
+  Assert.assertEquals(host1,storedTasks.get(0).getHostName());
   Assert.assertEquals(requestProperties.get(REQUEST_CONTEXT_PROPERTY),response.getRequestContext());
 }

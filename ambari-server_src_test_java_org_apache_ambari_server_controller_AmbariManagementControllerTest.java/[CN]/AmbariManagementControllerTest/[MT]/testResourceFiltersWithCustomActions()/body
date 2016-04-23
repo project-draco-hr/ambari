@@ -1,13 +1,17 @@
 {
-  setupClusterWithHosts("c1","HDP-2.0.6",new ArrayList<String>(){
+  String cluster1=getUniqueName();
+  final String host1=getUniqueName();
+  final String host2=getUniqueName();
+  final String host3=getUniqueName();
+  setupClusterWithHosts(cluster1,"HDP-2.0.6",new ArrayList<String>(){
 {
-      add("h1");
-      add("h2");
-      add("h3");
+      add(host1);
+      add(host2);
+      add(host3);
     }
   }
 ,"centos6");
-  Cluster cluster=clusters.getCluster("c1");
+  Cluster cluster=clusters.getCluster(cluster1);
   cluster.setDesiredStackVersion(new StackId("HDP-2.0.6"));
   cluster.setCurrentStackVersion(new StackId("HDP-2.0.6"));
   ConfigFactory cf=injector.getInstance(ConfigFactory.class);
@@ -35,11 +39,12 @@
   hdfs.addServiceComponent(Role.NAMENODE.name()).persist();
   hdfs.addServiceComponent(Role.DATANODE.name()).persist();
   mapred.addServiceComponent(Role.RESOURCEMANAGER.name()).persist();
-  hdfs.getServiceComponent(Role.HDFS_CLIENT.name()).addServiceComponentHost("h1").persist();
-  hdfs.getServiceComponent(Role.NAMENODE.name()).addServiceComponentHost("h1").persist();
-  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h1").persist();
-  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost("h2").persist();
-  controller.getAmbariMetaInfo().addActionDefinition(new ActionDefinition("a1",ActionType.SYSTEM,"","HDFS","","Some custom action.",TargetHostType.ALL,Short.valueOf("10010")));
+  hdfs.getServiceComponent(Role.HDFS_CLIENT.name()).addServiceComponentHost(host1).persist();
+  hdfs.getServiceComponent(Role.NAMENODE.name()).addServiceComponentHost(host1).persist();
+  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost(host1).persist();
+  hdfs.getServiceComponent(Role.DATANODE.name()).addServiceComponentHost(host2).persist();
+  String action1=getUniqueName();
+  controller.getAmbariMetaInfo().addActionDefinition(new ActionDefinition(action1,ActionType.SYSTEM,"","HDFS","","Some custom action.",TargetHostType.ALL,Short.valueOf("10010")));
   Map<String,String> params=new HashMap<String,String>(){
 {
       put("test","test");
@@ -51,21 +56,21 @@
   List<RequestResourceFilter> resourceFilters=new ArrayList<RequestResourceFilter>();
   ArrayList<String> hosts=new ArrayList<String>(){
 {
-      add("h2");
+      add(host2);
     }
   }
 ;
   RequestResourceFilter resourceFilter1=new RequestResourceFilter("HDFS","DATANODE",hosts);
   hosts=new ArrayList<String>(){
 {
-      add("h1");
+      add(host1);
     }
   }
 ;
   RequestResourceFilter resourceFilter2=new RequestResourceFilter("HDFS","NAMENODE",hosts);
   resourceFilters.add(resourceFilter1);
   resourceFilters.add(resourceFilter2);
-  ExecuteActionRequest actionRequest=new ExecuteActionRequest("c1",null,"a1",resourceFilters,null,params,false);
+  ExecuteActionRequest actionRequest=new ExecuteActionRequest(cluster1,null,action1,resourceFilters,null,params,false);
   RequestStatusResponse response=null;
   try {
     response=controller.createAction(actionRequest,requestProperties);
@@ -75,18 +80,18 @@
     Assert.assertTrue(ae.getMessage().contains("Custom action definition only " + "allows one resource filter to be specified"));
   }
   resourceFilters.remove(resourceFilter1);
-  actionRequest=new ExecuteActionRequest("c1",null,"a1",resourceFilters,null,params,false);
+  actionRequest=new ExecuteActionRequest(cluster1,null,action1,resourceFilters,null,params,false);
   response=controller.createAction(actionRequest,requestProperties);
   assertEquals(1,response.getTasks().size());
   HostRoleCommand nnCommand=null;
   for (  HostRoleCommand hrc : actionDB.getRequestTasks(response.getRequestId())) {
-    if (hrc.getHostName().equals("h1")) {
+    if (hrc.getHostName().equals(host1)) {
       nnCommand=hrc;
     }
   }
   Assert.assertNotNull(nnCommand);
   ExecutionCommand cmd=nnCommand.getExecutionCommandWrapper().getExecutionCommand();
-  Assert.assertEquals("a1",cmd.getRole());
+  Assert.assertEquals(action1,cmd.getRole());
   Assert.assertEquals("10010",cmd.getCommandParams().get("command_timeout"));
   Type type=new TypeToken<Map<String,String>>(){
   }

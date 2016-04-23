@@ -1,32 +1,32 @@
 {
-  String clusterName="foo1";
-  createCluster(clusterName);
-  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-2.0.7"));
+  String cluster1=getUniqueName();
+  createCluster(cluster1);
+  clusters.getCluster(cluster1).setDesiredStackVersion(new StackId("HDP-2.0.7"));
   String serviceName="HBASE";
-  createService(clusterName,serviceName,null);
+  createService(cluster1,serviceName,null);
   String componentName1="HBASE_MASTER";
   String componentName2="HBASE_REGIONSERVER";
-  createServiceComponent(clusterName,serviceName,componentName1,State.INIT);
-  createServiceComponent(clusterName,serviceName,componentName2,State.INIT);
-  String host1="h1";
-  String host2="h2";
-  addHostToCluster(host1,clusterName);
-  addHostToCluster(host2,clusterName);
-  createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName1,host2,null);
-  createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName2,host2,null);
-  RequestOperationLevel level=new RequestOperationLevel(Resource.Type.HostComponent,clusterName,null,null,null);
-  installService(clusterName,serviceName,false,false);
-  startService(clusterName,serviceName,false,false);
-  Cluster cluster=clusters.getCluster(clusterName);
+  createServiceComponent(cluster1,serviceName,componentName1,State.INIT);
+  createServiceComponent(cluster1,serviceName,componentName2,State.INIT);
+  final String host1=getUniqueName();
+  final String host2=getUniqueName();
+  addHostToCluster(host1,cluster1);
+  addHostToCluster(host2,cluster1);
+  createServiceComponentHost(cluster1,serviceName,componentName1,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName1,host2,null);
+  createServiceComponentHost(cluster1,serviceName,componentName2,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName2,host2,null);
+  RequestOperationLevel level=new RequestOperationLevel(Resource.Type.HostComponent,cluster1,null,null,null);
+  installService(cluster1,serviceName,false,false);
+  startService(cluster1,serviceName,false,false);
+  Cluster cluster=clusters.getCluster(cluster1);
   Service s=cluster.getService(serviceName);
   Assert.assertEquals(State.STARTED,s.getDesiredState());
-  ServiceComponentHost scHost=s.getServiceComponent("HBASE_REGIONSERVER").getServiceComponentHost("h2");
+  ServiceComponentHost scHost=s.getServiceComponent("HBASE_REGIONSERVER").getServiceComponentHost(host2);
   Assert.assertEquals(HostComponentAdminState.INSERVICE,scHost.getComponentAdminState());
   Map<String,String> params=new HashMap<String,String>(){
 {
-      put("excluded_hosts","h2");
+      put("excluded_hosts",host2);
       put("align_maintenance_state","true");
     }
   }
@@ -34,7 +34,7 @@
   RequestResourceFilter resourceFilter=new RequestResourceFilter("HBASE","HBASE_MASTER",null);
   List<RequestResourceFilter> resourceFilters=new ArrayList<RequestResourceFilter>();
   resourceFilters.add(resourceFilter);
-  ExecuteActionRequest request=new ExecuteActionRequest(clusterName,"DECOMMISSION",null,resourceFilters,level,params,false);
+  ExecuteActionRequest request=new ExecuteActionRequest(cluster1,"DECOMMISSION",null,resourceFilters,level,params,false);
   Map<String,String> requestProperties=new HashMap<String,String>();
   requestProperties.put(REQUEST_CONTEXT_PROPERTY,"Called from a test");
   RequestStatusResponse response=controller.createAction(request,requestProperties);
@@ -45,8 +45,8 @@
   Assert.assertEquals(HostComponentAdminState.DECOMMISSIONED,scHost.getComponentAdminState());
   Assert.assertEquals(MaintenanceState.ON,scHost.getMaintenanceState());
   HostRoleCommand command=storedTasks.get(0);
-  Assert.assertTrue("DECOMMISSION, Excluded: h2".equals(command.getCommandDetail()));
   Assert.assertTrue("DECOMMISSION".equals(command.getCustomCommandName()));
+  Assert.assertTrue(("DECOMMISSION, Excluded: " + host2).equals(command.getCommandDetail()));
   Map<String,String> cmdParams=command.getExecutionCommandWrapper().getExecutionCommand().getCommandParams();
   Assert.assertTrue(cmdParams.containsKey("mark_draining_only"));
   Assert.assertEquals("false",cmdParams.get("mark_draining_only"));
@@ -54,10 +54,10 @@
   Assert.assertEquals(RoleCommand.CUSTOM_COMMAND,command.getRoleCommand());
   Assert.assertEquals("DECOMMISSION",execCmd.getHostLevelParams().get("custom_command"));
   assertEquals(requestProperties.get(REQUEST_CONTEXT_PROPERTY),response.getRequestContext());
-  s.getServiceComponent("HBASE_REGIONSERVER").getServiceComponentHost("h2").setState(State.INSTALLED);
+  s.getServiceComponent("HBASE_REGIONSERVER").getServiceComponentHost(host2).setState(State.INSTALLED);
   params=new HashMap<String,String>(){
 {
-      put("excluded_hosts","h2");
+      put("excluded_hosts",host2);
       put("mark_draining_only","true");
       put("slave_type","HBASE_REGIONSERVER");
       put("align_maintenance_state","true");
@@ -67,7 +67,7 @@
   resourceFilter=new RequestResourceFilter("HBASE","HBASE_MASTER",null);
   ArrayList<RequestResourceFilter> filters=new ArrayList<RequestResourceFilter>();
   filters.add(resourceFilter);
-  request=new ExecuteActionRequest(clusterName,"DECOMMISSION",null,filters,level,params,false);
+  request=new ExecuteActionRequest(cluster1,"DECOMMISSION",null,filters,level,params,false);
   response=controller.createAction(request,requestProperties);
   storedTasks=actionDB.getRequestTasks(response.getRequestId());
   execCmd=storedTasks.get(0).getExecutionCommandWrapper().getExecutionCommand();
@@ -77,19 +77,19 @@
   Assert.assertEquals(MaintenanceState.ON,scHost.getMaintenanceState());
   command=storedTasks.get(0);
   Assert.assertEquals("DECOMMISSION",execCmd.getHostLevelParams().get("custom_command"));
-  Assert.assertTrue("DECOMMISSION, Excluded: h2".equals(command.getCommandDetail()));
   Assert.assertTrue("DECOMMISSION".equals(command.getCustomCommandName()));
+  Assert.assertTrue(("DECOMMISSION, Excluded: " + host2).equals(command.getCommandDetail()));
   cmdParams=command.getExecutionCommandWrapper().getExecutionCommand().getCommandParams();
   Assert.assertTrue(cmdParams.containsKey("mark_draining_only"));
   Assert.assertEquals("true",cmdParams.get("mark_draining_only"));
   assertEquals(requestProperties.get(REQUEST_CONTEXT_PROPERTY),response.getRequestContext());
   params=new HashMap<String,String>(){
 {
-      put("included_hosts","h2");
+      put("included_hosts",host2);
     }
   }
 ;
-  request=new ExecuteActionRequest(clusterName,"DECOMMISSION",null,resourceFilters,level,params,false);
+  request=new ExecuteActionRequest(cluster1,"DECOMMISSION",null,resourceFilters,level,params,false);
   response=controller.createAction(request,requestProperties);
   storedTasks=actionDB.getRequestTasks(response.getRequestId());
   execCmd=storedTasks.get(0).getExecutionCommandWrapper().getExecutionCommand();
@@ -98,8 +98,8 @@
   Assert.assertEquals(HostComponentAdminState.INSERVICE,scHost.getComponentAdminState());
   Assert.assertEquals(MaintenanceState.ON,scHost.getMaintenanceState());
   command=storedTasks.get(0);
-  Assert.assertTrue("DECOMMISSION, Included: h2".equals(command.getCommandDetail()));
   Assert.assertTrue("DECOMMISSION".equals(command.getCustomCommandName()));
+  Assert.assertTrue(("DECOMMISSION, Included: " + host2).equals(command.getCommandDetail()));
   cmdParams=command.getExecutionCommandWrapper().getExecutionCommand().getCommandParams();
   Assert.assertTrue(cmdParams.containsKey("mark_draining_only"));
   Assert.assertEquals("false",cmdParams.get("mark_draining_only"));

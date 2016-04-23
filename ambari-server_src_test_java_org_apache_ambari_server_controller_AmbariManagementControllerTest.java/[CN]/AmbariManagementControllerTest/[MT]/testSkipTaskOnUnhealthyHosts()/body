@@ -1,97 +1,97 @@
 {
-  String clusterName="foo1";
-  createCluster(clusterName);
-  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-0.1"));
+  String cluster1=getUniqueName();
+  createCluster(cluster1);
+  clusters.getCluster(cluster1).setDesiredStackVersion(new StackId("HDP-0.1"));
   String serviceName="HDFS";
-  createService(clusterName,serviceName,null);
+  createService(cluster1,serviceName,null);
   String componentName1="NAMENODE";
   String componentName2="DATANODE";
-  createServiceComponent(clusterName,serviceName,componentName1,State.INIT);
-  createServiceComponent(clusterName,serviceName,componentName2,State.INIT);
-  String host1="h1";
-  String host2="h2";
-  String host3="h3";
-  addHostToCluster(host1,clusterName);
-  addHostToCluster(host2,clusterName);
-  addHostToCluster(host3,clusterName);
-  createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName2,host2,null);
-  createServiceComponentHost(clusterName,serviceName,componentName2,host3,null);
-  installService(clusterName,serviceName,false,false);
-  clusters.getHost("h1").setState(HostState.HEALTHY);
-  clusters.getHost("h2").setState(HostState.HEALTHY);
-  clusters.getHost("h3").setState(HostState.HEARTBEAT_LOST);
-  long requestId=startService(clusterName,serviceName,true,false);
+  createServiceComponent(cluster1,serviceName,componentName1,State.INIT);
+  createServiceComponent(cluster1,serviceName,componentName2,State.INIT);
+  String host1=getUniqueName();
+  String host2=getUniqueName();
+  String host3=getUniqueName();
+  addHostToCluster(host1,cluster1);
+  addHostToCluster(host2,cluster1);
+  addHostToCluster(host3,cluster1);
+  createServiceComponentHost(cluster1,serviceName,componentName1,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName2,host2,null);
+  createServiceComponentHost(cluster1,serviceName,componentName2,host3,null);
+  installService(cluster1,serviceName,false,false);
+  clusters.getHost(host1).setState(HostState.HEALTHY);
+  clusters.getHost(host2).setState(HostState.HEALTHY);
+  clusters.getHost(host3).setState(HostState.HEARTBEAT_LOST);
+  long requestId=startService(cluster1,serviceName,true,false);
   List<HostRoleCommand> commands=actionDB.getRequestTasks(requestId);
   Assert.assertEquals(3,commands.size());
   int commandCount=0;
   for (  HostRoleCommand command : commands) {
     if (command.getRoleCommand() == RoleCommand.START) {
-      Assert.assertTrue(command.getHostName().equals("h1") || command.getHostName().equals("h2"));
+      Assert.assertTrue(command.getHostName().equals(host1) || command.getHostName().equals(host2));
       commandCount++;
     }
   }
   Assert.assertEquals("Expect only two task.",2,commandCount);
-  stopService(clusterName,serviceName,false,false);
-  clusters.getHost("h1").setState(HostState.HEARTBEAT_LOST);
-  clusters.getHost("h2").setState(HostState.HEARTBEAT_LOST);
-  clusters.getHost("h3").setState(HostState.HEALTHY);
-  requestId=startService(clusterName,serviceName,true,false);
+  stopService(cluster1,serviceName,false,false);
+  clusters.getHost(host1).setState(HostState.HEARTBEAT_LOST);
+  clusters.getHost(host2).setState(HostState.HEARTBEAT_LOST);
+  clusters.getHost(host3).setState(HostState.HEALTHY);
+  requestId=startService(cluster1,serviceName,true,false);
   commands=actionDB.getRequestTasks(requestId);
   commandCount=0;
   for (  HostRoleCommand command : commands) {
     if (command.getRoleCommand() == RoleCommand.START) {
-      Assert.assertTrue(command.getHostName().equals("h3"));
+      Assert.assertTrue(command.getHostName().equals(host3));
       commandCount++;
     }
   }
   Assert.assertEquals("Expect only one task.",1,commandCount);
-  stopService(clusterName,serviceName,false,false);
-  clusters.getHost("h1").setState(HostState.HEALTHY);
-  clusters.getHost("h2").setState(HostState.HEALTHY);
-  clusters.getHost("h3").setState(HostState.HEALTHY);
-  requestId=startService(clusterName,serviceName,true,false);
+  stopService(cluster1,serviceName,false,false);
+  clusters.getHost(host1).setState(HostState.HEALTHY);
+  clusters.getHost(host2).setState(HostState.HEALTHY);
+  clusters.getHost(host3).setState(HostState.HEALTHY);
+  requestId=startService(cluster1,serviceName,true,false);
   commands=actionDB.getRequestTasks(requestId);
   commandCount=0;
   for (  HostRoleCommand command : commands) {
     if (command.getRoleCommand() == RoleCommand.START) {
-      Assert.assertTrue(command.getHostName().equals("h3") || command.getHostName().equals("h2") || command.getHostName().equals("h1"));
+      Assert.assertTrue(command.getHostName().equals(host3) || command.getHostName().equals(host2) || command.getHostName().equals(host1));
       commandCount++;
     }
   }
   Assert.assertEquals("Expect all three task.",3,commandCount);
-  clusters.getHost("h2").setState(HostState.HEARTBEAT_LOST);
-  requestId=stopService(clusterName,serviceName,false,false);
+  clusters.getHost(host2).setState(HostState.HEARTBEAT_LOST);
+  requestId=stopService(cluster1,serviceName,false,false);
   commands=actionDB.getRequestTasks(requestId);
   Assert.assertEquals(2,commands.size());
   commandCount=0;
   for (  HostRoleCommand command : commands) {
     if (command.getRoleCommand() == RoleCommand.STOP) {
-      Assert.assertTrue(command.getHostName().equals("h3") || command.getHostName().equals("h1"));
+      Assert.assertTrue(command.getHostName().equals(host3) || command.getHostName().equals(host1));
       commandCount++;
     }
   }
   Assert.assertEquals("Expect only two task.",2,commandCount);
-  Cluster cluster=clusters.getCluster(clusterName);
+  Cluster cluster=clusters.getCluster(cluster1);
   Service s=cluster.getService(serviceName);
   ServiceComponent sc3=s.getServiceComponent(componentName2);
   for (  ServiceComponentHost sch : sc3.getServiceComponentHosts().values()) {
-    if (sch.getHostName().equals("h3")) {
+    if (sch.getHostName().equals(host3)) {
       sch.setState(State.INSTALL_FAILED);
     }
   }
-  clusters.getHost("h3").setState(HostState.HEARTBEAT_LOST);
-  clusters.getHost("h2").setState(HostState.HEALTHY);
-  requestId=installService(clusterName,serviceName,false,false);
+  clusters.getHost(host3).setState(HostState.HEARTBEAT_LOST);
+  clusters.getHost(host2).setState(HostState.HEALTHY);
+  requestId=installService(cluster1,serviceName,false,false);
   Assert.assertEquals(-1,requestId);
-  clusters.getHost("h3").setState(HostState.HEALTHY);
-  requestId=installService(clusterName,serviceName,false,false);
+  clusters.getHost(host3).setState(HostState.HEALTHY);
+  requestId=installService(cluster1,serviceName,false,false);
   commands=actionDB.getRequestTasks(requestId);
   Assert.assertEquals(1,commands.size());
   commandCount=0;
   for (  HostRoleCommand command : commands) {
     if (command.getRoleCommand() == RoleCommand.INSTALL) {
-      Assert.assertTrue(command.getHostName().equals("h3"));
+      Assert.assertTrue(command.getHostName().equals(host3));
       commandCount++;
     }
   }

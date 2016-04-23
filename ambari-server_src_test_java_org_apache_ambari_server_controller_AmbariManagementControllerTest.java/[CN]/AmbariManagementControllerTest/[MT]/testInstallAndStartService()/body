@@ -1,8 +1,10 @@
 {
-  testCreateServiceComponentHostSimple();
-  String clusterName="foo1";
+  String cluster1=getUniqueName();
+  String host1=getUniqueName();
+  String host2=getUniqueName();
+  createServiceComponentHostSimple(cluster1,host1,host2);
   String serviceName="HDFS";
-  Cluster cluster=clusters.getCluster(clusterName);
+  Cluster cluster=clusters.getCluster(cluster1);
   Service s1=cluster.getService(serviceName);
   Map<String,Config> configs=new HashMap<String,Config>();
   Map<String,String> properties=new HashMap<String,String>();
@@ -10,7 +12,7 @@
   properties.put("a","a1");
   properties.put("b","b1");
   Config c1=new ConfigImpl(cluster,"hdfs-site",properties,propertiesAttributes,injector);
-  properties.put("c","c1");
+  properties.put("c",cluster1);
   properties.put("d","d1");
   Config c2=new ConfigImpl(cluster,"core-site",properties,propertiesAttributes,injector);
   Config c3=new ConfigImpl(cluster,"foo-site",properties,propertiesAttributes,injector);
@@ -27,12 +29,12 @@
   c3.persist();
   configs.put(c1.getType(),c1);
   configs.put(c2.getType(),c2);
-  ServiceRequest r=new ServiceRequest(clusterName,serviceName,State.INSTALLED.toString());
+  ServiceRequest r=new ServiceRequest(cluster1,serviceName,State.INSTALLED.toString());
   Set<ServiceRequest> requests=new HashSet<ServiceRequest>();
   requests.add(r);
   RequestStatusResponse trackAction=ServiceResourceProviderTest.updateServices(controller,requests,mapRequestProps,true,false);
-  Assert.assertEquals(State.INSTALLED,clusters.getCluster(clusterName).getService(serviceName).getDesiredState());
-  for (  ServiceComponent sc : clusters.getCluster(clusterName).getService(serviceName).getServiceComponents().values()) {
+  Assert.assertEquals(State.INSTALLED,clusters.getCluster(cluster1).getService(serviceName).getDesiredState());
+  for (  ServiceComponent sc : clusters.getCluster(cluster1).getService(serviceName).getServiceComponents().values()) {
     Assert.assertEquals(State.INSTALLED,sc.getDesiredState());
     for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
       Assert.assertEquals(State.INSTALLED,sch.getDesiredState());
@@ -50,7 +52,7 @@
     LOG.debug("Task dump :" + taskStatus.toString());
     Assert.assertEquals(RoleCommand.INSTALL.toString(),taskStatus.getCommand());
     Assert.assertEquals(HostRoleStatus.PENDING.toString(),taskStatus.getStatus());
-    if (taskStatus.getHostName().equals("h1")) {
+    if (taskStatus.getHostName().equals(host1)) {
       if (Role.NAMENODE.toString().equals(taskStatus.getRole())) {
         foundH1NN=true;
       }
@@ -64,7 +66,7 @@
         fail("Found invalid role for host h1");
       }
     }
- else     if (taskStatus.getHostName().equals("h2")) {
+ else     if (taskStatus.getHostName().equals(host2)) {
       if (Role.DATANODE.toString().equals(taskStatus.getRole())) {
         foundH2DN=true;
       }
@@ -94,20 +96,21 @@
   Predicate predicate=new PredicateBuilder().property(TaskResourceProvider.TASK_REQUEST_ID_PROPERTY_ID).equals(trackAction.getRequestId()).toPredicate();
   List<HostRoleCommandEntity> entities=hostRoleCommandDAO.findAll(request,predicate);
   Assert.assertEquals(5,entities.size());
-  predicate=new PredicateBuilder().property(TaskResourceProvider.TASK_REQUEST_ID_PROPERTY_ID).equals(trackAction.getRequestId()).and().property(TaskResourceProvider.TASK_ID_PROPERTY_ID).equals(1L).toPredicate();
+  Long taskId=entities.get(0).getTaskId();
+  predicate=new PredicateBuilder().property(TaskResourceProvider.TASK_REQUEST_ID_PROPERTY_ID).equals(trackAction.getRequestId()).and().property(TaskResourceProvider.TASK_ID_PROPERTY_ID).equals(taskId).toPredicate();
   entities=hostRoleCommandDAO.findAll(request,predicate);
   Assert.assertEquals(1,entities.size());
-  for (  ServiceComponent sc : clusters.getCluster(clusterName).getService(serviceName).getServiceComponents().values()) {
+  for (  ServiceComponent sc : clusters.getCluster(cluster1).getService(serviceName).getServiceComponents().values()) {
     for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
       sch.setState(State.INSTALLED);
     }
   }
-  r=new ServiceRequest(clusterName,serviceName,State.STARTED.toString());
+  r=new ServiceRequest(cluster1,serviceName,State.STARTED.toString());
   requests.clear();
   requests.add(r);
   trackAction=ServiceResourceProviderTest.updateServices(controller,requests,mapRequestProps,true,false);
-  Assert.assertEquals(State.STARTED,clusters.getCluster(clusterName).getService(serviceName).getDesiredState());
-  for (  ServiceComponent sc : clusters.getCluster(clusterName).getService(serviceName).getServiceComponents().values()) {
+  Assert.assertEquals(State.STARTED,clusters.getCluster(cluster1).getService(serviceName).getDesiredState());
+  for (  ServiceComponent sc : clusters.getCluster(cluster1).getService(serviceName).getServiceComponents().values()) {
     if (sc.getName().equals("HDFS_CLIENT")) {
       Assert.assertEquals(State.INSTALLED,sc.getDesiredState());
     }
@@ -128,7 +131,7 @@
   StringBuilder sb=new StringBuilder();
   clusters.debugDump(sb);
   LOG.info("Cluster Dump: " + sb.toString());
-  for (  ServiceComponent sc : clusters.getCluster(clusterName).getService(serviceName).getServiceComponents().values()) {
+  for (  ServiceComponent sc : clusters.getCluster(cluster1).getService(serviceName).getServiceComponents().values()) {
     for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
       if (sc.isClientComponent()) {
         sch.setState(State.INSTALLED);
@@ -138,12 +141,12 @@
       }
     }
   }
-  r=new ServiceRequest(clusterName,serviceName,State.INSTALLED.toString());
+  r=new ServiceRequest(cluster1,serviceName,State.INSTALLED.toString());
   requests.clear();
   requests.add(r);
   trackAction=ServiceResourceProviderTest.updateServices(controller,requests,mapRequestProps,true,false);
-  Assert.assertEquals(State.INSTALLED,clusters.getCluster(clusterName).getService(serviceName).getDesiredState());
-  for (  ServiceComponent sc : clusters.getCluster(clusterName).getService(serviceName).getServiceComponents().values()) {
+  Assert.assertEquals(State.INSTALLED,clusters.getCluster(cluster1).getService(serviceName).getDesiredState());
+  for (  ServiceComponent sc : clusters.getCluster(cluster1).getService(serviceName).getServiceComponents().values()) {
     Assert.assertEquals(State.INSTALLED,sc.getDesiredState());
     for (    ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
       Assert.assertEquals(State.INSTALLED,sch.getDesiredState());

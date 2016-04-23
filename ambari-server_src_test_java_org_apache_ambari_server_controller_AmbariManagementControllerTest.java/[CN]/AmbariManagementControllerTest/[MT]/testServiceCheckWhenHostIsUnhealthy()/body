@@ -1,53 +1,53 @@
 {
-  String clusterName="foo1";
-  createCluster(clusterName);
-  clusters.getCluster(clusterName).setDesiredStackVersion(new StackId("HDP-0.1"));
+  String cluster1=getUniqueName();
+  createCluster(cluster1);
+  clusters.getCluster(cluster1).setDesiredStackVersion(new StackId("HDP-0.1"));
   String serviceName="HDFS";
-  createService(clusterName,serviceName,null);
+  createService(cluster1,serviceName,null);
   String componentName1="NAMENODE";
   String componentName2="DATANODE";
   String componentName3="HDFS_CLIENT";
-  createServiceComponent(clusterName,serviceName,componentName1,State.INIT);
-  createServiceComponent(clusterName,serviceName,componentName2,State.INIT);
-  createServiceComponent(clusterName,serviceName,componentName3,State.INIT);
-  String host1="h1";
-  String host2="h2";
-  String host3="h3";
-  addHostToCluster(host1,clusterName);
-  addHostToCluster(host2,clusterName);
-  addHostToCluster(host3,clusterName);
-  createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName3,host2,null);
-  createServiceComponentHost(clusterName,serviceName,componentName3,host3,null);
-  installService(clusterName,serviceName,false,false);
-  clusters.getHost("h3").setState(HostState.UNHEALTHY);
-  clusters.getHost("h2").setState(HostState.HEALTHY);
-  long requestId=startService(clusterName,serviceName,true,false);
+  createServiceComponent(cluster1,serviceName,componentName1,State.INIT);
+  createServiceComponent(cluster1,serviceName,componentName2,State.INIT);
+  createServiceComponent(cluster1,serviceName,componentName3,State.INIT);
+  String host1=getUniqueName();
+  String host2=getUniqueName();
+  String host3=getUniqueName();
+  addHostToCluster(host1,cluster1);
+  addHostToCluster(host2,cluster1);
+  addHostToCluster(host3,cluster1);
+  createServiceComponentHost(cluster1,serviceName,componentName1,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName2,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName3,host2,null);
+  createServiceComponentHost(cluster1,serviceName,componentName3,host3,null);
+  installService(cluster1,serviceName,false,false);
+  clusters.getHost(host3).setState(HostState.UNHEALTHY);
+  clusters.getHost(host2).setState(HostState.HEALTHY);
+  long requestId=startService(cluster1,serviceName,true,false);
   List<HostRoleCommand> commands=actionDB.getRequestTasks(requestId);
   int commandCount=0;
   for (  HostRoleCommand command : commands) {
     if (command.getRoleCommand() == RoleCommand.SERVICE_CHECK && command.getRole() == Role.HDFS_SERVICE_CHECK) {
-      Assert.assertTrue(command.getHostName().equals("h2"));
+      Assert.assertTrue(command.getHostName().equals(host2));
       commandCount++;
     }
   }
   Assert.assertEquals("Expect only one service check.",1,commandCount);
-  stopService(clusterName,serviceName,false,false);
-  clusters.getHost("h3").setState(HostState.HEALTHY);
-  clusters.getHost("h2").setState(HostState.HEARTBEAT_LOST);
-  requestId=startService(clusterName,serviceName,true,false);
+  stopService(cluster1,serviceName,false,false);
+  clusters.getHost(host3).setState(HostState.HEALTHY);
+  clusters.getHost(host2).setState(HostState.HEARTBEAT_LOST);
+  requestId=startService(cluster1,serviceName,true,false);
   commands=actionDB.getRequestTasks(requestId);
   commandCount=0;
   for (  HostRoleCommand command : commands) {
     if (command.getRoleCommand() == RoleCommand.SERVICE_CHECK && command.getRole() == Role.HDFS_SERVICE_CHECK) {
-      Assert.assertTrue(command.getHostName().equals("h3"));
+      Assert.assertTrue(command.getHostName().equals(host3));
       commandCount++;
     }
   }
   Assert.assertEquals("Expect only one service check.",1,commandCount);
   RequestResourceFilter resourceFilter=new RequestResourceFilter("HDFS",null,null);
-  ExecuteActionRequest actionRequest=new ExecuteActionRequest("foo1",Role.HDFS_SERVICE_CHECK.name(),null,false);
+  ExecuteActionRequest actionRequest=new ExecuteActionRequest(cluster1,Role.HDFS_SERVICE_CHECK.name(),null,false);
   actionRequest.getResourceFilters().add(resourceFilter);
   Map<String,String> requestProperties=new HashMap<String,String>();
   RequestStatusResponse response=controller.createAction(actionRequest,requestProperties);
@@ -55,19 +55,19 @@
   commandCount=0;
   for (  HostRoleCommand command : commands) {
     if (command.getRoleCommand() == RoleCommand.SERVICE_CHECK && command.getRole() == Role.HDFS_SERVICE_CHECK) {
-      Assert.assertTrue(command.getHostName().equals("h3"));
+      Assert.assertTrue(command.getHostName().equals(host3));
       commandCount++;
     }
   }
   Assert.assertEquals("Expect only one service check.",1,commandCount);
-  clusters.getHost("h3").setState(HostState.WAITING_FOR_HOST_STATUS_UPDATES);
-  clusters.getHost("h2").setState(HostState.INIT);
+  clusters.getHost(host3).setState(HostState.WAITING_FOR_HOST_STATUS_UPDATES);
+  clusters.getHost(host2).setState(HostState.INIT);
   response=controller.createAction(actionRequest,requestProperties);
   commands=actionDB.getRequestTasks(response.getRequestId());
   commandCount=0;
   for (  HostRoleCommand command : commands) {
     if (command.getRoleCommand() == RoleCommand.SERVICE_CHECK && command.getRole() == Role.HDFS_SERVICE_CHECK) {
-      Assert.assertTrue(command.getHostName().equals("h3") || command.getHostName().equals("h2"));
+      Assert.assertTrue(command.getHostName().equals(host3) || command.getHostName().equals(host2));
       commandCount++;
     }
   }

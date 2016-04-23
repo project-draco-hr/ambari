@@ -1,43 +1,45 @@
 {
-  String clusterName="foo1";
-  createCluster(clusterName);
-  Cluster cluster=clusters.getCluster(clusterName);
+  String cluster1=getUniqueName();
+  createCluster(cluster1);
+  Cluster cluster=clusters.getCluster(cluster1);
   cluster.setDesiredStackVersion(new StackId("HDP-2.0.7"));
   String serviceName="HDFS";
-  createService(clusterName,serviceName,null);
+  createService(cluster1,serviceName,null);
   String componentName1="NAMENODE";
   String componentName2="DATANODE";
   String componentName3="HDFS_CLIENT";
-  createServiceComponent(clusterName,serviceName,componentName1,State.INIT);
-  createServiceComponent(clusterName,serviceName,componentName2,State.INIT);
-  createServiceComponent(clusterName,serviceName,componentName3,State.INIT);
-  String host1="h1";
-  String host2="h2";
-  addHostToCluster(host1,clusterName);
-  addHostToCluster(host2,clusterName);
-  createServiceComponentHost(clusterName,serviceName,componentName1,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName2,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName2,host2,null);
-  createServiceComponentHost(clusterName,serviceName,componentName3,host1,null);
-  createServiceComponentHost(clusterName,serviceName,componentName3,host2,null);
-  installService(clusterName,serviceName,false,false);
+  createServiceComponent(cluster1,serviceName,componentName1,State.INIT);
+  createServiceComponent(cluster1,serviceName,componentName2,State.INIT);
+  createServiceComponent(cluster1,serviceName,componentName3,State.INIT);
+  final String host1=getUniqueName();
+  final String host2=getUniqueName();
+  addHostToCluster(host1,cluster1);
+  addHostToCluster(host2,cluster1);
+  createServiceComponentHost(cluster1,serviceName,componentName1,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName2,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName2,host2,null);
+  createServiceComponentHost(cluster1,serviceName,componentName3,host1,null);
+  createServiceComponentHost(cluster1,serviceName,componentName3,host2,null);
+  installService(cluster1,serviceName,false,false);
   Map<String,String> configs=new HashMap<String,String>();
   configs.put("a","b");
   ConfigurationRequest cr1, cr2;
-  cr1=new ConfigurationRequest(clusterName,"hdfs-site","version1",configs,null);
-  ClusterRequest crReq=new ClusterRequest(cluster.getClusterId(),clusterName,null,null);
+  cr1=new ConfigurationRequest(cluster1,"hdfs-site","version1",configs,null);
+  ClusterRequest crReq=new ClusterRequest(cluster.getClusterId(),cluster1,null,null);
   crReq.setDesiredConfig(Collections.singletonList(cr1));
   controller.updateClusters(Collections.singleton(crReq),null);
-  startService(clusterName,serviceName,false,false);
+  startService(cluster1,serviceName,false,false);
   configs=new HashMap<String,String>();
   configs.put("a","c");
+  String group1=getUniqueName();
+  String tag1=getUniqueName();
   final Config config=new ConfigImpl("hdfs-site");
   config.setProperties(configs);
   config.setTag("version122");
-  Long groupId=createConfigGroup(clusters.getCluster(clusterName),"g1","t1",new ArrayList<String>(){
+  Long groupId=createConfigGroup(clusters.getCluster(cluster1),group1,tag1,new ArrayList<String>(){
 {
-      add("h1");
-      add("h2");
+      add(host1);
+      add(host2);
     }
   }
 ,new ArrayList<Config>(){
@@ -47,18 +49,18 @@
   }
 );
   Assert.assertNotNull(groupId);
-  cluster=clusters.getCluster(clusterName);
+  cluster=clusters.getCluster(cluster1);
   Service s=cluster.getService(serviceName);
   Assert.assertEquals(State.STARTED,s.getDesiredState());
   Map<String,String> params=new HashMap<String,String>(){
 {
       put("test","test");
-      put("excluded_hosts"," h1 ");
+      put("excluded_hosts",host1);
     }
   }
 ;
   RequestResourceFilter resourceFilter=new RequestResourceFilter("HDFS","NAMENODE",null);
-  ExecuteActionRequest request=new ExecuteActionRequest(clusterName,"DECOMMISSION",params,false);
+  ExecuteActionRequest request=new ExecuteActionRequest(cluster1,"DECOMMISSION",params,false);
   request.getResourceFilters().add(resourceFilter);
   Map<String,String> requestProperties=new HashMap<String,String>();
   requestProperties.put(REQUEST_CONTEXT_PROPERTY,"Called from a test");

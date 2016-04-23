@@ -1,62 +1,40 @@
 {
-  Injector injector=Guice.createInjector(new AuditLoggerModule(),new AbstractModule(){
-    @Override protected void configure(){
-      Properties properties=new Properties();
-      properties.setProperty(Configuration.SERVER_PERSISTENCE_TYPE_KEY,"in-memory");
-      properties.setProperty(Configuration.METADATA_DIR_PATH,"src/test/resources/stacks");
-      properties.setProperty(Configuration.SERVER_VERSION_FILE,"src/test/resources/version");
-      properties.setProperty(Configuration.OS_VERSION_KEY,"centos6");
-      properties.setProperty(Configuration.SHARED_RESOURCES_DIR_KEY,"src/test/resources/");
-      try {
-        install(new ControllerModule(properties));
-      }
- catch (      Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-);
-  injector.getInstance(GuiceJpaInitializer.class);
+  final String cluster1=getUniqueName();
+  String tag="version1";
+  String type="core-site";
+  AmbariException exception=null;
   try {
-    String tag="version1";
-    String type="core-site";
-    AmbariException exception=null;
-    try {
-      AmbariManagementController amc=injector.getInstance(AmbariManagementController.class);
-      Clusters clusters=injector.getInstance(Clusters.class);
-      Gson gson=new Gson();
-      clusters.addHost("host1");
-      clusters.addHost("host2");
-      clusters.addHost("host3");
-      Host host=clusters.getHost("host1");
-      setOsFamily(host,"redhat","6.3");
-      host.persist();
-      host=clusters.getHost("host2");
-      setOsFamily(host,"redhat","6.3");
-      host.persist();
-      host=clusters.getHost("host3");
-      setOsFamily(host,"redhat","6.3");
-      host.persist();
-      ClusterRequest clusterRequest=new ClusterRequest(null,"c1","HDP-1.2.0",null);
-      amc.createCluster(clusterRequest);
-      Set<ServiceRequest> serviceRequests=new HashSet<ServiceRequest>();
-      serviceRequests.add(new ServiceRequest("c1","HDFS",null));
-      ServiceResourceProviderTest.createServices(amc,serviceRequests);
-      Type confType=new TypeToken<Map<String,String>>(){
-      }
+    AmbariManagementController amc=injector.getInstance(AmbariManagementController.class);
+    Clusters clusters=injector.getInstance(Clusters.class);
+    Gson gson=new Gson();
+    clusters.addHost("host1");
+    clusters.addHost("host2");
+    clusters.addHost("host3");
+    Host host=clusters.getHost("host1");
+    setOsFamily(host,"redhat","6.3");
+    host.persist();
+    host=clusters.getHost("host2");
+    setOsFamily(host,"redhat","6.3");
+    host.persist();
+    host=clusters.getHost("host3");
+    setOsFamily(host,"redhat","6.3");
+    host.persist();
+    ClusterRequest clusterRequest=new ClusterRequest(null,cluster1,"HDP-1.2.0",null);
+    amc.createCluster(clusterRequest);
+    Set<ServiceRequest> serviceRequests=new HashSet<ServiceRequest>();
+    serviceRequests.add(new ServiceRequest(cluster1,"HDFS",null));
+    ServiceResourceProviderTest.createServices(amc,serviceRequests);
+    Type confType=new TypeToken<Map<String,String>>(){
+    }
 .getType();
-      ConfigurationRequest configurationRequest=new ConfigurationRequest("c1",type,tag,gson.<Map<String,String>>fromJson("{ \"fs.default.name\" : \"localhost:8020\"}",confType),null);
-      amc.createConfiguration(configurationRequest);
-      amc.createConfiguration(configurationRequest);
-    }
- catch (    AmbariException e) {
-      exception=e;
-    }
-    assertNotNull(exception);
-    String exceptionMessage=MessageFormat.format("Configuration with tag ''{0}'' exists for ''{1}''",tag,type);
-    org.junit.Assert.assertEquals(exceptionMessage,exception.getMessage());
+    ConfigurationRequest configurationRequest=new ConfigurationRequest(cluster1,type,tag,gson.<Map<String,String>>fromJson("{ \"fs.default.name\" : \"localhost:8020\"}",confType),null);
+    amc.createConfiguration(configurationRequest);
+    amc.createConfiguration(configurationRequest);
   }
-  finally {
-    injector.getInstance(PersistService.class).stop();
+ catch (  AmbariException e) {
+    exception=e;
   }
+  assertNotNull(exception);
+  String exceptionMessage=MessageFormat.format("Configuration with tag ''{0}'' exists for ''{1}''",tag,type);
+  assertEquals(exceptionMessage,exception.getMessage());
 }
