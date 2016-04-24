@@ -1,0 +1,37 @@
+{
+  ServiceComponentDesiredStateDAO serviceComponentDesiredStateDAO=injector.getInstance(ServiceComponentDesiredStateDAO.class);
+  String componentName="NAMENODE";
+  ServiceComponent component=serviceComponentFactory.createNew(service,componentName);
+  service.addServiceComponent(component);
+  component.persist();
+  ServiceComponent sc=service.getServiceComponent(componentName);
+  Assert.assertNotNull(sc);
+  sc.setDesiredState(State.STARTED);
+  Assert.assertEquals(State.STARTED,sc.getDesiredState());
+  ServiceComponentDesiredStateEntity serviceComponentDesiredStateEntity=serviceComponentDesiredStateDAO.findByName(cluster.getClusterId(),serviceName,componentName);
+  Assert.assertNotNull(serviceComponentDesiredStateEntity);
+  Assert.assertTrue(sc.getServiceComponentHosts().isEmpty());
+  addHostToCluster("h1",service.getCluster().getClusterName());
+  addHostToCluster("h2",service.getCluster().getClusterName());
+  HostEntity hostEntity1=hostDAO.findByName("h1");
+  assertNotNull(hostEntity1);
+  ServiceComponentHost sch1=serviceComponentHostFactory.createNew(sc,"h1");
+  ServiceComponentHost sch2=serviceComponentHostFactory.createNew(sc,"h2");
+  Map<String,ServiceComponentHost> compHosts=new HashMap<String,ServiceComponentHost>();
+  compHosts.put("h1",sch1);
+  compHosts.put("h2",sch2);
+  sc.addServiceComponentHosts(compHosts);
+  sch1.setState(State.STARTED);
+  sch2.setState(State.STARTED);
+  try {
+    sc.delete();
+    Assert.assertTrue("Delete must fail as some SCH are in STARTED state",false);
+  }
+ catch (  AmbariException e) {
+  }
+  sch1.setState(State.INSTALLED);
+  sch2.setState(State.INSTALL_FAILED);
+  sc.delete();
+  serviceComponentDesiredStateEntity=serviceComponentDesiredStateDAO.findByName(cluster.getClusterId(),serviceName,componentName);
+  Assert.assertNull(serviceComponentDesiredStateEntity);
+}
