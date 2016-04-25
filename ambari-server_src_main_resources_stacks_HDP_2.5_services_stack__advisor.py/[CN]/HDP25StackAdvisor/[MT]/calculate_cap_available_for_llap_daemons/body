@@ -1,0 +1,22 @@
+def calculate_cap_available_for_llap_daemons(self, services, hosts, configurations):
+    llap_concurrency = 0
+    llap_slider_cap_percentage = self.get_llap_cap_percent_slider(services, configurations)
+    yarn_rm_mem_in_mb = self.get_yarn_rm_mem_in_mb(services)
+    node_manager_hosts = self.get_node_manager_hosts(services, hosts)
+    assert (node_manager_hosts is not None), 'Information about NODEMANAGER not found in cluster.'
+    total_cluster_cap = (len(node_manager_hosts) * yarn_rm_mem_in_mb)
+    total_llap_queue_size = ((float(llap_slider_cap_percentage) / 100) * total_cluster_cap)
+    llap_daemon_container_size = self.get_hive_am_container_size(services)
+    yarn_min_container_size = self.get_yarn_min_container_size(services)
+    if ('hive.server2.tez.sessions.per.default.queue' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']):
+        llap_concurrency = float(services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.server2.tez.sessions.per.default.queue'])
+        assert (llap_concurrency > 0), "'hive.server2.tez.sessions.per.default.queue' current value : {0}. Expected value : > 0".format(llap_concurrency)
+    else:
+        raise Fail("Couldn't retrieve Hive Server interactive's 'hive.server2.tez.sessions.per.default.queue' config.")
+    total_am_capacity_required = ((self._normalizeUp(llap_daemon_container_size, yarn_min_container_size) * llap_concurrency) + self.calculate_slider_am_size(yarn_min_container_size))
+    cap_available_for_daemons = (total_llap_queue_size - total_am_capacity_required)
+    if (cap_available_for_daemons < yarn_min_container_size):
+        raise Fail("'Capacity available for LLAP daemons'({0}) < 'YARN minimum container size'({1}). Invalid configuration detected. Increase LLAP queue size.".format(cap_available_for_daemons, yarn_min_container_size))
+    assert (cap_available_for_daemons > 0), "'Capacity available for daemons' calculated value : {0}. Expected value : > 0".format(cap_available_for_daemons)
+    Logger.info('Calculated cap_available_for_daemons : {0}, using following : llap_slider_cap_percentage : {1}, yarn_rm_mem_in_mb : {2}, total_cluster_cap : {3}, total_llap_queue_size : {4}, llap_daemon_container_size : {5}, yarn_min_container_size : {6}, llap_concurrency : {7}, total_am_capacity_required : {8}, '.format(cap_available_for_daemons, llap_slider_cap_percentage, yarn_rm_mem_in_mb, total_cluster_cap, total_llap_queue_size, llap_daemon_container_size, yarn_min_container_size, llap_concurrency, total_am_capacity_required))
+    return cap_available_for_daemons

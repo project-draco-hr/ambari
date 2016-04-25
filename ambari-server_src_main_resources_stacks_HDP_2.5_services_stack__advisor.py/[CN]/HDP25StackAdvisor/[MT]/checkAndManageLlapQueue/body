@@ -1,16 +1,16 @@
 def checkAndManageLlapQueue(self, services, configurations, llap_queue_name):
     DEFAULT_LLAP_QUEUE_CAP_PERCENT = 20
     putHiveInteractiveEnvProperty = self.putProperty(configurations, 'hive-interactive-env', services)
-    putHiveInteractiveSiteProperty = self.putProperty(configurations, 'hive-interactive-site', services)
+    putHiveInteractiveSiteProperty = self.putProperty(configurations, self.HIVE_INTERACTIVE_SITE, services)
     putCapSchedProperty = self.putProperty(configurations, 'capacity-scheduler', services)
     capacitySchedulerProperties = self.getCapacitySchedulerProperties(services)
     if capacitySchedulerProperties:
         if ('llap_queue_capacity' in services['configurations']['hive-interactive-env']['properties']):
-            llapSliderCapPercentage = int(services['configurations']['hive-interactive-env']['properties']['llap_queue_capacity'])
-            if (llapSliderCapPercentage not in range(1, 101)):
-                Logger.debug("Adjusting HIVE 'llap_queue_capacity' from {0}% to {1}%".format(llapSliderCapPercentage, DEFAULT_LLAP_QUEUE_CAP_PERCENT))
-                llapSliderCapPercentage = DEFAULT_LLAP_QUEUE_CAP_PERCENT
-                putHiveInteractiveEnvProperty('llap_queue_capacity', llapSliderCapPercentage)
+            llap_slider_cap_percentage = int(services['configurations']['hive-interactive-env']['properties']['llap_queue_capacity'])
+            if (llap_slider_cap_percentage not in range(1, 101)):
+                Logger.info("Adjusting HIVE 'llap_queue_capacity' from {0}% to {1}%".format(llap_slider_cap_percentage, DEFAULT_LLAP_QUEUE_CAP_PERCENT))
+                llap_slider_cap_percentage = DEFAULT_LLAP_QUEUE_CAP_PERCENT
+                putHiveInteractiveEnvProperty('llap_queue_capacity', llap_slider_cap_percentage)
         else:
             Logger.error('Problem retrieving LLAP Queue Capacity. Skipping creating {0} queue'.format(llap_queue_name))
             return
@@ -25,10 +25,16 @@ def checkAndManageLlapQueue(self, services, configurations, llap_queue_name):
         currLlapQueueCap = (-1)
         if ((('yarn.scheduler.capacity.root.' + llap_queue_name) + '.capacity') in capSchedConfigKeys):
             currLlapQueueCap = capacitySchedulerProperties.get((('yarn.scheduler.capacity.root.' + llap_queue_name) + '.capacity'))
+        if ((self.HIVE_INTERACTIVE_SITE in services['configurations']) and ('hive.llap.daemon.queue.name' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties'])):
+            llap_daemon_selected_queue_name = services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.llap.daemon.queue.name']
+        else:
+            Logger.debug("Couldn't retrive 'hive.llap.daemon.queue.name' property. Skipping adjusting queues.")
+            return
         updated_cap_sched_configs = ''
-        '\n      We create OR "modify \'llap\' queue \'state and/or capacity\' " based on below conditions:\n       - if only 1 queue exists at root level and is \'default\' queue and has 100% cap -> Create \'llap\' queue,  OR\n       - if 2 queues exists at root level (\'llap\' and \'default\') :\n           - \'llap\' queue state is STOPPED -> Modify \'llap\' queue state to RUNNING, adjust capacity, OR\n           - \'llap\' queue state is RUNNING and \'llap_queue_capacity\' prop != \'llap\' queue current running capacity ->\n              Modify \'llap\' queue capacity to \'llap_queue_capacity\'\n      '
-        if (('default' in leafQueueNames) and (((len(leafQueueNames) == 1) and (int(yarn_default_queue_capacity) == 100)) or (((len(leafQueueNames) == 2) and (llap_queue_name in leafQueueNames)) and ((currLlapQueueState == 'STOPPED') or ((currLlapQueueState == 'RUNNING') and (currLlapQueueCap != llapSliderCapPercentage)))))):
-            adjusted_default_queue_cap = str((int(yarn_default_queue_capacity) - llapSliderCapPercentage))
+        enabled_hive_int_in_changed_configs = self.are_config_props_in_changed_configs(services, 'hive-interactive-env', set(['enable_hive_interactive']), False)
+        '\n      We create OR "modify \'llap\' queue \'state and/or capacity\' " based on below conditions:\n       - if only 1 queue exists at root level and is \'default\' queue and has 100% cap -> Create \'llap\' queue,  OR\n       - if 2 queues exists at root level (\'llap\' and \'default\') :\n           - Queue selected is \'llap\' and state is STOPPED -> Modify \'llap\' queue state to RUNNING, adjust capacity, OR\n           - Queue selected is \'llap\', state is RUNNING and \'llap_queue_capacity\' prop != \'llap\' queue current running capacity ->\n              Modify \'llap\' queue capacity to \'llap_queue_capacity\'\n      '
+        if (('default' in leafQueueNames) and (((len(leafQueueNames) == 1) and (int(yarn_default_queue_capacity) == 100)) or (((len(leafQueueNames) == 2) and (llap_queue_name in leafQueueNames)) and (((currLlapQueueState == 'STOPPED') and enabled_hive_int_in_changed_configs) or ((currLlapQueueState == 'RUNNING') and (currLlapQueueCap != llap_slider_cap_percentage)))))):
+            adjusted_default_queue_cap = str((int(yarn_default_queue_capacity) - llap_slider_cap_percentage))
             for (prop, val) in capacitySchedulerProperties.items():
                 if (llap_queue_name not in prop):
                     if (prop == 'yarn.scheduler.capacity.root.queues'):
@@ -39,17 +45,17 @@ def checkAndManageLlapQueue(self, services, configurations, llap_queue_name):
                         updated_cap_sched_configs = ((((updated_cap_sched_configs + prop) + '=') + adjusted_default_queue_cap) + '\n')
                     elif (prop.startswith('yarn.') and ('.llap.' not in prop)):
                         updated_cap_sched_configs = ((((updated_cap_sched_configs + prop) + '=') + val) + '\n')
-            llapSliderCapPercentage = str(llapSliderCapPercentage)
+            llap_slider_cap_percentage = str(llap_slider_cap_percentage)
             hive_user = '*'
             if ('hive_user' in services['configurations']['hive-env']['properties']):
                 hive_user = services['configurations']['hive-env']['properties']['hive_user']
-            updated_cap_sched_configs = (((((((((((((((((((((((((((((((((((updated_cap_sched_configs + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.user-limit-factor=1\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.state=RUNNING\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.ordering-policy=fifo\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.minimum-user-limit-percent=100\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.maximum-capacity=') + llapSliderCapPercentage) + '\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.capacity=') + llapSliderCapPercentage) + '\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.acl_submit_applications=') + hive_user) + '\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.acl_administer_queue=') + hive_user) + '\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.maximum-am-resource-percent=1')
+            updated_cap_sched_configs = (((((((((((((((((((((((((((((((((((updated_cap_sched_configs + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.user-limit-factor=1\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.state=RUNNING\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.ordering-policy=fifo\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.minimum-user-limit-percent=100\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.maximum-capacity=') + llap_slider_cap_percentage) + '\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.capacity=') + llap_slider_cap_percentage) + '\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.acl_submit_applications=') + hive_user) + '\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.acl_administer_queue=') + hive_user) + '\n') + 'yarn.scheduler.capacity.root.') + llap_queue_name) + '.maximum-am-resource-percent=1')
             if updated_cap_sched_configs:
                 putCapSchedProperty('capacity-scheduler', updated_cap_sched_configs)
                 if (len(leafQueueNames) == 1):
-                    Logger.info("Created YARN Queue : '{0}' with capacity : {1}%. Adjusted default queue capacity to : {2}%".format(llap_queue_name, llapSliderCapPercentage, adjusted_default_queue_cap))
+                    Logger.info("Created YARN Queue : '{0}' with capacity : {1}%. Adjusted default queue capacity to : {2}%".format(llap_queue_name, llap_slider_cap_percentage, adjusted_default_queue_cap))
                 else:
-                    Logger.info("Adjusted YARN Queue : '{0}'. Current capacity : {1}%. State: RUNNING.".format(llap_queue_name, llapSliderCapPercentage))
+                    Logger.info("Adjusted YARN Queue : '{0}'. Current capacity : {1}%. State: RUNNING.".format(llap_queue_name, llap_slider_cap_percentage))
                     Logger.info("Adjusted 'default' queue capacity to : {0}%".format(adjusted_default_queue_cap))
                 putHiveInteractiveSiteProperty('hive.llap.daemon.queue.name', 'llap')
                 self.setLlapDaemonQueueName(services, configurations)
