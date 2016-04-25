@@ -1,20 +1,25 @@
 {
+  String deafalutValue="0";
   VBarDataList dataList=new VBarDataList();
-  SolrQuery solrQuery=queryGenerator.commonFilterQuery(searchCriteria);
+  SolrQuery solrQuery=queryGenerator.commonServiceFilterQuery(searchCriteria);
   solrQuery.set("event","/getHistogramData");
-  String from=(String)searchCriteria.getParamValue("from");
-  String to=(String)searchCriteria.getParamValue("to");
-  String unit=(String)searchCriteria.getParamValue("unit");
+  String from=getFrom((String)searchCriteria.getParamValue("from"));
+  String to=getTo((String)searchCriteria.getParamValue("to"));
+  String unit=getUnit((String)searchCriteria.getParamValue("unit"));
   List<VBarGraphData> histogramData=new ArrayList<VBarGraphData>();
   List<String> logLevels=ConfigUtil.logLevels;
   String jsonHistogramQuery=queryGenerator.buildJSONFacetTermTimeRangeQuery(LogSearchConstants.SOLR_LEVEL,LogSearchConstants.LOGTIME,from,to,unit).replace("\\","");
   try {
     queryGenerator.setJSONFacet(solrQuery,jsonHistogramQuery);
-    queryGenerator.setRowCount(solrQuery,0);
+    queryGenerator.setRowCount(solrQuery,Integer.parseInt(deafalutValue));
     QueryResponse response=serviceLogsSolrDao.process(solrQuery);
-    if (response == null)     response=new QueryResponse();
+    if (response == null) {
+      return convertObjToString(dataList);
+    }
     SimpleOrderedMap<Object> jsonFacetResponse=(SimpleOrderedMap<Object>)response.getResponse().get("facets");
-    if (jsonFacetResponse == null || jsonFacetResponse.toString().equals("{count=0}"))     return convertObjToString(dataList);
+    if (jsonFacetResponse == null || jsonFacetResponse.toString().equals("{count=0}")) {
+      return convertObjToString(dataList);
+    }
     extractValuesFromBuckets(jsonFacetResponse,"x","y",histogramData);
     Collection<VNameValue> vNameValues=new ArrayList<VNameValue>();
     List<VBarGraphData> graphDatas=new ArrayList<VBarGraphData>();
@@ -32,7 +37,7 @@
           Collection<VNameValue> vNameValues2=vData2.getDataCount();
           for (          VNameValue value : vNameValues2) {
             VNameValue value2=new VNameValue();
-            value2.setValue("0");
+            value2.setValue(deafalutValue);
             value2.setName(value.getName());
             vNameValues.add(value2);
           }
@@ -53,6 +58,6 @@
   }
  catch (  SolrServerException|SolrException|IOException e) {
     logger.error(e);
-    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+    throw restErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
   }
 }

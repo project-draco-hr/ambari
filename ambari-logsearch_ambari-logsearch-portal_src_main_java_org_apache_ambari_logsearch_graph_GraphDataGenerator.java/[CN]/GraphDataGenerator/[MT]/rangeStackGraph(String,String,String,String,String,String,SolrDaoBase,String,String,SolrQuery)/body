@@ -1,0 +1,25 @@
+{
+  VBarDataList dataList=new VBarDataList();
+  List<VBarGraphData> histogramData=new ArrayList<VBarGraphData>();
+  queryGenerator.setMainQuery(solrQuery,null);
+  queryGenerator.setFacetSort(solrQuery,LogSearchConstants.FACET_INDEX);
+  String jsonHistogramQuery=queryGenerator.buildJSONFacetTermTimeRangeQuery(stackField,xAxisField,from,to,unit).replace("\\","");
+  try {
+    solrQuery.set("json.facet",jsonHistogramQuery);
+    queryGenerator.setRowCount(solrQuery,0);
+    QueryResponse response=solrDaoBase.process(solrQuery);
+    if (response != null) {
+      SimpleOrderedMap<Object> jsonFacetResponse=(SimpleOrderedMap<Object>)response.getResponse().get("facets");
+      if (jsonFacetResponse == null || jsonFacetResponse.toString().equals("{count=0}")) {
+        return dataList;
+      }
+      extractRangeStackValuesFromBucket(jsonFacetResponse,"x","y",histogramData);
+      dataList.setGraphData(histogramData);
+    }
+    return dataList;
+  }
+ catch (  SolrException|IOException|SolrServerException e) {
+    logger.error("Got exception for solr query :" + solrQuery,e.getCause());
+  }
+  return null;
+}

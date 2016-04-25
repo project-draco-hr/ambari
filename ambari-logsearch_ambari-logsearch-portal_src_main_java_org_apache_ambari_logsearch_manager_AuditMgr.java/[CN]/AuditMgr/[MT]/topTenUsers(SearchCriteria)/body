@@ -1,21 +1,30 @@
 {
   String jsonUserQuery="{Users:{type:terms, field:reqUser, facet:{ Repo:{ type:terms, field:repo, facet:{eventCount:\"sum(event_count)\"}}}}}";
   SolrQuery solrQuery=queryGenerator.commonAuditFilterQuery(searchCriteria);
-  solrQuery.set("json.facet",jsonUserQuery);
+  queryGenerator.setJSONFacet(solrQuery,jsonUserQuery);
   queryGenerator.setRowCount(solrQuery,0);
   try {
-    QueryResponse queryResponse=auditSolrDao.process(solrQuery);
-    NamedList<Object> namedList=queryResponse.getResponse();
     VBarDataList vBarDataList=new VBarDataList();
+    QueryResponse queryResponse=auditSolrDao.process(solrQuery);
+    if (queryResponse == null) {
+      return convertObjToString(vBarDataList);
+    }
+    NamedList<Object> namedList=queryResponse.getResponse();
     if (namedList == null) {
       return convertObjToString(vBarDataList);
     }
     @SuppressWarnings("unchecked") SimpleOrderedMap<Object> jsonFacetResponse=(SimpleOrderedMap<Object>)namedList.get("facets");
-    vBarDataList=bizUtil.buildSummaryForTopCounts(jsonFacetResponse);
+    if (jsonFacetResponse == null) {
+      return convertObjToString(vBarDataList);
+    }
+    if (jsonFacetResponse.toString().equals("{count=0}")) {
+      return convertObjToString(vBarDataList);
+    }
+    vBarDataList=bizUtil.buildSummaryForTopCounts(jsonFacetResponse,"Repo","Users");
     return convertObjToString(vBarDataList);
   }
  catch (  SolrServerException|SolrException|IOException e) {
     logger.error("Error during solrQuery=" + e);
-    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+    throw restErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
   }
 }

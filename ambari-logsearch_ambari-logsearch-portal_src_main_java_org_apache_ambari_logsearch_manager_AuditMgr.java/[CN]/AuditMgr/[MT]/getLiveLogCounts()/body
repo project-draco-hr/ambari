@@ -1,4 +1,5 @@
 {
+  VNameValueList nameValueList=new VNameValueList();
   SolrQuery solrQuery=new SolrQuery();
   solrQuery.setParam("event","/getLiveLogsCount");
   try {
@@ -8,9 +9,15 @@
     queryGenerator.setFacetRange(solrQuery,LogSearchConstants.AUDIT_EVTTIME,startDate,endDate,"+2MINUTE");
     List<RangeFacet.Count> listCount;
     QueryResponse response=auditSolrDao.process(solrQuery);
-    @SuppressWarnings("rawtypes") List<RangeFacet> rangeFacet=response.getFacetRanges();
-    if (rangeFacet == null)     return convertObjToString(new VNameValueList());
-    listCount=rangeFacet.get(0).getCounts();
+    List<RangeFacet> rangeFacet=response.getFacetRanges();
+    if (rangeFacet == null) {
+      return convertObjToString(nameValueList);
+    }
+    RangeFacet range=rangeFacet.get(0);
+    if (range == null) {
+      return convertObjToString(nameValueList);
+    }
+    listCount=range.getCounts();
     List<VNameValue> nameValues=new ArrayList<VNameValue>();
     int count=0;
     for (    RangeFacet.Count cnt : listCount) {
@@ -20,11 +27,11 @@
       nameValues.add(nameValue);
       count++;
     }
-    VNameValueList nameValueList=new VNameValueList(nameValues);
+    nameValueList.setVNameValues(nameValues);
     return convertObjToString(nameValueList);
   }
  catch (  SolrException|SolrServerException|ParseException|IOException e) {
     logger.error("Error during solrQuery=" + solrQuery,e);
-    throw restErrorUtil.createRESTException(e.getMessage(),MessageEnums.ERROR_SYSTEM);
+    throw restErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
   }
 }

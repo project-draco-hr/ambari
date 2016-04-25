@@ -1,0 +1,38 @@
+{
+  VCountList collection=new VCountList();
+  List<VCount> vCounts=new ArrayList<VCount>();
+  SolrQuery solrQuery=new SolrQuery();
+  queryGenerator.setMainQuery(solrQuery,null);
+  if (field == null) {
+    return collection;
+  }
+  queryGenerator.setFacetField(solrQuery,field);
+  try {
+    QueryResponse response=serviceLogsSolrDao.process(solrQuery);
+    if (response == null) {
+      return collection;
+    }
+    FacetField facetFields=response.getFacetField(field);
+    if (facetFields == null) {
+      return collection;
+    }
+    List<Count> fieldList=facetFields.getValues();
+    if (fieldList == null) {
+      return collection;
+    }
+    for (    Count cnt : fieldList) {
+      if (cnt != null) {
+        VCount vCount=new VCount();
+        vCount.setName(cnt.getName());
+        vCount.setCount(cnt.getCount());
+        vCounts.add(vCount);
+      }
+    }
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error("Error during solrQuery=" + solrQuery,e);
+    throw restErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+  collection.setCounts(vCounts);
+  return collection;
+}

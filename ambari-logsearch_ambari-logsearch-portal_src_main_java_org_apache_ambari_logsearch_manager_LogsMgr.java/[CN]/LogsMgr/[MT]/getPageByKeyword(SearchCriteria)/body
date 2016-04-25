@@ -1,64 +1,108 @@
 {
-  String keyword=solrUtil.makeSolrSearchString((String)searchCriteria.getParamValue("keyword"));
+  String defaultChoice="0";
+  String key=(String)searchCriteria.getParamValue("keyword");
+  if (stringUtil.isEmpty(key)) {
+    throw restErrorUtil.createRESTException("Keyword was not given",MessageEnums.DATA_NOT_FOUND);
+  }
+  String keyword=solrUtil.escapeForStandardTokenizer(key);
+  if (keyword.startsWith("\"") && keyword.endsWith("\"")) {
+    keyword=keyword.substring(1);
+    keyword=keyword.substring(0,keyword.length() - 1);
+  }
+  keyword="*" + keyword + "*";
   String keyType=(String)searchCriteria.getParamValue("keywordType");
-  if (!(boolean)"0".equals(keyType)) {
+  QueryResponse queryResponse=null;
+  if (!defaultChoice.equals(keyType)) {
     try {
       int currentPageNumber=searchCriteria.getPage();
       int maxRows=searchCriteria.getMaxRows();
       String nextPageLogID="";
       int lastLogIndexNumber=((currentPageNumber + 1) * maxRows);
       String nextPageLogTime="";
-      SolrQuery nextPageLogTimeQuery=queryGenerator.commonFilterQuery(searchCriteria);
+      SolrQuery nextPageLogTimeQuery=queryGenerator.commonServiceFilterQuery(searchCriteria);
       nextPageLogTimeQuery.remove("start");
       nextPageLogTimeQuery.remove("rows");
       nextPageLogTimeQuery.setStart(lastLogIndexNumber);
       nextPageLogTimeQuery.setRows(1);
-      SolrDocumentList docList=serviceLogsSolrDao.process(nextPageLogTimeQuery).getResults();
+      queryResponse=serviceLogsSolrDao.process(nextPageLogTimeQuery);
+      if (queryResponse == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
+      SolrDocumentList docList=queryResponse.getResults();
+      if (docList == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
       SolrDocument solrDoc=docList.get(0);
       Date logDate=(Date)solrDoc.get(LogSearchConstants.LOGTIME);
+      if (logDate == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
       nextPageLogTime=dateUtil.convertDateWithMillisecondsToSolrDate(logDate);
       nextPageLogID="" + solrDoc.get(LogSearchConstants.ID);
-      if (stringUtil.isEmpty(nextPageLogID))       nextPageLogID="0";
+      if (stringUtil.isEmpty(nextPageLogID)) {
+        nextPageLogID="0";
+      }
       String filterQueryListIds="";
-      SolrQuery listRemoveIds=queryGenerator.commonFilterQuery(searchCriteria);
+      SolrQuery listRemoveIds=queryGenerator.commonServiceFilterQuery(searchCriteria);
       listRemoveIds.remove("start");
       listRemoveIds.remove("rows");
       queryGenerator.setSingleIncludeFilter(listRemoveIds,LogSearchConstants.LOGTIME,"\"" + nextPageLogTime + "\"");
       queryGenerator.setSingleExcludeFilter(listRemoveIds,LogSearchConstants.ID,nextPageLogID);
-      listRemoveIds.set("fl",LogSearchConstants.ID);
-      SolrDocumentList docListIds=serviceLogsSolrDao.process(listRemoveIds).getResults();
+      queryGenerator.setFl(listRemoveIds,LogSearchConstants.ID);
+      queryResponse=serviceLogsSolrDao.process(listRemoveIds);
+      if (queryResponse == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
+      SolrDocumentList docListIds=queryResponse.getResults();
+      if (docListIds == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
       boolean isFirst=true;
       for (      SolrDocument solrDocId : docListIds) {
         String id="" + solrDocId.get(LogSearchConstants.ID);
         if (isFirst) {
-          filterQueryListIds+="-" + LogSearchConstants.ID + ":"+ id;
+          filterQueryListIds+=LogSearchConstants.MINUS_OPERATOR + LogSearchConstants.ID + ":"+ id;
           isFirst=false;
         }
  else {
-          filterQueryListIds+=" AND " + "-" + LogSearchConstants.ID + ":"+ id;
+          filterQueryListIds+=" " + CONDITION.AND + " "+ LogSearchConstants.MINUS_OPERATOR+ LogSearchConstants.ID+ ":"+ id;
         }
       }
       String endTime=(String)searchCriteria.getParamValue("to");
       String startTime=(String)searchCriteria.getParamValue("from");
-      SolrQuery logTimeThroughRangeQuery=queryGenerator.commonFilterQuery(searchCriteria);
+      SolrQuery logTimeThroughRangeQuery=queryGenerator.commonServiceFilterQuery(searchCriteria);
       logTimeThroughRangeQuery.remove("start");
       logTimeThroughRangeQuery.remove("rows");
       logTimeThroughRangeQuery.setRows(1);
-      if (!stringUtil.isEmpty(filterQueryListIds))       logTimeThroughRangeQuery.setFilterQueries(filterQueryListIds);
+      if (!stringUtil.isEmpty(filterQueryListIds)) {
+        logTimeThroughRangeQuery.setFilterQueries(filterQueryListIds);
+      }
       String sortByType=searchCriteria.getSortType();
       if (!stringUtil.isEmpty(sortByType) && sortByType.equalsIgnoreCase(LogSearchConstants.ASCENDING_ORDER)) {
         queryGenerator.setSingleRangeFilter(logTimeThroughRangeQuery,LogSearchConstants.LOGTIME,nextPageLogTime,endTime);
-        logTimeThroughRangeQuery.set("sort",LogSearchConstants.LOGTIME + " " + LogSearchConstants.ASCENDING_ORDER);
+        logTimeThroughRangeQuery.set(LogSearchConstants.SORT,LogSearchConstants.LOGTIME + " " + LogSearchConstants.ASCENDING_ORDER);
       }
  else {
         queryGenerator.setSingleRangeFilter(logTimeThroughRangeQuery,LogSearchConstants.LOGTIME,startTime,nextPageLogTime);
-        logTimeThroughRangeQuery.set("sort",LogSearchConstants.LOGTIME + " " + LogSearchConstants.DESCENDING_ORDER);
+        logTimeThroughRangeQuery.set(LogSearchConstants.SORT,LogSearchConstants.LOGTIME + " " + LogSearchConstants.DESCENDING_ORDER);
       }
-      queryGenerator.setSingleIncludeFilter(logTimeThroughRangeQuery,LogSearchConstants.SOLR_LOG_MESSAGE,keyword);
-      SolrDocumentList documentList=serviceLogsSolrDao.process(logTimeThroughRangeQuery).getResults();
+      queryGenerator.setSingleIncludeFilter(logTimeThroughRangeQuery,LogSearchConstants.SOLR_KEY_LOG_MESSAGE,keyword);
+      queryResponse=serviceLogsSolrDao.process(logTimeThroughRangeQuery);
+      if (queryResponse == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
+      SolrDocumentList documentList=queryResponse.getResults();
+      if (documentList == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
       SolrDocument solrDocument=new SolrDocument();
-      if (!documentList.isEmpty())       solrDocument=documentList.get(0);
+      if (!documentList.isEmpty()) {
+        solrDocument=documentList.get(0);
+      }
       Date keywordLogDate=(Date)solrDocument.get(LogSearchConstants.LOGTIME);
+      if (keywordLogDate == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
       String originalKeywordDate=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
       String keywordId="" + solrDocument.get(LogSearchConstants.ID);
       SolrQuery rangeLogQuery=nextPageLogTimeQuery.getCopy();
@@ -76,14 +120,16 @@
       }
       long countNumberLogs=countQuery(rangeLogQuery) - 1;
       try {
-        SolrQuery sameIdQuery=queryGenerator.commonFilterQuery(searchCriteria);
+        SolrQuery sameIdQuery=queryGenerator.commonServiceFilterQuery(searchCriteria);
         queryGenerator.setSingleIncludeFilter(sameIdQuery,LogSearchConstants.LOGTIME,"\"" + originalKeywordDate + "\"");
-        sameIdQuery.set("fl",LogSearchConstants.ID);
+        queryGenerator.setFl(sameIdQuery,LogSearchConstants.ID);
         SolrDocumentList sameQueryDocList=serviceLogsSolrDao.process(sameIdQuery).getResults();
         for (        SolrDocument solrDocumenent : sameQueryDocList) {
           String id=(String)solrDocumenent.getFieldValue(LogSearchConstants.ID);
           countNumberLogs++;
-          if (id.equals(keywordId))           break;
+          if (stringUtil.isEmpty(id) && id.equals(keywordId)) {
+            break;
+          }
         }
       }
  catch (      SolrException|SolrServerException|IOException e) {
@@ -105,93 +151,121 @@
     try {
       int currentPageNumber=searchCriteria.getPage();
       int maxRows=searchCriteria.getMaxRows();
-      String sequenceNumber="";
       if (currentPageNumber == 0) {
-        throw restErrorUtil.createRESTException("This is first Page Not",MessageEnums.ERROR_SYSTEM);
+        throw restErrorUtil.createRESTException("This is first Page Not",MessageEnums.DATA_NOT_FOUND);
       }
       int firstLogCurrentPage=(currentPageNumber * maxRows);
       String lastLogsLogTime="";
-      SolrQuery lastLogTime=queryGenerator.commonFilterQuery(searchCriteria);
+      SolrQuery lastLogTime=queryGenerator.commonServiceFilterQuery(searchCriteria);
       lastLogTime.remove("start");
       lastLogTime.remove("rows");
       lastLogTime.setStart(firstLogCurrentPage);
       lastLogTime.setRows(1);
-      SolrDocumentList docList=serviceLogsSolrDao.process(lastLogTime).getResults();
+      queryResponse=serviceLogsSolrDao.process(lastLogTime);
+      if (queryResponse == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
+      SolrDocumentList docList=queryResponse.getResults();
+      if (docList == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
       SolrDocument solrDoc=docList.get(0);
       Date logDate=(Date)solrDoc.get(LogSearchConstants.LOGTIME);
       String sortByType=searchCriteria.getSortType();
       lastLogsLogTime=dateUtil.convertDateWithMillisecondsToSolrDate(logDate);
-      String lastLogsLogId="" + solrDoc.get(LogSearchConstants.SEQUNCE_ID);
-      if (stringUtil.isEmpty(sequenceNumber))       sequenceNumber="0";
+      String lastLogsLogId="" + solrDoc.get(LogSearchConstants.ID);
       String filterQueryListIds="";
-      SolrQuery listRemoveIds=queryGenerator.commonFilterQuery(searchCriteria);
+      SolrQuery listRemoveIds=queryGenerator.commonServiceFilterQuery(searchCriteria);
       listRemoveIds.remove("start");
       listRemoveIds.remove("rows");
       queryGenerator.setSingleIncludeFilter(listRemoveIds,LogSearchConstants.LOGTIME,"\"" + lastLogsLogTime + "\"");
       queryGenerator.setSingleExcludeFilter(listRemoveIds,LogSearchConstants.ID,lastLogsLogId);
-      listRemoveIds.set("fl",LogSearchConstants.ID);
-      SolrDocumentList docListIds=serviceLogsSolrDao.process(listRemoveIds).getResults();
+      queryGenerator.setFl(listRemoveIds,LogSearchConstants.ID);
+      queryResponse=serviceLogsSolrDao.process(lastLogTime);
+      if (queryResponse == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
+      SolrDocumentList docListIds=queryResponse.getResults();
+      if (docListIds == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
       boolean isFirst=true;
       for (      SolrDocument solrDocId : docListIds) {
-        String id="" + solrDocId.get(LogSearchConstants.ID);
-        if (isFirst) {
-          filterQueryListIds+="-" + LogSearchConstants.ID + ":"+ id;
-          isFirst=false;
-        }
+        if (solrDocId != null) {
+          String id="" + solrDocId.get(LogSearchConstants.ID);
+          if (isFirst) {
+            filterQueryListIds+=LogSearchConstants.MINUS_OPERATOR + LogSearchConstants.ID + ":"+ id;
+            isFirst=false;
+          }
  else {
-          filterQueryListIds+=" AND " + "-" + LogSearchConstants.ID + ":"+ id;
+            filterQueryListIds+=" " + CONDITION.AND + " "+ LogSearchConstants.MINUS_OPERATOR+ LogSearchConstants.ID+ ":"+ id;
+          }
         }
       }
       String endTime=(String)searchCriteria.getParamValue("to");
       String startTime=(String)searchCriteria.getParamValue("from");
-      SolrQuery logTimeThroughRangeQuery=queryGenerator.commonFilterQuery(searchCriteria);
+      SolrQuery logTimeThroughRangeQuery=queryGenerator.commonServiceFilterQuery(searchCriteria);
       logTimeThroughRangeQuery.remove("start");
       logTimeThroughRangeQuery.remove("rows");
       logTimeThroughRangeQuery.setRows(1);
       queryGenerator.setSingleExcludeFilter(logTimeThroughRangeQuery,LogSearchConstants.ID,lastLogsLogId);
-      if (!stringUtil.isEmpty(filterQueryListIds))       logTimeThroughRangeQuery.setFilterQueries(filterQueryListIds);
+      if (!stringUtil.isEmpty(filterQueryListIds)) {
+        logTimeThroughRangeQuery.setFilterQueries(filterQueryListIds);
+      }
       if (!stringUtil.isEmpty(sortByType) && sortByType.equalsIgnoreCase(LogSearchConstants.ASCENDING_ORDER)) {
-        sequenceNumber="" + (Integer.parseInt(sequenceNumber) - 1);
-        logTimeThroughRangeQuery.remove("sort");
-        logTimeThroughRangeQuery.set("sort",LogSearchConstants.LOGTIME + " " + LogSearchConstants.DESCENDING_ORDER);
+        logTimeThroughRangeQuery.remove(LogSearchConstants.SORT);
+        logTimeThroughRangeQuery.set(LogSearchConstants.SORT,LogSearchConstants.LOGTIME + " " + LogSearchConstants.DESCENDING_ORDER);
         queryGenerator.setSingleRangeFilter(logTimeThroughRangeQuery,LogSearchConstants.LOGTIME,startTime,lastLogsLogTime);
       }
  else {
-        sequenceNumber="" + (Integer.parseInt(sequenceNumber) + 1);
-        logTimeThroughRangeQuery.remove("sort");
-        logTimeThroughRangeQuery.set("sort",LogSearchConstants.LOGTIME + " " + LogSearchConstants.ASCENDING_ORDER);
+        logTimeThroughRangeQuery.remove(LogSearchConstants.SORT);
+        logTimeThroughRangeQuery.set(LogSearchConstants.SORT,LogSearchConstants.LOGTIME + " " + LogSearchConstants.ASCENDING_ORDER);
         queryGenerator.setSingleRangeFilter(logTimeThroughRangeQuery,LogSearchConstants.LOGTIME,lastLogsLogTime,endTime);
       }
-      queryGenerator.setSingleIncludeFilter(logTimeThroughRangeQuery,LogSearchConstants.SOLR_LOG_MESSAGE,keyword);
-      SolrDocumentList documentList=serviceLogsSolrDao.process(logTimeThroughRangeQuery).getResults();
+      queryGenerator.setSingleIncludeFilter(logTimeThroughRangeQuery,LogSearchConstants.SOLR_KEY_LOG_MESSAGE,keyword);
+      queryResponse=serviceLogsSolrDao.process(logTimeThroughRangeQuery);
+      if (queryResponse == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
+      SolrDocumentList documentList=queryResponse.getResults();
+      if (documentList == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
       SolrDocument solrDocument=new SolrDocument();
-      if (!documentList.isEmpty())       solrDocument=documentList.get(0);
+      if (!documentList.isEmpty()) {
+        solrDocument=documentList.get(0);
+      }
       Date keywordLogDate=(Date)solrDocument.get(LogSearchConstants.LOGTIME);
+      if (keywordLogDate == null) {
+        throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+      }
       String originalKeywordDate=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
       String keywordId="" + solrDocument.get(LogSearchConstants.ID);
       SolrQuery rangeLogQuery=lastLogTime.getCopy();
       rangeLogQuery.remove("start");
       rangeLogQuery.remove("rows");
       if (!stringUtil.isEmpty(sortByType) && sortByType.equalsIgnoreCase(LogSearchConstants.ASCENDING_ORDER)) {
-        keywordLogDate=dateUtil.addMilliSecondsToDate(keywordLogDate,1);
         String keywordDateTime=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
         queryGenerator.setSingleRangeFilter(rangeLogQuery,LogSearchConstants.LOGTIME,startTime,keywordDateTime);
       }
  else {
-        keywordLogDate=dateUtil.addMilliSecondsToDate(keywordLogDate,-1);
         String keywordDateTime=dateUtil.convertDateWithMillisecondsToSolrDate(keywordLogDate);
         queryGenerator.setSingleRangeFilter(rangeLogQuery,LogSearchConstants.LOGTIME,keywordDateTime,endTime);
       }
       long countNumberLogs=countQuery(rangeLogQuery) - 1;
       try {
-        SolrQuery sameIdQuery=queryGenerator.commonFilterQuery(searchCriteria);
+        SolrQuery sameIdQuery=queryGenerator.commonServiceFilterQuery(searchCriteria);
         queryGenerator.setSingleIncludeFilter(sameIdQuery,LogSearchConstants.LOGTIME,"\"" + originalKeywordDate + "\"");
-        sameIdQuery.set("fl",LogSearchConstants.ID);
+        queryGenerator.setFl(sameIdQuery,LogSearchConstants.ID);
         SolrDocumentList sameQueryDocList=serviceLogsSolrDao.process(sameIdQuery).getResults();
         for (        SolrDocument solrDocumenent : sameQueryDocList) {
-          String id=(String)solrDocumenent.getFieldValue(LogSearchConstants.ID);
-          countNumberLogs++;
-          if (id.equals(keywordId))           break;
+          if (solrDocumenent != null) {
+            String id=(String)solrDocumenent.getFieldValue(LogSearchConstants.ID);
+            countNumberLogs++;
+            if (stringUtil.isEmpty(id) && id.equals(keywordId)) {
+              break;
+            }
+          }
         }
       }
  catch (      SolrException|SolrServerException|IOException e) {
@@ -209,5 +283,5 @@
  catch (    Exception e) {
     }
   }
-  throw restErrorUtil.createRESTException("keyword not found",MessageEnums.ERROR_SYSTEM);
+  throw restErrorUtil.createRESTException("The keyword " + "\"" + key + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
 }
