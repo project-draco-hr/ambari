@@ -1,0 +1,31 @@
+{
+  return new Command<Void>(){
+    @Override public Void invoke() throws AmbariException {
+      ViewRegistry viewRegistry=ViewRegistry.getInstance();
+      Comparable deletedUrl=((EqualsPredicate)predicate).getValue();
+      String toDelete=deletedUrl.toString();
+      Optional<ViewURLEntity> urlEntity=viewURLDAO.findByName(toDelete);
+      if (!urlEntity.isPresent()) {
+        throw new AmbariException("The URL " + toDelete + "does not exist");
+      }
+      ViewInstanceEntity viewInstanceEntity=urlEntity.get().getViewInstanceEntity();
+      if (viewInstanceEntity != null) {
+        viewInstanceEntity.clearUrl();
+        try {
+          viewRegistry.updateViewInstance(viewInstanceEntity);
+        }
+ catch (        ValidationException e) {
+          throw new IllegalArgumentException(e.getMessage(),e);
+        }
+catch (        org.apache.ambari.view.SystemException e) {
+          throw new AmbariException("Caught exception trying to update view URL.",e);
+        }
+        viewRegistry.updateView(viewInstanceEntity);
+      }
+      urlEntity.get().clearEntity();
+      viewURLDAO.delete(urlEntity.get());
+      return null;
+    }
+  }
+;
+}

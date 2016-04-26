@@ -1,0 +1,41 @@
+{
+  return new Command<Void>(){
+    @Transactional @Override public Void invoke() throws AmbariException {
+      ViewRegistry viewRegistry=ViewRegistry.getInstance();
+      ViewURLEntity urlEntity=toEntity(properties);
+      ViewInstanceEntity viewInstanceEntity=urlEntity.getViewInstanceEntity();
+      ViewEntity viewEntity=viewInstanceEntity.getViewEntity();
+      String viewName=viewEntity.getCommonName();
+      String version=viewEntity.getVersion();
+      ViewEntity view=viewRegistry.getDefinition(viewName,version);
+      if (view == null) {
+        throw new IllegalStateException("The view " + viewName + " is not registered.");
+      }
+      if (!view.isDeployed()) {
+        throw new IllegalStateException("The view " + viewName + " is not loaded.");
+      }
+      ViewURLEntity viewUrl=viewInstanceEntity.getViewUrl();
+      Optional<ViewURLEntity> savedUrl=viewURLDAO.findByName(urlEntity.getUrlName());
+      if (savedUrl.isPresent()) {
+        throw new AmbariException("This view URL name exists, URL names should be unique");
+      }
+      if (viewUrl != null) {
+        throw new AmbariException("The view instance selected already has a linked URL");
+      }
+      viewURLDAO.save(urlEntity);
+      viewInstanceEntity.setViewUrl(urlEntity);
+      try {
+        viewRegistry.updateViewInstance(viewInstanceEntity);
+      }
+ catch (      ValidationException e) {
+        throw new IllegalArgumentException(e.getMessage(),e);
+      }
+catch (      org.apache.ambari.view.SystemException e) {
+        throw new AmbariException("Caught exception trying to update view URL.",e);
+      }
+      viewRegistry.updateView(viewInstanceEntity);
+      return null;
+    }
+  }
+;
+}

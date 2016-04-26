@@ -1,0 +1,28 @@
+{
+  return new Command<Void>(){
+    @Override public Void invoke() throws AmbariException {
+      ViewRegistry registry=ViewRegistry.getInstance();
+      String name=(String)properties.get(URL_NAME_PROPERTY_ID);
+      String suffix=(String)properties.get(URL_SUFFIX_PROPERTY_ID);
+      Optional<ViewURLEntity> entity=viewURLDAO.findByName(name);
+      if (!entity.isPresent()) {
+        throw new AmbariException("URL with name " + name + "was not found");
+      }
+      entity.get().setUrlSuffix(suffix);
+      viewURLDAO.update(entity.get());
+      ViewInstanceEntity viewInstanceEntity=entity.get().getViewInstanceEntity();
+      try {
+        registry.updateViewInstance(viewInstanceEntity);
+      }
+ catch (      ValidationException e) {
+        throw new IllegalArgumentException(e.getMessage(),e);
+      }
+catch (      org.apache.ambari.view.SystemException e) {
+        throw new AmbariException("Caught exception trying to update view URL.",e);
+      }
+      registry.updateView(viewInstanceEntity);
+      return null;
+    }
+  }
+;
+}
