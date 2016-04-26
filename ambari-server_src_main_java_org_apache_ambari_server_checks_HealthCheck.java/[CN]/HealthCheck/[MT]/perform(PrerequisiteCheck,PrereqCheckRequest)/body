@@ -1,0 +1,24 @@
+{
+  AlertsDAO alertsDAO=alertsDAOProvider.get();
+  final String clusterName=request.getClusterName();
+  final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+  List<AlertCurrentEntity> alerts=alertsDAO.findCurrentByCluster(cluster.getClusterId());
+  List<String> errorMessages=new ArrayList<String>();
+  for (  AlertCurrentEntity alert : alerts) {
+    AlertHistoryEntity alertHistory=alert.getAlertHistory();
+    AlertState alertState=alertHistory.getAlertState();
+    if (ALERT_STATES.contains(alertState) && !alert.getMaintenanceState().equals(MaintenanceState.ON)) {
+      String state=alertState.name();
+      String label=alertHistory.getAlertDefinition().getLabel();
+      String hostName=alertHistory.getHostName();
+      errorMessages.add(state + ": " + label+ ": "+ hostName);
+      prerequisiteCheck.getFailedDetail().add(new AlertDetail(state,label,hostName));
+    }
+  }
+  if (!errorMessages.isEmpty()) {
+    prerequisiteCheck.getFailedOn().add(clusterName);
+    prerequisiteCheck.setStatus(PrereqCheckStatus.WARNING);
+    String failReason=getFailReason(prerequisiteCheck,request);
+    prerequisiteCheck.setFailReason(String.format(failReason,StringUtils.join(errorMessages,"\n")));
+  }
+}
