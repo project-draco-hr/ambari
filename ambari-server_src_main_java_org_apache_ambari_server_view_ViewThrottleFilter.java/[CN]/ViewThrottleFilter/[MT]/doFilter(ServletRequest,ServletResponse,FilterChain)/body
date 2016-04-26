@@ -1,0 +1,24 @@
+{
+  if (!(request instanceof HttpServletRequest)) {
+    chain.doFilter(request,response);
+    return;
+  }
+  HttpServletResponse httpResponse=(HttpServletResponse)response;
+  boolean acquired=false;
+  try {
+    acquired=m_semaphore.tryAcquire(m_timeout,TimeUnit.MILLISECONDS);
+  }
+ catch (  InterruptedException interruptedException) {
+    LOG.warn("While waiting for an available thread, the view request was interrupted");
+  }
+  if (!acquired) {
+    httpResponse.sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE,"There are no available threads to handle view requests");
+    return;
+  }
+  try {
+    chain.doFilter(request,response);
+  }
+  finally {
+    m_semaphore.release();
+  }
+}
