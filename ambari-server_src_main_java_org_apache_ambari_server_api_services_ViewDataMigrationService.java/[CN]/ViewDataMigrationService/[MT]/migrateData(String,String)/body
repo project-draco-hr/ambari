@@ -1,0 +1,37 @@
+{
+  if (!viewRegistry.checkAdmin()) {
+    throw new WebApplicationException(Response.Status.FORBIDDEN);
+  }
+  LOG.info("Data Migration to view instance " + viewName + "/"+ viewVersion+ "/"+ instanceName+ " from "+ viewName+ "/"+ originViewVersion+ "/"+ originInstanceName);
+  ViewInstanceEntity instanceDefinition=getViewInstanceEntity(viewName,viewVersion,instanceName);
+  ViewInstanceEntity originInstanceDefinition=getViewInstanceEntity(viewName,originViewVersion,originInstanceName);
+  ViewDataMigrationContextImpl migrationContext=getViewDataMigrationContext(instanceDefinition,originInstanceDefinition);
+  ViewDataMigrator dataMigrator=getViewDataMigrator(instanceDefinition,migrationContext);
+  LOG.debug("Running before-migration hook");
+  if (!dataMigrator.beforeMigration()) {
+    String msg="View " + viewName + "/"+ viewVersion+ "/"+ instanceName+ " canceled the migration process";
+    LOG.error(msg);
+    throw new ViewDataMigrationException(msg);
+  }
+  Map<String,Class> originClasses=migrationContext.getOriginEntityClasses();
+  Map<String,Class> currentClasses=migrationContext.getCurrentEntityClasses();
+  for (  Map.Entry<String,Class> originEntity : originClasses.entrySet()) {
+    LOG.debug("Migrating persistence entity " + originEntity.getKey());
+    if (currentClasses.containsKey(originEntity.getKey())) {
+      Class entity=currentClasses.get(originEntity.getKey());
+      dataMigrator.migrateEntity(originEntity.getValue(),entity);
+    }
+ else {
+      LOG.debug("Entity " + originEntity.getKey() + " not found in target view");
+      dataMigrator.migrateEntity(originEntity.getValue(),null);
+    }
+  }
+  LOG.debug("Migrating instance data");
+  dataMigrator.migrateInstanceData();
+  LOG.debug("Running after-migration hook");
+  dataMigrator.afterMigration();
+  LOG.debug("Copying user permissions");
+  viewRegistry.copyPrivileges(originInstanceDefinition,instanceDefinition);
+  Response.ResponseBuilder builder=Response.status(Response.Status.OK);
+  return builder.build();
+}

@@ -1,0 +1,38 @@
+{
+  ViewEntity entity1=getViewEntityMock(VERSION_1);
+  ViewEntity entity2=getViewEntityMock(VERSION_2);
+  replay(entity1,entity2);
+  ViewInstanceEntity instanceEntity1=getViewInstanceEntityMock(entity1);
+  ViewInstanceEntity instanceEntity2=getViewInstanceEntityMock(entity2);
+  replay(instanceEntity1,instanceEntity2);
+  TestViewDataMigrationContextImpl context=new TestViewDataMigrationContextImpl(instanceEntity1,instanceEntity2);
+  DataStore dataStore1=createStrictMock(DataStore.class);
+  SampleEntity sampleEntity1=new SampleEntity("data1");
+  SampleEntity sampleEntity2=new SampleEntity("data2");
+  expect(dataStore1.findAll(eq(SampleEntity.class),(String)isNull())).andReturn(Arrays.asList(sampleEntity1,sampleEntity2));
+  replay(dataStore1);
+  DataStore dataStore2=createStrictMock(DataStore.class);
+  Capture<SampleEntity> copiedEntity1=Capture.newInstance();
+  Capture<SampleEntity> copiedEntity2=Capture.newInstance();
+  Capture<SampleEntity> convertedEntity1=Capture.newInstance();
+  Capture<SampleEntity> convertedEntity2=Capture.newInstance();
+  dataStore2.store(capture(copiedEntity1));
+  expectLastCall();
+  dataStore2.store(capture(copiedEntity2));
+  expectLastCall();
+  replay(dataStore2);
+  context.setMockOriginDataStore(dataStore1);
+  context.setMockCurrentDataStore(dataStore2);
+  EntityConverter converter=createStrictMock(EntityConverter.class);
+  converter.convert(eq(sampleEntity1),capture(convertedEntity1));
+  expectLastCall();
+  converter.convert(eq(sampleEntity2),capture(convertedEntity2));
+  expectLastCall();
+  replay(converter);
+  context.copyAllObjects(SampleEntity.class,SampleEntity.class,converter);
+  verify(dataStore1);
+  verify(dataStore2);
+  verify(converter);
+  Assert.assertSame(copiedEntity1.getValue(),convertedEntity1.getValue());
+  Assert.assertSame(copiedEntity2.getValue(),convertedEntity2.getValue());
+}
