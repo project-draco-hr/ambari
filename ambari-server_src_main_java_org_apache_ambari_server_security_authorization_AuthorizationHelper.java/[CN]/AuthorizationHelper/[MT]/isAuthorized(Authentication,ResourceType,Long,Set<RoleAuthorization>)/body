@@ -38,6 +38,36 @@
         }
       }
     }
-    return false;
+    if (resourceId == null) {
+      return false;
+    }
+    ViewInstanceDAO viewInstanceDAO=viewInstanceDAOProvider.get();
+    ViewInstanceEntity instanceEntity=viewInstanceDAO.findByResourceId(resourceId);
+    if (instanceEntity == null || instanceEntity.getClusterHandle() == null) {
+      return false;
+    }
+    PrivilegeDAO privilegeDAO=privilegeDAOProvider.get();
+    final Set<String> privilegeNames=FluentIterable.from(privilegeDAO.findByResourceId(resourceId)).filter(ClusterInheritedPermissionHelper.privilegeWithClusterInheritedPermissionTypePredicate).transform(ClusterInheritedPermissionHelper.permissionNameFromClusterInheritedPrivilege).toSet();
+    return FluentIterable.from(authentication.getAuthorities()).filter(new Predicate<GrantedAuthority>(){
+      @Override public boolean apply(      GrantedAuthority grantedAuthority){
+        AmbariGrantedAuthority authority=(AmbariGrantedAuthority)grantedAuthority;
+        PrivilegeEntity privilege=authority.getPrivilegeEntity();
+        String resourceTypeName=privilege.getResource().getResourceType().getName();
+        return ResourceType.translate(resourceTypeName) == ResourceType.CLUSTER;
+      }
+    }
+).transform(new Function<GrantedAuthority,PermissionEntity>(){
+      @Override public PermissionEntity apply(      GrantedAuthority grantedAuthority){
+        AmbariGrantedAuthority authority=(AmbariGrantedAuthority)grantedAuthority;
+        PrivilegeEntity privilege=authority.getPrivilegeEntity();
+        return privilege.getPermission();
+      }
+    }
+).anyMatch(new Predicate<PermissionEntity>(){
+      @Override public boolean apply(      PermissionEntity input){
+        return privilegeNames.contains(input.getPermissionName());
+      }
+    }
+);
   }
 }
