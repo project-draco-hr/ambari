@@ -1,31 +1,55 @@
-def create_ranger_repository(self, component, repo_name, repo_properties, ambari_ranger_admin, ambari_ranger_password, admin_uname, admin_password, policy_user):
-    response_code = self.check_ranger_login_urllib2(self.base_url)
-    repo_data = json.dumps(repo_properties)
-    ambari_ranger_password = unicode(ambari_ranger_password)
-    admin_password = unicode(admin_password)
-    ambari_username_password_for_ranger = format('{ambari_ranger_admin}:{ambari_ranger_password}')
-    if ((response_code is not None) and (response_code == 200)):
-        user_resp_code = self.create_ambari_admin_user(ambari_ranger_admin, ambari_ranger_password, format('{admin_uname}:{admin_password}'))
-        if ((user_resp_code is not None) and (user_resp_code == 200)):
+def create_ranger_repository(self, component, repo_name, repo_properties, ambari_ranger_admin, ambari_ranger_password, admin_uname, admin_password, policy_user, is_security_enabled, component_user, component_user_principal, component_user_keytab):
+    if (not is_security_enabled):
+        response_code = self.check_ranger_login_urllib2(self.base_url)
+        repo_data = json.dumps(repo_properties)
+        ambari_ranger_password = unicode(ambari_ranger_password)
+        admin_password = unicode(admin_password)
+        ambari_username_password_for_ranger = format('{ambari_ranger_admin}:{ambari_ranger_password}')
+        if ((response_code is not None) and (response_code == 200)):
+            user_resp_code = self.create_ambari_admin_user(ambari_ranger_admin, ambari_ranger_password, format('{admin_uname}:{admin_password}'))
+            if ((user_resp_code is not None) and (user_resp_code == 200)):
+                retryCount = 0
+                while (retryCount <= 5):
+                    repo = self.get_repository_by_name_urllib2(repo_name, component, 'true', ambari_username_password_for_ranger)
+                    if (repo is not None):
+                        Logger.info('{0} Repository {1} exist'.format(component.title(), repo['name']))
+                        break
+                    else:
+                        response = self.create_repository_urllib2(repo_data, ambari_username_password_for_ranger)
+                        if (response is not None):
+                            Logger.info('{0} Repository created in Ranger admin'.format(component.title()))
+                            break
+                        elif (retryCount < 5):
+                            Logger.info('Retry Repository Creation is being called')
+                            time.sleep(30)
+                            retryCount += 1
+                        else:
+                            Logger.error('{0} Repository creation failed in Ranger admin'.format(component.title()))
+                            break
+            else:
+                Logger.error('Ambari admin user creation failed')
+        elif (not self.skip_if_rangeradmin_down):
+            Logger.error('Connection failed to Ranger Admin !')
+    else:
+        response = self.check_ranger_login_curl(component_user, component_user_keytab, component_user_principal, self.base_url, True)
+        if (response and (response[0] == 200)):
             retryCount = 0
+            repo_data = json.dumps(repo_properties)
             while (retryCount <= 5):
-                repo = self.get_repository_by_name_urllib2(repo_name, component, 'true', ambari_username_password_for_ranger)
-                if (repo is not None):
-                    Logger.info('{0} Repository {1} exist'.format(component.title(), repo['name']))
+                response = self.get_repository_by_name_curl(component_user, component_user_keytab, component_user_principal, repo_name, component, 'true')
+                if (response is not None):
+                    Logger.info('{0} Repository {1} exist'.format(component.title(), response['name']))
                     break
                 else:
-                    response = self.create_repository_urllib2(repo_data, ambari_username_password_for_ranger)
-                    if (response is not None):
+                    response = self.create_repository_curl(component_user, component_user_keytab, component_user_principal, repo_name, repo_data, policy_user)
+                    if (response and (len(response) > 0)):
                         Logger.info('{0} Repository created in Ranger admin'.format(component.title()))
                         break
                     elif (retryCount < 5):
-                        Logger.info('Retry Repository Creation is being called')
                         time.sleep(30)
                         retryCount += 1
                     else:
                         Logger.error('{0} Repository creation failed in Ranger admin'.format(component.title()))
                         break
         else:
-            Logger.error('Ambari admin user creation failed')
-    elif (not self.skip_if_rangeradmin_down):
-        Logger.error('Connection failed to Ranger Admin !')
+            Logger.error('Connection failed to Ranger Admin !')
