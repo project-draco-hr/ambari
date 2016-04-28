@@ -50,6 +50,7 @@ def namenode(action=None, hdfs_binary=None, do_format=True, upgrade_type=None, u
         if (upgrade_type == 'nonrolling'):
             is_active_namenode_cmd = False
         check_for_safemode_off = False
+        is_active_namenode = False
         msg = ''
         if params.dfs_ha_enabled:
             if (upgrade_type is not None):
@@ -57,14 +58,16 @@ def namenode(action=None, hdfs_binary=None, do_format=True, upgrade_type=None, u
                 msg = 'Must wait to leave safemode since High Availability is enabled during a Stack Upgrade'
             else:
                 Logger.info('Wait for NameNode to become active.')
-                if is_active_namenode(hdfs_binary):
+                if check_is_active_namenode(hdfs_binary):
                     check_for_safemode_off = True
+                    is_active_namenode = True
                     msg = 'Must wait to leave safemode since High Availability is enabled and this is the Active NameNode.'
                 else:
                     msg = 'Will remain in the current safemode state.'
         else:
             msg = 'Must wait to leave safemode since High Availability is not enabled.'
             check_for_safemode_off = True
+            is_active_namenode = True
         Logger.info(msg)
         stay_in_safe_mode = False
         if (upgrade_type == 'nonrolling'):
@@ -73,8 +76,11 @@ def namenode(action=None, hdfs_binary=None, do_format=True, upgrade_type=None, u
             Logger.info('Stay in safe mode: {0}'.format(stay_in_safe_mode))
             if (not stay_in_safe_mode):
                 wait_for_safemode_off(hdfs_binary)
-        create_hdfs_directories(is_active_namenode_cmd)
-        create_ranger_audit_hdfs_directories(is_active_namenode_cmd)
+        if is_active_namenode:
+            create_hdfs_directories()
+            create_ranger_audit_hdfs_directories()
+        else:
+            Logger.info('Skipping creating hdfs directories as is not active NN.')
     elif (action == 'stop'):
         import params
         service(action='stop', name='namenode', user=params.hdfs_user)
