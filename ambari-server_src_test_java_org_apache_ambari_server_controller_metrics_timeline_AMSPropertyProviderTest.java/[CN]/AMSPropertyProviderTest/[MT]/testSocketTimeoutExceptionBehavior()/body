@@ -1,0 +1,44 @@
+{
+  setUpCommonMocks();
+  SecurityContextHolder.getContext().setAuthentication(TestAuthenticationFactory.createClusterAdministrator("ClusterAdmin",2L));
+  URLStreamProvider streamProvider=createNiceMock(URLStreamProvider.class);
+  HttpURLConnection connection=createNiceMock(HttpURLConnection.class);
+  expect(streamProvider.processURL((String)anyObject(),(String)anyObject(),(String)anyObject(),(Map<String,List<String>>)anyObject())).andReturn(connection);
+  expect(connection.getInputStream()).andThrow(new SocketTimeoutException("Unit test raising Exception")).once();
+  replay(streamProvider,connection);
+  injectCacheEntryFactoryWithStreamProvider(streamProvider);
+  TestMetricHostProvider metricHostProvider=new TestMetricHostProvider();
+  ComponentSSLConfiguration sslConfiguration=mock(ComponentSSLConfiguration.class);
+  Map<String,Map<String,PropertyInfo>> propertyIds=PropertyHelper.getMetricPropertyIds(Resource.Type.Host);
+  AMSPropertyProvider propertyProvider=new AMSHostPropertyProvider(propertyIds,streamProvider,sslConfiguration,new TimelineMetricCacheProvider(new Configuration(),cacheEntryFactory),metricHostProvider,CLUSTER_NAME_PROPERTY_ID,HOST_NAME_PROPERTY_ID);
+  final Resource resource1=new ResourceImpl(Resource.Type.Host);
+  resource1.setProperty(CLUSTER_NAME_PROPERTY_ID,"c1");
+  resource1.setProperty(HOST_NAME_PROPERTY_ID,"h1");
+  final Resource resource2=new ResourceImpl(Resource.Type.Host);
+  resource2.setProperty(CLUSTER_NAME_PROPERTY_ID,"c1");
+  resource2.setProperty(HOST_NAME_PROPERTY_ID,"h2");
+  Map<String,TemporalInfo> temporalInfoMap=new HashMap<String,TemporalInfo>();
+  temporalInfoMap.put(PROPERTY_ID1,new TemporalInfoImpl(1416445244801L,1416448936464L,1L));
+  temporalInfoMap.put(PROPERTY_ID2,new TemporalInfoImpl(1416445344901L,1416448946564L,1L));
+  Request request=PropertyHelper.getReadRequest(new HashSet<String>(){
+{
+      add(PROPERTY_ID1);
+      add(PROPERTY_ID2);
+    }
+  }
+,temporalInfoMap);
+  Set<Resource> resources=propertyProvider.populateResources(new HashSet<Resource>(){
+{
+      add(resource1);
+      add(resource2);
+    }
+  }
+,request,null);
+  verify(streamProvider,connection);
+  Assert.assertEquals(2,resources.size());
+  Resource res=resources.iterator().next();
+  Map<String,Object> properties=PropertyHelper.getProperties(resources.iterator().next());
+  Assert.assertNotNull(properties);
+  Assert.assertNull(res.getPropertyValue(PROPERTY_ID1));
+  Assert.assertNull(res.getPropertyValue(PROPERTY_ID2));
+}

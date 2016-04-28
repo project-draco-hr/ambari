@@ -21,15 +21,21 @@
     TimelineAppMetricCacheKey metricCacheKey=new TimelineAppMetricCacheKey(propertyIdMap.keySet(),"HOST",temporalInfo);
     metricCacheKey.setSpec(uriBuilder.toString());
     TimelineMetrics timelineMetrics;
-    if (metricCache != null && metricCacheKey.getTemporalInfo() != null) {
-      timelineMetrics=metricCache.getAppTimelineMetricsFromCache(metricCacheKey);
-    }
+    try {
+      if (metricCache != null && metricCacheKey.getTemporalInfo() != null) {
+        timelineMetrics=metricCache.getAppTimelineMetricsFromCache(metricCacheKey);
+      }
  else {
-      try {
         timelineMetrics=requestHelper.fetchTimelineMetrics(uriBuilder,temporalInfo.getStartTimeMillis(),temporalInfo.getEndTimeMillis());
       }
- catch (      IOException e) {
-        timelineMetrics=null;
+    }
+ catch (    IOException io) {
+      timelineMetrics=null;
+      if (io instanceof SocketTimeoutException) {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("Skip populating metrics on socket timeout exception.");
+        }
+        break;
       }
     }
     if (timelineMetrics != null) {
