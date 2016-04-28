@@ -1,0 +1,37 @@
+{
+  ServiceConfigDAO serviceConfigDAO=serviceConfigDAOProvider.get();
+  HostRoleCommandDAO hostRoleCommandDAO=hostRoleCommandDAOProvider.get();
+  final String clusterName=request.getClusterName();
+  final Cluster cluster=clustersProvider.get().getCluster(clusterName);
+  long clusterId=cluster.getClusterId();
+  Map<String,Long> lastServiceConfigUpdates=new HashMap<>();
+  for (  Service service : cluster.getServices().values()) {
+    if (service.getMaintenanceState() != MaintenanceState.OFF || !hasAtLeastOneComponentVersionAdvertised(service)) {
+      continue;
+    }
+    ServiceConfigEntity lastServiceConfig=serviceConfigDAO.getLastServiceConfig(clusterId,service.getName());
+    lastServiceConfigUpdates.put(service.getName(),lastServiceConfig.getCreateTimestamp());
+  }
+  List<HostRoleCommandEntity> commands=hostRoleCommandDAO.findAll(REQUEST,null);
+  Collections.reverse(commands);
+  LinkedHashSet<String> failedServiceNames=new LinkedHashSet<>();
+  for (  Map.Entry<String,Long> serviceEntry : lastServiceConfigUpdates.entrySet()) {
+    String serviceName=serviceEntry.getKey();
+    Long configTimestamp=serviceEntry.getValue();
+    for (    HostRoleCommandEntity command : commands) {
+      if (RoleCommand.SERVICE_CHECK.equals(command.getRoleCommand()) && command.getCommandDetail().contains(serviceName)) {
+        Long serviceCheckTimestamp=command.getStartTime();
+        if (serviceCheckTimestamp < configTimestamp) {
+          failedServiceNames.add(serviceName);
+          LOG.info("Service {} latest config change is {}, latest service check executed at {}",serviceName,DATE_FORMAT.format(new Date(configTimestamp)),DATE_FORMAT.format(new Date(serviceCheckTimestamp)));
+        }
+      }
+    }
+  }
+  if (!failedServiceNames.isEmpty()) {
+    prerequisiteCheck.setFailedOn(failedServiceNames);
+    prerequisiteCheck.setStatus(PrereqCheckStatus.FAIL);
+    String failReason=getFailReason(prerequisiteCheck,request);
+    prerequisiteCheck.setFailReason(String.format(failReason,StringUtils.join(failedServiceNames,", ")));
+  }
+}
