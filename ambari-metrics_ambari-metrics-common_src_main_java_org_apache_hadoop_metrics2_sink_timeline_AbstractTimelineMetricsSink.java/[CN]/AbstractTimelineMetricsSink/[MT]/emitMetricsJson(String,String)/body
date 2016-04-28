@@ -27,9 +27,10 @@
       }
     }
     cleanupInputStream(connection.getInputStream());
+    failedCollectorConnectionsCounter.set(0);
   }
  catch (  IOException ioe) {
-    StringBuilder errorMessage=new StringBuilder("Unable to connect to collector, " + connectUrl + "\n");
+    StringBuilder errorMessage=new StringBuilder("Unable to connect to collector, " + connectUrl + "\n"+ "This exceptions will be ignored for next "+ NUMBER_OF_SKIPPED_COLLECTOR_EXCEPTIONS+ " times\n");
     try {
       if ((connection != null)) {
         errorMessage.append(cleanupInputStream(connection.getErrorStream()));
@@ -37,12 +38,20 @@
     }
  catch (    IOException e) {
     }
-    if (LOG.isDebugEnabled()) {
-      LOG.debug(errorMessage,ioe);
+    if (failedCollectorConnectionsCounter.getAndIncrement() == 0) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(errorMessage,ioe);
+      }
+ else {
+        LOG.info(errorMessage);
+      }
+      throw new UnableToConnectException(ioe).setConnectUrl(connectUrl);
     }
  else {
-      LOG.info(errorMessage);
+      failedCollectorConnectionsCounter.compareAndSet(NUMBER_OF_SKIPPED_COLLECTOR_EXCEPTIONS,0);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug(String.format("Ignoring %s AMS connection exceptions",NUMBER_OF_SKIPPED_COLLECTOR_EXCEPTIONS));
+      }
     }
-    throw new UnableToConnectException(ioe).setConnectUrl(connectUrl);
   }
 }
