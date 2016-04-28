@@ -4,9 +4,27 @@ def get_all_supported_files_grouped_by_name(extensions=SUPPORTED_EXTENSIONS):
     for (dirName, subdirList, fileList) in os.walk(ConfigMerge.INPUT_DIR, followlinks=True):
         for file in fileList:
             (root, ext) = os.path.splitext(file)
-            for filename_ending in ConfigMerge.SUPPORTED_FILENAME_ENDINGS:
-                if (root.endswith(filename_ending) and (ext in extensions)):
-                    if (not (file in filePaths)):
-                        filePaths[file] = []
-                    filePaths[file].append(os.path.join(dirName, file))
+            if (ext in extensions):
+                file_path = os.path.join(dirName, file)
+                config_name = None
+                if (file in ConfigMerge.SERVICE_TO_AMBARI_CONFIG_NAME):
+                    config_name = ConfigMerge.SERVICE_TO_AMBARI_CONFIG_NAME[file]
+                elif ConfigMerge.UNKNOWN_FILES_MAPPING_FILE:
+                    for (path_regex, name) in ConfigMerge.CONTENT_UNKNOWN_FILES_MAPPING_FILE.iteritems():
+                        match = re.match(path_regex, os.path.relpath(file_path, ConfigMerge.INPUT_DIR))
+                        if match:
+                            config_name = name
+                            break
+                if (not config_name):
+                    if (file in ConfigMerge.NOT_MAPPED_FILES):
+                        if ConfigMerge.UNKNOWN_FILES_MAPPING_FILE:
+                            logger.error("File {0} doesn't match any regex from {1}".format(file_path, ConfigMerge.UNKNOWN_FILES_MAPPING_FILE))
+                        else:
+                            logger.error('Cannot map {0} to Ambari config type. Please use -u option to specify config mapping for this file. \nFor more information use --help option for script'.format(file_path))
+                        continue
+                    else:
+                        config_name = file
+                if (not (config_name in filePaths)):
+                    filePaths[config_name] = []
+                filePaths[config_name].append((file_path, ConfigMerge.PARSER_BY_EXTENSIONS[ext]))
     return filePaths
