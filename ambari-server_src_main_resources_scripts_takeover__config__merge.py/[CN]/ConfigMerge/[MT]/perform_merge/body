@@ -1,28 +1,41 @@
 def perform_merge(self):
     result_configurations = {}
+    result_property_attributes = {}
     has_conflicts = False
     for (filename, paths_and_parsers) in self.config_files_map.iteritems():
         filepath_to_configurations = {}
+        filepath_to_property_attributes = {}
         configuration_type = os.path.splitext(filename)[0]
         for path_and_parser in paths_and_parsers:
             (path, parser) = path_and_parser
             logger.debug('Read data from {0}'.format(path))
-            parsed_configurations_from_path = parser.read_data_to_map(path)
+            (parsed_configurations_from_path, parsed_properties_attributes) = parser.read_data_to_map(path)
             if (parsed_configurations_from_path != None):
                 filepath_to_configurations[path] = parsed_configurations_from_path
+            if (parsed_properties_attributes != None):
+                filepath_to_property_attributes[path] = parsed_properties_attributes
         (merged_configurations, property_name_to_value_to_filepaths) = ConfigMerge.merge_configurations(filepath_to_configurations)
-        conflicts_output = ConfigMerge.format_conflicts_output(property_name_to_value_to_filepaths)
-        if conflicts_output:
+        (merged_attributes, property_name_to_attribute_to_filepaths) = ConfigMerge.merge_configurations(filepath_to_property_attributes)
+        configuration_conflicts_output = ConfigMerge.format_conflicts_output(property_name_to_value_to_filepaths)
+        attribute_conflicts_output = ConfigMerge.format_conflicts_output(property_name_to_attribute_to_filepaths)
+        if configuration_conflicts_output:
             has_conflicts = True
             conflict_filename = os.path.join(self.OUTPUT_DIR, (configuration_type + '-conflicts.txt'))
             logger.warn('You have configurations conflicts for {0}. Please check {1}'.format(configuration_type, conflict_filename))
             with open(conflict_filename, 'w') as fp:
-                fp.write(conflicts_output)
+                fp.write(configuration_conflicts_output)
+        if attribute_conflicts_output:
+            has_conflicts = True
+            conflict_filename = os.path.join(self.OUTPUT_DIR, (configuration_type + '-attributes-conflicts.txt'))
+            logger.warn('You have property attribute conflicts for {0}. Please check {1}'.format(configuration_type, conflict_filename))
+            with open(conflict_filename, 'w') as fp:
+                fp.write(attribute_conflicts_output)
         result_configurations[configuration_type] = merged_configurations
+        result_property_attributes[configuration_type] = merged_attributes
     result_json_file = os.path.join(self.OUTPUT_DIR, 'blueprint.json')
     logger.info("Using '{0}' file as output for blueprint template".format(result_json_file))
     with open(result_json_file, 'w') as outfile:
-        outfile.write(json.dumps(ConfigMerge.format_for_blueprint(result_configurations), sort_keys=True, indent=4, separators=(',', ': ')))
+        outfile.write(json.dumps(ConfigMerge.format_for_blueprint(result_configurations, result_property_attributes), sort_keys=True, indent=4, separators=(',', ': ')))
     if has_conflicts:
         logger.info('Script finished with configurations conflicts, please resolve them before using the blueprint')
         return 1
