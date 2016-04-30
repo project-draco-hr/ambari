@@ -2,4 +2,12 @@ def run_hawq_check(self, env):
     import params
     Logger.info('Executing HAWQ Check ...')
     params.File(hawq_constants.hawq_hosts_file, content=InlineTemplate('{% for host in hawq_all_hosts %}{{host}}\n{% endfor %}'))
-    Execute('source {0} && hawq check -f {1} --hadoop {2} --config {3}'.format(hawq_constants.hawq_greenplum_path_file, hawq_constants.hawq_hosts_file, stack_select.get_hadoop_dir('home'), hawq_constants.hawq_check_file), user=hawq_constants.hawq_user, timeout=hawq_constants.default_exec_timeout)
+    additional_flags = list()
+    if params.dfs_nameservice:
+        additional_flags.append('--hdfs-ha')
+    if (params.hawq_global_rm_type == 'yarn'):
+        yarn_option = ('--yarn-ha' if params.is_yarn_ha_enabled else '--yarn')
+        additional_flags.append(yarn_option)
+    if (str(params.security_enabled).lower() == 'true'):
+        additional_flags.append('--kerberos')
+    Execute('source {0} && hawq check -f {1} --hadoop {2} --config {3} {4}'.format(hawq_constants.hawq_greenplum_path_file, hawq_constants.hawq_hosts_file, stack_select.get_hadoop_dir('home'), hawq_constants.hawq_check_file, ' '.join(additional_flags)), user=hawq_constants.hawq_user, timeout=hawq_constants.default_exec_timeout)
