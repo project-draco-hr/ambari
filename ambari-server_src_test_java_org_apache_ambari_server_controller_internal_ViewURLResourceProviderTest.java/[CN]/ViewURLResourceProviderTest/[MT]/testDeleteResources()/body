@@ -1,0 +1,33 @@
+{
+  ViewInstanceEntity viewInstanceEntity=createNiceMock(ViewInstanceEntity.class);
+  ViewEntity viewEntity=createNiceMock(ViewEntity.class);
+  ViewURLResourceProvider provider=new ViewURLResourceProvider();
+  ViewURLEntity viewURLEntity=createNiceMock(ViewURLEntity.class);
+  ViewURLDAO viewURLDAO=createNiceMock(ViewURLDAO.class);
+  EqualsPredicate equalsPredicate=new EqualsPredicate(ViewURLResourceProvider.URL_NAME_PROPERTY_ID,"test");
+  setDao(ViewURLResourceProvider.class.getDeclaredField("viewURLDAO"),viewURLDAO);
+  Set<Map<String,Object>> properties=new HashSet<>();
+  Map<String,Object> propertyMap=new HashMap<>();
+  propertyMap.put(ViewURLResourceProvider.URL_NAME_PROPERTY_ID,"test");
+  propertyMap.put(ViewURLResourceProvider.URL_SUFFIX_PROPERTY_ID,"suffix");
+  expect(viewURLDAO.findByName("test")).andReturn(Optional.of(viewURLEntity));
+  expect(viewURLEntity.getViewInstanceEntity()).andReturn(viewInstanceEntity).once();
+  expect(viewURLEntity.getUrlName()).andReturn("test").once();
+  expect(viewURLEntity.getUrlSuffix()).andReturn("suffix").once();
+  expect(viewURLEntity.getViewInstanceEntity()).andReturn(viewInstanceEntity).once();
+  viewURLEntity.setUrlSuffix("suffix");
+  Capture<ViewURLEntity> urlEntityCapture=newCapture();
+  viewInstanceEntity.clearUrl();
+  viewURLEntity.clearEntity();
+  viewURLDAO.delete(capture(urlEntityCapture));
+  viewregistry.updateViewInstance(viewInstanceEntity);
+  viewregistry.updateView(viewInstanceEntity);
+  replay(viewregistry,viewEntity,viewInstanceEntity,viewURLDAO,viewURLEntity);
+  properties.add(propertyMap);
+  SecurityContextHolder.getContext().setAuthentication(TestAuthenticationFactory.createAdministrator());
+  provider.deleteResources(PropertyHelper.getCreateRequest(properties,null),equalsPredicate);
+  ViewURLEntity urlEntity=urlEntityCapture.getValue();
+  assertEquals(urlEntity.getUrlName(),"test");
+  assertEquals(urlEntity.getUrlSuffix(),"suffix");
+  assertEquals(urlEntity.getViewInstanceEntity(),viewInstanceEntity);
+}
