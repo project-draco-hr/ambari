@@ -1,0 +1,67 @@
+{
+  LOG.info("Consolidating User Roles...");
+  List<UserEntity> users=userDAO.findAll();
+  if (users != null) {
+    for (    UserEntity user : users) {
+      PrincipalEntity principal=user.getPrincipal();
+      if (principal != null) {
+        Set<PrivilegeEntity> privileges=principal.getPrivileges();
+        if (privileges != null) {
+          Map<ResourceEntity,Set<PrivilegeEntity>> resourceExplicitPrivileges=new HashMap<ResourceEntity,Set<PrivilegeEntity>>();
+          PrivilegeEntity ambariAdministratorPrivilege=null;
+          for (          PrivilegeEntity privilege : privileges) {
+            ResourceEntity resource=privilege.getResource();
+            if (resource != null) {
+              ResourceTypeEntity resourceType=resource.getResourceType();
+              if (resourceType != null) {
+                String type=resourceType.getName();
+                if (ResourceType.CLUSTER.name().equalsIgnoreCase(type)) {
+                  Set<PrivilegeEntity> explicitPrivileges=resourceExplicitPrivileges.get(resource);
+                  if (explicitPrivileges == null) {
+                    explicitPrivileges=new HashSet<PrivilegeEntity>();
+                    resourceExplicitPrivileges.put(resource,explicitPrivileges);
+                  }
+                  explicitPrivileges.add(privilege);
+                }
+ else                 if (ResourceType.AMBARI.name().equalsIgnoreCase(type)) {
+                  ambariAdministratorPrivilege=privilege;
+                }
+              }
+            }
+          }
+          if (ambariAdministratorPrivilege != null) {
+            for (            Set<PrivilegeEntity> explicitPrivileges : resourceExplicitPrivileges.values()) {
+              explicitPrivileges.add(ambariAdministratorPrivilege);
+            }
+          }
+          for (          Map.Entry<ResourceEntity,Set<PrivilegeEntity>> entry : resourceExplicitPrivileges.entrySet()) {
+            Set<PrivilegeEntity> explicitPrivileges=entry.getValue();
+            if (explicitPrivileges.size() > 1) {
+              LOG.info("{} has {} explicitly assigned roles for the cluster {}, consolidating...",user.getUserName(),explicitPrivileges.size(),getClusterName(entry.getKey()));
+              PrivilegeEntity toKeep=null;
+              PrivilegeEntity toRemove=null;
+              for (              PrivilegeEntity privilegeEntity : explicitPrivileges) {
+                if (toKeep == null) {
+                  toKeep=privilegeEntity;
+                }
+ else {
+                  Integer toKeepLevel=ROLE_ORDER.get(toKeep.getPermission().getPermissionName());
+                  Integer currentLevel=ROLE_ORDER.get(privilegeEntity.getPermission().getPermissionName());
+                  if (toKeepLevel > currentLevel) {
+                    toRemove=toKeep;
+                    toKeep=privilegeEntity;
+                  }
+ else {
+                    toRemove=privilegeEntity;
+                  }
+                  LOG.info("Removing the role {} from the set assigned to {} since {} is more powerful.",toRemove.getPermission().getPermissionName(),user.getUserName(),toKeep.getPermission().getPermissionName());
+                  privilegeDAO.remove(toRemove);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
