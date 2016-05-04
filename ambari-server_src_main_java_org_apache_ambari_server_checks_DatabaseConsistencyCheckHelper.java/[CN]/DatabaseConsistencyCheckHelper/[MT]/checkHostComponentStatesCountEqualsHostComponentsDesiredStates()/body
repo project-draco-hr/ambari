@@ -1,0 +1,54 @@
+{
+  LOG.info("Checking host component states count equals host component desired states count");
+  String GET_HOST_COMPONENT_STATE_COUNT_QUERY="select count(*) from hostcomponentstate";
+  String GET_HOST_COMPONENT_DESIRED_STATE_COUNT_QUERY="select count(*) from hostcomponentdesiredstate";
+  String GET_MERGED_TABLE_ROW_COUNT_QUERY="select count(*) FROM hostcomponentstate hcs " + "JOIN hostcomponentdesiredstate hcds ON hcs.service_name=hcds.service_name AND hcs.component_name=hcds.component_name AND hcs.host_id=hcds.host_id";
+  int hostComponentStateCount=0;
+  int hostComponentDesiredStateCount=0;
+  int mergedCount=0;
+  ResultSet rs=null;
+  if (connection == null) {
+    if (dbAccessor == null) {
+      dbAccessor=injector.getInstance(DBAccessor.class);
+    }
+    connection=dbAccessor.getConnection();
+  }
+  try {
+    Statement statement=connection.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,ResultSet.CONCUR_UPDATABLE);
+    rs=statement.executeQuery(GET_HOST_COMPONENT_STATE_COUNT_QUERY);
+    if (rs != null) {
+      while (rs.next()) {
+        hostComponentStateCount=rs.getInt(1);
+      }
+    }
+    rs=statement.executeQuery(GET_HOST_COMPONENT_DESIRED_STATE_COUNT_QUERY);
+    if (rs != null) {
+      while (rs.next()) {
+        hostComponentDesiredStateCount=rs.getInt(1);
+      }
+    }
+    rs=statement.executeQuery(GET_MERGED_TABLE_ROW_COUNT_QUERY);
+    if (rs != null) {
+      while (rs.next()) {
+        mergedCount=rs.getInt(1);
+      }
+    }
+    if (hostComponentStateCount != hostComponentDesiredStateCount || hostComponentStateCount != mergedCount) {
+      LOG.error("Your host component states (hostcomponentstate table) count not equals host component desired states (hostcomponentdesiredstate table) count!");
+      errorAvailable=true;
+    }
+  }
+ catch (  SQLException e) {
+    LOG.error("Exception occurred during check for same count of host component states and host component desired states: ",e);
+  }
+ finally {
+    if (rs != null) {
+      try {
+        rs.close();
+      }
+ catch (      SQLException e) {
+        LOG.error("Exception occurred during result set closing procedure: ",e);
+      }
+    }
+  }
+}

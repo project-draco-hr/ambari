@@ -1,0 +1,38 @@
+{
+  LOG.info("Checking for configs not mapped to any cluster");
+  String GET_NOT_MAPPED_CONFIGS_QUERY="select type_name from clusterconfig where type_name not in (select type_name from clusterconfigmapping)";
+  Set<String> nonSelectedConfigs=new HashSet<>();
+  ResultSet rs=null;
+  if (connection == null) {
+    if (dbAccessor == null) {
+      dbAccessor=injector.getInstance(DBAccessor.class);
+    }
+    connection=dbAccessor.getConnection();
+  }
+  try {
+    Statement statement=connection.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,ResultSet.CONCUR_UPDATABLE);
+    rs=statement.executeQuery(GET_NOT_MAPPED_CONFIGS_QUERY);
+    if (rs != null) {
+      while (rs.next()) {
+        nonSelectedConfigs.add(rs.getString("type_name"));
+      }
+    }
+    if (!nonSelectedConfigs.isEmpty()) {
+      LOG.warn("You have config(s): {} that is(are) not mapped (in clusterconfigmapping table) to any cluster!",StringUtils.join(nonSelectedConfigs,","));
+      warningAvailable=true;
+    }
+  }
+ catch (  SQLException e) {
+    LOG.error("Exception occurred during check for not mapped configs to cluster procedure: ",e);
+  }
+ finally {
+    if (rs != null) {
+      try {
+        rs.close();
+      }
+ catch (      SQLException e) {
+        LOG.error("Exception occurred during result set closing procedure: ",e);
+      }
+    }
+  }
+}
