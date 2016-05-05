@@ -1,0 +1,51 @@
+{
+  Authentication authentication=TestAuthenticationFactory.createServiceAdministrator();
+  Resource.Type type=Resource.Type.HostComponent;
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  HostVersionDAO hostVersionDAO=createMock(HostVersionDAO.class);
+  ResourceProviderFactory resourceProviderFactory=createNiceMock(ResourceProviderFactory.class);
+  Injector injector=createNiceMock(Injector.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  Service service=createNiceMock(Service.class);
+  ServiceComponent component=createNiceMock(ServiceComponent.class);
+  ServiceComponentHost componentHost=createNiceMock(ServiceComponentHost.class);
+  RequestStageContainer stageContainer=createNiceMock(RequestStageContainer.class);
+  MaintenanceStateHelper maintenanceStateHelper=createNiceMock(MaintenanceStateHelper.class);
+  Map<String,String> mapRequestProps=new HashMap<String,String>();
+  mapRequestProps.put("context","Called from a test");
+  Set<ServiceComponentHostResponse> nameResponse=new HashSet<ServiceComponentHostResponse>();
+  nameResponse.add(new ServiceComponentHostResponse("Cluster102","Service100","Component100","Component 100","Host100","INSTALLED","","","",null));
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(managementController.findServiceName(cluster,"Component100")).andReturn("Service100").anyTimes();
+  expect(clusters.getCluster("Cluster102")).andReturn(cluster).anyTimes();
+  expect(cluster.getClusterId()).andReturn(2L).anyTimes();
+  expect(cluster.getService("Service100")).andReturn(service).anyTimes();
+  expect(service.getServiceComponent("Component100")).andReturn(component).anyTimes();
+  expect(component.getServiceComponentHost("Host100")).andReturn(componentHost).anyTimes();
+  expect(component.getName()).andReturn("Component100").anyTimes();
+  expect(componentHost.getState()).andReturn(State.INSTALLED).anyTimes();
+  expect(maintenanceStateHelper.isOperationAllowed(Resource.Type.Cluster,componentHost)).andReturn(true).anyTimes();
+  expect(managementController.getHostComponents(EasyMock.<Set<ServiceComponentHostRequest>>anyObject())).andReturn(Collections.<ServiceComponentHostResponse>emptySet()).once();
+  Map<String,Map<State,List<ServiceComponentHost>>> changedHosts=new HashMap<String,Map<State,List<ServiceComponentHost>>>();
+  List<ServiceComponentHost> changedComponentHosts=new ArrayList<ServiceComponentHost>();
+  changedComponentHosts.add(componentHost);
+  changedHosts.put("Component100",Collections.singletonMap(State.STARTED,changedComponentHosts));
+  TestHostComponentResourceProvider provider=new TestHostComponentResourceProvider(PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController,injector);
+  provider.setFieldValue("maintenanceStateHelper",maintenanceStateHelper);
+  provider.setFieldValue("hostVersionDAO",hostVersionDAO);
+  expect(resourceProviderFactory.getHostComponentResourceProvider(EasyMock.<Set<String>>anyObject(),EasyMock.<Map<Type,String>>anyObject(),eq(managementController))).andReturn(provider).anyTimes();
+  replay(managementController,resourceProviderFactory,clusters,cluster,service,component,componentHost,stageContainer,maintenanceStateHelper);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  Map<String,Object> properties=new LinkedHashMap<String,Object>();
+  properties.put(HostComponentResourceProvider.HOST_COMPONENT_STATE_PROPERTY_ID,"STARTED");
+  Request request=PropertyHelper.getUpdateRequest(properties,mapRequestProps);
+  Predicate predicate=new PredicateBuilder().property(HostComponentResourceProvider.HOST_COMPONENT_CLUSTER_NAME_PROPERTY_ID).equals("Cluster102").and().property(HostComponentResourceProvider.HOST_COMPONENT_STATE_PROPERTY_ID).equals("INSTALLED").and().property(HostComponentResourceProvider.HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID).equals("Component100").toPredicate();
+  try {
+    provider.updateResources(request,predicate);
+    fail("Expected exception when no resources are found to be updatable");
+  }
+ catch (  NoSuchResourceException e) {
+  }
+  verify(managementController,resourceProviderFactory,stageContainer);
+}
