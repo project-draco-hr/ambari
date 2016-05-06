@@ -1,4 +1,5 @@
 def createComponentLayoutRecommendations(self, services, hosts):
+    self.services = services
     recommendations = {'blueprint': {'host_groups': [], }, 'blueprint_cluster_binding': {'host_groups': [], }, }
     hostsList = self.getActiveHosts([host['Hosts'] for host in hosts['items']])
     hostsSet = set(hostsList)
@@ -8,24 +9,14 @@ def createComponentLayoutRecommendations(self, services, hosts):
             hostsComponentsMap[hostName] = []
     for service in services['services']:
         masterComponents = [component for component in service['components'] if self.isMasterComponent(component)]
+        serviceAdvisor = self.instantiateServiceAdvisor(service)
         for component in masterComponents:
             componentName = component['StackServiceComponents']['component_name']
-            if self.isComponentHostsPopulated(component):
-                hostsForComponent = component['StackServiceComponents']['hostnames']
-            elif ((len(hostsList) > 1) and self.isMasterComponentWithMultipleInstances(component)):
-                hostsCount = self.getMinComponentCount(component)
-                if (hostsCount > 1):
-                    hostsForComponent = []
-                    hostIndex = 0
-                    while ((hostsCount > len(hostsForComponent)) and (hostIndex < len(hostsList))):
-                        currentHost = hostsList[hostIndex]
-                        if self.isHostSuitableForComponent(currentHost, component):
-                            hostsForComponent.append(currentHost)
-                        hostIndex += 1
-                else:
-                    hostsForComponent = [self.getHostForComponent(component, hostsList)]
+            hostsForComponent = []
+            if (serviceAdvisor is None):
+                hostsForComponent = self.getHostsForMasterComponent(services, hosts, component, hostsList, hostsComponentsMap)
             else:
-                hostsForComponent = [self.getHostForComponent(component, hostsList)]
+                hostsForComponent = serviceAdvisor.getHostsForMasterComponent(self, services, hosts, component, hostsList, hostsComponentsMap)
             for hostName in hostsForComponent:
                 if (hostName in hostsSet):
                     hostsComponentsMap[hostName].append({'name': componentName, })
@@ -36,42 +27,24 @@ def createComponentLayoutRecommendations(self, services, hosts):
     freeHosts = [hostName for hostName in hostsList if (hostName not in utilizedHosts)]
     for service in services['services']:
         slaveClientComponents = [component for component in service['components'] if (self.isSlaveComponent(component) or self.isClientComponent(component))]
+        serviceAdvisor = self.instantiateServiceAdvisor(service)
         for component in slaveClientComponents:
             componentName = component['StackServiceComponents']['component_name']
-            if (component['StackServiceComponents']['cardinality'] == 'ALL'):
-                hostsForComponent = hostsList
+            hostsForComponent = []
+            if (serviceAdvisor is None):
+                hostsForComponent = self.getHostsForSlaveComponent(services, hosts, component, hostsList, hostsComponentsMap, freeHosts)
             else:
-                componentIsPopulated = self.isComponentHostsPopulated(component)
-                if componentIsPopulated:
-                    hostsForComponent = component['StackServiceComponents']['hostnames']
-                else:
-                    hostsForComponent = []
-                if self.isSlaveComponent(component):
-                    cardinality = str(component['StackServiceComponents']['cardinality'])
-                    if (self.isComponentUsingCardinalityForLayout(componentName) and cardinality):
-                        if ('+' in cardinality):
-                            hostsMin = int(cardinality[:(-1)])
-                        elif ('-' in cardinality):
-                            nums = cardinality.split('-')
-                            hostsMin = int(nums[0])
-                        else:
-                            hostsMin = int(cardinality)
-                        if (hostsMin > len(hostsForComponent)):
-                            hostsForComponent.extend(freeHosts[0:(hostsMin - len(hostsForComponent))])
-                    elif (not componentIsPopulated):
-                        hostsForComponent.extend(freeHosts)
-                        if (not hostsForComponent):
-                            hostsForComponent = hostsList[(-1):]
-                    hostsForComponent = list(set(hostsForComponent))
-                elif (self.isClientComponent(component) and (not componentIsPopulated)):
-                    hostsForComponent = freeHosts[0:1]
-                    if (not hostsForComponent):
-                        hostsForComponent = hostsList[(-1):]
+                hostsForComponent = serviceAdvisor.getHostsForSlaveComponent(self, services, hosts, component, hostsList, hostsComponentsMap, freeHosts)
             for hostName in hostsForComponent:
                 if ((hostName not in hostsComponentsMap) and (hostName in hostsSet)):
                     hostsComponentsMap[hostName] = []
                 if (hostName in hostsSet):
                     hostsComponentsMap[hostName].append({'name': componentName, })
+    for service in services['services']:
+        serviceAdvisor = self.instantiateServiceAdvisor(service)
+        if (serviceAdvisor is not None):
+            serviceComponents = [component for component in service['components']]
+            serviceAdvisor.colocateService(self, hostsComponentsMap, serviceComponents)
     host_groups = recommendations['blueprint']['host_groups']
     bindings = recommendations['blueprint_cluster_binding']['host_groups']
     index = 0

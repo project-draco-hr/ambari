@@ -1,0 +1,28 @@
+def validateHAWQSiteConfigurations(self, stackAdvisor, properties, recommendedDefaults, configurations, services, hosts):
+    hawq_site = properties
+    validationItems = []
+    if (self.isHawqMasterComponentOnAmbariServer(stackAdvisor, services) and self.isHawqMasterPortConflict(configurations)):
+        prop_name = 'hawq_master_address_port'
+        validationItems.append({'config-name': prop_name, 'item': self.getWarnItem('The default Postgres port (5432) on the Ambari Server conflicts with the default HAWQ Masters port. If you are using port 5432 for Postgres, you must either deploy the HAWQ Masters on a different host or configure a different port for the HAWQ Masters in the HAWQ Configuration page.'), })
+    directories = {'hawq_master_directory': 'HAWQ Master directory', 'hawq_master_temp_directory': 'HAWQ Master temp directory', 'hawq_segment_directory': 'HAWQ Segment directory', 'hawq_segment_temp_directory': 'HAWQ Segment temp directory', }
+    for (property_name, display_name) in directories.iteritems():
+        self.validateIfRootDir(properties, validationItems, property_name, display_name)
+    directories = {'hawq_master_directory': 'HAWQ Master directory', 'hawq_segment_directory': 'HAWQ Segment directory', }
+    for (property_name, display_name) in directories.iteritems():
+        self.checkForMultipleDirs(properties, validationItems, property_name, display_name)
+    YARN = 'YARN'
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    if ((YARN in servicesList) and ('yarn-site' in configurations)):
+        yarn_site = self.getSiteProperties(configurations, 'yarn-site')
+        for (hs_prop, ys_prop) in self.getHAWQYARNPropertyMapping().items():
+            if ((hs_prop in hawq_site) and (ys_prop in yarn_site) and (hawq_site[hs_prop] != yarn_site[ys_prop])):
+                message = 'Expected value: {0} (this property should have the same value as the property {1} in yarn-site)'.format(yarn_site[ys_prop], ys_prop)
+                validationItems.append({'config-name': hs_prop, 'item': self.getWarnItem(message), })
+    HAWQ_GLOBAL_RM_TYPE = 'hawq_global_rm_type'
+    if ((YARN not in servicesList) and (HAWQ_GLOBAL_RM_TYPE in hawq_site) and (hawq_site[HAWQ_GLOBAL_RM_TYPE].upper() == YARN)):
+        message = '{0} must be set to none if YARN service is not installed'.format(HAWQ_GLOBAL_RM_TYPE)
+        validationItems.append({'config-name': HAWQ_GLOBAL_RM_TYPE, 'item': self.getErrorItem(message), })
+    if (('default_hash_table_bucket_number' in hawq_site) and ('hawq_rm_nvseg_perquery_limit' in hawq_site) and (int(hawq_site['default_hash_table_bucket_number']) > int(hawq_site['hawq_rm_nvseg_perquery_limit']))):
+        message = 'Default buckets for Hash Distributed tables parameter value should not be greater than the value of Virtual Segments Limit per Query (Total) parameter, currently set to {0}.'.format(hawq_site['hawq_rm_nvseg_perquery_limit'])
+        validationItems.append({'config-name': 'default_hash_table_bucket_number', 'item': self.getErrorItem(message), })
+    return stackAdvisor.toConfigurationValidationProblems(validationItems, 'hawq-site')

@@ -1,0 +1,25 @@
+def getComponentLayoutValidations(self, stackAdvisor, services, hosts):
+    componentsListList = [service['components'] for service in services['services']]
+    componentsList = [item['StackServiceComponents'] for sublist in componentsListList for item in sublist]
+    hostsList = [host['Hosts']['host_name'] for host in hosts['items']]
+    hostsCount = len(hostsList)
+    hawqMasterHosts = self.getHosts(componentsList, 'HAWQMASTER')
+    hawqStandbyHosts = self.getHosts(componentsList, 'HAWQSTANDBY')
+    hawqSegmentHosts = self.getHosts(componentsList, 'HAWQSEGMENT')
+    datanodeHosts = self.getHosts(componentsList, 'DATANODE')
+    items = []
+    mismatchHosts = sorted(set(hawqSegmentHosts).symmetric_difference(set(datanodeHosts)))
+    if (len(mismatchHosts) > 0):
+        hostsString = ', '.join(mismatchHosts)
+        message = 'HAWQ Segment must be installed on all DataNodes. The following {0} host(s) do not satisfy the colocation recommendation: {1}'.format(len(mismatchHosts), hostsString)
+        items.append({'type': 'host-component', 'level': 'WARN', 'message': message, 'component-name': 'HAWQSEGMENT', })
+    if ((len(hawqMasterHosts) == 1) and (len(hawqStandbyHosts) == 1) and (hawqMasterHosts == hawqStandbyHosts)):
+        message = 'HAWQ Master and HAWQ Standby Master cannot be deployed on the same host.'
+        items.append({'type': 'host-component', 'level': 'ERROR', 'message': message, 'component-name': 'HAWQSTANDBY', 'host': hawqStandbyHosts[0], })
+    if ((len(hawqMasterHosts) == 1) and (hostsCount > 1) and stackAdvisor.isLocalHost(hawqMasterHosts[0])):
+        message = 'The default Postgres port (5432) on the Ambari Server conflicts with the default HAWQ Masters port. If you are using port 5432 for Postgres, you must either deploy the HAWQ Master on a different host or configure a different port for the HAWQ Masters in the HAWQ Configuration page.'
+        items.append({'type': 'host-component', 'level': 'WARN', 'message': message, 'component-name': 'HAWQMASTER', 'host': hawqMasterHosts[0], })
+    if ((len(hawqStandbyHosts) == 1) and (hostsCount > 1) and stackAdvisor.isLocalHost(hawqStandbyHosts[0])):
+        message = 'The default Postgres port (5432) on the Ambari Server conflicts with the default HAWQ Masters port. If you are using port 5432 for Postgres, you must either deploy the HAWQ Standby Master on a different host or configure a different port for the HAWQ Masters in the HAWQ Configuration page.'
+        items.append({'type': 'host-component', 'level': 'WARN', 'message': message, 'component-name': 'HAWQSTANDBY', 'host': hawqStandbyHosts[0], })
+    return items

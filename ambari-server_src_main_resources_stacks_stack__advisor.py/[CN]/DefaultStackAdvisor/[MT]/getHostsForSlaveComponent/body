@@ -1,0 +1,30 @@
+def getHostsForSlaveComponent(self, services, hosts, component, hostsList, hostsComponentsMap, freeHosts):
+    componentName = component['StackServiceComponents']['component_name']
+    if (component['StackServiceComponents']['cardinality'] == 'ALL'):
+        return hostsList
+    componentIsPopulated = self.isComponentHostsPopulated(component)
+    if componentIsPopulated:
+        return component['StackServiceComponents']['hostnames']
+    hostsForComponent = []
+    if self.isSlaveComponent(component):
+        cardinality = str(component['StackServiceComponents']['cardinality'])
+        if (self.isComponentUsingCardinalityForLayout(component) and cardinality):
+            if ('+' in cardinality):
+                hostsMin = int(cardinality[:(-1)])
+            elif ('-' in cardinality):
+                nums = cardinality.split('-')
+                hostsMin = int(nums[0])
+            else:
+                hostsMin = int(cardinality)
+            if (hostsMin > len(hostsForComponent)):
+                hostsForComponent.extend(freeHosts[0:(hostsMin - len(hostsForComponent))])
+        else:
+            hostsForComponent.extend(freeHosts)
+            if (not hostsForComponent):
+                hostsForComponent = hostsList[(-1):]
+        hostsForComponent = list(set(hostsForComponent))
+    elif self.isClientComponent(component):
+        hostsForComponent = freeHosts[0:1]
+        if (not hostsForComponent):
+            hostsForComponent = hostsList[(-1):]
+    return hostsForComponent
