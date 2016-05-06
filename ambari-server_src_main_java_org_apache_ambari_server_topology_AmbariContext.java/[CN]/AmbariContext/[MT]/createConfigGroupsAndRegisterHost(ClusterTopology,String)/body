@@ -24,7 +24,22 @@
     String absoluteGroupName=getConfigurationGroupName(bpName,groupName);
     Collection<String> groupHosts;
     groupHosts=topology.getHostGroupInfo().get(groupName).getHostNames();
-    ConfigGroupRequest request=new ConfigGroupRequest(null,getClusterName(topology.getClusterId()),absoluteGroupName,service,"Host Group Configuration",new HashSet<String>(groupHosts),serviceConfigs);
+    String clusterName=null;
+    try {
+      clusterName=getClusterName(topology.getClusterId());
+    }
+ catch (    AmbariException e) {
+      LOG.error("Cannot get cluster name for clusterId = " + topology.getClusterId(),e);
+      throw new RuntimeException(e);
+    }
+    final Map<String,Host> clusterHosts=getController().getClusters().getHostsForCluster(clusterName);
+    Iterable<String> filteredGroupHosts=Iterables.filter(groupHosts,new com.google.common.base.Predicate<String>(){
+      @Override public boolean apply(      @Nullable String groupHost){
+        return clusterHosts.containsKey(groupHost);
+      }
+    }
+);
+    ConfigGroupRequest request=new ConfigGroupRequest(null,clusterName,absoluteGroupName,service,"Host Group Configuration",Sets.newHashSet(filteredGroupHosts),serviceConfigs);
     ConfigGroupResourceProvider configGroupProvider=(ConfigGroupResourceProvider)getClusterController().ensureResourceProvider(Resource.Type.ConfigGroup);
     try {
       configGroupProvider.createResources(Collections.singleton(request));
