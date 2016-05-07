@@ -1,35 +1,23 @@
 @safe_retry(times=5, sleep_time=8, backoff_factor=1.5, err_class=Fail, return_on_fail=None)
 def create_repository_curl(self, component_user, component_user_keytab, component_user_principal, name, data, policy_user):
     '\n    :param component_user: service user for which call is to be made\n    :param component_user_keytab: keytab of service user\n    :param component_user_principal: principal of service user\n    :param name: name of the repository to be created\n    :param data: service definition of the repository\n    :return:\n    '
-    search_repo_url = self.url_repos_pub
-    header = 'Content-Type: application/json'
-    method = 'POST'
-    (response, error_message, time_in_millis) = self.call_curl_request(component_user, component_user_keytab, component_user_principal, search_repo_url, False, method, data, header)
-    if (response and (len(response) > 0)):
-        response_json = json.loads(response)
-        if (('name' in response_json) and (response_json['name'].lower() == name.lower())):
-            Logger.info('Repository created Successfully')
-            service_name = response_json['name']
-            service_type = response_json['type']
-            if (service_type in ['hdfs', 'hive', 'hbase', 'knox', 'storm']):
-                policy_list = self.get_policy_by_repo_name(component_user, component_user_keytab, component_user_principal, service_name, service_type, 'true')
-                if ((policy_list is not None) and (len(policy_list) > 0)):
-                    policy_update_count = 0
-                    for policy in policy_list:
-                        updated_policy_object = self.get_policy_params(service_type, policy, policy_user=policy_user)
-                        (response, error_message, time_in_millis) = self.update_ranger_policy(component_user, component_user_keytab, component_user_principal, updated_policy_object['id'], json.dumps(updated_policy_object))
-                        if (response and (len(response) > 0)):
-                            policy_update_count += 1
-                        else:
-                            Logger.info('Policy updated failed')
-                    if (len(policy_list) == policy_update_count):
-                        Logger.info('Ranger Repository created successfully and policies updated successfully providing ambari-qa user all permissions')
-                        return response_json
-            else:
+    try:
+        search_repo_url = self.url_repos_pub
+        header = 'Content-Type: application/json'
+        method = 'POST'
+        (response, error_message, time_in_millis) = self.call_curl_request(component_user, component_user_keytab, component_user_principal, search_repo_url, False, method, data, header)
+        if (response and (len(response) > 0)):
+            response_json = json.loads(response)
+            if (('name' in response_json) and (response_json['name'].lower() == name.lower())):
+                Logger.info('Repository created Successfully')
                 return response_json
+            elif ('exists'.lower() in response_json.lower()):
+                Logger.info('Repository {name} already exists'.format(name=name))
+            else:
+                Logger.info('Repository creation failed')
+                return None
         else:
             Logger.info('Repository creation failed')
             return None
-    else:
-        Logger.info('Repository creation failed')
-        return None
+    except Fail as fail:
+        raise Fail(str(fail))
