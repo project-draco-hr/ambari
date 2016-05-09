@@ -12,14 +12,26 @@
     ServiceConfigEntity lastServiceConfig=serviceConfigDAO.getLastServiceConfig(clusterId,service.getName());
     lastServiceConfigUpdates.put(service.getName(),lastServiceConfig.getCreateTimestamp());
   }
-  List<HostRoleCommandEntity> commands=hostRoleCommandDAO.findAll(REQUEST,null);
-  Collections.reverse(commands);
+  List<HostRoleCommandEntity> commands=hostRoleCommandDAO.findAll(REQUEST,PREDICATE);
+  Map<Role,HostRoleCommandEntity> latestTimestamps=new HashMap<>();
+  for (  HostRoleCommandEntity command : commands) {
+    Role role=command.getRole();
+    if (!latestTimestamps.containsKey(role)) {
+      latestTimestamps.put(role,command);
+    }
+ else {
+      Long latest=latestTimestamps.get(role).getStartTime();
+      if (command.getStartTime() > latest) {
+        latestTimestamps.put(role,command);
+      }
+    }
+  }
   LinkedHashSet<String> failedServiceNames=new LinkedHashSet<>();
   for (  Map.Entry<String,Long> serviceEntry : lastServiceConfigUpdates.entrySet()) {
     String serviceName=serviceEntry.getKey();
     Long configTimestamp=serviceEntry.getValue();
-    for (    HostRoleCommandEntity command : commands) {
-      if (RoleCommand.SERVICE_CHECK.equals(command.getRoleCommand()) && command.getCommandDetail().contains(serviceName)) {
+    for (    HostRoleCommandEntity command : latestTimestamps.values()) {
+      if (command.getCommandDetail().contains(serviceName)) {
         Long serviceCheckTimestamp=command.getStartTime();
         if (serviceCheckTimestamp < configTimestamp) {
           failedServiceNames.add(serviceName);
