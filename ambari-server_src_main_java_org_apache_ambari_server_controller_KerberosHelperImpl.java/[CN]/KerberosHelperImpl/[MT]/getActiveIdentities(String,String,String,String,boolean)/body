@@ -7,73 +7,79 @@
     throw new AmbariException(String.format("The cluster object for the cluster name %s is not available",clusterName));
   }
   Map<String,Collection<KerberosIdentityDescriptor>> activeIdentities=new HashMap<String,Collection<KerberosIdentityDescriptor>>();
-  Collection<String> hosts;
-  String ambariServerHostname=StageUtils.getHostName();
-  if (hostName == null) {
-    Map<String,Host> hostMap=clusters.getHostsForCluster(clusterName);
-    if (hostMap == null) {
-      hosts=null;
-    }
- else {
-      hosts=hostMap.keySet();
-    }
-    if (!hosts.contains(ambariServerHostname)) {
-      Collection<String> extendedHosts=new ArrayList<>(hosts.size() + 1);
-      extendedHosts.addAll(hosts);
-      extendedHosts.add(ambariServerHostname);
-      hosts=extendedHosts;
-    }
+  Config kerberosEnvConfig=cluster.getDesiredConfigByType("kerberos-env");
+  if (kerberosEnvConfig == null) {
+    LOG.debug("Calculating the active identities for {} is being skipped since the kerberos-env configuration is not available",clusterName,cluster.getSecurityType().name(),SecurityType.KERBEROS.name());
   }
  else {
-    hosts=Collections.singleton(hostName);
-  }
-  KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
-  if ((hosts != null) && !hosts.isEmpty()) {
-    if (kerberosDescriptor != null) {
-      Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
-      for (      String hostname : hosts) {
-        Map<String,KerberosIdentityDescriptor> hostActiveIdentities=new HashMap<String,KerberosIdentityDescriptor>();
-        List<KerberosIdentityDescriptor> identities=getActiveIdentities(cluster,hostname,serviceName,componentName,kerberosDescriptor);
-        if (hostname.equals(ambariServerHostname)) {
-          addAmbariServerIdentity(cluster,kerberosDescriptor,identities);
-        }
-        if (!identities.isEmpty()) {
-          Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,hostname.equals(ambariServerHostname) ? null : hostname,kerberosDescriptorProperties);
-          for (          KerberosIdentityDescriptor identity : identities) {
-            KerberosPrincipalDescriptor principalDescriptor=identity.getPrincipalDescriptor();
-            String principal=null;
-            if (principalDescriptor != null) {
-              principal=variableReplacementHelper.replaceVariables(principalDescriptor.getValue(),configurations);
-            }
-            if (principal != null) {
-              KerberosKeytabDescriptor keytabDescriptor=identity.getKeytabDescriptor();
-              String keytabFile=null;
-              if (keytabDescriptor != null) {
-                keytabFile=variableReplacementHelper.replaceVariables(keytabDescriptor.getFile(),configurations);
-              }
-              if (replaceHostNames) {
-                principal=principal.replace("_HOST",hostname);
-              }
-              String uniqueKey=String.format("%s|%s",principal,(keytabFile == null) ? "" : keytabFile);
-              if (!hostActiveIdentities.containsKey(uniqueKey)) {
-                KerberosPrincipalType principalType=principalDescriptor.getType();
-                if (principalType == null) {
-                  principalType=KerberosPrincipalType.SERVICE;
-                }
-                KerberosPrincipalDescriptor resolvedPrincipalDescriptor=new KerberosPrincipalDescriptor(principal,principalType,variableReplacementHelper.replaceVariables(principalDescriptor.getConfiguration(),configurations),variableReplacementHelper.replaceVariables(principalDescriptor.getLocalUsername(),configurations));
-                KerberosKeytabDescriptor resolvedKeytabDescriptor;
-                if (keytabFile == null) {
-                  resolvedKeytabDescriptor=null;
-                }
+    Collection<String> hosts;
+    String ambariServerHostname=StageUtils.getHostName();
+    if (hostName == null) {
+      Map<String,Host> hostMap=clusters.getHostsForCluster(clusterName);
+      if (hostMap == null) {
+        hosts=Collections.emptySet();
+      }
  else {
-                  resolvedKeytabDescriptor=new KerberosKeytabDescriptor(keytabFile,variableReplacementHelper.replaceVariables(keytabDescriptor.getOwnerName(),configurations),variableReplacementHelper.replaceVariables(keytabDescriptor.getOwnerAccess(),configurations),variableReplacementHelper.replaceVariables(keytabDescriptor.getGroupName(),configurations),variableReplacementHelper.replaceVariables(keytabDescriptor.getGroupAccess(),configurations),variableReplacementHelper.replaceVariables(keytabDescriptor.getConfiguration(),configurations),keytabDescriptor.isCachable());
+        hosts=hostMap.keySet();
+      }
+      if (!hosts.contains(ambariServerHostname)) {
+        Collection<String> extendedHosts=new ArrayList<>(hosts.size() + 1);
+        extendedHosts.addAll(hosts);
+        extendedHosts.add(ambariServerHostname);
+        hosts=extendedHosts;
+      }
+    }
+ else {
+      hosts=Collections.singleton(hostName);
+    }
+    if (!hosts.isEmpty()) {
+      KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
+      if (kerberosDescriptor != null) {
+        Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
+        for (        String hostname : hosts) {
+          Map<String,KerberosIdentityDescriptor> hostActiveIdentities=new HashMap<String,KerberosIdentityDescriptor>();
+          List<KerberosIdentityDescriptor> identities=getActiveIdentities(cluster,hostname,serviceName,componentName,kerberosDescriptor);
+          if (hostname.equals(ambariServerHostname)) {
+            addAmbariServerIdentity(kerberosEnvConfig.getProperties(),kerberosDescriptor,identities);
+          }
+          if (!identities.isEmpty()) {
+            Map<String,Map<String,String>> configurations=calculateConfigurations(cluster,hostname.equals(ambariServerHostname) ? null : hostname,kerberosDescriptorProperties);
+            for (            KerberosIdentityDescriptor identity : identities) {
+              KerberosPrincipalDescriptor principalDescriptor=identity.getPrincipalDescriptor();
+              String principal=null;
+              if (principalDescriptor != null) {
+                principal=variableReplacementHelper.replaceVariables(principalDescriptor.getValue(),configurations);
+              }
+              if (principal != null) {
+                KerberosKeytabDescriptor keytabDescriptor=identity.getKeytabDescriptor();
+                String keytabFile=null;
+                if (keytabDescriptor != null) {
+                  keytabFile=variableReplacementHelper.replaceVariables(keytabDescriptor.getFile(),configurations);
                 }
-                hostActiveIdentities.put(uniqueKey,new KerberosIdentityDescriptor(identity.getName(),resolvedPrincipalDescriptor,resolvedKeytabDescriptor));
+                if (replaceHostNames) {
+                  principal=principal.replace("_HOST",hostname);
+                }
+                String uniqueKey=String.format("%s|%s",principal,(keytabFile == null) ? "" : keytabFile);
+                if (!hostActiveIdentities.containsKey(uniqueKey)) {
+                  KerberosPrincipalType principalType=principalDescriptor.getType();
+                  if (principalType == null) {
+                    principalType=KerberosPrincipalType.SERVICE;
+                  }
+                  KerberosPrincipalDescriptor resolvedPrincipalDescriptor=new KerberosPrincipalDescriptor(principal,principalType,variableReplacementHelper.replaceVariables(principalDescriptor.getConfiguration(),configurations),variableReplacementHelper.replaceVariables(principalDescriptor.getLocalUsername(),configurations));
+                  KerberosKeytabDescriptor resolvedKeytabDescriptor;
+                  if (keytabFile == null) {
+                    resolvedKeytabDescriptor=null;
+                  }
+ else {
+                    resolvedKeytabDescriptor=new KerberosKeytabDescriptor(keytabFile,variableReplacementHelper.replaceVariables(keytabDescriptor.getOwnerName(),configurations),variableReplacementHelper.replaceVariables(keytabDescriptor.getOwnerAccess(),configurations),variableReplacementHelper.replaceVariables(keytabDescriptor.getGroupName(),configurations),variableReplacementHelper.replaceVariables(keytabDescriptor.getGroupAccess(),configurations),variableReplacementHelper.replaceVariables(keytabDescriptor.getConfiguration(),configurations),keytabDescriptor.isCachable());
+                  }
+                  hostActiveIdentities.put(uniqueKey,new KerberosIdentityDescriptor(identity.getName(),resolvedPrincipalDescriptor,resolvedKeytabDescriptor));
+                }
               }
             }
           }
+          activeIdentities.put(hostname,hostActiveIdentities.values());
         }
-        activeIdentities.put(hostname,hostActiveIdentities.values());
       }
     }
   }
