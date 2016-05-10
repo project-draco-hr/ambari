@@ -1,0 +1,21 @@
+{
+  try {
+    String collectorHosts=PropertiesUtil.getProperty("metrics.collector.hosts");
+    if (StringUtils.isEmpty(collectorHosts)) {
+      LOG.warn("No Ambari Metrics service is available, no Solr metrics will be loaded!");
+      return;
+    }
+    int solrJmxPort=PropertiesUtil.getIntProperty("solr.jmx.port");
+    String zkHosts=PropertiesUtil.getProperty("solr.zkhosts");
+    AmbariSolrCloudClient ambariSolrCloudClient=new AmbariSolrCloudClientBuilder().withZookeeperHosts(zkHosts).build();
+    Collection<String> solrHosts=ambariSolrCloudClient.getSolrHosts();
+    for (    String solrHost : solrHosts) {
+      SolrMetricsLoader sml=new SolrMetricsLoader(solrHost,solrJmxPort,collectorHosts);
+      Timer timer=new Timer("Solr Metrics Loader - " + solrHost,false);
+      timer.scheduleAtFixedRate(sml,0,10000);
+    }
+  }
+ catch (  Exception e) {
+    LOG.warn("Could not start solr metric loader tasks",e);
+  }
+}
