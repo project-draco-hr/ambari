@@ -1,0 +1,42 @@
+{
+  String name=(String)properties.get(CLUSTER_NAME_PROPERTY_ID);
+  String url=(String)properties.get(CLUSTER_URL_PROPERTY_ID);
+  String username=(String)properties.get(USERNAME_PROPERTY_ID);
+  String password=(String)properties.get(PASSWORD_PROPERTY_ID);
+  if (StringUtils.isEmpty(url) && StringUtils.isEmpty(username)) {
+    throw new IllegalArgumentException("Url or username cannot be null");
+  }
+  RemoteAmbariClusterEntity entity=remoteAmbariClusterDAO.findByName(name);
+  if (update && entity == null) {
+    throw new IllegalArgumentException(String.format("Cannot find cluster with name : \"%s\"",name));
+  }
+ else   if (!update && entity != null) {
+    throw new DuplicateResourceException(String.format("Cluster with name : \"%s\" already exists",name));
+  }
+  if (StringUtils.isBlank(password) && !update) {
+    throw new IllegalArgumentException("Password cannot be null");
+  }
+ else   if (StringUtils.isBlank(password) && update && !username.equals(entity.getUsername())) {
+    throw new IllegalArgumentException("Failed to update. Username does not match.");
+  }
+  if (entity == null) {
+    entity=new RemoteAmbariClusterEntity();
+  }
+  entity.setName(name);
+  entity.setUrl(url);
+  try {
+    if (password != null) {
+      entity.setUsername(username);
+      entity.setPassword(password);
+    }
+  }
+ catch (  MaskException e) {
+    throw new IllegalArgumentException("Failed to create new Remote Cluster " + name + ". Illegal Password");
+  }
+  try {
+    remoteAmbariClusterRegistry.saveOrUpdate(entity,update);
+  }
+ catch (  Exception e) {
+    throw new IllegalArgumentException("Failed to create new Remote Cluster " + name + ". "+ e.getMessage(),e);
+  }
+}

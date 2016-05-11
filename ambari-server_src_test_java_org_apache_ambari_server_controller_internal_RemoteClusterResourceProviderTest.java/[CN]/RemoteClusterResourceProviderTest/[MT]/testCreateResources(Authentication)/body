@@ -1,0 +1,32 @@
+{
+  RemoteClusterResourceProvider provider=new RemoteClusterResourceProvider();
+  RemoteAmbariClusterDAO clusterDAO=createMock(RemoteAmbariClusterDAO.class);
+  setField(RemoteClusterResourceProvider.class.getDeclaredField("remoteAmbariClusterDAO"),clusterDAO);
+  RemoteAmbariClusterRegistry clusterRegistry=createMock(RemoteAmbariClusterRegistry.class);
+  setField(RemoteClusterResourceProvider.class.getDeclaredField("remoteAmbariClusterRegistry"),clusterRegistry);
+  Set<Map<String,Object>> properties=new HashSet<>();
+  Map<String,Object> propertyMap=new HashMap<>();
+  propertyMap.put(RemoteClusterResourceProvider.CLUSTER_NAME_PROPERTY_ID,"test");
+  propertyMap.put(RemoteClusterResourceProvider.CLUSTER_URL_PROPERTY_ID,"url");
+  propertyMap.put(RemoteClusterResourceProvider.USERNAME_PROPERTY_ID,"username");
+  propertyMap.put(RemoteClusterResourceProvider.PASSWORD_PROPERTY_ID,"password");
+  RemoteAmbariClusterServiceEntity service1=createNiceMock(RemoteAmbariClusterServiceEntity.class);
+  expect(service1.getServiceName()).andReturn("service1").once();
+  RemoteAmbariClusterServiceEntity service2=createNiceMock(RemoteAmbariClusterServiceEntity.class);
+  expect(service2.getServiceName()).andReturn("service2").once();
+  List<RemoteAmbariClusterServiceEntity> serviceList=new ArrayList<RemoteAmbariClusterServiceEntity>();
+  serviceList.add(service1);
+  serviceList.add(service2);
+  expect(clusterDAO.findByName("test")).andReturn(null).anyTimes();
+  Capture<RemoteAmbariClusterEntity> clusterEntityCapture=newCapture();
+  clusterRegistry.saveOrUpdate(capture(clusterEntityCapture),eq(false));
+  replay(clusterRegistry,clusterDAO,service1,service2);
+  properties.add(propertyMap);
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  provider.createResources(PropertyHelper.getCreateRequest(properties,null));
+  RemoteAmbariClusterEntity clusterEntity=clusterEntityCapture.getValue();
+  assertEquals(clusterEntity.getName(),"test");
+  assertEquals(clusterEntity.getPassword(),"password");
+  assertEquals(clusterEntity.getUrl(),"url");
+  assertEquals(clusterEntity.getUsername(),"username");
+}

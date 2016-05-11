@@ -1,22 +1,19 @@
 {
   String response;
-  URLStreamProviderBasicAuth urlStreamProvider=getUrlStreamProviderBasicAuth();
   try {
-    String url;
-    if (isLocalCluster()) {
-      url=String.format("/api/v1/clusters/%s/%s",getCluster().getName(),path);
-    }
- else     if (isRemoteCluster()) {
-      url=String.format("%s/%s",remoteUrlCluster,path);
-    }
- else {
+    if (context.getAmbariClusterStreamProvider() == null || context.getCluster() == null) {
       throw new NoClusterAssociatedException("RA030 View is not associated with any cluster. No way to request Ambari.");
     }
-    InputStream inputStream=urlStreamProvider.readFrom(url,method,data,headers);
+    if (!path.startsWith("/"))     path="/" + path;
+    path=API_PREFIX + context.getCluster().getName() + path;
+    InputStream inputStream=context.getAmbariClusterStreamProvider().readFrom(path,method,data,addRequestedByHeader(headers));
     response=IOUtils.toString(inputStream);
   }
  catch (  IOException e) {
     throw new AmbariApiException("RA040 I/O error while requesting Ambari",e);
+  }
+catch (  AmbariHttpException e) {
+    throw new AmbariApiException("RA040 Request to Ambari is unsuccessful with response code " + e.getResponseCode(),e);
   }
   return response;
 }
