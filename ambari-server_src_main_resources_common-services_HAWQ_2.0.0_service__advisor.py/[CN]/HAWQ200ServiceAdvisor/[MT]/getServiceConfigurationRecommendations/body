@@ -1,11 +1,15 @@
 def getServiceConfigurationRecommendations(self, stackAdvisor, configurations, clusterData, services, hosts):
     putHdfsSiteProperty = self.putProperty(configurations, 'hdfs-site', services)
     putHdfsSiteProperty('dfs.allow.truncate', 'true')
-    if any(((x in services['configurations']) for x in ['hawq-site', 'hdfs-client'])):
+    if any(((x in services['configurations']) for x in ['hawq-site', 'hdfs-client', 'hawq-sysctl-env'])):
         componentsListList = [service['components'] for service in services['services']]
         componentsList = [item['StackServiceComponents'] for sublist in componentsListList for item in sublist]
         servicesList = [service['StackServices']['service_name'] for service in services['services']]
-        numSegments = len(self.getHosts(componentsList, 'HAWQSEGMENT'))
+        hawqMasterHosts = set(self.getHosts(componentsList, 'HAWQMASTER')).union(set(self.getHosts(componentsList, 'HAWQSTANDBY')))
+        hawqSegmentHosts = set(self.getHosts(componentsList, 'HAWQSEGMENT'))
+        hawqHosts = hawqMasterHosts.union(hawqSegmentHosts)
+        numSegments = len(hawqSegmentHosts)
+        minHawqHostsMemory = min([host['Hosts']['total_mem'] for host in hosts['items'] if (host['Hosts']['host_name'] in hawqHosts)])
     if ('hawq-site' in services['configurations']):
         hawq_site = services['configurations']['hawq-site']['properties']
         putHawqSiteProperty = self.putProperty(configurations, 'hawq-site', services)
@@ -28,9 +32,17 @@ def getServiceConfigurationRecommendations(self, stackAdvisor, configurations, c
             for (hs_prop, ys_prop) in self.getHAWQYARNPropertyMapping().items():
                 if ((hs_prop in hawq_site) and (ys_prop in yarn_site)):
                     putHawqSiteProperty(hs_prop, yarn_site[ys_prop])
+    if ('hawq-sysctl-env' in services['configurations']):
+        MEM_THRESHOLD = 33554432
+        hawq_sysctl_env = services['configurations']['hawq-sysctl-env']['properties']
+        if ('vm.overcommit_memory' in hawq_sysctl_env):
+            propertyValue = ('2' if (minHawqHostsMemory >= MEM_THRESHOLD) else '1')
+            putHawqSysctlEnvProperty = self.putProperty(configurations, 'hawq-sysctl-env', services)
+            putHawqSysctlEnvProperty('vm.overcommit_memory', propertyValue)
     if ('hdfs-client' in services['configurations']):
+        MIN_NUM_SEGMENT_THRESHOLD = 3
         hdfs_client = services['configurations']['hdfs-client']['properties']
         if ('output.replace-datanode-on-failure' in hdfs_client):
-            propertyValue = ('true' if (numSegments > 3) else 'false')
+            propertyValue = ('true' if (numSegments > MIN_NUM_SEGMENT_THRESHOLD) else 'false')
             putHdfsClientProperty = self.putProperty(configurations, 'hdfs-client', services)
             putHdfsClientProperty('output.replace-datanode-on-failure', propertyValue)
