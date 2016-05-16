@@ -1,0 +1,60 @@
+{
+  Collection<StackInfo> stacks=ambariMetaInfo.getStacks();
+  Assert.assertFalse(stacks.isEmpty());
+  for (  StackInfo stack : stacks) {
+    if (!stack.isActive()) {
+      LOG.info("Skipping configuration validity test for {}",new StackId(stack));
+      continue;
+    }
+    Map<String,UpgradePack> upgradePacks=ambariMetaInfo.getUpgradePacks(stack.getName(),stack.getVersion());
+    for (    String key : upgradePacks.keySet()) {
+      UpgradePack upgradePack=upgradePacks.get(key);
+      StackId sourceStack=new StackId(stack);
+      ConfigUpgradePack configUpgradePack=ConfigurationPackBuilder.build(upgradePack,sourceStack);
+      List<Grouping> groups=upgradePack.getGroups(Direction.UPGRADE);
+      for (      Grouping group : groups) {
+        if (group instanceof ClusterGrouping) {
+          ClusterGrouping clusterGrouping=(ClusterGrouping)group;
+          if (null != clusterGrouping.executionStages) {
+            for (            ExecuteStage executionStage : clusterGrouping.executionStages) {
+              if (executionStage.task.getType() == Type.CONFIGURE) {
+                ConfigureTask configureTask=(ConfigureTask)executionStage.task;
+                assertIdDefinitionExists(configureTask.id,configUpgradePack,upgradePack,sourceStack);
+              }
+            }
+          }
+        }
+      }
+      Map<String,Map<String,ProcessingComponent>> tasks=upgradePack.getTasks();
+      for (      Map<String,ProcessingComponent> value : tasks.values()) {
+        for (        ProcessingComponent processingComponent : value.values()) {
+          if (null != processingComponent.preTasks) {
+            for (            Task preTask : processingComponent.preTasks) {
+              if (preTask.getType() == Type.CONFIGURE) {
+                ConfigureTask configureTask=(ConfigureTask)preTask;
+                assertIdDefinitionExists(configureTask.id,configUpgradePack,upgradePack,sourceStack);
+              }
+            }
+            if (null != processingComponent.tasks) {
+              for (              Task task : processingComponent.tasks) {
+                if (task.getType() == Type.CONFIGURE) {
+                  ConfigureTask configureTask=(ConfigureTask)task;
+                  assertIdDefinitionExists(configureTask.id,configUpgradePack,upgradePack,sourceStack);
+                }
+              }
+            }
+            if (null != processingComponent.postTasks) {
+              for (              Task postTask : processingComponent.postTasks) {
+                if (postTask.getType() == Type.CONFIGURE) {
+                  ConfigureTask configureTask=(ConfigureTask)postTask;
+                  assertIdDefinitionExists(configureTask.id,configUpgradePack,upgradePack,sourceStack);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  Assert.assertTrue(validatedConfigCount > 100);
+}
