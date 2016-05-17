@@ -24,7 +24,7 @@ def execute_command(self, command):
             retryAble = (command['commandParams']['command_retry_enabled'] == 'true')
     if isAutoExecuteCommand:
         retryAble = False
-    logger.debug('Command execution metadata - retry enabled = {retryAble}, max retry duration (sec) = {retryDuration}'.format(retryAble=retryAble, retryDuration=retryDuration))
+    logger.info('Command execution metadata - taskId = {taskId}, retry enabled = {retryAble}, max retry duration (sec) = {retryDuration}'.format(taskId=taskId, retryAble=retryAble, retryDuration=retryDuration))
     while (retryDuration >= 0):
         numAttempts += 1
         start = 0
@@ -36,6 +36,7 @@ def execute_command(self, command):
             end = int(time.time())
         retryDuration -= (end - start)
         if isCommandBackground:
+            logger.info('Command is background command, quit retrying. Exit code: {exitCode}, retryAble: {retryAble}, retryDuration (sec): {retryDuration}, last delay (sec): {delay}'.format(cid=taskId, exitCode=commandresult['exitcode'], retryAble=retryAble, retryDuration=retryDuration, delay=delay))
             return
         elif (commandresult['exitcode'] == 0):
             status = self.COMPLETED_STATUS
@@ -51,6 +52,7 @@ def execute_command(self, command):
             time.sleep(delay)
             continue
         else:
+            logger.info('Quit retrying for command id {cid}. Status: {status}, retryAble: {retryAble}, retryDuration (sec): {retryDuration}, last delay (sec): {delay}'.format(cid=taskId, status=status, retryAble=retryAble, retryDuration=retryDuration, delay=delay))
             break
     commandresult['stdout'] += ('\n\nCommand completed successfully!\n' if (status == self.COMPLETED_STATUS) else (('\n\nCommand failed after ' + str(numAttempts)) + ' tries\n'))
     logger.info(('Command {cid} completed successfully!'.format(cid=taskId) if (status == self.COMPLETED_STATUS) else 'Command {cid} failed after {attempts} tries'.format(cid=taskId, attempts=numAttempts)))
