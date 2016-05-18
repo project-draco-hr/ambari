@@ -3,10 +3,9 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
     putHiveInteractiveSitePropertyAttribute = self.putPropertyAttribute(configurations, self.HIVE_INTERACTIVE_SITE)
     putHiveInteractiveEnvProperty = self.putProperty(configurations, 'hive-interactive-env', services)
     putHiveInteractiveEnvPropertyAttribute = self.putPropertyAttribute(configurations, 'hive-interactive-env')
-    num_llap_nodes_in_changed_configs = False
     llap_daemon_selected_queue_name = None
     llap_queue_selected_in_current_call = None
-    cache_size_per_node_in_changed_configs = False
+    LLAP_MAX_CONCURRENCY = 32
     try:
         if ((self.HIVE_INTERACTIVE_SITE in services['configurations']) and ('hive.llap.daemon.queue.name' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties'])):
             llap_daemon_selected_queue_name = services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.llap.daemon.queue.name']
@@ -30,79 +29,105 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
         if ((len(leafQueueNames) > 2) or ((len(leafQueueNames) == 1) and (llap_queue_selected_in_current_call != llap_queue_name))):
             return
         if ('changed-configurations' in services.keys()):
-            llap_queue_prop_old_val = None
-            config_names_to_be_checked = set(['llap_queue_capacity', 'enable_hive_interactive', 'num_llap_nodes'])
+            config_names_to_be_checked = set(['llap_queue_capacity', 'enable_hive_interactive'])
             changed_configs_in_hive_int_env = self.are_config_props_in_changed_configs(services, 'hive-interactive-env', config_names_to_be_checked, False)
-            llap_queue_prop_in_changed_configs = self.are_config_props_in_changed_configs(services, self.HIVE_INTERACTIVE_SITE, set(['hive.llap.daemon.queue.name']), False)
-            if ((not changed_configs_in_hive_int_env) and (not llap_queue_prop_in_changed_configs)):
-                Logger.info('LLAP parameters not modified. Not adjusting LLAP configs. Current changed-configuration received is : {0}'.format(services['changed-configurations']))
+            llap_concurrency_in_changed_configs = self.are_config_props_in_changed_configs(services, 'hive-interactive-site', set(['hive.server2.tez.sessions.per.default.queue']), False)
+            if ((not changed_configs_in_hive_int_env) and (llap_daemon_selected_queue_name != llap_queue_name) and (not llap_concurrency_in_changed_configs)):
+                Logger.info('LLAP parameters not modified. Not adjusting LLAP configs.')
+                Logger.debug('Current changed-configuration received is : {0}'.format(services['changed-configurations']))
                 return
-            node_manager_hosts = self.get_node_manager_hosts(services, hosts)
-            node_manager_host_cnt = len(node_manager_hosts)
-            num_llap_nodes_in_changed_configs = self.are_config_props_in_changed_configs(services, 'hive-interactive-env', set(['num_llap_nodes']), False)
-            if (not num_llap_nodes_in_changed_configs):
-                (num_llap_nodes, num_llap_nodes_max_limit) = self.calculate_num_llap_nodes(services, hosts, configurations)
-            else:
-                num_llap_nodes = self.get_num_llap_nodes(services)
-                num_llap_nodes_max_limit = node_manager_host_cnt
-            (llap_container_size, llap_container_size_min_limit) = self.calculate_llap_app_container_size(services, hosts, configurations)
-            (num_executors_per_node, num_executors_per_node_max_limit) = self.calculate_llap_daemon_executors_count(services, llap_container_size)
-            assert (num_executors_per_node >= 0), "'Number of executors per node' : {0}. Expected value : > 0".format(num_executors_per_node)
-            cache_size_per_node_in_changed_configs = self.are_config_props_in_changed_configs(services, 'hive-interactive-site', set(['hive.llap.io.memory.size']), False)
-            if (not cache_size_per_node_in_changed_configs):
-                (cache_size_per_node, cache_size_per_node_max_limit) = self.calculate_llap_cache_size_per_executor(services, llap_container_size, num_executors_per_node)
-                if (cache_size_per_node < 0):
-                    Logger.info("Calculated 'cache_size_per_node' : {0}. Setting 'cache_size_per_node' to 0.".format(cache_size_per_node))
-                    cache_size_per_node = 0
-                if (cache_size_per_node_max_limit < 0):
-                    Logger.info("Calculated 'cache_size_per_node_max_limit' : {0}. Setting 'cache_size_per_node_max_limit' to 0.".format(cache_size_per_node_max_limit))
-                    cache_size_per_node_max_limit = 0
-            llap_xmx = self.calculate_llap_app_heap_size(services, num_executors_per_node)
+            node_manager_host_list = self.get_node_manager_hosts(services, hosts)
+            assert (node_manager_host_list is not None), 'Information about NODEMANAGER not found in cluster.'
+            node_manager_cnt = len(node_manager_host_list)
+            llap_slider_cap_percentage = self.get_llap_cap_percent_slider(services, configurations)
+            yarn_nm_mem_in_mb = self.get_yarn_nm_mem_in_mb(services)
+            total_cluster_capacity = (node_manager_cnt * yarn_nm_mem_in_mb)
+            Logger.info('\n\nCalculated total_cluster_capacity : {0}, using following : node_manager_cnt : {1}, yarn_nm_mem_in_mb : {2}'.format(total_cluster_capacity, node_manager_cnt, yarn_nm_mem_in_mb))
             yarn_min_container_size = self.get_yarn_min_container_size(services)
-            slider_am_container_mb = self.calculate_slider_am_size(yarn_min_container_size)
-            if (not num_llap_nodes_in_changed_configs):
-                num_llap_nodes = long(num_llap_nodes)
-                num_llap_nodes_max_limit = long(num_llap_nodes_max_limit)
-                Logger.info("LLAP config 'num_llap_nodes' updated. Min : {0}, Curr: {1}, Max: {2}".format('1', num_llap_nodes, num_llap_nodes_max_limit))
-                putHiveInteractiveEnvProperty('num_llap_nodes', num_llap_nodes)
-                putHiveInteractiveEnvPropertyAttribute('num_llap_nodes', 'minimum', 1)
-                putHiveInteractiveEnvPropertyAttribute('num_llap_nodes', 'maximum', int(num_llap_nodes_max_limit))
-            llap_container_size = max(long(yarn_min_container_size), long(llap_container_size))
-            llap_container_size_min_limit = max(long(yarn_min_container_size), long(llap_container_size_min_limit))
+            tez_am_container_size = self._normalizeUp(self.get_tez_am_container_size(services), yarn_min_container_size)
+            total_llap_queue_size = ((float(llap_slider_cap_percentage) / 100) * total_cluster_capacity)
+            slider_am_container_size = self.calculate_slider_am_size(yarn_min_container_size)
+            if (not llap_concurrency_in_changed_configs):
+                llap_concurrency = long(((total_llap_queue_size * 0.25) / tez_am_container_size))
+                assert (llap_concurrency >= 1), "'hive.server2.tez.sessions.per.default.queue' calculated value : {0}. Expected value : >= 1".format(llap_concurrency)
+                if (llap_concurrency > LLAP_MAX_CONCURRENCY):
+                    llap_concurrency = LLAP_MAX_CONCURRENCY
+            elif ('hive.server2.tez.sessions.per.default.queue' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']):
+                llap_concurrency = long(services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.server2.tez.sessions.per.default.queue'])
+                assert (llap_concurrency >= 1), "'hive.server2.tez.sessions.per.default.queue' current value : {0}. Expected value : >= 1".format(llap_concurrency)
+            else:
+                raise Fail("Couldn't retrieve Hive Server interactive's 'hive.server2.tez.sessions.per.default.queue' config.")
+            total_am_capacity_required = ((tez_am_container_size * llap_concurrency) + slider_am_container_size)
+            cap_available_for_daemons = (total_llap_queue_size - total_am_capacity_required)
+            if (cap_available_for_daemons < yarn_min_container_size):
+                raise Fail("'Capacity available for LLAP daemons'({0}) < 'YARN minimum container size'({1}). Invalid configuration detected. Increase LLAP queue size.".format(cap_available_for_daemons, yarn_min_container_size))
+            Logger.info('Calculated cap_available_for_daemons : {0}, using following : llap_slider_cap_percentage : {1}, yarn_nm_mem_in_mb : {2}, total_cluster_capacity : {3}, total_llap_queue_size : {4}, tez_am_container_size : {5}, yarn_min_container_size : {6}, llap_concurrency : {7}, total_am_capacity_required : {8}'.format(cap_available_for_daemons, llap_slider_cap_percentage, yarn_nm_mem_in_mb, total_cluster_capacity, total_llap_queue_size, tez_am_container_size, yarn_min_container_size, llap_concurrency, total_am_capacity_required))
+            num_llap_nodes_raw = (cap_available_for_daemons / yarn_nm_mem_in_mb)
+            if (num_llap_nodes_raw < 1.0):
+                num_llap_nodes = 1
+                llap_container_size = self._normalizeUp(cap_available_for_daemons, yarn_min_container_size)
+                Logger.info('Calculated llap_container_size : {0}, using following : cap_available_for_daemons : {1}, yarn_min_container_size : {2}'.format(llap_container_size, cap_available_for_daemons, yarn_min_container_size))
+            else:
+                num_llap_nodes = math.floor(num_llap_nodes_raw)
+                llap_container_size = self._normalizeDown(yarn_nm_mem_in_mb, yarn_min_container_size)
+                Logger.info('Calculated llap_container_size : {0}, using following : yarn_nm_mem_in_mb : {1}, yarn_min_container_size : {2}'.format(llap_container_size, yarn_nm_mem_in_mb, yarn_min_container_size))
+            Logger.info('Calculated num_llap_nodes : {0} using following : yarn_nm_mem_in_mb : {1}, cap_available_for_daemons : {2} '.format(num_llap_nodes, yarn_nm_mem_in_mb, cap_available_for_daemons))
+            hive_tez_container_size = self.get_hive_tez_container_size(services)
+            if ('yarn.nodemanager.resource.cpu-vcores' in services['configurations']['yarn-site']['properties']):
+                cpu_per_nm_host = float(services['configurations']['yarn-site']['properties']['yarn.nodemanager.resource.cpu-vcores'])
+                assert (cpu_per_nm_host > 0), "'yarn.nodemanager.resource.cpu-vcores' current value : {0}. Expected value : > 0".format(cpu_per_nm_host)
+            else:
+                raise Fail("Couldn't retrieve YARN's 'yarn.nodemanager.resource.cpu-vcores' config.")
+            num_executors_per_node_raw = math.floor((llap_container_size / hive_tez_container_size))
+            num_executors_per_node = min(num_executors_per_node_raw, cpu_per_nm_host)
+            Logger.info('calculated num_executors_per_node: {0}, using following :  hive_tez_container_size : {1}, cpu_per_nm_host : {2}, num_executors_per_node_raw : {3}, llap_container_size : {4}'.format(num_executors_per_node, hive_tez_container_size, cpu_per_nm_host, num_executors_per_node_raw, llap_container_size))
+            assert (num_executors_per_node >= 0), "'Number of executors per node' : {0}. Expected value : > 0".format(num_executors_per_node)
+            total_mem_for_executors = (num_executors_per_node * hive_tez_container_size)
+            cache_size_per_node = (llap_container_size - total_mem_for_executors)
+            Logger.info('Calculated cache_size_per_node : {0} using following : hive_container_size : {1}, llap_container_size : {2}, num_executors_per_node : {3}'.format(cache_size_per_node, hive_tez_container_size, llap_container_size, num_executors_per_node))
+            if (cache_size_per_node < 0):
+                Logger.info("Calculated 'cache_size_per_node' : {0}. Setting 'cache_size_per_node' to 0.".format(cache_size_per_node))
+                cache_size_per_node = 0
+            llap_xmx = max((total_mem_for_executors * 0.8), (total_mem_for_executors - 1024))
+            Logger.info('Calculated llap_app_heap_size : {0}, using following : hive_container_size : {1}, total_mem_for_executors : {2}'.format(llap_xmx, hive_tez_container_size, total_mem_for_executors))
+            if (not llap_concurrency_in_changed_configs):
+                min_llap_concurrency = 1
+                putHiveInteractiveSiteProperty('hive.server2.tez.sessions.per.default.queue', llap_concurrency)
+                putHiveInteractiveSitePropertyAttribute('hive.server2.tez.sessions.per.default.queue', 'minimum', min_llap_concurrency)
+                putHiveInteractiveSitePropertyAttribute('hive.server2.tez.sessions.per.default.queue', 'maximum', LLAP_MAX_CONCURRENCY)
+                Logger.info("LLAP config 'hive.server2.tez.sessions.per.default.queue' updated. Min : {0}, Current: {1}, Max: {2}".format(min_llap_concurrency, llap_concurrency, LLAP_MAX_CONCURRENCY))
+            num_llap_nodes = long(num_llap_nodes)
+            putHiveInteractiveEnvProperty('num_llap_nodes', num_llap_nodes)
+            Logger.info("LLAP config 'num_llap_nodes' updated. Current: {0}".format(num_llap_nodes))
+            llap_container_size = long(llap_container_size)
             putHiveInteractiveSiteProperty('hive.llap.daemon.yarn.container.mb', llap_container_size)
-            putHiveInteractiveSitePropertyAttribute('hive.llap.daemon.yarn.container.mb', 'minimum', llap_container_size_min_limit)
-            putHiveInteractiveSitePropertyAttribute('hive.llap.daemon.yarn.container.mb', 'maximum', llap_container_size)
-            Logger.info("LLAP config 'hive.llap.daemon.yarn.container.mb' updated. Min : {0}, Curr: {1}, Max: {2}".format(llap_container_size_min_limit, llap_container_size, llap_container_size))
+            Logger.info("LLAP config 'hive.llap.daemon.yarn.container.mb' updated. Current: {0}".format(llap_container_size))
             num_executors_per_node = long(num_executors_per_node)
-            num_executors_per_node_max_limit = long(num_executors_per_node_max_limit)
             putHiveInteractiveSiteProperty('hive.llap.daemon.num.executors', num_executors_per_node)
-            putHiveInteractiveSitePropertyAttribute('hive.llap.daemon.num.executors', 'minimum', 1)
-            putHiveInteractiveSitePropertyAttribute('hive.llap.daemon.num.executors', 'maximum', num_executors_per_node_max_limit)
-            Logger.info("LLAP config 'hive.llap.daemon.num.executors' updated. Min : {0}, Curr: {1}, Max: {2}".format('1', num_executors_per_node, num_executors_per_node_max_limit))
-            if (not cache_size_per_node_in_changed_configs):
-                cache_size_per_node = long(cache_size_per_node)
-                cache_size_per_node_max_limit = long(cache_size_per_node_max_limit)
-                putHiveInteractiveSiteProperty('hive.llap.io.memory.size', cache_size_per_node)
-                putHiveInteractiveSitePropertyAttribute('hive.llap.io.memory.size', 'minimum', 0)
-                putHiveInteractiveSitePropertyAttribute('hive.llap.io.memory.size', 'maximum', cache_size_per_node_max_limit)
-                llap_io_enabled = 'false'
-                if (cache_size_per_node >= 64):
-                    llap_io_enabled = 'true'
-                putHiveInteractiveSiteProperty('hive.llap.io.enabled', llap_io_enabled)
-                Logger.info("LLAP config 'hive.llap.io.memory.size' updated. Min : {0}, Curr: {1}, Max: {2}".format('0', cache_size_per_node, cache_size_per_node_max_limit))
-                Logger.info("HiveServer2 config 'hive.llap.io.enabled' updated to '{0}' as part of 'hive.llap.io.memory.size' calculation.".format(llap_io_enabled))
+            Logger.info("LLAP config 'hive.llap.daemon.num.executors' updated. Current: {0}".format(num_executors_per_node))
+            cache_size_per_node = long(cache_size_per_node)
+            putHiveInteractiveSiteProperty('hive.llap.io.memory.size', cache_size_per_node)
+            Logger.info("LLAP config 'hive.llap.io.memory.size' updated. Current: {0}".format(cache_size_per_node))
+            llap_io_enabled = 'false'
+            if (cache_size_per_node >= 64):
+                llap_io_enabled = 'true'
+            putHiveInteractiveSiteProperty('hive.llap.io.enabled', llap_io_enabled)
+            Logger.info("HiveServer2 config 'hive.llap.io.enabled' updated to '{0}' as part of 'hive.llap.io.memory.size' calculation.".format(llap_io_enabled))
             llap_xmx = long(llap_xmx)
             putHiveInteractiveEnvProperty('llap_heap_size', llap_xmx)
-            Logger.info("LLAP config 'llap_heap_size' updated. Curr: {0}".format(llap_xmx))
-            slider_am_container_mb = long(slider_am_container_mb)
-            putHiveInteractiveEnvProperty('slider_am_container_mb', slider_am_container_mb)
-            Logger.info("LLAP config 'slider_am_container_mb' updated. Curr: {0}".format(slider_am_container_mb))
+            Logger.info("LLAP config 'llap_heap_size' updated. Current: {0}".format(llap_xmx))
+            slider_am_container_size = long(slider_am_container_size)
+            putHiveInteractiveEnvProperty('slider_am_container_size', slider_am_container_size)
+            Logger.info("LLAP config 'slider_am_container_size' updated. Current: {0}".format(slider_am_container_size))
     except Exception as e:
         Logger.info((e.message + ' Skipping calculating LLAP configs. Setting them to minimum values.'))
         traceback.print_exc()
         try:
-            yarn_min_container_size = self.get_yarn_min_container_size(services)
-            slider_am_container_mb = self.calculate_slider_am_size(yarn_min_container_size)
+            yarn_min_container_size = long(self.get_yarn_min_container_size(services))
+            slider_am_container_size = long(self.calculate_slider_am_size(yarn_min_container_size))
+            putHiveInteractiveSiteProperty('hive.server2.tez.sessions.per.default.queue', 0)
+            putHiveInteractiveSitePropertyAttribute('hive.server2.tez.sessions.per.default.queue', 'minimum', 0)
+            putHiveInteractiveSitePropertyAttribute('hive.server2.tez.sessions.per.default.queue', 'maximum', 0)
             putHiveInteractiveEnvProperty('num_llap_nodes', 0)
             putHiveInteractiveEnvPropertyAttribute('num_llap_nodes', 'minimum', 0)
             putHiveInteractiveEnvPropertyAttribute('num_llap_nodes', 'maximum', 0)
@@ -116,7 +141,7 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
             putHiveInteractiveSitePropertyAttribute('hive.llap.io.memory.size', 'minimum', 0)
             putHiveInteractiveSitePropertyAttribute('hive.llap.io.memory.size', 'maximum', 0)
             putHiveInteractiveEnvProperty('llap_heap_size', 0)
-            putHiveInteractiveEnvProperty('slider_am_container_mb', slider_am_container_mb)
+            putHiveInteractiveEnvProperty('slider_am_container_size', slider_am_container_size)
         except Exception as e:
-            Logger.info('Problem setting minimum values for LLAP configs in except code.')
+            Logger.info('Problem setting minimum values for LLAP configs in Exception code.')
             traceback.print_exc()
