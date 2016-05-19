@@ -32,13 +32,20 @@ def getServiceConfigurationRecommendations(self, stackAdvisor, configurations, c
             for (hs_prop, ys_prop) in self.getHAWQYARNPropertyMapping().items():
                 if ((hs_prop in hawq_site) and (ys_prop in yarn_site)):
                     putHawqSiteProperty(hs_prop, yarn_site[ys_prop])
-    if ('hawq-sysctl-env' in services['configurations']):
+    if (('hawq-sysctl-env' in services['configurations']) and ('vm.overcommit_memory' in services['configurations']['hawq-sysctl-env']['properties'])):
         MEM_THRESHOLD = 33554432
-        hawq_sysctl_env = services['configurations']['hawq-sysctl-env']['properties']
-        if ('vm.overcommit_memory' in hawq_sysctl_env):
-            propertyValue = ('2' if (minHawqHostsMemory >= MEM_THRESHOLD) else '1')
-            putHawqSysctlEnvProperty = self.putProperty(configurations, 'hawq-sysctl-env', services)
-            putHawqSysctlEnvProperty('vm.overcommit_memory', propertyValue)
+        vm_overcommit_mem_value = ('2' if (minHawqHostsMemory >= MEM_THRESHOLD) else '1')
+        putHawqSysctlEnvProperty = self.putProperty(configurations, 'hawq-sysctl-env', services)
+        putHawqSysctlEnvProperty('vm.overcommit_memory', vm_overcommit_mem_value)
+        host_ram_kb = ((minHawqHostsMemory / 2) if (vm_overcommit_mem_value == '2') else minHawqHostsMemory)
+        host_ram_gb = (float(host_ram_kb) / (1024 * 1024))
+        recommended_mem_percentage = {(host_ram_gb <= 64): 0.75, (64 < host_ram_gb <= 512): 0.85, (host_ram_gb > 512): 0.95, }[True]
+        recommended_mem = math.ceil((host_ram_gb * recommended_mem_percentage))
+        unit = 'GB'
+        if (recommended_mem >= host_ram_gb):
+            recommended_mem = math.ceil(((float(host_ram_kb) / 1024) * recommended_mem_percentage))
+            unit = 'MB'
+        putHawqSiteProperty('hawq_rm_memory_limit_perseg', '{0}{1}'.format(int(recommended_mem), unit))
     if ('hdfs-client' in services['configurations']):
         MIN_NUM_SEGMENT_THRESHOLD = 3
         hdfs_client = services['configurations']['hdfs-client']['properties']
