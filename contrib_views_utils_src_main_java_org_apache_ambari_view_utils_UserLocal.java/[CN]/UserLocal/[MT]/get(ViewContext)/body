@@ -1,10 +1,35 @@
 {
   if (!viewSingletonObjects.containsKey(tClass)) {
-    viewSingletonObjects.put(tClass,new ConcurrentHashMap<String,Object>());
+synchronized (viewSingletonObjects) {
+      if (!viewSingletonObjects.containsKey(tClass)) {
+        viewSingletonObjects.put(tClass,new ConcurrentHashMap<String,Object>());
+      }
+    }
   }
   Map<String,Object> instances=viewSingletonObjects.get(tClass);
-  if (!instances.containsKey(getTagName(context))) {
-    instances.put(getTagName(context),initialValue(context));
+  String key=getTagName(context);
+  LOG.debug("looking for key : {}",key);
+  if (!instances.containsKey(key)) {
+    String lockKey=tClass.getName() + "_" + key;
+    LOG.info("key {} not found. getting lock for {}",key,lockKey);
+    ReentrantLock lock=getLockFor(lockKey);
+    boolean gotLock=lock.tryLock();
+    if (!gotLock) {
+      LOG.error("Lock could not be obtained for {}. Throwing exception.",lockKey);
+      throw new RuntimeException(String.format("Failed to initialize %s for %s. Try Again.",tClass.getName(),key));
+    }
+ else {
+      try {
+        if (!instances.containsKey(key)) {
+          T initValue=initialValue(context);
+          LOG.info("Obtained initial value : {} for key : {}",initValue,key);
+          instances.put(key,initValue);
+        }
+      }
+  finally {
+        lock.unlock();
+      }
+    }
   }
-  return (T)instances.get(getTagName(context));
+  return (T)instances.get(key);
 }
