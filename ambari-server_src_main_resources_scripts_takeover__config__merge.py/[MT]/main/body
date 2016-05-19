@@ -6,7 +6,7 @@ def main():
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', default=False, help='output verbosity.')
     parser.add_option('-o', '--outputdir', dest='outputDir', default=outputDir, metavar='FILE', help='Output directory. [default: /tmp]')
     parser.add_option('-i', '--inputdir', dest='inputDir', help='Input directory.')
-    parser.add_option('-u', '--unknown-files-mapping-file', dest='unknown_files_mapping_file', metavar='FILE', help=CONFIG_MAPPING_HELP_TEXT, default='takeover_files_mapping.json')
+    parser.add_option('-u', '--unknown-files-mapping-file', dest='unknown_files_mapping_file', default=None, metavar='FILE', help=LOG4J_HELP_TEXT)
     (options, args) = parser.parse_args()
     if options.verbose:
         logger.setLevel(logging.DEBUG)
@@ -14,6 +14,10 @@ def main():
         logger.setLevel(logging.INFO)
     ConfigMerge.INPUT_DIR = options.inputDir
     ConfigMerge.OUTPUT_DIR = options.outputDir
+    if options.unknown_files_mapping_file:
+        ConfigMerge.UNKNOWN_FILES_MAPPING_FILE = options.unknown_files_mapping_file
+        with open(options.unknown_files_mapping_file) as f:
+            ConfigMerge.CONTENT_UNKNOWN_FILES_MAPPING_FILE = json.load(f)
     if (not os.path.exists(ConfigMerge.OUTPUT_DIR)):
         os.makedirs(ConfigMerge.OUTPUT_DIR)
     logegr_file_name = os.path.join(ConfigMerge.OUTPUT_DIR, 'takeover_config_merge.log')
@@ -25,12 +29,6 @@ def main():
     stdout_handler.setLevel(logging.INFO)
     stdout_handler.setFormatter(formatter)
     logger.addHandler(stdout_handler)
-    if (options.unknown_files_mapping_file and os.path.exists(options.unknown_files_mapping_file)):
-        ConfigMerge.UNKNOWN_FILES_MAPPING_FILE = options.unknown_files_mapping_file
-        with open(options.unknown_files_mapping_file) as f:
-            ConfigMerge.CONTENT_UNKNOWN_FILES_MAPPING_FILE = json.load(f)
-    else:
-        logger.warning('Config mapping file was not found at {0}. Please provide it at the given path or provide a different path to it using -u option.'.format(options.unknown_files_mapping_file))
     filePaths = ConfigMerge.get_all_supported_files_grouped_by_name()
     logger.info("Writing logs into '{0}' file".format(logegr_file_name))
     logger.debug('Following configuration files found:\n{0}'.format(filePaths.items()))
