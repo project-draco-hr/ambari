@@ -1,7 +1,28 @@
 {
-  URL resourceURL=cl.getResource(VIEW_LOG_FILE);
-  if (null != resourceURL) {
-    LOG.info("setting up logging for view {} as per property file {}",viewDefinition.getName(),resourceURL);
-    PropertyConfigurator.configure(resourceURL);
+  InputStream viewLog4jStream=cl.getResourceAsStream(VIEW_LOG_FILE);
+  if (null != viewLog4jStream) {
+    try {
+      Properties viewLog4jConfig=new Properties();
+      viewLog4jConfig.load(viewLog4jStream);
+      LOG.info("setting up logging for view {} as per property file {}",viewDefinition.getName(),VIEW_LOG_FILE);
+      InputStream ambariLog4jStream=cl.getResourceAsStream(AMBARI_LOG_FILE);
+      if (null != ambariLog4jStream) {
+        Properties ambariLog4jConfig=new Properties();
+        ambariLog4jConfig.load(ambariLog4jStream);
+        for (        Object property : ambariLog4jConfig.keySet()) {
+          String prop=(String)property;
+          if (prop.startsWith(LOG4J)) {
+            viewLog4jConfig.remove(prop);
+          }
+ else {
+            viewLog4jConfig.put(prop,ambariLog4jConfig.getProperty(prop));
+          }
+        }
+      }
+      PropertyConfigurator.configure(viewLog4jConfig);
+    }
+ catch (    IOException e) {
+      LOG.error("Error occurred while configuring logs for {}",viewDefinition.getName());
+    }
   }
 }
