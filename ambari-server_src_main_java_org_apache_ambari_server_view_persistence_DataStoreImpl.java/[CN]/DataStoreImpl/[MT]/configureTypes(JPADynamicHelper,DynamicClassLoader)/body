@@ -6,10 +6,14 @@
     JPADynamicTypeBuilder typeBuilder=new JPADynamicTypeBuilder(javaType,null,tableName);
     typeBuilderMap.put(entityName,typeBuilder);
   }
+  Session session=JpaHelper.getEntityManager(getEntityManager()).getServerSession();
   for (  Map.Entry<Class,String> entry : entityClassMap.entrySet()) {
     Class clazz=entry.getKey();
     String entityName=entry.getValue();
     JPADynamicTypeBuilder typeBuilder=typeBuilderMap.get(entityName);
+    String seqName=new String(entityName + "_id_seq").toLowerCase();
+    TableSequence tableSequence=new TableSequence(seqName,50,"ambari_sequences","sequence_name","sequence_value");
+    session.getLogin().addSequence(tableSequence);
     Map<String,PropertyDescriptor> descriptorMap=getDescriptorMap(clazz);
     long totalLength=0L;
     for (    Map.Entry<String,PropertyDescriptor> descriptorEntry : descriptorMap.entrySet()) {
@@ -18,6 +22,7 @@
       PropertyDescriptor descriptor=descriptorEntry.getValue();
       if (fieldName.equals(entityMap.get(entityName).getIdProperty())) {
         typeBuilder.setPrimaryKeyFields(attributeName);
+        typeBuilder.configureSequencing(tableSequence,seqName,attributeName);
       }
       Class<?> propertyType=descriptor.getPropertyType();
       if (isDirectMappingType(propertyType)) {
@@ -44,9 +49,6 @@
       String fieldName=descriptorEntry.getKey();
       String attributeName=getAttributeName(fieldName);
       PropertyDescriptor descriptor=descriptorEntry.getValue();
-      if (fieldName.equals(entityMap.get(entityName).getIdProperty())) {
-        typeBuilder.setPrimaryKeyFields(attributeName);
-      }
       Class<?> propertyType=descriptor.getPropertyType();
       String refEntityName=entityClassMap.get(propertyType);
       if (refEntityName == null) {

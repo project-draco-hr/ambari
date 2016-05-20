@@ -1,0 +1,44 @@
+{
+  LOG.info("updateSequenceForView called.");
+  EntityManager entityManager=getEntityManagerProvider().get();
+  TypedQuery<ViewEntityEntity> viewEntityQuery=entityManager.createQuery("SELECT vee FROM ViewEntityEntity vee",ViewEntityEntity.class);
+  List<ViewEntityEntity> viewEntities=viewEntityQuery.getResultList();
+  LOG.info("Received view Entities : {}, length : {}",viewEntities,viewEntities.size());
+  String selectIdsFormat="select %s from %s";
+  String insertQuery="insert into ambari_sequences values ('%s',%d)";
+  for (  ViewEntityEntity viewEntity : viewEntities) {
+    LOG.info("Working with viewEntity : {} : {} ",viewEntity,viewEntity.getViewName() + viewEntity.getViewInstance());
+    String tableName=getEntityName(viewEntity);
+    String seqName=tableName.toLowerCase() + "_id_seq";
+    try {
+      entityManager.getTransaction().begin();
+      String selectIdsQueryString=String.format(selectIdsFormat,NAME_PREFIX + viewEntity.getIdProperty(),tableName).toLowerCase();
+      LOG.info("executing max query string {}",selectIdsQueryString);
+      Query selectIdsQuery=entityManager.createNativeQuery(selectIdsQueryString);
+      List<String> ids=selectIdsQuery.getResultList();
+      LOG.info("Received ids : {}",ids);
+      int maxId=0;
+      if (null != ids && ids.size() != 0) {
+        for (        String id : ids) {
+          try {
+            Integer intId=Integer.parseInt(id);
+            maxId=Math.max(intId,maxId);
+          }
+ catch (          NumberFormatException e) {
+            LOG.error("the id was non integer : id : {}. So ignoring.",id);
+          }
+        }
+      }
+      String insertQueryString=String.format(insertQuery,seqName,maxId).toLowerCase();
+      LOG.info("Executing insert query : {}",insertQueryString);
+      Query insertQ=entityManager.createNativeQuery(insertQueryString);
+      int rowsChanged=insertQ.executeUpdate();
+      entityManager.getTransaction().commit();
+      LOG.info("executing insert resulted in {} row changes.",rowsChanged);
+    }
+ catch (    Exception e) {
+      entityManager.getTransaction().rollback();
+      LOG.error("Error --> can be ignored.",e);
+    }
+  }
+}
