@@ -1,11 +1,20 @@
-def check_llap(self, env, kinit_cmd):
+def check_llap(self, env, kinit_cmd, address, port, key, hive_auth='NOSASL', transport_mode='binary', http_endpoint='cliservice'):
     import params
     env.set_params(params)
-    File(format('{tmp_dir}/hiveLlapSmoke.sh'), content=StaticFile('hiveLlapSmoke.sh'), mode=493)
     unique_id = get_unique_id_and_date()
-    llap_cmd = format('{kinit_cmd}env JAVA_HOME={java64_home} {tmp_dir}/hiveLlapSmoke.sh {stack_root} llap_smoke_{unique_id} prepare')
+    beeline_url = ['jdbc:hive2://{address}:{port}/', 'transportMode={transport_mode}']
+    address = address[0]
+    if (transport_mode == 'http'):
+        beeline_url.append('httpPath={http_endpoint}')
+    if (hive_auth == 'NOSASL'):
+        beeline_url.append('auth=noSasl')
+    if kinit_cmd:
+        beeline_url.append('principal={key}')
     exec_path = params.execute_path
     if (params.version and params.stack_root):
         upgrade_hive_bin = format('{stack_root}/{version}/hive2/bin')
         exec_path = ((((os.environ['PATH'] + os.pathsep) + params.hadoop_bin_dir) + os.pathsep) + upgrade_hive_bin)
-    Execute(llap_cmd, user=params.hive_user, path=['/usr/sbin', '/usr/local/bin', '/bin', '/usr/bin', exec_path], tries=1, try_sleep=5, wait_for_finish=True, stderr=subprocess.PIPE, logoutput=True)
+    llap_cmd = ("! beeline -u '%s'" % format(';'.join(beeline_url)))
+    llap_cmd += format(' --hiveconf "hiveLlapServiceCheck={unique_id}" -f {stack_root}/current/hive-server2-hive2/scripts/llap/sql/serviceCheckScript.sql')
+    llap_cmd += " -e '' 2>&1| awk '{print}'|grep -i -e 'Invalid status\\|Invalid URL\\|command not found\\|Connection refused'"
+    Execute(llap_cmd, user=params.hive_user, path=['/usr/sbin', '/usr/local/bin', '/bin', '/usr/bin', exec_path], tries=1, wait_for_finish=True, stderr=subprocess.PIPE, logoutput=True)
