@@ -10,8 +10,12 @@
     throw new IllegalStateException(e);
   }
   this.dataSource=dataSource;
-  this.retryCounterFactory=new RetryCounterFactory(metricsConf.getInt(GLOBAL_MAX_RETRIES,10),(int)SECONDS.toMillis(metricsConf.getInt(GLOBAL_RETRY_INTERVAL,5)));
+  this.retryCounterFactory=new RetryCounterFactory(metricsConf.getInt(GLOBAL_MAX_RETRIES,10),(int)SECONDS.toMillis(metricsConf.getInt(GLOBAL_RETRY_INTERVAL,3)));
   this.outOfBandTimeAllowance=metricsConf.getLong(OUT_OFF_BAND_DATA_TIME_ALLOWANCE,DEFAULT_OUT_OF_BAND_TIME_ALLOWANCE);
+  this.cacheEnabled=Boolean.valueOf(metricsConf.get(TIMELINE_METRICS_CACHE_ENABLED,"true"));
+  this.cacheSize=Integer.valueOf(metricsConf.get(TIMELINE_METRICS_CACHE_SIZE,"150"));
+  this.cacheCommitInterval=Integer.valueOf(metricsConf.get(TIMELINE_METRICS_CACHE_COMMIT_INTERVAL,"3"));
+  this.insertCache=new ArrayBlockingQueue<TimelineMetrics>(cacheSize);
   this.skipBlockCacheForAggregatorsEnabled=metricsConf.getBoolean(AGGREGATORS_SKIP_BLOCK_CACHE,false);
   this.timelineMetricsTablesDurability=metricsConf.get(TIMELINE_METRICS_TABLES_DURABILITY,"");
   tableTTL.put(METRICS_RECORD_TABLE_NAME,metricsConf.get(PRECISION_TABLE_TTL,String.valueOf(1 * 86400)));
@@ -23,4 +27,10 @@
   tableTTL.put(METRICS_CLUSTER_AGGREGATE_MINUTE_TABLE_NAME,metricsConf.get(CLUSTER_MINUTE_TABLE_TTL,String.valueOf(30 * 86400)));
   tableTTL.put(METRICS_CLUSTER_AGGREGATE_HOURLY_TABLE_NAME,metricsConf.get(CLUSTER_HOUR_TABLE_TTL,String.valueOf(365 * 86400)));
   tableTTL.put(METRICS_CLUSTER_AGGREGATE_DAILY_TABLE_NAME,metricsConf.get(CLUSTER_DAILY_TABLE_TTL,String.valueOf(730 * 86400)));
+  if (cacheEnabled) {
+    LOG.debug("Initialising and starting metrics cache committer thread...");
+    metricsCommiterThread=new MetricsCacheCommitterThread(this);
+    scheduledExecutorService=Executors.newSingleThreadScheduledExecutor();
+    scheduledExecutorService.scheduleWithFixedDelay(metricsCommiterThread,0,cacheCommitInterval,TimeUnit.SECONDS);
+  }
 }
