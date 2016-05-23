@@ -1,11 +1,22 @@
 {
   HadoopTimelineMetricsSink sink=new HadoopTimelineMetricsSink();
+  HttpURLConnection connection=PowerMock.createNiceMock(HttpURLConnection.class);
+  URL url=PowerMock.createNiceMock(URL.class);
+  InputStream is=IOUtils.toInputStream(gson.toJson(Collections.singletonList("localhost")));
+  expectNew(URL.class,anyString()).andReturn(url).anyTimes();
+  expect(url.openConnection()).andReturn(connection).anyTimes();
+  expect(connection.getInputStream()).andReturn(is).anyTimes();
+  expect(connection.getResponseCode()).andReturn(200).anyTimes();
+  OutputStream os=PowerMock.createNiceMock(OutputStream.class);
+  expect(connection.getOutputStream()).andReturn(os).anyTimes();
   SubsetConfiguration conf=createNiceMock(SubsetConfiguration.class);
-  expect(conf.getString(eq("slave.host.name"))).andReturn("testhost").anyTimes();
+  expect(conf.getString("slave.host.name")).andReturn("localhost").anyTimes();
   expect(conf.getParent()).andReturn(null).anyTimes();
   expect(conf.getPrefix()).andReturn("service").anyTimes();
-  expect(conf.getString(eq(COLLECTOR_PROPERTY))).andReturn("localhost:63188").anyTimes();
+  expect(conf.getString(eq(COLLECTOR_PROPERTY),eq(""))).andReturn("localhost:6188").anyTimes();
   expect(conf.getString(eq("serviceName-prefix"),eq(""))).andReturn("").anyTimes();
+  expect(conf.getString(eq(COLLECTOR_PROTOCOL),eq("http"))).andReturn("http").anyTimes();
+  expect(conf.getString(eq(COLLECTOR_PORT),eq("6188"))).andReturn("6188").anyTimes();
   expect(conf.getInt(eq(MAX_METRIC_ROW_CACHE_SIZE),anyInt())).andReturn(10).anyTimes();
   expect(conf.getInt(eq(METRICS_SEND_INTERVAL),anyInt())).andReturn(1000).anyTimes();
   conf.setListDelimiter(eq(','));
@@ -36,9 +47,10 @@
 ).anyTimes();
   expect(record.metrics()).andReturn(Arrays.asList(metric)).anyTimes();
   replay(conf,record,metric);
+  replayAll();
   sink.init(conf);
   sink.putMetrics(record);
   Thread.sleep(1500L);
   sink.putMetrics(record);
-  verify(conf,record,metric);
+  verifyAll();
 }

@@ -1,0 +1,26 @@
+{
+  Set<String> collectors=new HashSet<>();
+  RetryPolicy retryPolicy=new RetryUntilElapsed(tryTime,sleepMsBetweenRetries);
+  final CuratorZookeeperClient client=new CuratorZookeeperClient(zookeeperQuorum,SESSION_TIMEOUT,CONNECTION_TIMEOUT,null,retryPolicy);
+  String liveInstances=null;
+  try {
+    liveInstances=RetryLoop.callWithRetry(client,new Callable<String>(){
+      @Override public String call() throws Exception {
+        ZooKeeper zookeeper=client.getZooKeeper();
+        byte[] data=zookeeper.getData(ZK_PATH,null,null);
+        return data != null ? new String(data) : null;
+      }
+    }
+);
+  }
+ catch (  Exception e) {
+    LOG.warn("Unable to connect to zookeeper.",e);
+    LOG.debug(e);
+  }
+  if (liveInstances != null && !liveInstances.isEmpty()) {
+    for (    String instanceStr : liveInstances.split(",")) {
+      collectors.add(instanceStr.substring(0,instanceStr.indexOf(INSTANCE_NAME_DELIMITER)));
+    }
+  }
+  return collectors;
+}

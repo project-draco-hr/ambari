@@ -1,0 +1,49 @@
+{
+  List<String> collectors=new ArrayList<>();
+  HttpURLConnection connection=null;
+  StringBuilder sb=new StringBuilder(getCollectorProtocol());
+  sb.append("://");
+  sb.append(host);
+  sb.append(":");
+  sb.append(port);
+  sb.append(COLLECTOR_LIVE_NODES_PATH);
+  String connectUrl=sb.toString();
+  LOG.debug("Requesting live collector nodes : " + connectUrl);
+  try {
+    connection=getCollectorProtocol().startsWith("https") ? getSSLConnection(connectUrl) : getConnection(connectUrl);
+    connection.setRequestMethod("GET");
+    connection.setConnectTimeout(3000);
+    connection.setReadTimeout(2000);
+    int responseCode=connection.getResponseCode();
+    if (responseCode == 200) {
+      try (InputStream in=connection.getInputStream()){
+        StringWriter writer=new StringWriter();
+        IOUtils.copy(in,writer);
+        try {
+          collectors=gson.fromJson(writer.toString(),new TypeToken<List<String>>(){
+          }
+.getType());
+        }
+ catch (        JsonSyntaxException jse) {
+          LOG.debug("Exception deserializing the json data on live " + "collector nodes.",jse);
+        }
+      }
+     }
+  }
+ catch (  IOException ioe) {
+    StringBuilder errorMessage=new StringBuilder("Unable to connect to collector, " + connectUrl);
+    try {
+      if ((connection != null)) {
+        errorMessage.append(cleanupInputStream(connection.getErrorStream()));
+      }
+    }
+ catch (    IOException e) {
+    }
+    LOG.debug(errorMessage);
+    LOG.debug(ioe);
+    String warnMsg="Unable to connect to collector to find live nodes.";
+    LOG.warn(warnMsg,ioe);
+    throw new MetricCollectorUnavailableException(warnMsg);
+  }
+  return collectors;
+}

@@ -12,16 +12,19 @@ synchronized (lock) {
         LOG.error("Could not identify hostname.");
         throw new RuntimeException("Could not identify hostname.",e);
       }
+      super.init();
       KafkaMetricsConfig metricsConfig=new KafkaMetricsConfig(props);
       timeoutSeconds=props.getInt(METRICS_POST_TIMEOUT_SECONDS,DEFAULT_POST_TIMEOUT_SECONDS);
       int metricsSendInterval=props.getInt(TIMELINE_METRICS_SEND_INTERVAL_PROPERTY,MAX_EVICTION_TIME_MILLIS);
       int maxRowCacheSize=props.getInt(TIMELINE_METRICS_MAX_ROW_CACHE_SIZE_PROPERTY,MAX_RECS_PER_NAME_DEFAULT);
+      zookeeperQuorum=props.getString("zookeeper.connect");
+      collectors=props.getString(TIMELINE_HOST_PROPERTY,TIMELINE_DEFAULT_HOST);
+      metricCollectorProtocol=props.getString(TIMELINE_PROTOCOL_PROPERTY,TIMELINE_DEFAULT_PROTOCOL);
       String metricCollectorHost=props.getString(TIMELINE_HOST_PROPERTY,TIMELINE_DEFAULT_HOST);
-      String metricCollectorPort=props.getString(TIMELINE_PORT_PROPERTY,TIMELINE_DEFAULT_PORT);
-      String metricCollectorProtocol=props.getString(TIMELINE_PROTOCOL_PROPERTY,TIMELINE_DEFAULT_PROTOCOL);
+      metricCollectorPort=props.getString(TIMELINE_PORT_PROPERTY,TIMELINE_DEFAULT_PORT);
       setMetricsCache(new TimelineMetricsCache(maxRowCacheSize,metricsSendInterval));
-      collectorUri=metricCollectorProtocol + "://" + metricCollectorHost+ ":"+ metricCollectorPort+ WS_V1_TIMELINE_METRICS;
-      if (collectorUri.toLowerCase().startsWith("https://")) {
+      collectorUri=constructTimelineMetricUri(metricCollectorProtocol,metricCollectorHost,metricCollectorPort);
+      if (metricCollectorProtocol.contains("https")) {
         String trustStorePath=props.getString(SSL_KEYSTORE_PATH_PROPERTY).trim();
         String trustStoreType=props.getString(SSL_KEYSTORE_TYPE_PROPERTY).trim();
         String trustStorePwd=props.getString(SSL_KEYSTORE_PASSWORD_PROPERTY).trim();

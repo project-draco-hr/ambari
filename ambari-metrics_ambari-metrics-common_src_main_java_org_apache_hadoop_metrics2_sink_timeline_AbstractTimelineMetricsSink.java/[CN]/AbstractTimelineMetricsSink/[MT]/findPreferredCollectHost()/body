@@ -1,0 +1,52 @@
+{
+  if (!isInitializedForHA) {
+    init();
+  }
+  if (targetCollectorHostSupplier != null) {
+    Object targetCollector=targetCollectorHostSupplier.get();
+    if (targetCollector != null) {
+      return (String)targetCollector;
+    }
+  }
+  String configuredCollectors=getConfiguredCollectors();
+  if (configuredCollectors != null && !configuredCollectors.isEmpty()) {
+    String collectorHosts=getConfiguredCollectors();
+    if (!collectorHosts.isEmpty()) {
+      String[] hosts=collectorHosts.split(",");
+      for (      String hostPortStr : hosts) {
+        if (hostPortStr != null && !hostPortStr.isEmpty()) {
+          String[] hostPortPair=hostPortStr.split(":");
+          if (hostPortPair.length < 2) {
+            LOG.warn("Collector port is missing from the configuration.");
+            continue;
+          }
+          String hostStr=hostPortPair[0].trim();
+          String portStr=hostPortPair[1].trim();
+          try {
+            Collection<String> liveHosts=findLiveCollectorHostsFromKnownCollector(hostStr,portStr);
+            for (            String host : liveHosts) {
+              allKnownLiveCollectors.add(host);
+            }
+          }
+ catch (          MetricCollectorUnavailableException e) {
+            allKnownLiveCollectors.remove(hostStr);
+            LOG.info("Collector " + hostStr + " is not longer live. Removing "+ "it from list of know live collector hosts : "+ allKnownLiveCollectors);
+          }
+        }
+      }
+    }
+  }
+  if (allKnownLiveCollectors.size() == 0) {
+    allKnownLiveCollectors.addAll(collectorHAHelper.findLiveCollectorHostsFromZNode());
+  }
+  if (allKnownLiveCollectors.size() != 0) {
+    targetCollectorHostSupplier=Suppliers.memoizeWithExpiration(new Supplier(){
+      @Override public Object get(){
+        return metricSinkWriteShardStrategy.findCollectorShard(new ArrayList<>(allKnownLiveCollectors));
+      }
+    }
+,rand.nextInt(COLLECTOR_HOST_CACHE_MAX_EXPIRATION_MINUTES - COLLECTOR_HOST_CACHE_MIN_EXPIRATION_MINUTES + 1) + COLLECTOR_HOST_CACHE_MIN_EXPIRATION_MINUTES,TimeUnit.MINUTES);
+    return (String)targetCollectorHostSupplier.get();
+  }
+  return null;
+}

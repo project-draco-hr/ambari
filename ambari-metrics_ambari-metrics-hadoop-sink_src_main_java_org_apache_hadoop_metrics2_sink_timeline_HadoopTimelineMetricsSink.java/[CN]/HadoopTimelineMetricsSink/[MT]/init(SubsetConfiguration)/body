@@ -15,14 +15,18 @@
   }
   serviceName=getServiceName(conf);
   LOG.info("Identified hostname = " + hostName + ", serviceName = "+ serviceName);
-  metricsServers=Servers.parse(conf.getString(COLLECTOR_PROPERTY),6188);
-  if (metricsServers == null || metricsServers.isEmpty()) {
+  super.init();
+  protocol=conf.getString(COLLECTOR_PROTOCOL,"http");
+  collectors=conf.getString(COLLECTOR_PROPERTY,"").trim();
+  port=conf.getString(COLLECTOR_PORT,"6188");
+  if (StringUtils.isEmpty(collectors)) {
     LOG.error("No Metric collector configured.");
   }
  else {
-    collectorUri=conf.getString(COLLECTOR_PROPERTY).trim() + WS_V1_TIMELINE_METRICS;
-    containerMetricsUri=conf.getString(COLLECTOR_PROPERTY).trim() + WS_V1_CONTAINER_METRICS;
-    if (collectorUri.toLowerCase().startsWith("https://")) {
+    String preferredCollectorHost=findPreferredCollectHost();
+    collectorUri=constructTimelineMetricUri(protocol,preferredCollectorHost,port);
+    containerMetricsUri=constructContainerMetricUri(protocol,preferredCollectorHost,port);
+    if (protocol.contains("https")) {
       String trustStorePath=conf.getString(SSL_KEYSTORE_PATH_PROPERTY).trim();
       String trustStoreType=conf.getString(SSL_KEYSTORE_TYPE_PROPERTY).trim();
       String trustStorePwd=conf.getString(SSL_KEYSTORE_PASSWORD_PROPERTY).trim();
