@@ -53,6 +53,30 @@
   if (repoVersionEnt == null) {
     throw new IllegalArgumentException(String.format("Repo version %s is not available for stack %s",desiredRepoVersion,stackId));
   }
+  VersionDefinitionXml desiredVersionDefinition=null;
+  try {
+    desiredVersionDefinition=repoVersionEnt.getRepositoryXml();
+  }
+ catch (  Exception e) {
+    throw new IllegalArgumentException(String.format("Version %s is backed by a version definition, but it could not be parsed",desiredRepoVersion),e);
+  }
+  for (  ClusterVersionEntity clusterVersion : clusterVersionDAO.findByCluster(clName)) {
+    RepositoryVersionEntity clusterRepoVersion=clusterVersion.getRepositoryVersion();
+    int compare=compareVersions(clusterRepoVersion.getVersion(),desiredRepoVersion);
+    if (compare <= 0) {
+      continue;
+    }
+    if (!StringUtils.equals(clusterRepoVersion.getStackName(),repoVersionEnt.getStackName())) {
+      continue;
+    }
+    if (null == desiredVersionDefinition) {
+      continue;
+    }
+    if (null == desiredVersionDefinition.release.packageVersion) {
+      String msg=String.format("Ambari cannot install version %s.  Version %s is already installed.",desiredRepoVersion,clusterRepoVersion.getVersion());
+      throw new IllegalArgumentException(msg);
+    }
+  }
   List<OperatingSystemEntity> operatingSystems=repoVersionEnt.getOperatingSystems();
   Map<String,List<RepositoryEntity>> perOsRepos=new HashMap<String,List<RepositoryEntity>>();
   for (  OperatingSystemEntity operatingSystem : operatingSystems) {
