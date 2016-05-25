@@ -13,9 +13,9 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
             llap_daemon_selected_queue_name = services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.llap.daemon.queue.name']
         if ('hive.llap.daemon.queue.name' in configurations[self.HIVE_INTERACTIVE_SITE]['properties']):
             llap_queue_selected_in_current_call = configurations[self.HIVE_INTERACTIVE_SITE]['properties']['hive.llap.daemon.queue.name']
-        capacitySchedulerProperties = self.getCapacitySchedulerProperties(services)
-        if capacitySchedulerProperties:
-            leafQueueNames = self.getAllYarnLeafQueues(capacitySchedulerProperties)
+        (capacity_scheduler_properties, received_as_key_value_pair) = self.getCapacitySchedulerProperties(services)
+        if capacity_scheduler_properties:
+            leafQueueNames = self.getAllYarnLeafQueues(capacity_scheduler_properties)
             if (((llap_daemon_selected_queue_name != None) and (llap_daemon_selected_queue_name == llap_queue_name)) or ((llap_queue_selected_in_current_call != None) and (llap_queue_selected_in_current_call == llap_queue_name))):
                 putHiveInteractiveEnvPropertyAttribute('llap_queue_capacity', 'visible', 'true')
                 Logger.debug("Selected YARN queue is '{0}'. Setting LLAP queue capacity slider visibility to True".format(llap_queue_name))
@@ -32,7 +32,7 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
             config_names_to_be_checked = set(['llap_queue_capacity', 'enable_hive_interactive'])
             changed_configs_in_hive_int_env = self.are_config_props_in_changed_configs(services, 'hive-interactive-env', config_names_to_be_checked, False)
             llap_concurrency_in_changed_configs = self.are_config_props_in_changed_configs(services, 'hive-interactive-site', set(['hive.server2.tez.sessions.per.default.queue']), False)
-            if ((not changed_configs_in_hive_int_env) and (llap_daemon_selected_queue_name != llap_queue_name) and (not llap_concurrency_in_changed_configs)):
+            if ((not changed_configs_in_hive_int_env) and (llap_daemon_selected_queue_name != llap_queue_name) and (llap_queue_selected_in_current_call != llap_queue_name) and (not llap_concurrency_in_changed_configs)):
                 Logger.info('LLAP parameters not modified. Not adjusting LLAP configs.')
                 Logger.debug('Current changed-configuration received is : {0}'.format(services['changed-configurations']))
                 return
@@ -48,8 +48,9 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
             total_llap_queue_size = ((float(llap_slider_cap_percentage) / 100) * total_cluster_capacity)
             slider_am_container_size = self.calculate_slider_am_size(yarn_min_container_size)
             if (not llap_concurrency_in_changed_configs):
-                llap_concurrency = long(((total_llap_queue_size * 0.25) / tez_am_container_size))
-                assert (llap_concurrency >= 1), "'hive.server2.tez.sessions.per.default.queue' calculated value : {0}. Expected value : >= 1".format(llap_concurrency)
+                llap_concurrency = float(((total_llap_queue_size * 0.25) / tez_am_container_size))
+                llap_concurrency = max(long(llap_concurrency), 1)
+                Logger.info('Calculated llap_concurrency : {0}, using following : total_llap_queue_size : {1}, tez_am_container_size : {2}'.format(llap_concurrency, total_llap_queue_size, tez_am_container_size))
                 if (llap_concurrency > LLAP_MAX_CONCURRENCY):
                     llap_concurrency = LLAP_MAX_CONCURRENCY
             elif ('hive.server2.tez.sessions.per.default.queue' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']):

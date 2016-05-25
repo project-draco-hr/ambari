@@ -1,0 +1,25 @@
+def setLlapDaemonQueueNamePropAttributes(self, services, configurations):
+    Logger.info("Determing 'hive.llap.daemon.queue.name' config Property Attributes.")
+    putHiveInteractiveSitePropertyAttribute = self.putPropertyAttribute(configurations, self.HIVE_INTERACTIVE_SITE)
+    capacity_scheduler_properties = dict()
+    if ('capacity-scheduler' in configurations):
+        if (isinstance(configurations['capacity-scheduler']['properties'], dict) and (len(configurations['capacity-scheduler']['properties']) > 1)):
+            capacity_scheduler_properties = configurations['capacity-scheduler']['properties']
+            Logger.info("'capacity-scheduler' changed in current Stack Advisor invocation. Retrieved the configs as dictionary from configurations.")
+        elif ('capacity-scheduler' in configurations['capacity-scheduler']['properties']):
+            properties = str(configurations['capacity-scheduler']['properties']['capacity-scheduler']).split('\n')
+            for property in properties:
+                (key, sep, value) = property.partition('=')
+                capacity_scheduler_properties[key] = value
+            Logger.info("'capacity-scheduler' changed in current Stack Advisor invocation. Retrieved the configs as '\\n' separated single string from configurations.")
+    else:
+        (capacity_scheduler_properties, received_as_key_value_pair) = self.getCapacitySchedulerProperties(services)
+        Logger.info("'capacity-scheduler' not changed in current Stack Advisor invocation. Retrieved the configs from services.")
+    leafQueueNames = self.getAllYarnLeafQueues(capacity_scheduler_properties)
+    if leafQueueNames:
+        leafQueues = [{'label': str(queueName), 'value': queueName, } for queueName in leafQueueNames]
+        leafQueues = sorted(leafQueues, key=(lambda q: q['value']))
+        putHiveInteractiveSitePropertyAttribute('hive.llap.daemon.queue.name', 'entries', leafQueues)
+        Logger.info("'hive.llap.daemon.queue.name' config Property Attributes set to : {0}".format(leafQueues))
+    else:
+        Logger.error("Problem retrieving YARN queues. Skipping updating HIVE Server Interactve 'hive.server2.tez.default.queues' property.")
