@@ -1,0 +1,34 @@
+{
+  final String configType="hadoop-env";
+  Map<String,Map<String,String>> properties=new HashMap<>();
+  Map<String,String> hdfsSite=new HashMap<>();
+  hdfsSite.put("dfs.nameservices","mycluster");
+  hdfsSite.put("dfs.ha.namenodes.mycluster","nn1,nn2");
+  hdfsSite.put("dfs.namenode.http-address","%HOSTGROUP::master_1%:50070");
+  hdfsSite.put("dfs.namenode.http-address.mycluster.nn1","%HOSTGROUP::master_1%:50070");
+  hdfsSite.put("dfs.namenode.http-address.mycluster.nn2","%HOSTGROUP::master_2%:50070");
+  hdfsSite.put("dfs.namenode.https-address","%HOSTGROUP::master_1%:50470");
+  hdfsSite.put("dfs.namenode.https-address.mycluster.nn1","%HOSTGROUP::master_1%:50470");
+  hdfsSite.put("dfs.namenode.https-address.mycluster.nn2","%HOSTGROUP::master_2%:50470");
+  hdfsSite.put("dfs.namenode.rpc-address.mycluster.nn1","%HOSTGROUP::master_1%:8020");
+  hdfsSite.put("dfs.namenode.rpc-address.mycluster.nn2","%HOSTGROUP::master_2%:8020");
+  hdfsSite.put("dfs.namenode.shared.edits.dir","qjournal://%HOSTGROUP::master_1%:8485;%HOSTGROUP::master_2%:8485;%HOSTGROUP::master_2%:8485/mycluster");
+  hdfsSite.put("dfs.ha.automatic-failover.enabled","true");
+  hdfsSite.put("dfs.ha.fencing.methods","shell(/bin/true)");
+  properties.put("hdfs-site",hdfsSite);
+  Map<String,String> hadoopEnv=new HashMap<>();
+  hadoopEnv.put("dfs_ha_initial_namenode_active","%HOSTGROUP::master_1%");
+  hadoopEnv.put("dfs_ha_initial_namenode_standby","%HOSTGROUP::master_2%");
+  properties.put("hadoop-env",hadoopEnv);
+  Map<String,Map<String,String>> parentProperties=new HashMap<>();
+  Configuration parentClusterConfig=new Configuration(parentProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap(),parentClusterConfig);
+  TestHostGroup group1=new TestHostGroup("master_1",ImmutableSet.of("DATANODE","NAMENODE"),Collections.singleton("node_1"));
+  TestHostGroup group2=new TestHostGroup("master_2",ImmutableSet.of("DATANODE","NAMENODE"),Collections.singleton("node_2"));
+  Collection<TestHostGroup> hostGroups=Lists.newArrayList(group1,group2);
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForClusterCreate();
+  assertEquals("node_1",clusterConfig.getPropertyValue(configType,"dfs_ha_initial_namenode_active"));
+  assertEquals("node_2",clusterConfig.getPropertyValue(configType,"dfs_ha_initial_namenode_standby"));
+}
