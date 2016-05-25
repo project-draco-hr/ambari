@@ -1,0 +1,60 @@
+def handle_mounted_dirs(func, dirs_string, history_filename, update_cache=True):
+    "\n  This function determine which dir paths can be created.\n  There are 2 uses cases:\n  1. Customers that have many dirs, each one on a separate mount point that corresponds to a different drive.\n  2. Developers that are using a sandbox VM and all dirs are mounted on the root.\n\n  The goal is to avoid forcefully creating a dir when a user's drive fails. In this scenario, the\n  mount point for a dir changes from something like /hadoop/hdfs/data/data1 to /\n  If Ambari forcefully creates the directory when it doesn't exist and drive became unmounted, then Ambari will soon\n  fill up the root drive, which is bad. Instead, we should not create the directory and let HDFS handle the failure\n  based on its tolerance of missing directories.\n\n  This function relies on the history_file parameter to parse a file that contains\n  a mapping from a dir, and its last known mount point.\n  After determining which dirs can be created if they don't exist, it recalculates the mount points and\n  writes to the file again.\n  :param func: Function that will be called if a directory will be created. This function\n               will be called as func(dir)\n  :param update_cache: Bool indicating whether to update the global cache of mount points\n  :return: Returns a history_filename content\n  "
+    Directory(os.path.dirname(history_filename), create_parents=True, mode=493)
+    prev_dir_to_mount_point = get_dir_to_mount_from_file(history_filename)
+    dir_to_mount_point = prev_dir_to_mount_point.copy()
+    allowed_to_create_any_dir = False
+    if (history_filename is None):
+        allowed_to_create_any_dir = True
+        Logger.warning('handle_mounted_dirs is allowed to create any directory since history_file.file property is null.')
+    elif (not os.path.exists(history_filename)):
+        allowed_to_create_any_dir = True
+        Logger.warning(('handle_mounted_dirs is allowed to create any directory since history_file property has file %s and it does not exist.' % history_filename))
+    valid_dirs = []
+    error_messages = []
+    dirs_unmounted = set()
+    print (20 * '=')
+    print dirs_string
+    dirs_string = ','.join([re.sub('^\\[.+\\]', '', dfs_dir.strip()) for dfs_dir in dirs_string.split(',')])
+    print dirs_string
+    print (20 * '=')
+    for dir in dirs_string.split(','):
+        if ((dir is None) or (dir.strip() == '')):
+            continue
+        dir = dir.strip()
+        valid_dirs.append(dir)
+        if (not os.path.isdir(dir)):
+            may_create_this_dir = allowed_to_create_any_dir
+            last_mount_point_for_dir = None
+            if (not may_create_this_dir):
+                last_mount_point_for_dir = (prev_dir_to_mount_point[dir] if (dir in prev_dir_to_mount_point) else None)
+                if (last_mount_point_for_dir is None):
+                    may_create_this_dir = True
+                else:
+                    curr_mount_point = get_mount_point_for_dir(dir)
+                    if ((last_mount_point_for_dir == '/') or ((curr_mount_point is not None) and (curr_mount_point != '/'))):
+                        may_create_this_dir = True
+            if may_create_this_dir:
+                Logger.info('Forcefully creating directory: {0}'.format(dir))
+                func(dir)
+            elif (last_mount_point_for_dir is not None):
+                dirs_unmounted.add(dir)
+                msg = 'Directory {0} does not exist and became unmounted from {1} .'.format(dir, last_mount_point_for_dir)
+                error_messages.append(msg)
+    pass
+    if update_cache:
+        get_and_cache_mount_points(refresh=True)
+    for dir in valid_dirs:
+        if (os.path.isdir(dir) and (dir not in dirs_unmounted)):
+            curr_mount_point = get_mount_point_for_dir(dir)
+            dir_to_mount_point[dir] = curr_mount_point
+            func(dir)
+    if (error_messages and (len(error_messages) > 0)):
+        header = ' ERROR '.join((['*****'] * 6))
+        header = (('\n' + '\n'.join(([header] * 3))) + '\n')
+        msg = (' '.join(error_messages) + ' Please remount the dir(s) and run this command again. To ignore this failure and allow writing to the root partition, either update the contents of {0}, or delete that file.'.format(history_filename))
+        Logger.error(((header + msg) + header))
+    dir_to_mount = DIR_TO_MOUNT_HEADER
+    for kv in dir_to_mount_point.iteritems():
+        dir_to_mount += (((kv[0] + ',') + kv[1]) + '\n')
+    return dir_to_mount
