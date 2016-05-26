@@ -13,23 +13,37 @@ def handle_mounted_dirs(func, dirs_string, history_filename, update_cache=True):
     valid_dirs = []
     error_messages = []
     dirs_unmounted = set()
+    valid_existing_dirs = []
     dirs_string = ','.join([re.sub('^\\[.+\\]', '', dfs_dir.strip()) for dfs_dir in dirs_string.split(',')])
     for dir in dirs_string.split(','):
         if ((dir is None) or (dir.strip() == '')):
             continue
         dir = dir.strip()
         valid_dirs.append(dir)
-        if (not os.path.isdir(dir)):
+        if os.path.isdir(dir):
+            valid_existing_dirs.append(dir)
+    used_mounts = set([get_mount_point_for_dir(dir) for dir in valid_existing_dirs])
+    for dir in valid_dirs:
+        if (not (dir in valid_existing_dirs)):
             may_create_this_dir = allowed_to_create_any_dir
             last_mount_point_for_dir = None
+            curr_mount_point = get_mount_point_for_dir(dir)
+            is_non_root_dir = ((curr_mount_point is not None) and (curr_mount_point != '/'))
             if (not may_create_this_dir):
                 last_mount_point_for_dir = (prev_dir_to_mount_point[dir] if (dir in prev_dir_to_mount_point) else None)
                 if (last_mount_point_for_dir is None):
-                    may_create_this_dir = True
+                    may_create_this_dir = (is_non_root_dir or Script.get_config()['configurations']['cluster-env']['create_dirs_on_root'])
                 else:
-                    curr_mount_point = get_mount_point_for_dir(dir)
-                    if ((last_mount_point_for_dir == '/') or ((curr_mount_point is not None) and (curr_mount_point != '/'))):
-                        may_create_this_dir = True
+                    may_create_this_dir = ((last_mount_point_for_dir == '/') or is_non_root_dir)
+            if (may_create_this_dir and Script.get_config()['configurations']['cluster-env']['ignore_bad_mounts']):
+                Logger.warning('Not creating {0} as cluster-env/ignore_bad_mounts is enabled.'.format(dir))
+                may_create_this_dir = False
+            if (may_create_this_dir and (curr_mount_point in used_mounts)):
+                message = ('Trying to create another directory on the following mount: ' + curr_mount_point)
+                if Script.get_config()['configurations']['cluster-env']['one_dir_per_partition']:
+                    raise Fail((message + ' . Please turn off cluster-env/one_dir_per_partition or handle the situation manually.'))
+                else:
+                    Logger.warning(message)
             if may_create_this_dir:
                 Logger.info('Forcefully creating directory: {0}'.format(dir))
                 func(dir)
