@@ -1,17 +1,20 @@
 {
-  this.validateForUploadFile(input);
-  if (ParseOptions.InputFileType.CSV.toString().equals(input.getInputFileType()) && Boolean.FALSE.equals(input.getIsFirstRowHeader())) {
-    LoadQueryInput loadQueryInput=new LoadQueryInput(input.getHdfsPath(),input.getDatabaseName(),input.getTableName());
-    String loadQuery=new QueryGenerator().generateLoadQuery(loadQueryInput);
+  if (ParseOptions.InputFileType.CSV.toString().equals(input.getInputFileType()) && input.getIsFirstRowHeader().equals(Boolean.FALSE)) {
     try {
+      LoadQueryInput loadQueryInput=new LoadQueryInput(input.getHdfsPath(),input.getDatabaseName(),input.getTableName());
+      String loadQuery=new QueryGenerator().generateLoadQuery(loadQueryInput);
       Job job=createJob(loadQuery,input.getDatabaseName());
       JSONObject jo=new JSONObject();
       jo.put("jobId",job.getId());
       return Response.ok(jo).build();
     }
- catch (    Exception e) {
-      LOG.error("Exception occurred while creating job for Load From HDFS query : " + loadQuery,e);
-      throw new ServiceFormattedException(e.getMessage(),e);
+ catch (    WebApplicationException e) {
+      LOG.error(getErrorMessage(e),e);
+      throw e;
+    }
+catch (    Exception e) {
+      LOG.error(e.getMessage(),e);
+      throw new ServiceFormattedException(e);
     }
   }
  else {
@@ -23,9 +26,13 @@
       jo.put("uploadedPath",path);
       return Response.ok(jo).build();
     }
- catch (    Exception e) {
-      LOG.error("Exception occurred while uploading the file from HDFS with path : " + input.getHdfsPath(),e);
-      throw new ServiceFormattedException(e.getMessage(),e);
+ catch (    WebApplicationException e) {
+      LOG.error(getErrorMessage(e),e);
+      throw e;
+    }
+catch (    Exception e) {
+      LOG.error(e.getMessage(),e);
+      throw new ServiceFormattedException(e);
     }
  finally {
       if (null != hdfsStream)       try {
