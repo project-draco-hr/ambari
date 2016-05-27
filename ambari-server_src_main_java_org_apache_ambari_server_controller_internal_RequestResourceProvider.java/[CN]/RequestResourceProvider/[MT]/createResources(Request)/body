@@ -8,6 +8,22 @@
     @Override public RequestStatusResponse invoke() throws AmbariException, AuthorizationException {
       String clusterName=actionRequest.getClusterName();
       if (clusterName == null) {
+        String actionName=actionRequest.getActionName();
+        if (StringUtils.isEmpty(actionName)) {
+          actionName="_unknown_action_";
+        }
+        ActionDefinition actionDefinition=getManagementController().getAmbariMetaInfo().getActionDefinition(actionName);
+        Set<RoleAuthorization> permissions=(actionDefinition == null) ? null : actionDefinition.getPermissions();
+        if (permissions == null) {
+          if (!AuthorizationHelper.isAuthorized(ResourceType.AMBARI,null,RoleAuthorization.SERVICE_RUN_CUSTOM_COMMAND)) {
+            throw new AuthorizationException(String.format("The authenticated user is not authorized to execute the '%s'command.",actionName));
+          }
+        }
+ else {
+          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,null,permissions)) {
+            throw new AuthorizationException(String.format("The authenticated user is not authorized to execute the '%s'command.",actionName));
+          }
+        }
       }
  else       if (actionRequest.isCommand()) {
         if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,getClusterResourceId(clusterName),RoleAuthorization.SERVICE_RUN_CUSTOM_COMMAND)) {
