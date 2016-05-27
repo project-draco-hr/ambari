@@ -2,25 +2,23 @@
   if (!checkAuthorizationForMetrics(resources,clusterNamePropertyId)) {
     return resources;
   }
-  Ticket ticket=new Ticket();
-  CompletionService<Resource> completionService=new BufferedThreadPoolExecutorCompletionService<Resource>(EXECUTOR_SERVICE);
+  final Ticket ticket=new Ticket();
+  final CompletionService<Resource> completionService=new BufferedThreadPoolExecutorCompletionService<Resource>(EXECUTOR_SERVICE);
   for (  Resource resource : resources) {
     completionService.submit(getPopulateResourceCallable(resource,request,predicate,ticket));
   }
   Set<Resource> keepers=new HashSet<Resource>();
   try {
     for (int i=0; i < resources.size(); ++i) {
-      Future<Resource> resourceFuture=completionService.poll(populateTimeout,TimeUnit.MILLISECONDS);
+      Future<Resource> resourceFuture=completionService.poll(COMPLETION_SERVICE_POLL_TIMEOUT,TimeUnit.MILLISECONDS);
       if (resourceFuture == null) {
         ticket.invalidate();
-        LOG.error(TIMED_OUT_MSG);
+        LOG.error("Timed out after waiting {}ms waiting for request {}",COMPLETION_SERVICE_POLL_TIMEOUT,request);
         break;
       }
- else {
-        Resource resource=resourceFuture.get();
-        if (resource != null) {
-          keepers.add(resource);
-        }
+      Resource resource=resourceFuture.get();
+      if (resource != null) {
+        keepers.add(resource);
       }
     }
   }

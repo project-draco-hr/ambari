@@ -1,0 +1,15 @@
+{
+  int jmxCacheExpirationMinutes=m_configuration.getMetricsServiceCacheTimeout();
+  m_jmxCache=CacheBuilder.newBuilder().expireAfterWrite(jmxCacheExpirationMinutes,TimeUnit.MINUTES).build();
+  m_restCache=CacheBuilder.newBuilder().expireAfterWrite(jmxCacheExpirationMinutes,TimeUnit.MINUTES).build();
+  int corePoolSize=m_configuration.getMetricsServiceThreadPoolCoreSize();
+  int maxPoolSize=m_configuration.getMetricsServiceThreadPoolMaxSize();
+  m_queueMaximumSize=m_configuration.getMetricsServiceWorkerQueueSize();
+  int threadPriority=m_configuration.getMetricsServiceThreadPriority();
+  m_threadPoolExecutor=new ScalingThreadPoolExecutor(corePoolSize,maxPoolSize,30,TimeUnit.SECONDS,m_queueMaximumSize);
+  m_threadPoolExecutor.allowCoreThreadTimeOut(true);
+  m_threadPoolExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardOldestPolicy());
+  ThreadFactory threadFactory=new ThreadFactoryBuilder().setDaemon(true).setNameFormat("ambari-metrics-retrieval-service-thread-%d").setPriority(threadPriority).setUncaughtExceptionHandler(new MetricRunnableExceptionHandler()).build();
+  m_threadPoolExecutor.setThreadFactory(threadFactory);
+  LOG.info("Initializing the Metrics Retrieval Service with core={}, max={}, workerQueue={}, threadPriority={}",corePoolSize,maxPoolSize,m_queueMaximumSize,threadPriority);
+}

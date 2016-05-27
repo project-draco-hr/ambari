@@ -34,41 +34,29 @@
     LOG.warn("Unable to get JMX metrics.  No host name for " + componentName);
     return resource;
   }
-  InputStream in=null;
   String spec=null;
-  try {
+  for (  String hostName : hostNames) {
     try {
-      for (      String hostName : hostNames) {
-        try {
-          String port=getPort(clusterName,componentName,hostName,httpsEnabled);
-          if (port == null) {
-            LOG.warn("Unable to get JMX metrics.  No port value for " + componentName);
-            return resource;
-          }
-          spec=getSpec(protocol,hostName,port,"/jmx");
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("Spec: " + spec);
-          }
-          in=streamProvider.readFrom(spec);
-          if (!ticket.isValid()) {
-            return resource;
-          }
-          getHadoopMetricValue(in,ids,resource,request,ticket);
-        }
- catch (        IOException e) {
-          AmbariException detailedException=new AmbariException(String.format("Unable to get JMX metrics from the host %s for the component %s. Spec: %s",hostName,componentName,spec),e);
-          logException(detailedException);
-        }
+      String port=getPort(clusterName,componentName,hostName,httpsEnabled);
+      if (port == null) {
+        LOG.warn("Unable to get JMX metrics.  No port value for " + componentName);
+        return resource;
       }
-    }
-  finally {
-      if (in != null) {
-        in.close();
+      String jmxUrl=getSpec(protocol,hostName,port,"/jmx");
+      metricsRetrievalService.submitJMXRequest(streamProvider,jmxUrl);
+      JMXMetricHolder jmxMetricHolder=metricsRetrievalService.getCachedJMXMetric(jmxUrl);
+      if (null == jmxMetricHolder) {
+        return resource;
       }
+      if (!ticket.isValid()) {
+        return resource;
+      }
+      getHadoopMetricValue(jmxMetricHolder,ids,resource,request,ticket);
     }
-  }
- catch (  IOException e) {
-    logException(e);
+ catch (    IOException e) {
+      AmbariException detailedException=new AmbariException(String.format("Unable to get JMX metrics from the host %s for the component %s. Spec: %s",hostName,componentName,spec),e);
+      logException(detailedException);
+    }
   }
   return resource;
 }
