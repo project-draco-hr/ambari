@@ -2,8 +2,33 @@
   File f=new File("src/test/resources/version_definition_test_all_services.xml");
   VersionDefinitionXml xml1=VersionDefinitionXml.load(f.toURI().toURL());
   VersionDefinitionXml xml2=VersionDefinitionXml.load(f.toURI().toURL());
+  assertEquals(2,xml1.repositoryInfo.getOses().size());
+  assertEquals(2,xml2.repositoryInfo.getOses().size());
+  RepositoryXml.Os target=null;
+  for (  RepositoryXml.Os os : xml1.repositoryInfo.getOses()) {
+    if (os.getFamily().equals("redhat7")) {
+      target=os;
+    }
+  }
+  assertNotNull(target);
+  xml1.repositoryInfo.getOses().remove(target);
+  target=null;
+  for (  RepositoryXml.Os os : xml2.repositoryInfo.getOses()) {
+    if (os.getFamily().equals("redhat6")) {
+      target=os;
+    }
+ else {
+      Field field=RepositoryXml.Os.class.getDeclaredField("packageVersion");
+      field.setAccessible(true);
+      field.set(os,"2_3_4_2");
+    }
+  }
+  assertNotNull(target);
+  xml2.repositoryInfo.getOses().remove(target);
   xml2.release.version="2.3.4.2";
   xml2.release.build="2468";
+  assertEquals(1,xml1.repositoryInfo.getOses().size());
+  assertEquals(1,xml2.repositoryInfo.getOses().size());
   VersionDefinitionXml.Merger builder=new VersionDefinitionXml.Merger();
   VersionDefinitionXml xml3=builder.merge();
   assertNull(xml3);
@@ -13,4 +38,20 @@
   assertNotNull(xml3);
   assertNull("Merged definition cannot have a build",xml3.release.build);
   assertEquals(xml3.release.version,"2.3.4.1");
+  RepositoryXml.Os redhat6=null;
+  RepositoryXml.Os redhat7=null;
+  assertEquals(2,xml3.repositoryInfo.getOses().size());
+  for (  RepositoryXml.Os os : xml3.repositoryInfo.getOses()) {
+    if (os.getFamily().equals("redhat6")) {
+      redhat6=os;
+    }
+ else     if (os.getFamily().equals("redhat7")) {
+      redhat7=os;
+    }
+  }
+  assertNotNull(redhat6);
+  assertNotNull(redhat7);
+  assertNull(redhat6.getPackageVersion());
+  assertEquals("2_3_4_2",redhat7.getPackageVersion());
+  xml3.toXml();
 }
