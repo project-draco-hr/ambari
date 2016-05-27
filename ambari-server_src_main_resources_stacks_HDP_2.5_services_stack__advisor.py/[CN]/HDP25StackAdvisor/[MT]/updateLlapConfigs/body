@@ -6,8 +6,8 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
     llap_daemon_selected_queue_name = None
     llap_queue_selected_in_current_call = None
     LLAP_MAX_CONCURRENCY = 32
-    Logger.debug((('Setting hive.llap.daemon.yarn.container.mb to yarn min container size as initial size (' + str(self.get_yarn_min_container_size(services))) + ' MB).'))
-    putHiveInteractiveSiteProperty('hive.llap.daemon.yarn.container.mb', long(self.get_yarn_min_container_size(services)))
+    Logger.debug((('Setting hive.llap.daemon.yarn.container.mb to yarn min container size as initial size (' + str(self.get_yarn_min_container_size(services, configurations))) + ' MB).'))
+    putHiveInteractiveSiteProperty('hive.llap.daemon.yarn.container.mb', long(self.get_yarn_min_container_size(services, configurations)))
     try:
         if ((self.HIVE_INTERACTIVE_SITE in services['configurations']) and ('hive.llap.daemon.queue.name' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties'])):
             llap_daemon_selected_queue_name = services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.llap.daemon.queue.name']
@@ -40,11 +40,11 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
             assert (node_manager_host_list is not None), 'Information about NODEMANAGER not found in cluster.'
             node_manager_cnt = len(node_manager_host_list)
             llap_slider_cap_percentage = self.get_llap_cap_percent_slider(services, configurations)
-            yarn_nm_mem_in_mb = self.get_yarn_nm_mem_in_mb(services)
+            yarn_nm_mem_in_mb = self.get_yarn_nm_mem_in_mb(services, configurations)
             total_cluster_capacity = (node_manager_cnt * yarn_nm_mem_in_mb)
             Logger.info('\n\nCalculated total_cluster_capacity : {0}, using following : node_manager_cnt : {1}, yarn_nm_mem_in_mb : {2}'.format(total_cluster_capacity, node_manager_cnt, yarn_nm_mem_in_mb))
-            yarn_min_container_size = self.get_yarn_min_container_size(services)
-            tez_am_container_size = self._normalizeUp(self.get_tez_am_container_size(services), yarn_min_container_size)
+            yarn_min_container_size = self.get_yarn_min_container_size(services, configurations)
+            tez_am_container_size = self._normalizeUp(self.get_tez_am_container_size(services, configurations), yarn_min_container_size)
             total_llap_queue_size = ((float(llap_slider_cap_percentage) / 100) * total_cluster_capacity)
             slider_am_container_size = self.calculate_slider_am_size(yarn_min_container_size)
             if (not llap_concurrency_in_changed_configs):
@@ -73,7 +73,7 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
                 llap_container_size = self._normalizeDown(yarn_nm_mem_in_mb, yarn_min_container_size)
                 Logger.info('Calculated llap_container_size : {0}, using following : yarn_nm_mem_in_mb : {1}, yarn_min_container_size : {2}'.format(llap_container_size, yarn_nm_mem_in_mb, yarn_min_container_size))
             Logger.info('Calculated num_llap_nodes : {0} using following : yarn_nm_mem_in_mb : {1}, cap_available_for_daemons : {2} '.format(num_llap_nodes, yarn_nm_mem_in_mb, cap_available_for_daemons))
-            hive_tez_container_size = self.get_hive_tez_container_size(services)
+            hive_tez_container_size = self.get_hive_tez_container_size(services, configurations)
             if ('yarn.nodemanager.resource.cpu-vcores' in services['configurations']['yarn-site']['properties']):
                 cpu_per_nm_host = float(services['configurations']['yarn-site']['properties']['yarn.nodemanager.resource.cpu-vcores'])
                 assert (cpu_per_nm_host > 0), "'yarn.nodemanager.resource.cpu-vcores' current value : {0}. Expected value : > 0".format(cpu_per_nm_host)
@@ -124,7 +124,7 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
         Logger.info((e.message + ' Skipping calculating LLAP configs. Setting them to minimum values.'))
         traceback.print_exc()
         try:
-            yarn_min_container_size = long(self.get_yarn_min_container_size(services))
+            yarn_min_container_size = long(self.get_yarn_min_container_size(services, configurations))
             slider_am_container_size = long(self.calculate_slider_am_size(yarn_min_container_size))
             putHiveInteractiveSiteProperty('hive.server2.tez.sessions.per.default.queue', 0)
             putHiveInteractiveSitePropertyAttribute('hive.server2.tez.sessions.per.default.queue', 'minimum', 0)
