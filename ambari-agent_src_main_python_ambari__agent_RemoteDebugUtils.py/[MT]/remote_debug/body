@@ -1,0 +1,46 @@
+def remote_debug(sig, frame):
+    'Handler to allow process to be remotely debugged.'
+
+    def _raiseEx(ex):
+        'Raise specified exception in the remote process'
+        _raiseEx.ex = ex
+    _raiseEx.ex = None
+    try:
+        locs = {'_raiseEx': _raiseEx, }
+        locs.update(frame.f_locals)
+        globs = frame.f_globals
+        pid = os.getpid()
+        pipe = NamedPipe(pipename(pid))
+        (old_stdout, old_stderr) = (sys.stdout, sys.stderr)
+        txt = ''
+        pipe.put((('Interrupting process at following point:\n' + ''.join(traceback.format_stack(frame))) + '>>> '))
+        try:
+            while (pipe.is_open() and (_raiseEx.ex is None)):
+                line = pipe.get()
+                if (line is None):
+                    continue
+                txt += line
+                try:
+                    code = codeop.compile_command(txt)
+                    if code:
+                        sys.stdout = cStringIO.StringIO()
+                        sys.stderr = sys.stdout
+                        exec code in globs, locs
+                        txt = ''
+                        pipe.put((sys.stdout.getvalue() + '>>> '))
+                    else:
+                        pipe.put('... ')
+                except:
+                    txt = ''
+                    sys.stdout = cStringIO.StringIO()
+                    sys.stderr = sys.stdout
+                    traceback.print_exc()
+                    pipe.put((sys.stdout.getvalue() + '>>> '))
+        finally:
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            pipe.close()
+    except Exception:
+        traceback.print_exc()
+    if (_raiseEx.ex is not None):
+        raise _raiseEx.ex
