@@ -1,0 +1,39 @@
+{
+  final AmbariManagementController controller=injector.getInstance(AmbariManagementController.class);
+  final Clusters clusters=controller.getClusters();
+  if (null != clusters) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (null != clusterMap && !clusterMap.isEmpty()) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        Set<String> installedServices=cluster.getServices().keySet();
+        StackId stackId=cluster.getCurrentStackVersion();
+        if (installedServices.contains("HBASE") && SecurityType.KERBEROS == cluster.getSecurityType() && isAtLeastHdp25(stackId)) {
+          Config hbaseSite=cluster.getDesiredConfigByType(HBASE_SITE_CONFIG);
+          if (null != hbaseSite) {
+            Map<String,String> hbaseSiteProperties=hbaseSite.getProperties();
+            String pqsKrbPrincipal=hbaseSiteProperties.get(PHOENIX_QUERY_SERVER_PRINCIPAL_KEY);
+            String pqsKrbKeytab=hbaseSiteProperties.get(PHOENIX_QUERY_SERVER_KEYTAB_KEY);
+            if (null != pqsKrbPrincipal && null != pqsKrbKeytab) {
+              final Map<String,String> updatedKerberosProperties=new HashMap<>();
+              final KerberosDescriptor defaultDescriptor=getKerberosDescriptor(cluster);
+              KerberosIdentityDescriptor spnegoDescriptor=defaultDescriptor.getIdentity("spnego");
+              if (null != spnegoDescriptor) {
+                KerberosPrincipalDescriptor principalDescriptor=spnegoDescriptor.getPrincipalDescriptor();
+                if (null != principalDescriptor) {
+                  updatedKerberosProperties.put(PHOENIX_QUERY_SERVER_PRINCIPAL_KEY,principalDescriptor.getValue());
+                }
+                KerberosKeytabDescriptor keytabDescriptor=spnegoDescriptor.getKeytabDescriptor();
+                if (null != keytabDescriptor) {
+                  updatedKerberosProperties.put(PHOENIX_QUERY_SERVER_KEYTAB_KEY,keytabDescriptor.getFile());
+                }
+                if (!updatedKerberosProperties.isEmpty()) {
+                  updateConfigurationProperties(HBASE_SITE_CONFIG,updatedKerberosProperties,true,false);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

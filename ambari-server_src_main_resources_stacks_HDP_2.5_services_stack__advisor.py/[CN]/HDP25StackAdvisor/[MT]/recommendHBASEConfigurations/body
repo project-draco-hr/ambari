@@ -1,8 +1,22 @@
 def recommendHBASEConfigurations(self, configurations, clusterData, services, hosts):
     super(HDP25StackAdvisor, self).recommendHBASEConfigurations(configurations, clusterData, services, hosts)
     putHbaseSiteProperty = self.putProperty(configurations, 'hbase-site', services)
+    appendCoreSiteProperty = self.updateProperty(configurations, 'core-site', services)
     servicesList = [service['StackServices']['service_name'] for service in services['services']]
     if ('KERBEROS' in servicesList):
         putHbaseSiteProperty('hbase.master.ui.readonly', 'true')
+        phoenix_query_server_hosts = self.get_phoenix_query_server_hosts(services, hosts)
+        if phoenix_query_server_hosts:
+            new_value = ','.join(phoenix_query_server_hosts)
+
+            def updateCallback(originalValue, newValue):
+                if (originalValue and (not originalValue.isspace())):
+                    hosts = originalValue.split(',')
+                    if (newValue and (not newValue.isspace())):
+                        hosts.extend(newValue.split(','))
+                    return ','.join(set(hosts))
+                else:
+                    return newValue
+            appendCoreSiteProperty('hadoop.proxyuser.HTTP.hosts', new_value, updateCallback)
     else:
         putHbaseSiteProperty('hbase.master.ui.readonly', 'false')
