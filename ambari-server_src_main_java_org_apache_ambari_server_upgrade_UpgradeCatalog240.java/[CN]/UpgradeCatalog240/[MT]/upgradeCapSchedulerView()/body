@@ -1,0 +1,24 @@
+{
+  String capSchedulerViewName="CAPACITY-SCHEDULER{1.0.0}";
+  RemoteAmbariClusterDAO remoteClusterDAO=injector.getInstance(RemoteAmbariClusterDAO.class);
+  ViewInstanceDAO instanceDAO=injector.getInstance(ViewInstanceDAO.class);
+  List<ViewInstanceEntity> instances=instanceDAO.findAll();
+  for (  ViewInstanceEntity instance : instances) {
+    if (instance.getViewName().equals(capSchedulerViewName) && instance.getClusterHandle() == null) {
+      RemoteAmbariClusterEntity clusterEntity=new RemoteAmbariClusterEntity();
+      clusterEntity.setName(instance.getName() + "-cluster");
+      Map<String,String> propertyMap=instance.getPropertyMap();
+      clusterEntity.setUrl(propertyMap.get("ambari.server.url"));
+      clusterEntity.setUsername(propertyMap.get("ambari.server.username"));
+      try {
+        clusterEntity.setPassword(new DefaultMasker().unmask(propertyMap.get("ambari.server.password")));
+      }
+ catch (      MaskException e) {
+      }
+      remoteClusterDAO.save(clusterEntity);
+      instance.setClusterHandle(clusterEntity.getId());
+      instance.setClusterType(ClusterType.REMOTE_AMBARI);
+      instanceDAO.merge(instance);
+    }
+  }
+}
