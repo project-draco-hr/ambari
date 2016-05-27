@@ -1,16 +1,17 @@
 {
-  String url=String.format(CLUSTER_OPERATOR_PRIVILEGE_URL,context.getUsername());
-  JSONObject json=readFromCluster(url);
-  if (json == null || json.size() <= 0) {
-    url=String.format(AMBARI_ADMIN_PRIVILEGE_URL,context.getUsername());
+  String url=String.format(AMBARI_OR_CLUSTER_ADMIN_PRIVILEGE_URL,context.getUsername(),context.getCluster().getName());
+  try {
     String response=ambariApi.readFromAmbari(url,"GET",null,null);
-    if (response == null || response.isEmpty()) {
-      return false;
-    }
-    json=getJsonObject(response);
-    if (json == null || json.size() <= 0) {
-      return false;
+    if (response != null && !response.isEmpty()) {
+      JSONObject json=(JSONObject)JSONValue.parse(response);
+      if (json.containsKey("privileges")) {
+        JSONArray privileges=(JSONArray)json.get("privileges");
+        if (privileges.size() > 0)         return true;
+      }
     }
   }
-  return true;
+ catch (  AmbariHttpException e) {
+    LOG.info("Got Error response from url : {}. Response : {}",url,e.getMessage());
+  }
+  return false;
 }
