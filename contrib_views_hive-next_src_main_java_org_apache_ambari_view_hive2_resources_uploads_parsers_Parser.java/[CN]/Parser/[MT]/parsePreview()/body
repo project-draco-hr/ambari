@@ -1,0 +1,63 @@
+{
+  List<Row> previewRows;
+  List<ColumnDescription> header;
+  try {
+    numberOfPreviewRows=(Integer)parseOptions.getOption(ParseOptions.OPTIONS_NUMBER_OF_PREVIEW_ROWS);
+  }
+ catch (  Exception e) {
+  }
+  int numberOfRows=numberOfPreviewRows;
+  previewRows=new ArrayList<Row>(numberOfPreviewRows + 1);
+  Row headerRow=null;
+  Integer numOfCols=null;
+  int[][] typeCounts=null;
+  if (parseOptions.getOption(ParseOptions.OPTIONS_HEADER) != null && parseOptions.getOption(ParseOptions.OPTIONS_HEADER).equals(ParseOptions.HEADER.FIRST_RECORD.toString())) {
+    if (!this.iterator().hasNext()) {
+      throw new NoSuchElementException("Cannot parse Header");
+    }
+    headerRow=extractHeader();
+    numOfCols=headerRow.getRow().length;
+    typeCounts=new int[numOfCols][ColumnDescription.DataTypes.values().length];
+    previewRows.add(headerRow);
+  }
+  Row r;
+  if (iterator().hasNext()) {
+    r=iterator().next();
+    if (null == numOfCols) {
+      numOfCols=r.getRow().length;
+      typeCounts=new int[numOfCols][ColumnDescription.DataTypes.values().length];
+    }
+  }
+ else {
+    throw new NoSuchElementException("No rows in the file.");
+  }
+  while (true) {
+    Object[] values=r.getRow();
+    Object[] newValues=new Object[numOfCols];
+    for (int colNum=0; colNum < numOfCols; colNum++) {
+      if (colNum < values.length) {
+        ColumnDescription.DataTypes type=ParseUtils.detectHiveDataType(values[colNum]);
+        typeCounts[colNum][type.ordinal()]++;
+        newValues[colNum]=values[colNum];
+      }
+ else {
+        newValues[colNum]=null;
+      }
+    }
+    previewRows.add(new Row(newValues));
+    numberOfRows--;
+    if (numberOfRows <= 0 || !iterator().hasNext())     break;
+    r=iterator().next();
+  }
+  if (previewRows.size() <= 0)   throw new NoSuchElementException("Does not contain any rows.");
+  header=new ArrayList<>(numOfCols);
+  for (int colNum=0; colNum < numOfCols; colNum++) {
+    int dataTypeId=getLikelyDataType(typeCounts,colNum);
+    ColumnDescription.DataTypes type=ColumnDescription.DataTypes.values()[dataTypeId];
+    String colName="Column" + colNum;
+    if (null != headerRow)     colName=(String)headerRow.getRow()[colNum];
+    ColumnDescription cd=new ColumnDescriptionImpl(colName,type.toString(),colNum);
+    header.add(cd);
+  }
+  return new PreviewData(header,previewRows);
+}

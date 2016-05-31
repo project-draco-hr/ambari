@@ -1,0 +1,23 @@
+{
+  String transportMode=context.getCluster().getConfigurationValue(HIVE_SITE,HIVE_TRANSPORT_MODE_KEY);
+  String binaryPort=context.getCluster().getConfigurationValue(HIVE_SITE,BINARY_PORT_KEY);
+  String httpPort=context.getCluster().getConfigurationValue(HIVE_SITE,HTTP_PORT_KEY);
+  String pathKey=context.getCluster().getConfigurationValue(HIVE_SITE,HTTP_PATH_KEY);
+  List<String> hiveHosts=context.getCluster().getHostsForServiceComponent(AMBARI_HIVE_SERVICE_NAME,AMBARI_HIVESERVER_COMPONENT_NAME);
+  String sessionParams=context.getProperties().get(HIVE_SESSION_PARAMS);
+  boolean isBinary=transportMode.equalsIgnoreCase("binary");
+  final String port=isBinary ? binaryPort : httpPort;
+  List<String> hostPorts=FluentIterable.from(hiveHosts).transform(new Function<String,String>(){
+    @Override public String apply(    String input){
+      return input + ":" + port;
+    }
+  }
+).toList();
+  String concatHostPorts=Joiner.on(",").join(hostPorts);
+  StringBuilder builder=new StringBuilder();
+  builder.append("jdbc:hive2://").append(concatHostPorts).append(";").append(sessionParams);
+  if (!isBinary) {
+    builder.append(";").append("transportMode=http;httpPath=").append(pathKey);
+  }
+  return builder.toString();
+}

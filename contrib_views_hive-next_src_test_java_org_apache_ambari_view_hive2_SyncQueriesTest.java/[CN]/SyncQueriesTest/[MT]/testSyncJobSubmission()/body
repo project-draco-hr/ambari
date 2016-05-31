@@ -1,0 +1,47 @@
+{
+  mockDependencies();
+  setUpDefaultExpectations();
+  String[] statements={"select * from test"};
+  SyncJob job=new SyncJob("admin",statements,viewContext);
+  for (  String s : statements) {
+    expect(statement.execute(s)).andReturn(true);
+  }
+  ActorRef operationControl=actorSystem.actorOf(Props.create(OperationController.class,actorSystem,connectionSupplier,supplier,hdfsSupplier),"operationController-test");
+  Inbox inbox=Inbox.create(actorSystem);
+  ExecuteJob executeJob=new ExecuteJob(connect,job);
+  inbox.send(operationControl,executeJob);
+  replay(connection,resultSet,resultSetMetaData,statement,viewContext,connect,connectable,hdfsSupplier,hdfsApi,supplier,connectionSupplier);
+  try {
+    Object jdbcResult=inbox.receive(Duration.create(1,TimeUnit.MINUTES));
+    if (jdbcResult instanceof NoResult) {
+      fail();
+    }
+ else     if (jdbcResult instanceof ExecutionFailed) {
+      ExecutionFailed error=(ExecutionFailed)jdbcResult;
+      fail();
+      error.getError().printStackTrace();
+    }
+ else     if (jdbcResult instanceof ResultSetHolder) {
+      ResultSetHolder holder=(ResultSetHolder)jdbcResult;
+      ActorRef iterator=holder.getIterator();
+      inbox.send(iterator,new Next());
+      Object receive=inbox.receive(Duration.create(1,TimeUnit.MINUTES));
+      Result result=(Result)receive;
+      List<Row> rows=result.getRows();
+      System.out.println("Fetched " + rows.size() + " entries.");
+      for (      Row row : rows) {
+        assertArrayEquals(row.getRow(),new String[]{"test"});
+      }
+      inbox.send(iterator,new Next());
+      receive=inbox.receive(Duration.create(1,TimeUnit.MINUTES));
+      assertTrue(receive instanceof NoMoreItems);
+      if (receive instanceof FetchFailed) {
+        fail();
+      }
+    }
+  }
+ catch (  Throwable ex) {
+    fail();
+  }
+  verify(connection,resultSet,resultSetMetaData,statement,viewContext,connect,connectable,hdfsSupplier,hdfsApi,supplier);
+}

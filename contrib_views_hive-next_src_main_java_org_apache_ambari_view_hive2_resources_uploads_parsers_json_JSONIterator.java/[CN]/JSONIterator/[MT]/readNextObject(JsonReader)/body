@@ -1,0 +1,68 @@
+{
+  LinkedHashMap<String,String> row=new LinkedHashMap<>();
+  boolean objectStarted=false;
+  boolean shouldBeName=false;
+  String currentName=null;
+  while (true) {
+    JsonToken token=reader.peek();
+switch (token) {
+case BEGIN_ARRAY:
+      throw new IllegalArgumentException("Row data cannot have an array.");
+case END_ARRAY:
+    throw new EndOfDocumentException("End of Json Array document.");
+case BEGIN_OBJECT:
+  if (objectStarted == true) {
+    throw new IllegalArgumentException("Nested objects not supported.");
+  }
+if (shouldBeName == true) {
+  throw new IllegalArgumentException("name expected, got begin_object");
+}
+objectStarted=true;
+shouldBeName=true;
+reader.beginObject();
+break;
+case END_OBJECT:
+if (shouldBeName == false) {
+throw new IllegalArgumentException("value expected, got end_object");
+}
+reader.endObject();
+return row;
+case NAME:
+if (shouldBeName == false) {
+throw new IllegalArgumentException("name not expected at this point.");
+}
+shouldBeName=false;
+currentName=reader.nextName();
+break;
+case NUMBER:
+case STRING:
+if (shouldBeName == true) {
+throw new IllegalArgumentException("value not expected at this point.");
+}
+String n=reader.nextString();
+row.put(currentName,n);
+shouldBeName=true;
+break;
+case BOOLEAN:
+if (shouldBeName == true) {
+throw new IllegalArgumentException("value not expected at this point.");
+}
+String b=String.valueOf(reader.nextBoolean());
+row.put(currentName,b);
+shouldBeName=true;
+break;
+case NULL:
+if (shouldBeName == true) {
+throw new IllegalArgumentException("value not expected at this point.");
+}
+reader.nextNull();
+row.put(currentName,"");
+shouldBeName=true;
+break;
+case END_DOCUMENT:
+return row;
+default :
+throw new IllegalArgumentException("Illegal token detected inside json: token : " + token.toString());
+}
+}
+}

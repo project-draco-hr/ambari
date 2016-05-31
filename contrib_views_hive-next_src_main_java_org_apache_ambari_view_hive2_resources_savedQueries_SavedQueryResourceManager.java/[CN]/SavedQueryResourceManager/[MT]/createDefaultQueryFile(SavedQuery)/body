@@ -1,0 +1,21 @@
+{
+  String userScriptsPath=context.getProperties().get("scripts.dir");
+  if (userScriptsPath == null) {
+    String msg="scripts.dir is not configured!";
+    LOG.error(msg);
+    throw new MisconfigurationFormattedException("scripts.dir");
+  }
+  String normalizedName=String.format("hive-query-%s",object.getId());
+  String timestamp=new SimpleDateFormat("yyyy-MM-dd_hh-mm").format(new Date());
+  String baseFileName=String.format(userScriptsPath + "/%s-%s",normalizedName,timestamp);
+  String newFilePath=null;
+  try {
+    newFilePath=HdfsUtil.findUnallocatedFileName(sharedObjectsFactory.getHdfsApi(),baseFileName,".hql");
+    HdfsUtil.putStringToFile(sharedObjectsFactory.getHdfsApi(),newFilePath,"");
+  }
+ catch (  HdfsApiException e) {
+    throw new ServiceFormattedException(e);
+  }
+  object.setQueryFile(newFilePath);
+  storageFactory.getStorage().store(SavedQuery.class,object);
+}

@@ -1,0 +1,22 @@
+{
+  JobImpl job=null;
+  try {
+    job=storage.load(JobImpl.class,jobId);
+    statement.getUpdateCount();
+    LOG.info("Job execution successful. Setting status in db.");
+    job.setStatus(Job.JOB_STATE_FINISHED);
+    storage.store(JobImpl.class,job);
+    sender().tell(new AsyncExecutionSuccess(),self());
+  }
+ catch (  SQLException e) {
+    job.setStatus(Job.JOB_STATE_ERROR);
+    sender().tell(new AsyncExecutionFailed(jobId,userName,e.getMessage(),e),self());
+    storage.store(JobImpl.class,job);
+  }
+catch (  ItemNotFound itemNotFound) {
+    sender().tell(new AsyncExecutionFailed(jobId,userName,"Cannot load job",itemNotFound),self());
+  }
+ finally {
+    parent.tell(new CleanUp(),self());
+  }
+}

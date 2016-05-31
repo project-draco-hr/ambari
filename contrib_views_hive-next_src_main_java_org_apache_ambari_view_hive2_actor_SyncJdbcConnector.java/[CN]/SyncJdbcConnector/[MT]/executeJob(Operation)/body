@@ -1,0 +1,32 @@
+{
+  ActorRef sender=this.getSender();
+  String errorMessage=operation.notConnectedErrorMessage();
+  if (connectable == null) {
+    sender.tell(new ExecutionFailed(errorMessage),ActorRef.noSender());
+    cleanUp();
+    return;
+  }
+  Optional<HiveConnection> connectionOptional=connectable.getConnection();
+  if (!connectionOptional.isPresent()) {
+    sender.tell(new ExecutionFailed(errorMessage),ActorRef.noSender());
+    cleanUp();
+    return;
+  }
+  try {
+    Optional<ResultSet> resultSetOptional=operation.call(connectionOptional.get());
+    if (resultSetOptional.isPresent()) {
+      ActorRef resultSetActor=getContext().actorOf(Props.create(ResultSetIterator.class,self(),resultSetOptional.get()).withDispatcher("akka.actor.result-dispatcher"));
+      deathWatch.tell(new RegisterActor(resultSetActor),self());
+      sender.tell(new ResultSetHolder(resultSetActor),self());
+    }
+ else {
+      sender.tell(new NoResult(),self());
+      cleanUp();
+    }
+  }
+ catch (  SQLException e) {
+    LOG.error(operation.executionFailedErrorMessage(),e);
+    sender.tell(new ExecutionFailed(operation.executionFailedErrorMessage(),e),self());
+    cleanUp();
+  }
+}

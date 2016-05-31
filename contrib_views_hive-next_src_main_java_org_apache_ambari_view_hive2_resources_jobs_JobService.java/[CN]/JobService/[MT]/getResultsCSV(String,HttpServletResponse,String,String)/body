@@ -1,0 +1,44 @@
+{
+  try {
+    final String username=context.getUsername();
+    ConnectionSystem system=ConnectionSystem.getInstance();
+    final AsyncJobRunner asyncJobRunner=new AsyncJobRunnerImpl(context,system.getOperationController(context),system.getActorSystem());
+    Optional<NonPersistentCursor> cursorOptional=asyncJobRunner.resetAndGetCursor(jobId,username);
+    if (!cursorOptional.isPresent()) {
+      throw new Exception("Download failed");
+    }
+    final NonPersistentCursor resultSet=cursorOptional.get();
+    StreamingOutput stream=new StreamingOutput(){
+      @Override public void write(      OutputStream os) throws IOException, WebApplicationException {
+        Writer writer=new BufferedWriter(new OutputStreamWriter(os));
+        CSVPrinter csvPrinter=new CSVPrinter(writer,CSVFormat.DEFAULT);
+        try {
+          List<ColumnDescription> descriptions=resultSet.getDescriptions();
+          List<String> headers=Lists.newArrayList();
+          for (          ColumnDescription description : descriptions) {
+            headers.add(description.getName());
+          }
+          csvPrinter.printRecord(headers.toArray());
+          while (resultSet.hasNext()) {
+            csvPrinter.printRecord(resultSet.next().getRow());
+            writer.flush();
+          }
+        }
+  finally {
+          writer.close();
+        }
+      }
+    }
+;
+    if (fileName == null || fileName.isEmpty()) {
+      fileName="results.csv";
+    }
+    return Response.ok(stream).header("Content-Disposition",String.format("attachment; filename=\"%s\"",fileName)).build();
+  }
+ catch (  WebApplicationException ex) {
+    throw ex;
+  }
+catch (  Throwable ex) {
+    throw new ServiceFormattedException(ex.getMessage(),ex);
+  }
+}

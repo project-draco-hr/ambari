@@ -1,0 +1,27 @@
+{
+  String username=job.getUsername();
+  ActorRef subActor=null;
+  subActor=getActorRefFromSyncPool(username);
+  ViewContext viewContext=job.getViewContext();
+  if (subActor == null) {
+    Optional<HdfsApi> hdfsApiOptional=hdfsApiSupplier.get(viewContext);
+    if (!hdfsApiOptional.isPresent()) {
+      sender().tell(new JobRejected(username,ExecuteJob.SYNC_JOB_MARKER,"Failed to connect to HDFS."),ActorRef.noSender());
+      return;
+    }
+    HdfsApi hdfsApi=hdfsApiOptional.get();
+    subActor=system.actorOf(Props.create(SyncJdbcConnector.class,viewContext,hdfsApi,system,self(),deathWatch,connectionSupplier.get(viewContext),storageSupplier.get(viewContext)).withDispatcher("akka.actor.jdbc-connector-dispatcher"),username + ":" + UUID.randomUUID().toString()+ ":SyncjdbcConnector");
+    deathWatch.tell(new RegisterActor(subActor),self());
+  }
+  if (syncBusyConnections.containsKey(username)) {
+    Set<ActorRef> actors=syncBusyConnections.get(username);
+    actors.add(subActor);
+  }
+ else {
+    LinkedHashSet<ActorRef> actors=new LinkedHashSet<>();
+    actors.add(subActor);
+    syncBusyConnections.put(username,actors);
+  }
+  subActor.tell(connect,self());
+  subActor.tell(job,sender());
+}

@@ -1,0 +1,36 @@
+{
+  List<Row> rows=Lists.newArrayList();
+  if (!metaDataFetched) {
+    try {
+      initialize();
+    }
+ catch (    SQLException ex) {
+      LOG.error("Failed to fetch metadata for the ResultSet",ex);
+      sender().tell(new FetchFailed("Failed to get metadata for ResultSet",ex),self());
+      cleanUpResources();
+    }
+  }
+  int index=0;
+  try {
+    while (resultSet.next() && index < batchSize) {
+      index++;
+      rows.add(getRowFromResultSet(resultSet));
+      sendJobCompleteMessageIfNotDone();
+    }
+    if (index == 0) {
+      sender().tell(new NoMoreItems(),self());
+      if (!async) {
+        cleanUpResources();
+      }
+    }
+ else {
+      Result result=new Result(rows,columnDescriptions);
+      sender().tell(result,self());
+    }
+  }
+ catch (  SQLException ex) {
+    LOG.error("Failed to fetch next batch for the Resultset",ex);
+    sender().tell(new FetchFailed("Failed to fetch next batch for the Resultset",ex),self());
+    cleanUpResources();
+  }
+}

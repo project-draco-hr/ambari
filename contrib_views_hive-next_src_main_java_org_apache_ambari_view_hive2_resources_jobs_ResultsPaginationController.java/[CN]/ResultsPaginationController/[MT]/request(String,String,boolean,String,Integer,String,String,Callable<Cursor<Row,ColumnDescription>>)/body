@@ -1,0 +1,52 @@
+{
+  if (searchId == null)   searchId=DEFAULT_SEARCH_ID;
+  key=key + "?" + searchId;
+  if (!canExpire)   key="$" + key;
+  if (fromBeginning != null && fromBeginning.equals("true") && getResultsCache().containsKey(key)) {
+    getResultsCache().remove(key);
+  }
+  Cursor<Row,ColumnDescription> resultSet=getResultsSet(key,makeResultsSet);
+  if (count == null)   count=DEFAULT_FETCH_COUNT;
+  List<ColumnDescription> allschema=resultSet.getDescriptions();
+  List<Row> allRowEntries=FluentIterable.from(resultSet).limit(count).toList();
+  List<ColumnDescription> schema=allschema;
+  final Set<Integer> selectedColumns=getRequestedColumns(requestedColumns);
+  if (!selectedColumns.isEmpty()) {
+    schema=filter(allschema,selectedColumns);
+  }
+  List<Object[]> rows=FluentIterable.from(allRowEntries).transform(new Function<Row,Object[]>(){
+    @Override public Object[] apply(    Row input){
+      if (!selectedColumns.isEmpty()) {
+        return filter(Lists.newArrayList(input.getRow()),selectedColumns).toArray();
+      }
+ else {
+        return input.getRow();
+      }
+    }
+  }
+).toList();
+  int read=rows.size();
+  if (format != null && format.equalsIgnoreCase("d3")) {
+    List<Map<String,Object>> results=new ArrayList<>();
+    for (int i=0; i < rows.size(); i++) {
+      Object[] row=rows.get(i);
+      Map<String,Object> keyValue=new HashMap<>(row.length);
+      for (int j=0; j < row.length; j++) {
+        String schemaName=schema.get(j).getName();
+        keyValue.put(schemaName.replace('.','_'),row[j]);
+      }
+      results.add(keyValue);
+    }
+    return Response.ok(results);
+  }
+ else {
+    ResultsResponse resultsResponse=new ResultsResponse();
+    resultsResponse.setSchema(schema);
+    resultsResponse.setRows(rows);
+    resultsResponse.setReadCount(read);
+    resultsResponse.setHasNext(resultSet.hasNext());
+    resultsResponse.setOffset(resultSet.getOffset());
+    resultsResponse.setHasResults(true);
+    return Response.ok(resultsResponse);
+  }
+}

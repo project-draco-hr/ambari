@@ -1,0 +1,56 @@
+{
+  List<ColumnDescription> descriptions=null;
+  List<Row> rows=Lists.newArrayList();
+  Inbox inbox=Inbox.create(system);
+  inbox.send(controller,job);
+  Object submitResult;
+  try {
+    submitResult=inbox.receive(Duration.create(actorConfiguration.getSyncQueryTimeout(60 * 1000),TimeUnit.MILLISECONDS));
+  }
+ catch (  Throwable ex) {
+    String errorMessage="Query timed out to fetch table description for user: " + job.getConnect().getUsername();
+    LOG.error(errorMessage,ex);
+    throw new ServiceFormattedException(errorMessage,ex);
+  }
+  if (submitResult instanceof NoResult) {
+    LOG.info("Query returned with no result.");
+    return Optional.absent();
+  }
+  if (submitResult instanceof ExecutionFailed) {
+    ExecutionFailed error=(ExecutionFailed)submitResult;
+    LOG.error("Failed to get the table description");
+    throw new ServiceFormattedException(error.getMessage(),error.getError());
+  }
+ else   if (submitResult instanceof ResultSetHolder) {
+    ResultSetHolder holder=(ResultSetHolder)submitResult;
+    ActorRef iterator=holder.getIterator();
+    while (true) {
+      inbox.send(iterator,new Next());
+      Object receive;
+      try {
+        receive=inbox.receive(Duration.create(actorConfiguration.getResultFetchTimeout(60 * 1000),TimeUnit.MILLISECONDS));
+      }
+ catch (      Throwable ex) {
+        String errorMessage="Query timed out to fetch results for user: " + job.getConnect().getUsername();
+        LOG.error(errorMessage,ex);
+        throw new ServiceFormattedException(errorMessage,ex);
+      }
+      if (receive instanceof Result) {
+        Result result=(Result)receive;
+        if (descriptions == null) {
+          descriptions=result.getColumns();
+        }
+        rows.addAll(result.getRows());
+      }
+      if (receive instanceof NoMoreItems) {
+        break;
+      }
+      if (receive instanceof FetchFailed) {
+        FetchFailed error=(FetchFailed)receive;
+        LOG.error("Failed to fetch results ");
+        throw new ServiceFormattedException(error.getMessage(),error.getError());
+      }
+    }
+  }
+  return Optional.of(new Result(rows,descriptions));
+}

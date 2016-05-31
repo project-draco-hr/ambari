@@ -1,0 +1,37 @@
+{
+  String dagIdx=parseDagIdIndex(dagId);
+  Map<String,String> vertexIdToEntityMapping=new HashMap<String,String>();
+  StringBuilder builder=new StringBuilder();
+  if (vertices.size() > 0) {
+    for (    TezVertexId vertexId : vertices) {
+      String[] parts=vertexId.entity.split("_");
+      String vertexIdx=parts[parts.length - 1];
+      builder.append(vertexIdx).append(",");
+      vertexIdToEntityMapping.put(vertexId.entity,vertexId.vertexName);
+    }
+    builder.setLength(builder.length() - 1);
+  }
+  String commaSeparatedVertices=builder.toString();
+  List<VertexProgress> parsedVertexProgresses=new LinkedList<VertexProgress>();
+  JSONObject vertexProgressesResponse=delegate.verticesProgress(appId,dagIdx,commaSeparatedVertices);
+  if (vertexProgressesResponse == null) {
+    LOG.error("Error while retrieving progress of vertices " + appId + ":"+ dagId+ ":"+ commaSeparatedVertices+ ". 0 assumed for all vertices.");
+    for (    TezVertexId vertexId : vertices) {
+      VertexProgress vertexProgressInfo=new VertexProgress();
+      vertexProgressInfo.name=vertexId.vertexName;
+      vertexProgressInfo.progress=0.0;
+      parsedVertexProgresses.add(vertexProgressInfo);
+    }
+    return parsedVertexProgresses;
+  }
+  JSONArray vertexProgresses=(JSONArray)vertexProgressesResponse.get("vertexProgresses");
+  for (  Object vertex : vertexProgresses) {
+    JSONObject jsonObject=(JSONObject)vertex;
+    VertexProgress vertexProgressInfo=new VertexProgress();
+    vertexProgressInfo.id=(String)jsonObject.get("id");
+    vertexProgressInfo.name=vertexIdToEntityMapping.get(vertexProgressInfo.id);
+    vertexProgressInfo.progress=(Double)jsonObject.get("progress");
+    parsedVertexProgresses.add(vertexProgressInfo);
+  }
+  return parsedVertexProgresses;
+}

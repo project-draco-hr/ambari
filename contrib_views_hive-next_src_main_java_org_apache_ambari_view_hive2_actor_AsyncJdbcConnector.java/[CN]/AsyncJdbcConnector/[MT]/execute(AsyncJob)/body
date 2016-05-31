@@ -1,0 +1,40 @@
+{
+  this.executing=true;
+  this.jobId=message.getJobId();
+  updateJobStatus(jobId,Job.JOB_STATE_INITIALIZED);
+  if (connectable == null) {
+    notifyAndCleanUp();
+    return;
+  }
+  Optional<HiveConnection> connectionOptional=connectable.getConnection();
+  if (!connectionOptional.isPresent()) {
+    notifyAndCleanUp();
+    return;
+  }
+  try {
+    Optional<ResultSet> resultSetOptional=connectionDelegate.execute(connectionOptional.get(),message);
+    Optional<HiveStatement> currentStatement=connectionDelegate.getCurrentStatement();
+    logAggregator=getContext().actorOf(Props.create(LogAggregator.class,system,hdfsApi,currentStatement.get(),message.getLogFile()).withDispatcher("akka.actor.misc-dispatcher"),message.getUsername() + ":" + message.getJobId()+ "-logAggregator");
+    deathWatch.tell(new RegisterActor(logAggregator),self());
+    updateGuidInJob(jobId,currentStatement.get());
+    updateJobStatus(jobId,Job.JOB_STATE_RUNNING);
+    if (resultSetOptional.isPresent()) {
+      resultSetActor=getContext().actorOf(Props.create(ResultSetIterator.class,self(),resultSetOptional.get(),storage).withDispatcher("akka.actor.result-dispatcher"),"ResultSetActor:ResultSetIterator:JobId:" + jobId + ":"+ UUID.randomUUID().toString());
+      deathWatch.tell(new RegisterActor(resultSetActor),self());
+      parent.tell(new ResultReady(jobId,username,Either.<ActorRef,ActorRef>left(resultSetActor)),self());
+    }
+ else {
+      ActorRef asyncQueryExecutor=getContext().actorOf(Props.create(AsyncQueryExecutor.class,parent,currentStatement.get(),storage,jobId,username).withDispatcher("akka.actor.result-dispatcher"),message.getUsername() + ":" + message.getJobId()+ "-asyncQueryExecutor");
+      deathWatch.tell(new RegisterActor(asyncQueryExecutor),self());
+      parent.tell(new ResultReady(jobId,username,Either.<ActorRef,ActorRef>right(asyncQueryExecutor)),self());
+    }
+    logAggregator.tell(new StartLogAggregation(),self());
+  }
+ catch (  SQLException e) {
+    AsyncExecutionFailed failure=new AsyncExecutionFailed(message.getJobId(),username,e.getMessage(),e);
+    updateJobStatus(jobId,Job.JOB_STATE_ERROR);
+    parent.tell(failure,self());
+    LOG.error("Caught SQL excpetion for job-" + message,e);
+  }
+  this.inactivityScheduler=system.scheduler().schedule(Duration.Zero(),Duration.create(15 * 1000,TimeUnit.MILLISECONDS),this.self(),new InactivityCheck(),system.dispatcher(),null);
+}

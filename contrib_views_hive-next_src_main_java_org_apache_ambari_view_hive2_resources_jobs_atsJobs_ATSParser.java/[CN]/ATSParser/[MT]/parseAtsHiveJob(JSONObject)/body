@@ -1,0 +1,40 @@
+{
+  HiveQueryId parsedJob=new HiveQueryId();
+  parsedJob.entity=(String)job.get("entity");
+  parsedJob.url=delegate.hiveQueryIdDirectUrl((String)job.get("entity"));
+  parsedJob.starttime=((Long)job.get("starttime")) / MillisInSecond;
+  JSONObject primaryfilters=(JSONObject)job.get("primaryfilters");
+  JSONArray operationIds=(JSONArray)primaryfilters.get("operationid");
+  if (operationIds != null) {
+    parsedJob.operationId=(String)(operationIds).get(0);
+  }
+  JSONArray users=(JSONArray)primaryfilters.get("user");
+  if (users != null) {
+    parsedJob.user=(String)(users).get(0);
+  }
+  JSONObject lastEvent=getLastEvent(job);
+  long lastEventTimestamp=((Long)lastEvent.get("timestamp")) / MillisInSecond;
+  parsedJob.duration=lastEventTimestamp - parsedJob.starttime;
+  JSONObject otherinfo=(JSONObject)job.get("otherinfo");
+  if (otherinfo.get("QUERY") != null) {
+    JSONObject query=(JSONObject)JSONValue.parse((String)otherinfo.get("QUERY"));
+    parsedJob.query=(String)query.get("queryText");
+    JSONObject stages=(JSONObject)((JSONObject)query.get("queryPlan")).get("STAGE PLANS");
+    List<String> dagIds=new LinkedList<String>();
+    List<JSONObject> stagesList=new LinkedList<JSONObject>();
+    for (    Object key : stages.keySet()) {
+      JSONObject stage=(JSONObject)stages.get(key);
+      if (stage.get("Tez") != null) {
+        String dagId=(String)((JSONObject)stage.get("Tez")).get("DagId:");
+        dagIds.add(dagId);
+      }
+      stagesList.add(stage);
+    }
+    parsedJob.dagNames=dagIds;
+    parsedJob.stages=stagesList;
+  }
+  if (otherinfo.get("VERSION") != null) {
+    parsedJob.version=(Long)otherinfo.get("VERSION");
+  }
+  return parsedJob;
+}

@@ -1,0 +1,28 @@
+{
+  Inbox inbox=Inbox.create(system);
+  inbox.send(actorRef,new Next());
+  Object receive;
+  try {
+    receive=inbox.receive(Duration.create(actorConfiguration.getResultFetchTimeout(DEFAULT_WAIT_TIMEOUT),TimeUnit.MILLISECONDS));
+  }
+ catch (  Throwable ex) {
+    String errorMessage="Result fetch timed out";
+    LOG.error(errorMessage,ex);
+    throw new ServiceFormattedException(errorMessage,ex);
+  }
+  if (receive instanceof Result) {
+    Result result=(Result)receive;
+    if (descriptions.isEmpty()) {
+      descriptions.addAll(result.getColumns());
+    }
+    rows.addAll(result.getRows());
+  }
+  if (receive instanceof NoMoreItems) {
+    endReached=true;
+  }
+  if (receive instanceof FetchFailed) {
+    FetchFailed error=(FetchFailed)receive;
+    LOG.error("Failed to fetch results ");
+    throw new ServiceFormattedException(error.getMessage(),error.getError());
+  }
+}
