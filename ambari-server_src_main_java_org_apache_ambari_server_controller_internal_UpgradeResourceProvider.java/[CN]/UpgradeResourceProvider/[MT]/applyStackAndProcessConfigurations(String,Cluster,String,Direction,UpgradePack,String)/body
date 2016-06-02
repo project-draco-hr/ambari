@@ -23,11 +23,10 @@ if (desiredStackId.equals(targetStackId)) {
 }
 break;
 }
-Map<String,Map<String,String>> newConfigurationsByType=null;
+Map<String,Map<String,String>> updatedConfigurationsByType=null;
 ConfigHelper configHelper=getManagementController().getConfigHelper();
 if (direction == Direction.UPGRADE) {
-Map<String,Map<String,String>> oldStackDefaultConfigurationsByType=configHelper.getDefaultProperties(currentStackId,cluster);
-newConfigurationsByType=configHelper.getDefaultProperties(targetStackId,cluster);
+Map<String,Set<PropertyInfo>> newConfigurationsByType=configHelper.getDefaultProperties(targetStackId,cluster);
 Set<String> skipConfigTypes=new HashSet<String>();
 Set<String> upgradePackServices=new HashSet<String>();
 Set<String> upgradePackConfigTypes=new HashSet<String>();
@@ -70,58 +69,47 @@ LOG.info("RU: Removing configs for config-type {}",configType);
 iterator.remove();
 }
 }
+Map<String,Map<String,String>> existingPropertiesByType=new HashMap<>();
 Map<String,DesiredConfig> existingDesiredConfigurationsByType=cluster.getDesiredConfigs();
-for (Map.Entry<String,DesiredConfig> existingEntry : existingDesiredConfigurationsByType.entrySet()) {
-String configurationType=existingEntry.getKey();
+for (String configurationType : existingDesiredConfigurationsByType.keySet()) {
 if (skipConfigTypes.contains(configurationType)) {
-LOG.info("RU: Skipping config-type {} as upgrade-pack contains no updates to its service",configurationType);
+LOG.info("RU: Skipping config-configurationType {} as upgrade-pack contains no updates to its service",configurationType);
 continue;
 }
-Config currentClusterConfig=cluster.getDesiredConfigByType(configurationType);
-if (null == currentClusterConfig) {
-continue;
+Map<String,String> existingProperties=cluster.getDesiredConfigByType(configurationType).getProperties();
+existingPropertiesByType.put(configurationType,existingProperties);
 }
-Map<String,String> existingConfigurations=currentClusterConfig.getProperties();
-Map<String,String> newDefaultConfigurations=newConfigurationsByType.get(configurationType);
-if (null == newDefaultConfigurations) {
-newConfigurationsByType.put(configurationType,existingConfigurations);
-continue;
+for (Map.Entry<String,Set<PropertyInfo>> newPropertyEntry : newConfigurationsByType.entrySet()) {
+String configurationType=newPropertyEntry.getKey();
+Map<String,String> existingProperties=existingPropertiesByType.get(configurationType);
+if (existingProperties == null) {
+existingProperties=new HashMap<>();
+existingPropertiesByType.put(configurationType,existingProperties);
 }
- else {
-Iterator<Map.Entry<String,String>> iter=newDefaultConfigurations.entrySet().iterator();
-while (iter.hasNext()) {
-  Map.Entry<String,String> entry=iter.next();
-  if (entry.getValue() == null) {
-    iter.remove();
+for (PropertyInfo propertyInfo : newPropertyEntry.getValue()) {
+String propertyName=propertyInfo.getName();
+String propertyValue=propertyInfo.getValue();
+PropertyUpgradeBehavior propertyStackUpgradeBehavior=propertyInfo.getPropertyStackUpgradeBehavior();
+if (!existingProperties.containsKey(propertyName) && propertyStackUpgradeBehavior.isAdd()) {
+  existingProperties.put(propertyName,propertyValue);
+}
+ else if (existingProperties.containsKey(propertyName)) {
+  if (propertyStackUpgradeBehavior.isDelete()) {
+    existingProperties.remove(propertyName);
+  }
+ else   if (propertyStackUpgradeBehavior.isChange()) {
+    existingProperties.put(propertyName,propertyValue);
   }
 }
 }
-for (Map.Entry<String,String> existingConfigurationEntry : existingConfigurations.entrySet()) {
-String existingConfigurationKey=existingConfigurationEntry.getKey();
-String existingConfigurationValue=existingConfigurationEntry.getValue();
-if (newDefaultConfigurations.containsKey(existingConfigurationKey)) {
-  String newDefaultConfigurationValue=newDefaultConfigurations.get(existingConfigurationKey);
-  if (!StringUtils.equals(existingConfigurationValue,newDefaultConfigurationValue)) {
-    Map<String,String> configurationTypeDefaultConfigurations=oldStackDefaultConfigurationsByType.get(configurationType);
-    if (null != configurationTypeDefaultConfigurations) {
-      String oldDefaultValue=configurationTypeDefaultConfigurations.get(existingConfigurationKey);
-      if (!StringUtils.equals(existingConfigurationValue,oldDefaultValue)) {
-        newDefaultConfigurations.put(existingConfigurationKey,existingConfigurationValue);
-      }
-    }
-  }
 }
- else {
-  newDefaultConfigurations.put(existingConfigurationKey,existingConfigurationValue);
-}
-}
-}
+updatedConfigurationsByType=existingPropertiesByType;
 }
  else {
 cluster.applyLatestConfigurations(cluster.getCurrentStackVersion());
 }
 cluster.setDesiredStackVersion(new StackId(targetStack.getStackName(),targetStack.getStackVersion()),true);
-if (null != newConfigurationsByType) {
-configHelper.createConfigTypes(cluster,getManagementController(),newConfigurationsByType,userName,"Configuration created for Upgrade");
+if (null != updatedConfigurationsByType) {
+configHelper.createConfigTypes(cluster,getManagementController(),updatedConfigurationsByType,userName,"Configuration created for Upgrade");
 }
 }
