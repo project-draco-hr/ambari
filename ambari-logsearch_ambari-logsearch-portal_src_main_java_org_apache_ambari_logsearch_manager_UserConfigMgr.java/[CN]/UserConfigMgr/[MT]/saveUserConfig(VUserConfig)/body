@@ -6,16 +6,35 @@
   if (isNotUnique(vHistory) && !vHistory.isOverwrite()) {
     throw restErrorUtil.createRESTException("Name '" + vHistory.getFilterName() + "' already exists",MessageEnums.INVALID_INPUT_DATA);
   }
+  String loggedInUserName=vHistory.getUserName();
+  String filterName=vHistory.getFilterName();
   solrInputDoc.addField(LogSearchConstants.ID,vHistory.getId());
-  solrInputDoc.addField(LogSearchConstants.USER_NAME,vHistory.getUserName());
+  solrInputDoc.addField(LogSearchConstants.USER_NAME,loggedInUserName);
   solrInputDoc.addField(LogSearchConstants.VALUES,vHistory.getValues());
-  solrInputDoc.addField(LogSearchConstants.FILTER_NAME,vHistory.getFilterName());
+  solrInputDoc.addField(LogSearchConstants.FILTER_NAME,filterName);
   solrInputDoc.addField(LogSearchConstants.ROW_TYPE,vHistory.getRowType());
   List<String> shareNameList=vHistory.getShareNameList();
   if (shareNameList != null && !shareNameList.isEmpty()) {
     solrInputDoc.addField(LogSearchConstants.SHARE_NAME_LIST,shareNameList);
   }
-  solrInputDoc.addField(LogSearchConstants.COMPOSITE_KEY,vHistory.getFilterName() + "-" + vHistory.getUserName());
+  SolrQuery solrQuery=new SolrQuery();
+  queryGenerator.setMainQuery(solrQuery,null);
+  queryGenerator.setSingleIncludeFilter(solrQuery,LogSearchConstants.FILTER_NAME,filterName);
+  queryGenerator.setSingleIncludeFilter(solrQuery,LogSearchConstants.USER_NAME,loggedInUserName);
+  try {
+    QueryResponse queryResponse=userConfigSolrDao.process(solrQuery);
+    if (queryResponse != null) {
+      SolrDocumentList documentList=queryResponse.getResults();
+      if (documentList != null && !documentList.isEmpty() && !vHistory.isOverwrite()) {
+        logger.error("Filtername is already present");
+        throw restErrorUtil.createRESTException("Filtername is already present",MessageEnums.INVALID_INPUT_DATA);
+      }
+    }
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error("Error in checking same filtername config",e);
+    throw restErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
   try {
     userConfigSolrDao.addDocs(solrInputDoc);
     return convertObjToString(solrInputDoc);
