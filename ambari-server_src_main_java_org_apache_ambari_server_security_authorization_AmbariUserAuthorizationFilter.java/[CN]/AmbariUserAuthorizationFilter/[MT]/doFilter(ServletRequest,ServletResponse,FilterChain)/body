@@ -1,0 +1,37 @@
+{
+  HttpServletRequest httpRequest=(HttpServletRequest)request;
+  HttpServletResponse httpResponse=(HttpServletResponse)response;
+  String token=httpRequest.getHeader(InternalTokenClientFilter.INTERNAL_TOKEN_HEADER);
+  if (token != null) {
+    if (internalTokenStorage.isValidInternalToken(token)) {
+      String userToken=httpRequest.getHeader(ExecutionScheduleManager.USER_ID_HEADER);
+      if (userToken != null) {
+        if (!NumberUtils.isDigits(userToken)) {
+          httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN,"Invalid user ID");
+          httpResponse.flushBuffer();
+          return;
+        }
+        Integer userId=Integer.parseInt(userToken);
+        User user=users.getUser(userId);
+        if (user == null) {
+          httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN,"Authentication required");
+          httpResponse.flushBuffer();
+          return;
+        }
+        if (!user.isActive()) {
+          httpResponse.sendError(HttpServletResponse.SC_FORBIDDEN,"User is not active");
+          httpResponse.flushBuffer();
+          return;
+        }
+ else {
+          Collection<AmbariGrantedAuthority> userAuthorities=users.getUserAuthorities(user.getUserName(),user.getUserType());
+          AmbariUserAuthentication authentication=new AmbariUserAuthentication(token,user,userAuthorities);
+          authentication.setAuthenticated(true);
+          SecurityContextHolder.getContext().setAuthentication(authentication);
+          httpResponse.setHeader("User",AuthorizationHelper.getAuthenticatedName());
+        }
+      }
+    }
+  }
+  chain.doFilter(request,response);
+}
