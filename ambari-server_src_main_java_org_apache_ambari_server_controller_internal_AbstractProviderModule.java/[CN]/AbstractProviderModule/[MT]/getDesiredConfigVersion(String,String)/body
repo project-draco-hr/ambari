@@ -1,30 +1,16 @@
 {
-  ResourceProvider clusterResourceProvider=getResourceProvider(Resource.Type.Cluster);
-  Predicate basePredicate=new PredicateBuilder().property(ClusterResourceProvider.CLUSTER_NAME_PROPERTY_ID).equals(clusterName).toPredicate();
-  Set<Resource> clusterResource=null;
+  String versionTag=ConfigHelper.FIRST_VERSION_TAG;
   try {
-    Set<String> propertyIds=new HashSet<String>();
-    propertyIds.add(ClusterResourceProvider.CLUSTER_NAME_PROPERTY_ID);
-    propertyIds.add(ClusterResourceProvider.CLUSTER_DESIRED_CONFIGS_PROPERTY_ID);
-    Map<String,String> requestInfoProperties=new HashMap<String,String>();
-    requestInfoProperties.put(ClusterResourceProvider.GET_IGNORE_PERMISSIONS_PROPERTY_ID,"true");
-    Request readRequest=PropertyHelper.getReadRequest(propertyIds,requestInfoProperties,null,null,null);
-    clusterResource=clusterResourceProvider.getResources(readRequest,basePredicate);
-  }
- catch (  NoSuchResourceException e) {
-    LOG.error("Resource for the desired config not found. " + e);
-  }
-  String versionTag="version1";
-  if (clusterResource != null) {
-    for (    Resource resource : clusterResource) {
-      Map<String,Object> configs=resource.getPropertiesMap().get(ClusterResourceProvider.CLUSTER_DESIRED_CONFIGS_PROPERTY_ID);
-      if (configs != null) {
-        DesiredConfig config=(DesiredConfig)configs.get(configType);
-        if (config != null) {
-          versionTag=config.getTag();
-        }
-      }
+    Clusters clusters=managementController.getClusters();
+    Cluster cluster=clusters.getCluster(clusterName);
+    Map<String,DesiredConfig> desiredConfigs=cluster.getDesiredConfigs();
+    DesiredConfig config=desiredConfigs.get(configType);
+    if (config != null) {
+      versionTag=config.getTag();
     }
+  }
+ catch (  AmbariException ambariException) {
+    LOG.error("Unable to lookup the desired configuration tag for {} on cluster {}, defaulting to {}",configType,clusterName,versionTag,ambariException);
   }
   return versionTag;
 }
