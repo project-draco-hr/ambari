@@ -2,19 +2,18 @@ def kms(upgrade_type=None):
     import params
     if params.has_ranger_admin:
         Directory(params.kms_conf_dir, owner=params.kms_user, group=params.kms_group, create_parents=True)
-        if (upgrade_type is not None):
-            copy_jdbc_connector(stack_version=params.version)
+        copy_jdbc_connector()
         File(format('/usr/lib/ambari-agent/{check_db_connection_jar_name}'), content=DownloadSource(format('{jdk_location}{check_db_connection_jar_name}')), mode=420)
         cp = format('{check_db_connection_jar}')
         if (params.db_flavor.lower() == 'sqla'):
             cp = ((cp + os.pathsep) + format('{kms_home}/ews/webapp/lib/sajdbc4.jar'))
         else:
             path_to_jdbc = format('{kms_home}/ews/webapp/lib/{jdbc_jar_name}')
-            if (not params.jdbc_jar_name):
-                path_to_jdbc = (format('{kms_home}/ews/webapp/lib/') + params.default_connectors_map[params.db_flavor])
+            if (not os.path.isfile(path_to_jdbc)):
+                path_to_jdbc = (format('{kms_home}/ews/webapp/lib/') + params.default_connectors_map[params.db_flavor.lower()])
                 if (not os.path.isfile(path_to_jdbc)):
                     path_to_jdbc = (format('{kms_home}/ews/webapp/lib/') + '*')
-                    error_message = (("Error! Sorry, but we can't find jdbc driver with default name " + params.default_connectors_map[params.db_flavor]) + " in oozie lib dir. So, db connection check can fail. Please run 'ambari-server setup --jdbc-db={db_name} --jdbc-driver={path_to_jdbc} on server host.'")
+                    error_message = (("Error! Sorry, but we can't find jdbc driver with default name " + params.default_connectors_map[params.db_flavor]) + " in ranger kms lib dir. So, db connection check can fail. Please run 'ambari-server setup --jdbc-db={db_name} --jdbc-driver={path_to_jdbc} on server host.'")
                     print error_message
                     Logger.error(error_message)
             cp = ((cp + os.pathsep) + path_to_jdbc)
@@ -23,7 +22,7 @@ def kms(upgrade_type=None):
         if (params.db_flavor.lower() == 'sqla'):
             env_dict = {'LD_LIBRARY_PATH': params.ld_library_path, }
         Execute(db_connection_check_command, path='/usr/sbin:/sbin:/usr/local/bin:/bin:/usr/bin', tries=5, try_sleep=10, environment=env_dict)
-        if (params.xa_audit_db_is_enabled and params.jdbc_jar):
+        if (params.xa_audit_db_is_enabled and (params.driver_source is not None) and (not params.driver_source.endswith('/None'))):
             if (params.xa_previous_jdbc_jar and os.path.isfile(params.xa_previous_jdbc_jar)):
                 File(params.xa_previous_jdbc_jar, action='delete')
             File(params.downloaded_connector_path, content=DownloadSource(params.driver_source), mode=420)
