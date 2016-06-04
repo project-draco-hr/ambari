@@ -1,0 +1,25 @@
+{
+  AmbariManagementController managementController=createMock(AmbariManagementController.class);
+  Clusters clusters=createNiceMock(Clusters.class);
+  Cluster cluster=createNiceMock(Cluster.class);
+  ConfigGroup configGroup=createNiceMock(ConfigGroup.class);
+  expect(managementController.getAuthName()).andReturn("admin").anyTimes();
+  expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  expect(clusters.getCluster("Cluster100")).andReturn(cluster).anyTimes();
+  expect(cluster.getConfigGroups()).andReturn(Collections.singletonMap(1L,configGroup));
+  cluster.deleteConfigGroup(1L);
+  replay(managementController,clusters,cluster,configGroup);
+  ResourceProvider resourceProvider=getConfigGroupResourceProvider(managementController);
+  AbstractResourceProviderTest.TestObserver observer=new AbstractResourceProviderTest.TestObserver();
+  ((ObservableResourceProvider)resourceProvider).addObserver(observer);
+  Predicate predicate=new PredicateBuilder().property(ConfigGroupResourceProvider.CONFIGGROUP_CLUSTER_NAME_PROPERTY_ID).equals("Cluster100").and().property(ConfigGroupResourceProvider.CONFIGGROUP_ID_PROPERTY_ID).equals(1L).toPredicate();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  resourceProvider.deleteResources(new RequestImpl(null,null,null,null),predicate);
+  ResourceProviderEvent lastEvent=observer.getLastEvent();
+  Assert.assertNotNull(lastEvent);
+  Assert.assertEquals(Resource.Type.ConfigGroup,lastEvent.getResourceType());
+  Assert.assertEquals(ResourceProviderEvent.Type.Delete,lastEvent.getType());
+  Assert.assertEquals(predicate,lastEvent.getPredicate());
+  Assert.assertNull(lastEvent.getRequest());
+  verify(managementController,clusters,cluster,configGroup);
+}
