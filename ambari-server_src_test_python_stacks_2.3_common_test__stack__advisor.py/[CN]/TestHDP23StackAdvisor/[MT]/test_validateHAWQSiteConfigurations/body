@@ -9,7 +9,7 @@ def test_validateHAWQSiteConfigurations(self):
     hosts = {}
     expected_warnings = {'hawq_rm_yarn_address': {'config-type': 'hawq-site', 'message': 'Expected value: host1:8050 (this property should have the same value as the property yarn.resourcemanager.address in yarn-site)', 'type': 'configuration', 'config-name': 'hawq_rm_yarn_address', 'level': 'WARN', }, 'hawq_rm_yarn_scheduler_address': {'config-type': 'hawq-site', 'message': 'Expected value: host1:8030 (this property should have the same value as the property yarn.resourcemanager.scheduler.address in yarn-site)', 'type': 'configuration', 'config-name': 'hawq_rm_yarn_scheduler_address', 'level': 'WARN', }, }
     serviceAdvisor = self.createHAWQServiceAdvisor()
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, configurations, services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     problems_dict = {}
     for problem in problems:
         problems_dict[problem['config-name']] = problem
@@ -17,14 +17,14 @@ def test_validateHAWQSiteConfigurations(self):
     self.assertEqual(problems_dict, expected_warnings)
     configurations['hawq-site'] = {'properties': {'hawq_master_directory': '/data/hawq/master', 'hawq_segment_directory': '/data/hawq/segment', }, }
     properties = configurations['hawq-site']['properties']
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, configurations, services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     problems_dict = {}
     self.assertEqual(len(problems), 0)
     expected_warnings = {}
     self.assertEqual(problems_dict, expected_warnings)
     configurations['hawq-site'] = {'properties': {'hawq_master_directory': '/data/hawq/master1,/data/hawq/master2', 'hawq_segment_directory': '/data/hawq/segment1 /data/hawq/segment2', }, }
     properties = configurations['hawq-site']['properties']
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, configurations, services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     problems_dict = {}
     for problem in problems:
         problems_dict[problem['config-name']] = problem
@@ -34,30 +34,30 @@ def test_validateHAWQSiteConfigurations(self):
     services = {'services': [{'StackServices': {'service_name': 'HAWQ', }, 'components': [], }], 'configurations': {'hawq-site': {'properties': {'hawq_global_rm_type': 'yarn', }, }, }, }
     properties = services['configurations']['hawq-site']['properties']
     '\n    Validation error expected is as below:\n                    [ {\n                          "config-type": "hawq-site",\n                          "message": "hawq_global_rm_type must be set to none if YARN service is not installed",\n                          "type": "configuration",\n                          "config-name": "hawq_global_rm_type",\n                          "level": "ERROR"\n                    } ]\n    '
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, services['configurations'], services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, services['configurations'], services, hosts)
     self.assertEqual(len(problems), 1)
     expected = {'config-type': 'hawq-site', 'message': 'hawq_global_rm_type must be set to none if YARN service is not installed', 'type': 'configuration', 'config-name': 'hawq_global_rm_type', 'level': 'ERROR', }
     self.assertEqual(problems[0], expected)
     services['services'].append({'StackServices': {'service_name': 'YARN', }, 'components': [], })
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, services['configurations'], services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, services['configurations'], services, hosts)
     self.assertEqual(len(problems), 0)
     serviceAdvisor.isHawqMasterComponentOnAmbariServer = MagicMock(return_value=True)
     configurations = {'hawq-site': {'properties': {'hawq_master_address_port': '5432', }, }, }
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, configurations, services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     self.assertEqual(len(problems), 1)
     expected = {'config-name': 'hawq_master_address_port', 'config-type': 'hawq-site', 'level': 'WARN', 'message': 'The default Postgres port (5432) on the Ambari Server conflicts with the default HAWQ Masters port. If you are using port 5432 for Postgres, you must either deploy the HAWQ Masters on a different host or configure a different port for the HAWQ Masters in the HAWQ Configuration page.', 'type': 'configuration', }
     self.assertEqual(problems[0], expected)
     serviceAdvisor.isHawqMasterComponentOnAmbariServer = MagicMock(return_value=True)
     configurations['hawq-site']['properties']['hawq_master_address_port'] = '10432'
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, configurations, services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     self.assertEqual(len(problems), 0)
     serviceAdvisor.isHawqMasterComponentOnAmbariServer = MagicMock(return_value=False)
     configurations['hawq-site']['properties']['hawq_master_address_port'] = '5432'
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, configurations, services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     self.assertEqual(len(problems), 0)
     serviceAdvisor.isHawqMasterComponentOnAmbariServer = MagicMock(return_value=False)
     configurations['hawq-site']['properties']['hawq_master_address_port'] = '10432'
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, configurations, services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     self.assertEqual(len(problems), 0)
     services = {'services': [{'StackServices': {'service_name': 'HAWQ', }, 'components': [{'StackServiceComponents': {'component_name': 'HAWQSEGMENT', 'hostnames': [], }, }], }], 'configurations': {}, }
     configurations = services['configurations']
@@ -66,10 +66,10 @@ def test_validateHAWQSiteConfigurations(self):
     defaults = {}
     hosts = {}
     expected = {'config-type': 'hawq-site', 'message': 'Default buckets for Hash Distributed tables parameter value should not be greater than the value of Virtual Segments Limit per Query (Total) parameter, currently set to 500.', 'type': 'configuration', 'config-name': 'default_hash_table_bucket_number', 'level': 'ERROR', }
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, configurations, services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     self.assertEqual(len(problems), 1)
     self.assertEqual(problems[0], expected)
     configurations['hawq-site'] = {'properties': {'default_hash_table_bucket_number': '500', 'hawq_rm_nvseg_perquery_limit': '500', }, }
     properties = configurations['hawq-site']['properties']
-    problems = serviceAdvisor.validateHAWQSiteConfigurations(self.stackAdvisor, properties, defaults, configurations, services, hosts)
+    problems = serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     self.assertEqual(len(problems), 0)
