@@ -1,8 +1,34 @@
 {
-  String port=(argv.length > 0) ? argv[0] : "61888";
+  String port=(argv.length > 0) ? argv[0] : HTTP_PORT;
   HttpServer2.Builder builder=new HttpServer2.Builder();
   builder.setName("app");
-  builder.addEndpoint(URI.create("http://0.0.0.0:" + port));
+  String keystorePassword=PropertiesUtil.getProperty(KEYSTORE_PASSWORD_PROP);
+  String trustorePassword=PropertiesUtil.getProperty(TRUSTORE_PASSWORD_PROP);
+  String keystoreType=PropertiesUtil.getProperty(KEYSTORE_TYPE_PROP);
+  String protcol=PropertiesUtil.getProperty(LOGSEARCH_PROTOCOL_PROP);
+  String keystoreLocation=PropertiesUtil.getProperty(KEYSTORE_LOCATION_PROP);
+  String trustoreLocation=PropertiesUtil.getProperty(TRUSTORE_LOCATION_PROP);
+  URI logsearchURI=URI.create("http://0.0.0.0:" + port);
+  if (HTTPS_PROTOCOL.equals(protcol)) {
+    if (keystoreType == null || keystoreType.isEmpty()) {
+      keystoreType=DEFAULT_KEYSTORE_TYPE;
+    }
+    if (keystoreLocation != null && !keystoreLocation.isEmpty() && keystorePassword != null && !keystorePassword.isEmpty()) {
+      builder.keyPassword(keystorePassword);
+      builder.keyStore(keystoreLocation,keystorePassword,keystoreType);
+      if (trustoreLocation != null && !trustoreLocation.isEmpty() && trustorePassword != null && !trustorePassword.isEmpty()) {
+        builder.trustStore(trustoreLocation,trustorePassword,keystoreType);
+      }
+      if (HTTP_PORT.equals(port)) {
+        port=HTTPS_PORT;
+      }
+      logsearchURI=URI.create("https://0.0.0.0:" + port);
+    }
+ else {
+      logger.warn("starting logsearch in with http protocol as keystore location or password was not present");
+    }
+  }
+  builder.addEndpoint(logsearchURI);
   builder.setFindPort(false);
   List<String> pathList=new ArrayList<String>();
   pathList.add("/*");
@@ -11,7 +37,7 @@
   Timer timer=new Timer();
   timer.schedule(new ManageStartEndTime(),0,40000);
   try {
-    logger.info("Starting logsearch server...");
+    logger.info("Starting logsearch server URI=" + logsearchURI);
     HttpServer2 server=builder.build();
     server.start();
     ConfigUtil.initializeApplicationConfig();
