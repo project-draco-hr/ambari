@@ -1,0 +1,33 @@
+{
+  String username=job.getUsername();
+  String jobId=job.getJobId().get();
+  ActorRef subActor=null;
+  subActor=getActorRefFromAsyncPool(username);
+  ViewContext viewContext=job.getViewContext();
+  if (subActor == null) {
+    Optional<HdfsApi> hdfsApiOptional=hdfsApiSupplier.get(viewContext);
+    if (!hdfsApiOptional.isPresent()) {
+      sender().tell(new JobRejected(username,jobId,"Failed to connect to Hive."),self());
+      return;
+    }
+    HdfsApi hdfsApi=hdfsApiOptional.get();
+    subActor=system.actorOf(Props.create(JdbcConnector.class,viewContext,self(),deathWatch,hdfsApi,connectionSupplier.get(viewContext),storageSupplier.get(viewContext)).withDispatcher("akka.actor.jdbc-connector-dispatcher"),"jobId:" + jobId + ":asyncjdbcConnector");
+    deathWatch.tell(new RegisterActor(subActor),self());
+  }
+  if (asyncBusyConnections.containsKey(username)) {
+    Map<String,ActorRef> actors=asyncBusyConnections.get(username);
+    if (!actors.containsKey(jobId)) {
+      actors.put(jobId,subActor);
+    }
+ else {
+      sender().tell(new JobRejected(username,jobId,"Existing job in progress with same jobId."),ActorRef.noSender());
+    }
+  }
+ else {
+    Map<String,ActorRef> actors=new HashMap<>();
+    actors.put(jobId,subActor);
+    asyncBusyConnections.put(username,actors);
+  }
+  subActor.tell(connect,self());
+  subActor.tell(job,self());
+}

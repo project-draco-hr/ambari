@@ -1,0 +1,26 @@
+{
+  try {
+    HiveStatement statement=connectionDelegate.createStatement(connection);
+    if (message.shouldStartLogAggregation()) {
+      startLogAggregation(statement,message.getStatement(),message.getLogFile().get());
+    }
+    if (message.shouldStartGUIDFetch() && message.getJobId().isPresent()) {
+      startGUIDFetch(statement,message.getJobId().get());
+    }
+    Optional<ResultSet> resultSetOptional=connectionDelegate.execute(message.getStatement());
+    if (resultSetOptional.isPresent()) {
+      sender().tell(new ResultInformation(message.getId(),resultSetOptional.get()),self());
+    }
+ else {
+      sender().tell(new ResultInformation(message.getId()),self());
+    }
+  }
+ catch (  SQLException e) {
+    LOG.error("Failed to execute statement: {}. {}",message.getStatement(),e);
+    sender().tell(new ResultInformation(message.getId(),new Failure("Failed to execute statement: " + message.getStatement(),e)),self());
+  }
+ finally {
+    stopLogAggregation();
+    stopGUIDFetch();
+  }
+}

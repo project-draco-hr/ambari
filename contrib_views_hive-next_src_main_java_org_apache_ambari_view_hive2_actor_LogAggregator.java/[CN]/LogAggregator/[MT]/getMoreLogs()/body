@@ -1,11 +1,16 @@
 {
-  if (statement.hasMoreLogs()) {
-    List<String> logs=statement.getQueryLog();
+  List<String> logs=statement.getQueryLog();
+  if (logs.size() > 0 && shouldFetchMore) {
     String allLogs=Joiner.on("\n").skipNulls().join(logs);
     HdfsUtil.putStringToFile(hdfsApi,logFile,allLogs);
+    if (!statement.hasMoreLogs()) {
+      shouldFetchMore=false;
+    }
   }
  else {
-    moreLogsScheduler.cancel();
-    parent.tell(new LogAggregationFinished(),ActorRef.noSender());
+    if (!shouldFetchMore) {
+      moreLogsScheduler.cancel();
+      parent.tell(new LogAggregationFinished(),ActorRef.noSender());
+    }
   }
 }

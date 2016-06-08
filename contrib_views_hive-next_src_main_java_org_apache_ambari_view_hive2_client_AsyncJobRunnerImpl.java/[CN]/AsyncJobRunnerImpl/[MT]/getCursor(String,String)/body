@@ -2,12 +2,22 @@
   Inbox inbox=Inbox.create(system);
   inbox.send(controller,new FetchResult(jobId,username));
   Object receive=inbox.receive(Duration.create(1,TimeUnit.MINUTES));
-  Either<ActorRef,ActorRef> result=(Either<ActorRef,ActorRef>)receive;
-  if (result.isRight()) {
-    return Optional.absent();
+  if (receive instanceof ResultNotReady) {
+    String errorString="Result not ready for job: " + jobId + ", username: "+ username+ ". Try after sometime.";
+    LOG.info(errorString);
+    throw new ResultNotReadyFormattedException(errorString,new Exception(errorString));
   }
- else   if (result.isLeft()) {
-    return Optional.of(new NonPersistentCursor(context,system,result.getLeft()));
+ else   if (receive instanceof Failure) {
+    Failure failure=(Failure)receive;
+    throw new ResultFetchFormattedException(failure.getMessage(),failure.getError());
   }
-  return Optional.absent();
+ else {
+    Optional<ActorRef> iterator=(Optional<ActorRef>)receive;
+    if (iterator.isPresent()) {
+      return Optional.of(new NonPersistentCursor(context,system,iterator.get()));
+    }
+ else {
+      return Optional.absent();
+    }
+  }
 }
