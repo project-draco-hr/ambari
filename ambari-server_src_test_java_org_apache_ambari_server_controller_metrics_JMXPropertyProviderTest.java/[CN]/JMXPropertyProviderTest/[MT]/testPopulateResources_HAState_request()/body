@@ -1,0 +1,37 @@
+{
+  TestStreamProvider streamProvider=new TestStreamProvider();
+  TestJMXHostProvider hostProvider=new TestJMXHostProvider(false);
+  TestMetricHostProvider metricsHostProvider=new TestMetricHostProvider();
+  JMXPropertyProvider propertyProvider=metricPropertyProviderFactory.createJMXPropertyProvider(jmxPropertyIdsWithHAState,streamProvider,hostProvider,metricsHostProvider,PropertyHelper.getPropertyId("HostRoles","cluster_name"),PropertyHelper.getPropertyId("HostRoles","host_name"),PropertyHelper.getPropertyId("HostRoles","component_name"),PropertyHelper.getPropertyId("HostRoles","state"));
+  Resource resource=new ResourceImpl(Resource.Type.HostComponent);
+  resource.setProperty(CLUSTER_NAME_PROPERTY_ID,"c1");
+  resource.setProperty(HOST_COMPONENT_HOST_NAME_PROPERTY_ID,"domu-12-31-39-0e-34-e1.compute-1.internal");
+  resource.setProperty(HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID,"NAMENODE");
+  resource.setProperty(HOST_COMPONENT_STATE_PROPERTY_ID,"STARTED");
+  Map<String,TemporalInfo> temporalInfoMap=new HashMap<String,TemporalInfo>();
+  Request request=PropertyHelper.getReadRequest(Collections.singleton("metrics/dfs/FSNamesystem"),temporalInfoMap);
+  Assert.assertEquals(1,propertyProvider.populateResources(Collections.singleton(resource),request,null).size());
+  List<String> expectedSpecs=new ArrayList<String>();
+  expectedSpecs.add(propertyProvider.getSpec("http","domu-12-31-39-0e-34-e1.compute-1.internal","50070","/jmx"));
+  expectedSpecs.add(propertyProvider.getSpec("http","domu-12-31-39-0e-34-e1.compute-1.internal","50070","/jmx?get=Hadoop:service=NameNode,name=FSNamesystem::tag.HAState"));
+  Assert.assertEquals(expectedSpecs,streamProvider.getSpecs());
+  Assert.assertEquals(184320,resource.getPropertyValue("metrics/dfs/FSNamesystem/CapacityUsed"));
+  Assert.assertEquals(21,resource.getPropertyValue("metrics/dfs/FSNamesystem/UnderReplicatedBlocks"));
+  Assert.assertEquals("customState",resource.getPropertyValue("metrics/dfs/FSNamesystem/HAState"));
+  Assert.assertNull(resource.getPropertyValue("metrics/rpc/ReceivedBytes"));
+  resource=new ResourceImpl(Resource.Type.HostComponent);
+  resource.setProperty(CLUSTER_NAME_PROPERTY_ID,"c1");
+  resource.setProperty(HOST_COMPONENT_HOST_NAME_PROPERTY_ID,"domu-12-31-39-0e-34-e1.compute-1.internal");
+  resource.setProperty(HOST_COMPONENT_COMPONENT_NAME_PROPERTY_ID,"NAMENODE");
+  resource.setProperty(HOST_COMPONENT_STATE_PROPERTY_ID,"STARTED");
+  streamProvider.getSpecs().clear();
+  temporalInfoMap=new HashMap<String,TemporalInfo>();
+  request=PropertyHelper.getReadRequest(Collections.singleton("metrics/dfs/FSNamesystem/CapacityUsed"),temporalInfoMap);
+  Assert.assertEquals(1,propertyProvider.populateResources(Collections.singleton(resource),request,null).size());
+  expectedSpecs.clear();
+  expectedSpecs.add(propertyProvider.getSpec("http","domu-12-31-39-0e-34-e1.compute-1.internal","50070","/jmx"));
+  Assert.assertEquals(expectedSpecs,streamProvider.getSpecs());
+  Assert.assertEquals(184320,resource.getPropertyValue("metrics/dfs/FSNamesystem/CapacityUsed"));
+  Assert.assertNull(resource.getPropertyValue("metrics/dfs/FSNamesystem/HAState"));
+  Assert.assertNull(resource.getPropertyValue("metrics/rpc/ReceivedBytes"));
+}
