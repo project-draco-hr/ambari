@@ -8,9 +8,12 @@ def checkAndManageLlapQueue(self, services, configurations, hosts, llap_queue_na
     if capacity_scheduler_properties:
         if ('llap_queue_capacity' in services['configurations']['hive-interactive-env']['properties']):
             llap_slider_cap_percentage = int(services['configurations']['hive-interactive-env']['properties']['llap_queue_capacity'])
-            llap_min_reqd_cap_percentage = self.min_llap_queue_perc_required_in_cluster(services, hosts, configurations)
+            llap_min_reqd_cap_percentage = math.ceil(self.min_llap_queue_perc_required_in_cluster(services, hosts, configurations))
+            if (llap_min_reqd_cap_percentage > 100):
+                Logger.error("Minimum calculated 'llap' queue capacity ({0}%) is more than what the cluster has in totality. Not creating/adjusting 'llap' queue. Increase the overall cluster capacity.".format(llap_min_reqd_cap_percentage))
+                return
             if ((llap_slider_cap_percentage <= 0) or (llap_slider_cap_percentage > 100)):
-                Logger.info("Adjusting HIVE 'llap_queue_capacity' from {0}% to {1}%".format(llap_slider_cap_percentage, llap_min_reqd_cap_percentage))
+                Logger.info("Adjusting HIVE 'llap_queue_capacity' from {0}% (invalid size) to {1}%".format(llap_slider_cap_percentage, llap_min_reqd_cap_percentage))
                 putHiveInteractiveEnvProperty('llap_queue_capacity', llap_min_reqd_cap_percentage)
                 llap_slider_cap_percentage = llap_min_reqd_cap_percentage
         else:
@@ -26,7 +29,7 @@ def checkAndManageLlapQueue(self, services, configurations, hosts, llap_queue_na
             currLlapQueueState = capacity_scheduler_properties.get((('yarn.scheduler.capacity.root.' + llap_queue_name) + '.state'))
         currLlapQueueCap = (-1)
         if ((('yarn.scheduler.capacity.root.' + llap_queue_name) + '.capacity') in cap_sched_config_keys):
-            currLlapQueueCap = int(capacity_scheduler_properties.get((('yarn.scheduler.capacity.root.' + llap_queue_name) + '.capacity')))
+            currLlapQueueCap = int(float(capacity_scheduler_properties.get((('yarn.scheduler.capacity.root.' + llap_queue_name) + '.capacity'))))
         if ((self.HIVE_INTERACTIVE_SITE in services['configurations']) and ('hive.llap.daemon.queue.name' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties'])):
             llap_daemon_selected_queue_name = services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.llap.daemon.queue.name']
         else:
