@@ -1,0 +1,36 @@
+{
+  ViewDataMigrationContextImpl migrationContext=getViewDataMigrationContext(targetInstanceDefinition,sourceInstanceDefinition);
+  if (migrateOnce) {
+    if (!isTargetEmpty(migrationContext)) {
+      LOG.error("Migration canceled because target instance is not empty");
+      return;
+    }
+  }
+  ViewDataMigrator dataMigrator=getViewDataMigrator(targetInstanceDefinition,migrationContext);
+  LOG.debug("Running before-migration hook");
+  if (!dataMigrator.beforeMigration()) {
+    String msg="View " + targetInstanceDefinition.getInstanceName() + " canceled the migration process";
+    LOG.error(msg);
+    throw new ViewDataMigrationException(msg);
+  }
+  Map<String,Class> originClasses=migrationContext.getOriginEntityClasses();
+  Map<String,Class> currentClasses=migrationContext.getCurrentEntityClasses();
+  for (  Map.Entry<String,Class> originEntity : originClasses.entrySet()) {
+    LOG.debug("Migrating persistence entity " + originEntity.getKey());
+    if (currentClasses.containsKey(originEntity.getKey())) {
+      Class entity=currentClasses.get(originEntity.getKey());
+      dataMigrator.migrateEntity(originEntity.getValue(),entity);
+    }
+ else {
+      LOG.debug("Entity " + originEntity.getKey() + " not found in target view");
+      dataMigrator.migrateEntity(originEntity.getValue(),null);
+    }
+  }
+  LOG.debug("Migrating instance data");
+  dataMigrator.migrateInstanceData();
+  LOG.debug("Running after-migration hook");
+  dataMigrator.afterMigration();
+  LOG.debug("Copying user permissions");
+  viewRegistry.copyPrivileges(sourceInstanceDefinition,targetInstanceDefinition);
+  migrationContext.putCurrentInstanceData("upgrade","upgradedFrom",sourceInstanceDefinition.getViewEntity().getVersion());
+}

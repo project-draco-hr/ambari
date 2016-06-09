@@ -1,0 +1,28 @@
+{
+  if (!viewDefinitions.containsKey(viewDefinition.getName())) {
+    LOG.debug("Cancel auto migration of not loaded view: " + viewDefinition.getName() + ".");
+    return;
+  }
+  try {
+    for (    ViewInstanceEntity instance : viewDefinition.getInstances()) {
+      LOG.debug("Try to migrate the data from previous version of: " + viewDefinition.getName() + "/"+ instance.getInstanceName()+ ".");
+      ViewInstanceEntity latestUnregisteredView=getLatestUnregisteredInstance(serverVersion,instance);
+      if (latestUnregisteredView != null) {
+        String instanceName=instance.getViewEntity().getName() + "/" + instance.getName();
+        try {
+          LOG.info("Found previous version of the view instance " + instanceName + ": "+ latestUnregisteredView.getViewEntity().getName()+ "/"+ latestUnregisteredView.getName());
+          getViewDataMigrationUtility().migrateData(instance,latestUnregisteredView,true);
+          LOG.info("View data migrated: " + viewDefinition.getName() + ".");
+        }
+ catch (        ViewDataMigrationException e) {
+          LOG.error("Error occurred during migration",e);
+        }
+      }
+    }
+  }
+ catch (  Exception e) {
+    String msg="Caught exception migrating data in view " + viewDefinition.getName();
+    setViewStatus(viewDefinition,ViewEntity.ViewStatus.ERROR,msg + " : " + e.getMessage());
+    LOG.error(msg,e);
+  }
+}

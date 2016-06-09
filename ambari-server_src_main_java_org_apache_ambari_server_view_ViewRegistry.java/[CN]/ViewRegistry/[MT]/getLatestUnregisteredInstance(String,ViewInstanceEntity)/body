@@ -1,0 +1,46 @@
+{
+  File viewDir=configuration.getViewsDir();
+  String extractedArchivesPath=viewDir.getAbsolutePath() + File.separator + EXTRACTED_ARCHIVES_DIR;
+  File extractedArchivesDir=new File(extractedArchivesPath);
+  File[] extractedArchives=extractedArchivesDir.listFiles();
+  Map<ViewInstanceEntity,Long> unregInstancesTimestamps=new HashMap<>();
+  if (extractedArchives != null) {
+    for (    File archiveDir : extractedArchives) {
+      if (archiveDir.isDirectory()) {
+        ViewConfig uViewConfig=archiveUtility.getViewConfigFromExtractedArchive(archiveDir.getPath(),false);
+        if (!uViewConfig.isSystem()) {
+          if (!uViewConfig.getName().equals(instance.getViewEntity().getViewName())) {
+            continue;
+          }
+          if (viewDefinitions.containsKey(ViewEntity.getViewName(uViewConfig.getName(),uViewConfig.getVersion()))) {
+            continue;
+          }
+          LOG.debug("Unregistered extracted view found: " + archiveDir.getPath());
+          ViewEntity uViewDefinition=new ViewEntity(uViewConfig,configuration,archiveDir.getPath());
+          readViewArchive(uViewDefinition,archiveDir,archiveDir,serverVersion);
+          for (          ViewInstanceEntity instanceEntity : uViewDefinition.getInstances()) {
+            LOG.debug(uViewDefinition.getName() + " instance found: " + instanceEntity.getInstanceName());
+            unregInstancesTimestamps.put(instanceEntity,archiveDir.lastModified());
+          }
+        }
+      }
+    }
+  }
+  long latestPrevInstanceTimestamp=0;
+  ViewInstanceEntity latestPrevInstance=null;
+  for (  ViewInstanceEntity unregInstance : unregInstancesTimestamps.keySet()) {
+    if (unregInstance.getName().equals(instance.getName())) {
+      if (unregInstancesTimestamps.get(unregInstance) > latestPrevInstanceTimestamp) {
+        latestPrevInstance=unregInstance;
+        latestPrevInstanceTimestamp=unregInstancesTimestamps.get(latestPrevInstance);
+      }
+    }
+  }
+  if (latestPrevInstance != null) {
+    LOG.debug("Previous version of " + instance.getViewEntity().getName() + "/"+ instance.getName()+ " found: "+ latestPrevInstance.getViewEntity().getName()+ "/"+ latestPrevInstance.getName());
+  }
+ else {
+    LOG.debug("Previous version of " + instance.getViewEntity().getName() + "/"+ instance.getName()+ " not found");
+  }
+  return latestPrevInstance;
+}
