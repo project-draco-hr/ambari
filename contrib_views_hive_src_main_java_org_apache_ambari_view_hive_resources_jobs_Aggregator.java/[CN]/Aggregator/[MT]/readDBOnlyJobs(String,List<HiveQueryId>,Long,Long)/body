@@ -1,0 +1,22 @@
+{
+  List<Job> dbOnlyJobs=new LinkedList<Job>();
+  HashMap<String,String> operationIdVsHiveId=new HashMap<>();
+  for (  HiveQueryId hqid : queries) {
+    operationIdVsHiveId.put(hqid.operationId,hqid.entity);
+  }
+  LOG.info("operationIdVsHiveId : {} ",operationIdVsHiveId);
+  List<Job> jobs=viewJobResourceManager.readAll(new OnlyOwnersFilteringStrategy(username));
+  for (  Job job : jobs) {
+    if (null != startTime && null != endTime && null != job.getDateSubmitted() && (job.getDateSubmitted() < startTime || job.getDateSubmitted() >= endTime)) {
+      continue;
+    }
+    List<StoredOperationHandle> operationHandles=operationHandleResourceManager.readJobRelatedHandles(job);
+    if (operationHandles.size() > 0) {
+      StoredOperationHandle operationHandle=operationHandles.get(0);
+      if (!operationIdVsHiveId.containsKey(hexStringToUrlSafeBase64(operationHandle.getGuid()))) {
+        dbOnlyJobs.add(job);
+      }
+    }
+  }
+  return dbOnlyJobs;
+}

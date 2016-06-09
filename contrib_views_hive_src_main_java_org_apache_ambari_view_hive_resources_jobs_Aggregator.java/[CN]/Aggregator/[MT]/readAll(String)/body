@@ -1,38 +1,9 @@
 {
-  Set<String> addedOperationIds=new HashSet<String>();
-  List<Job> allJobs=new LinkedList<Job>();
-  List<HiveQueryId> queries=ats.getHiveQueryIdsList(username);
-  for (  HiveQueryId atsHiveQuery : queries) {
-    TezDagId atsTezDag=getTezDagFromHiveQueryId(atsHiveQuery);
-    JobImpl atsJob;
-    if (hasOperationId(atsHiveQuery)) {
-      try {
-        Job viewJob=getJobByOperationId(urlSafeBase64ToHexString(atsHiveQuery.operationId));
-        saveJobInfoIfNeeded(atsHiveQuery,atsTezDag,viewJob);
-        atsJob=mergeAtsJobWithViewJob(atsHiveQuery,atsTezDag,viewJob);
-      }
- catch (      ItemNotFound itemNotFound) {
-        atsJob=atsOnlyJob(atsHiveQuery,atsTezDag);
-      }
-    }
- else {
-      atsJob=atsOnlyJob(atsHiveQuery,atsTezDag);
-    }
-    allJobs.add(atsJob);
-    addedOperationIds.add(atsHiveQuery.operationId);
-  }
-  List<Job> jobs=viewJobResourceManager.readAll(new OnlyOwnersFilteringStrategy(username));
-  for (  Job job : jobs) {
-    List<StoredOperationHandle> operationHandles=operationHandleResourceManager.readJobRelatedHandles(job);
-    if (operationHandles.size() > 0) {
-      StoredOperationHandle operationHandle=operationHandles.get(0);
-      if (!addedOperationIds.contains(hexStringToUrlSafeBase64(operationHandle.getGuid()))) {
-        allJobs.add(job);
-      }
-    }
- else {
-      LOG.error("operationHandle not found for job : {}",job.getId());
-    }
-  }
+  List<HiveQueryId> queries=ats.getHiveQueryIdsForUser(username);
+  LOG.debug("HiveQueryIds fetched : {}",queries);
+  List<Job> allJobs=fetchDagsAndMergeJobs(queries);
+  List<Job> dbOnlyJobs=readDBOnlyJobs(username,queries,null,null);
+  LOG.debug("Jobs only present in DB: {}",dbOnlyJobs);
+  allJobs.addAll(dbOnlyJobs);
   return allJobs;
 }
