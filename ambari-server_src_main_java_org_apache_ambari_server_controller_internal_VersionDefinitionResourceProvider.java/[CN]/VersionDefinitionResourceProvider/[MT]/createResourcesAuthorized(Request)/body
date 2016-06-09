@@ -13,6 +13,7 @@
   final String definitionUrl=(String)properties.get(VERSION_DEF_DEFINITION_URL);
   final String definitionBase64=(String)properties.get(VERSION_DEF_DEFINITION_BASE64);
   final String definitionName=(String)properties.get(VERSION_DEF_AVAILABLE_DEFINITION);
+  final Set<String> validations=new HashSet<>();
   final boolean dryRun=request.isDryRunRequest();
   XmlHolder xmlHolder=createResources(new Command<XmlHolder>(){
     @Override public XmlHolder invoke() throws AmbariException {
@@ -41,27 +42,55 @@
         throw new AmbariException("Cannot determine creation method");
       }
       toRepositoryVersionEntity(holder);
-      if (!dryRun) {
+      try {
         RepositoryVersionResourceProvider.validateRepositoryVersion(s_repoVersionDAO,s_metaInfo.get(),holder.entity);
       }
-      checkForParent(holder);
-      if (!dryRun) {
-        s_repoVersionDAO.create(holder.entity);
+ catch (      AmbariException e) {
+        if (dryRun) {
+          validations.add(e.getMessage());
+        }
+ else {
+          throw e;
+        }
       }
+      checkForParent(holder);
       return holder;
     }
   }
 );
+  if (StringUtils.isNotBlank(ObjectUtils.toString(properties.get(VERSION_DEF_DISPLAY_NAME)))) {
+    xmlHolder.xml.release.display=properties.get(VERSION_DEF_DISPLAY_NAME).toString();
+    xmlHolder.entity.setDisplayName(properties.get(VERSION_DEF_DISPLAY_NAME).toString());
+  }
+  if (s_repoVersionDAO.findByDisplayName(xmlHolder.entity.getDisplayName()) != null) {
+    String err=String.format("Repository version with name %s already exists.",xmlHolder.entity.getDisplayName());
+    if (dryRun) {
+      validations.add(err);
+    }
+ else {
+      throw new IllegalArgumentException(err);
+    }
+  }
+  if (s_repoVersionDAO.findByStackAndVersion(xmlHolder.entity.getStack(),xmlHolder.entity.getVersion()) != null) {
+    String err=String.format("Repository version for stack %s and version %s already exists.",xmlHolder.entity.getStackId(),xmlHolder.entity.getVersion());
+    if (dryRun) {
+      validations.add(err);
+    }
+ else {
+      throw new IllegalArgumentException(err);
+    }
+  }
   final Resource res;
   if (dryRun) {
-    Set<String> ids=Sets.newHashSet(VERSION_DEF_TYPE_PROPERTY_ID,VERSION_DEF_FULL_VERSION,VERSION_DEF_RELEASE_BUILD,VERSION_DEF_RELEASE_COMPATIBLE_WITH,VERSION_DEF_RELEASE_NOTES,VERSION_DEF_RELEASE_VERSION,VERSION_DEF_AVAILABLE_SERVICES,VERSION_DEF_STACK_SERVICES);
-    res=toResource(null,xmlHolder.xml,ids);
+    Set<String> ids=Sets.newHashSet(VERSION_DEF_TYPE_PROPERTY_ID,VERSION_DEF_FULL_VERSION,VERSION_DEF_RELEASE_BUILD,VERSION_DEF_RELEASE_COMPATIBLE_WITH,VERSION_DEF_RELEASE_NOTES,VERSION_DEF_RELEASE_VERSION,VERSION_DEF_DISPLAY_NAME,VERSION_DEF_AVAILABLE_SERVICES,VERSION_DEF_VALIDATION,VERSION_DEF_STACK_SERVICES);
+    res=toResource(null,xmlHolder.xml,ids,validations);
     if (null != definitionName) {
       res.setProperty(SHOW_AVAILABLE,true);
     }
     addSubresources(res,xmlHolder.entity);
   }
  else {
+    s_repoVersionDAO.create(xmlHolder.entity);
     res=toResource(xmlHolder.entity,Collections.<String>emptySet());
     notifyCreate(Resource.Type.VersionDefinition,request);
   }
