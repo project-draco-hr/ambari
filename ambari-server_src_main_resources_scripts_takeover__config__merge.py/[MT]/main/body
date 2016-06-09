@@ -3,16 +3,22 @@ def main():
     outputDir = os.path.join(tempDir)
     parser = optparse.OptionParser(usage='usage: %prog [options]')
     parser.set_description('This python program is an Ambari thin client and supports Ambari cluster takeover by generating a configuration json that can be used with a blueprint.\n\nIt reads actual hadoop configs from a target directory and produces an out file with problems found that need to be addressed and the json file which can be used to create the blueprint.\n\nThis script only works with *.xml *.yaml and *.properties extensions of files.')
+    parser.add_option('-a', '--action', dest='action', default='merge', help='Script action. (merge/diff) [default: merge]')
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', default=False, help='output verbosity.')
     parser.add_option('-o', '--outputdir', dest='outputDir', default=outputDir, metavar='FILE', help='Output directory. [default: /tmp]')
-    parser.add_option('-i', '--inputdir', dest='inputDir', help='Input directory.')
     parser.add_option('-u', '--unknown-files-mapping-file', dest='unknown_files_mapping_file', metavar='FILE', help=CONFIG_MAPPING_HELP_TEXT, default='takeover_files_mapping.json')
+    merge_options_group = OptionGroup(parser, "Required options for action 'merge'")
+    merge_options_group.add_option('-i', '--inputdir', dest='inputDir', help='Input directory.')
+    parser.add_option_group(merge_options_group)
+    diff_options_group = OptionGroup(parser, "Required options for action 'diff'")
+    diff_options_group.add_option('-l', '--leftInputDir', dest='leftInputDir', help='Left input directory.')
+    diff_options_group.add_option('-r', '--rightInputDir', dest='rightInputDir', help='Right input directory.')
+    parser.add_option_group(diff_options_group)
     (options, args) = parser.parse_args()
     if options.verbose:
         logger.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logging.INFO)
-    ConfigMerge.INPUT_DIR = options.inputDir
     ConfigMerge.OUTPUT_DIR = options.outputDir
     if (not os.path.exists(ConfigMerge.OUTPUT_DIR)):
         os.makedirs(ConfigMerge.OUTPUT_DIR)
@@ -31,8 +37,31 @@ def main():
             ConfigMerge.CONTENT_UNKNOWN_FILES_MAPPING_FILE = json.load(f)
     else:
         logger.warning('Config mapping file was not found at {0}. Please provide it at the given path or provide a different path to it using -u option.'.format(options.unknown_files_mapping_file))
-    filePaths = ConfigMerge.get_all_supported_files_grouped_by_name()
-    logger.info("Writing logs into '{0}' file".format(logegr_file_name))
-    logger.debug('Following configuration files found:\n{0}'.format(filePaths.items()))
-    configMerge = ConfigMerge(filePaths)
-    return configMerge.perform_merge()
+    if (options.action == 'merge'):
+        ConfigMerge.INPUT_DIR = options.inputDir
+        file_paths = ConfigMerge.get_all_supported_files_grouped_by_name(ConfigMerge.INPUT_DIR)
+        logger.info("Writing logs into '{0}' file".format(logegr_file_name))
+        logger.debug('Following configuration files found:\n{0}'.format(file_paths.items()))
+        config_merge = ConfigMerge(config_files_map=file_paths)
+        return config_merge.perform_merge()
+    elif (options.action == 'diff'):
+        if (options.leftInputDir and os.path.isdir(options.leftInputDir)):
+            ConfigMerge.LEFT_INPUT_DIR = options.leftInputDir
+        else:
+            logger.error('Directory "{0}" doesn\'t exist. Use option "-h" for details'.format(options.leftInputDir))
+            return (-1)
+        if (options.rightInputDir and os.path.isdir(options.rightInputDir)):
+            ConfigMerge.RIGHT_INPUT_DIR = options.rightInputDir
+        else:
+            logger.error('Directory "{0}" doesn\'t exist. Use option "-h" for details'.format(options.rightInputDir))
+            return (-1)
+        logger.info("Writing logs into '{0}' file".format(logegr_file_name))
+        left_file_paths = ConfigMerge.get_all_supported_files_grouped_by_name(directory=ConfigMerge.LEFT_INPUT_DIR)
+        logger.debug('Following configuration files found:\n{0} for left directory'.format(left_file_paths.items()))
+        right_file_paths = ConfigMerge.get_all_supported_files_grouped_by_name(directory=ConfigMerge.RIGHT_INPUT_DIR)
+        logger.debug('Following configuration files found:\n{0} for right directory'.format(right_file_paths.items()))
+        config_merge = ConfigMerge(left_file_paths=left_file_paths, right_file_paths=right_file_paths)
+        return config_merge.perform_diff()
+    else:
+        logger.error('Action "{0}" doesn\'t supports by script. Use option "-h" for details'.format(options.action))
+        return (-1)
