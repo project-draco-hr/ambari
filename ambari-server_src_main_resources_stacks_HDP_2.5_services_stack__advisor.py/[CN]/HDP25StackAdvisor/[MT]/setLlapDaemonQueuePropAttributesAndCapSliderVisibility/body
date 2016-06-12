@@ -1,6 +1,7 @@
-def setLlapDaemonQueueNamePropAttributes(self, services, configurations):
+def setLlapDaemonQueuePropAttributesAndCapSliderVisibility(self, services, configurations):
     Logger.info("Determining 'hive.llap.daemon.queue.name' config Property Attributes.")
     putHiveInteractiveSitePropertyAttribute = self.putPropertyAttribute(configurations, self.HIVE_INTERACTIVE_SITE)
+    putHiveInteractiveEnvPropertyAttribute = self.putPropertyAttribute(configurations, 'hive-interactive-env')
     capacity_scheduler_properties = dict()
     if ('capacity-scheduler' in configurations):
         cap_sched_props_as_dict = configurations['capacity-scheduler']['properties']
@@ -34,5 +35,17 @@ def setLlapDaemonQueueNamePropAttributes(self, services, configurations):
         leafQueues = sorted(leafQueues, key=(lambda q: q['value']))
         putHiveInteractiveSitePropertyAttribute('hive.llap.daemon.queue.name', 'entries', leafQueues)
         Logger.info("'hive.llap.daemon.queue.name' config Property Attributes set to : {0}".format(leafQueues))
+        llap_daemon_selected_queue_name = None
+        llap_queue_selected_in_current_call = None
+        if ((self.HIVE_INTERACTIVE_SITE in services['configurations']) and ('hive.llap.daemon.queue.name' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties'])):
+            llap_daemon_selected_queue_name = services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.llap.daemon.queue.name']
+        if ((self.HIVE_INTERACTIVE_SITE in configurations) and ('hive.llap.daemon.queue.name' in configurations[self.HIVE_INTERACTIVE_SITE]['properties'])):
+            llap_queue_selected_in_current_call = configurations[self.HIVE_INTERACTIVE_SITE]['properties']['hive.llap.daemon.queue.name']
+        if ((len(leafQueueNames) == 2) and (((llap_daemon_selected_queue_name != None) and (llap_daemon_selected_queue_name == 'llap')) or ((llap_queue_selected_in_current_call != None) and (llap_queue_selected_in_current_call == 'llap')))):
+            putHiveInteractiveEnvPropertyAttribute('llap_queue_capacity', 'visible', 'true')
+            Logger.info("Setting LLAP queue capacity slider visibility to 'True'.")
+        else:
+            putHiveInteractiveEnvPropertyAttribute('llap_queue_capacity', 'visible', 'false')
+            Logger.info("Setting LLAP queue capacity slider visibility to 'False'.")
     else:
         Logger.error("Problem retrieving YARN queues. Skipping updating HIVE Server Interactve 'hive.server2.tez.default.queues' property attributes.")

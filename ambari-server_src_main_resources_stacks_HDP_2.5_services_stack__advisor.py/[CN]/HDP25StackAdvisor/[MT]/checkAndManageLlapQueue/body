@@ -4,22 +4,20 @@ def checkAndManageLlapQueue(self, services, configurations, hosts, llap_queue_na
     putHiveInteractiveSiteProperty = self.putProperty(configurations, self.HIVE_INTERACTIVE_SITE, services)
     putHiveInteractiveEnvPropertyAttribute = self.putPropertyAttribute(configurations, 'hive-interactive-env')
     putCapSchedProperty = self.putProperty(configurations, 'capacity-scheduler', services)
+    leafQueueNames = None
     (capacity_scheduler_properties, received_as_key_value_pair) = self.getCapacitySchedulerProperties(services)
     if capacity_scheduler_properties:
+        leafQueueNames = self.getAllYarnLeafQueues(capacity_scheduler_properties)
         if ('llap_queue_capacity' in services['configurations']['hive-interactive-env']['properties']):
             llap_slider_cap_percentage = int(services['configurations']['hive-interactive-env']['properties']['llap_queue_capacity'])
-            llap_min_reqd_cap_percentage = math.ceil(self.min_llap_queue_perc_required_in_cluster(services, hosts, configurations))
-            if (llap_min_reqd_cap_percentage > 100):
-                Logger.error("Minimum calculated 'llap' queue capacity ({0}%) is more than what the cluster has in totality. Not creating/adjusting 'llap' queue. Increase the overall cluster capacity.".format(llap_min_reqd_cap_percentage))
-                return
+            min_reqd_queue_cap_perc = self.min_queue_perc_reqd_for_llap_and_hive_app(services, hosts, configurations)
             if ((llap_slider_cap_percentage <= 0) or (llap_slider_cap_percentage > 100)):
-                Logger.info("Adjusting HIVE 'llap_queue_capacity' from {0}% (invalid size) to {1}%".format(llap_slider_cap_percentage, llap_min_reqd_cap_percentage))
-                putHiveInteractiveEnvProperty('llap_queue_capacity', llap_min_reqd_cap_percentage)
-                llap_slider_cap_percentage = llap_min_reqd_cap_percentage
+                Logger.info("Adjusting HIVE 'llap_queue_capacity' from {0}% (invalid size) to {1}%".format(llap_slider_cap_percentage, min_reqd_queue_cap_perc))
+                putHiveInteractiveEnvProperty('llap_queue_capacity', min_reqd_queue_cap_perc)
+                llap_slider_cap_percentage = min_reqd_queue_cap_perc
         else:
             Logger.error('Problem retrieving LLAP Queue Capacity. Skipping creating {0} queue'.format(llap_queue_name))
             return
-        leafQueueNames = self.getAllYarnLeafQueues(capacity_scheduler_properties)
         cap_sched_config_keys = capacity_scheduler_properties.keys()
         yarn_default_queue_capacity = (-1)
         if ('yarn.scheduler.capacity.root.default.capacity' in cap_sched_config_keys):
@@ -89,10 +87,10 @@ def checkAndManageLlapQueue(self, services, configurations, hosts, llap_queue_na
                     Logger.info("Adjusted 'default' queue capacity to : {0}%".format(adjusted_default_queue_cap))
                 putHiveInteractiveSiteProperty('hive.llap.daemon.queue.name', llap_queue_name)
                 putHiveInteractiveSiteProperty('hive.server2.tez.default.queues', llap_queue_name)
-                putHiveInteractiveEnvPropertyAttribute('llap_queue_capacity', 'minimum', llap_min_reqd_cap_percentage)
+                putHiveInteractiveEnvPropertyAttribute('llap_queue_capacity', 'minimum', min_reqd_queue_cap_perc)
                 putHiveInteractiveEnvPropertyAttribute('llap_queue_capacity', 'maximum', 100)
-                self.setLlapDaemonQueueNamePropAttributes(services, configurations)
+                self.setLlapDaemonQueuePropAttributesAndCapSliderVisibility(services, configurations)
         else:
-            Logger.debug('Not creating {0} queue. Current YARN queues : {1}'.format(llap_queue_name, list(leafQueueNames)))
+            Logger.debug('Not creating/adjusting {0} queue. Current YARN queues : {1}'.format(llap_queue_name, list(leafQueueNames)))
     else:
         Logger.error("Couldn't retrieve 'capacity-scheduler' properties while doing YARN queue adjustment for Hive Server Interactive.")
