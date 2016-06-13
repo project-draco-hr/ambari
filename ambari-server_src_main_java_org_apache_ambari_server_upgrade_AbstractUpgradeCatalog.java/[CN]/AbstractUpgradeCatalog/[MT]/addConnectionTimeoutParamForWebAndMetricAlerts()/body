@@ -1,0 +1,24 @@
+{
+  LOG.info("Updating alert definitions.");
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  AlertDefinitionDAO alertDefinitionDAO=injector.getInstance(AlertDefinitionDAO.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  JsonParser jsonParser=new JsonParser();
+  for (  final Cluster cluster : getCheckedClusterMap(clusters).values()) {
+    long clusterID=cluster.getClusterId();
+    List<AlertDefinitionEntity> alertDefinitionList=alertDefinitionDAO.findAll(clusterID);
+    for (    AlertDefinitionEntity alertDefinitionEntity : alertDefinitionList) {
+      SourceType sourceType=alertDefinitionEntity.getSourceType();
+      if (sourceType == SourceType.METRIC || sourceType == SourceType.WEB) {
+        String source=alertDefinitionEntity.getSource();
+        JsonObject rootJson=jsonParser.parse(source).getAsJsonObject();
+        JsonObject uriJson=rootJson.get("uri").getAsJsonObject();
+        if (!uriJson.has(ALERT_URL_PROPERTY_CONNECTION_TIMEOUT)) {
+          uriJson.addProperty(ALERT_URL_PROPERTY_CONNECTION_TIMEOUT,5.0);
+          alertDefinitionEntity.setSource(rootJson.toString());
+          alertDefinitionDAO.merge(alertDefinitionEntity);
+        }
+      }
+    }
+  }
+}
