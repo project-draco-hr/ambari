@@ -16,22 +16,12 @@
         }
       }
       if (localBuffer.size() > 0 && ((outputData == null && isDrain()) || (nextDispatchDuration <= 0 || localBuffer.size() >= maxBufferSize))) {
-        try {
-          if (isComputeCurrentCollection) {
-            addRouterField();
-          }
-          addToSolr(outputData);
-          resetLocalBuffer();
-          lastDispatchTime=System.currentTimeMillis();
+        boolean response=sendToSolr(outputData);
+        if (isDrain() && !response) {
+          LOG.warn("In drain mode and sending to Solr failed. So exiting. output=" + getShortDescription());
+          break;
         }
- catch (        IOException ioException) {
-          waitForSolr();
-        }
-catch (        Throwable serverException) {
-          resetLocalBuffer();
-          String logMessageKey=this.getClass().getSimpleName() + "_SOLR_UPDATE_EXCEPTION";
-          LogFeederUtil.logErrorMessageByInterval(logMessageKey,"Error sending log message to server. " + outputData,serverException,LOG,Level.ERROR);
-        }
+        lastDispatchTime=currTimeMS;
       }
     }
  catch (    InterruptedException e) {
