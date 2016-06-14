@@ -4,14 +4,15 @@
   final String configurationString="{\"items\": [{\"properties\": {\"test.property.name\": \"test property value\"}}]}";
   final int[] desiredConfigPolls={0};
   final int[] testConfigPolls={0};
-  expect(clusterStreamProvider.readFrom(eq("?fields=services/ServiceInfo,hosts,Clusters"),eq("GET"),(String)isNull(),(Map<String,String>)anyObject())).andAnswer(new IAnswer<InputStream>(){
+  final String clusterPath="/api/v1/clusters/Test";
+  expect(clusterStreamProvider.readFrom(eq(clusterPath + "?fields=services/ServiceInfo,hosts,Clusters"),eq("GET"),(String)isNull(),(Map<String,String>)anyObject())).andAnswer(new IAnswer<InputStream>(){
     @Override public InputStream answer() throws Throwable {
       desiredConfigPolls[0]+=1;
       return new ByteArrayInputStream(desiredConfigsString.getBytes());
     }
   }
 ).anyTimes();
-  expect(clusterStreamProvider.readFrom(eq("/configurations?(type=test-site&tag=TAG)"),eq("GET"),(String)isNull(),(Map<String,String>)anyObject())).andAnswer(new IAnswer<InputStream>(){
+  expect(clusterStreamProvider.readFrom(eq(clusterPath + "/configurations?(type=test-site&tag=TAG)"),eq("GET"),(String)isNull(),(Map<String,String>)anyObject())).andAnswer(new IAnswer<InputStream>(){
     @Override public InputStream answer() throws Throwable {
       testConfigPolls[0]+=1;
       return new ByteArrayInputStream(configurationString.getBytes());
@@ -20,7 +21,7 @@
 ).anyTimes();
   RemoteAmbariClusterEntity entity=createNiceMock(RemoteAmbariClusterEntity.class);
   replay(clusterStreamProvider,entity);
-  RemoteAmbariCluster cluster=new RemoteAmbariCluster("Test",clusterStreamProvider);
+  RemoteAmbariCluster cluster=new RemoteAmbariCluster("Test",clusterPath,clusterStreamProvider);
   String value=cluster.getConfigurationValue("test-site","test.property.name");
   assertEquals(value,"test property value");
   assertEquals(desiredConfigPolls[0],1);
