@@ -1,0 +1,28 @@
+{
+  ConfigHelper configHelper=injector.getInstance(ConfigHelper.class);
+  AmbariManagementController controller=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=controller.getClusters();
+  if (clusters == null) {
+    return;
+  }
+  Map<String,Cluster> clusterMap=clusters.getClusters();
+  if (clusterMap != null && !clusterMap.isEmpty()) {
+    for (    Cluster cluster : clusterMap.values()) {
+      Map<String,String> properties=new HashMap<String,String>();
+      for (      String propertyName : propertyNames) {
+        String propertyValue=configHelper.getPropertyValueFromStackDefinitions(cluster,configType,propertyName);
+        if (propertyValue == null) {
+          LOG.info("Config " + propertyName + " from "+ configType+ " is not found in xml definitions."+ "Skipping configuration property update");
+          continue;
+        }
+        ServiceInfo propertyService=configHelper.getPropertyOwnerService(cluster,configType,propertyName);
+        if (propertyService != null && !cluster.getServices().containsKey(propertyService.getName())) {
+          LOG.info("Config " + propertyName + " from "+ configType+ " with value = "+ propertyValue+ " "+ "Is not added due to service "+ propertyService.getName()+ " is not in the cluster.");
+          continue;
+        }
+        properties.put(propertyName,propertyValue);
+      }
+      updateConfigurationPropertiesForCluster(cluster,configType,properties,toRemove,updateIfExists,createNewConfigType);
+    }
+  }
+}
