@@ -1,14 +1,17 @@
 def wait_for_safemode_off(hdfs_binary, afterwait_sleep=0, execute_kinit=False):
     '\n  During NonRolling (aka Express Upgrade), after starting NameNode, which is still in safemode, and then starting\n  all of the DataNodes, we need for NameNode to receive all of the block reports and leave safemode.\n  If HA is present, then this command will run individually on each NameNode, which checks for its own address.\n  '
     import params
-    Logger.info('Wait to leafe safemode since must transition from ON to OFF.')
+    retries = 115
+    sleep_seconds = 10
+    sleep_minutes = int(((sleep_seconds * retries) / 60))
+    Logger.info('Waiting up to {0} minutes for the NameNode to leave Safemode...'.format(sleep_minutes))
     if (params.security_enabled and execute_kinit):
         kinit_command = format('{params.kinit_path_local} -kt {params.hdfs_user_keytab} {params.hdfs_principal_name}')
         Execute(kinit_command, user=params.hdfs_user, logoutput=True)
     try:
         dfsadmin_base_command = get_dfsadmin_base_command(hdfs_binary, use_specific_namenode=True)
         is_namenode_safe_mode_off = (dfsadmin_base_command + " -safemode get | grep 'Safe mode is OFF'")
-        Execute(is_namenode_safe_mode_off, tries=115, try_sleep=10, user=params.hdfs_user, logoutput=True)
+        Execute(is_namenode_safe_mode_off, tries=retries, try_sleep=sleep_seconds, user=params.hdfs_user, logoutput=True)
         time.sleep(afterwait_sleep)
     except Fail:
-        Logger.error('NameNode is still in safemode, please be careful with commands that need safemode OFF.')
+        Logger.error('The NameNode is still in Safemode. Please be careful with commands that need Safemode OFF.')
