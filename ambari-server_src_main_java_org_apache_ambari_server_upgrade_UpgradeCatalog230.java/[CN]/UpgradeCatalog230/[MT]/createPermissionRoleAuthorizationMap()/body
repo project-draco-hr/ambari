@@ -1,23 +1,25 @@
 {
   LOG.info("Creating permission to authorizations map");
-  String[] columnNames=new String[]{PERMISSION_ID_COL,ROLE_AUTHORIZATION_ID_COL};
   PermissionDAO permissionDAO=injector.getInstance(PermissionDAO.class);
   ResourceTypeDAO resourceTypeDAO=injector.getInstance(ResourceTypeDAO.class);
-  String viewPermissionId=permissionDAO.findPermissionByNameAndType("VIEW.USER",resourceTypeDAO.findByName("VIEW")).getId().toString();
-  String administratorPermissionId=permissionDAO.findPermissionByNameAndType("AMBARI.ADMINISTRATOR",resourceTypeDAO.findByName("AMBARI")).getId().toString();
-  String clusterUserPermissionId=permissionDAO.findPermissionByNameAndType("CLUSTER.USER",resourceTypeDAO.findByName("CLUSTER")).getId().toString();
-  String clusterOperatorPermissionId=permissionDAO.findPermissionByNameAndType("CLUSTER.OPERATOR",resourceTypeDAO.findByName("CLUSTER")).getId().toString();
-  String clusterAdministratorPermissionId=permissionDAO.findPermissionByNameAndType("CLUSTER.ADMINISTRATOR",resourceTypeDAO.findByName("CLUSTER")).getId().toString();
-  String serviceAdministratorPermissionId=permissionDAO.findPermissionByNameAndType("SERVICE.ADMINISTRATOR",resourceTypeDAO.findByName("CLUSTER")).getId().toString();
-  String serviceOperatorPermissionId=permissionDAO.findPermissionByNameAndType("SERVICE.OPERATOR",resourceTypeDAO.findByName("CLUSTER")).getId().toString();
-  List<String> viewUserAndAdministrator=Arrays.asList(viewPermissionId,administratorPermissionId);
-  List<String> clusterUserAndUp=Arrays.asList(clusterUserPermissionId,serviceOperatorPermissionId,serviceAdministratorPermissionId,clusterOperatorPermissionId,clusterAdministratorPermissionId,administratorPermissionId);
-  List<String> serviceOperatorAndUp=Arrays.asList(serviceOperatorPermissionId,serviceAdministratorPermissionId,clusterOperatorPermissionId,clusterAdministratorPermissionId,administratorPermissionId);
-  List<String> serviceAdministratorAndUp=Arrays.asList(serviceAdministratorPermissionId,clusterOperatorPermissionId,clusterAdministratorPermissionId,administratorPermissionId);
-  List<String> clusterOperatorAndUp=Arrays.asList(clusterOperatorPermissionId,clusterAdministratorPermissionId,administratorPermissionId);
-  List<String> clusterAdministratorAndUp=Arrays.asList(clusterAdministratorPermissionId,administratorPermissionId);
-  List<String> administratorOnly=Arrays.asList(administratorPermissionId);
-  Map<String,List<String>> map=new HashMap<String,List<String>>();
+  ResourceTypeEntity ambariResource=resourceTypeDAO.findByName("AMBARI");
+  ResourceTypeEntity clusterResource=resourceTypeDAO.findByName("CLUSTER");
+  ResourceTypeEntity viewResource=resourceTypeDAO.findByName("VIEW");
+  PermissionEntity viewPermission=permissionDAO.findPermissionByNameAndType("VIEW.USER",viewResource);
+  PermissionEntity administratorPermission=permissionDAO.findPermissionByNameAndType("AMBARI.ADMINISTRATOR",ambariResource);
+  PermissionEntity clusterUserPermission=permissionDAO.findPermissionByNameAndType("CLUSTER.USER",clusterResource);
+  PermissionEntity clusterOperatorPermission=permissionDAO.findPermissionByNameAndType("CLUSTER.OPERATOR",clusterResource);
+  PermissionEntity clusterAdministratorPermission=permissionDAO.findPermissionByNameAndType("CLUSTER.ADMINISTRATOR",clusterResource);
+  PermissionEntity serviceAdministratorPermission=permissionDAO.findPermissionByNameAndType("SERVICE.ADMINISTRATOR",clusterResource);
+  PermissionEntity serviceOperatorPermission=permissionDAO.findPermissionByNameAndType("SERVICE.OPERATOR",clusterResource);
+  Collection<PermissionEntity> viewUserAndAdministrator=Arrays.asList(viewPermission,administratorPermission);
+  Collection<PermissionEntity> clusterUserAndUp=Arrays.asList(clusterUserPermission,serviceOperatorPermission,serviceAdministratorPermission,clusterOperatorPermission,clusterAdministratorPermission,administratorPermission);
+  Collection<PermissionEntity> serviceOperatorAndUp=Arrays.asList(serviceOperatorPermission,serviceAdministratorPermission,clusterOperatorPermission,clusterAdministratorPermission,administratorPermission);
+  Collection<PermissionEntity> serviceAdministratorAndUp=Arrays.asList(serviceAdministratorPermission,clusterOperatorPermission,clusterAdministratorPermission,administratorPermission);
+  Collection<PermissionEntity> clusterOperatorAndUp=Arrays.asList(clusterOperatorPermission,clusterAdministratorPermission,administratorPermission);
+  Collection<PermissionEntity> clusterAdministratorAndUp=Arrays.asList(clusterAdministratorPermission,administratorPermission);
+  Collection<PermissionEntity> administratorOnly=Collections.singleton(administratorPermission);
+  Map<String,Collection<PermissionEntity>> map=new HashMap<String,Collection<PermissionEntity>>();
   map.put("VIEW.USE",viewUserAndAdministrator);
   map.put("SERVICE.VIEW_METRICS",clusterUserAndUp);
   map.put("SERVICE.VIEW_STATUS_INFO",clusterUserAndUp);
@@ -63,14 +65,10 @@
   map.put("AMBARI.ASSIGN_ROLES",administratorOnly);
   map.put("AMBARI.MANAGE_STACK_VERSIONS",administratorOnly);
   map.put("AMBARI.EDIT_STACK_REPOS",administratorOnly);
-  for (  Map.Entry<String,List<String>> entry : map.entrySet()) {
+  for (  Map.Entry<String,Collection<PermissionEntity>> entry : map.entrySet()) {
     String authorizationId=entry.getKey();
-    for (    String permissionId : entry.getValue()) {
-      dbAccessor.insertRowIfMissing(PERMISSION_ROLE_AUTHORIZATION_TABLE,columnNames,new String[]{"'" + permissionId + "'","'" + authorizationId + "'"},false);
+    for (    PermissionEntity permission : entry.getValue()) {
+      addAuthorizationToRole(permission,authorizationId);
     }
-  }
-  JpaEntityManager jem=(JpaEntityManager)getEntityManagerProvider().get().getDelegate();
-  if (jem != null) {
-    jem.getServerSession().getIdentityMapAccessor().invalidateAll();
   }
 }
