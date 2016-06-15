@@ -1,0 +1,45 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  Map<String,Cluster> clusterMap=getCheckedClusterMap(clusters);
+  for (  final Cluster cluster : clusterMap.values()) {
+    Config sparkDefaultsConfig=cluster.getDesiredConfigByType("spark-defaults");
+    if (sparkDefaultsConfig != null) {
+      Map<String,String> updates=new HashMap<>();
+      Map<String,String> sparkDefaultsProperties=sparkDefaultsConfig.getProperties();
+      if (sparkDefaultsProperties.containsKey("spark.driver.extraJavaOptions")) {
+        LOG.info("Updating property spark.driver.extraJavaOptions in spark-defaults");
+        String oldValue=sparkDefaultsProperties.get("spark.driver.extraJavaOptions");
+        if (oldValue.contains("{{hdp_full_version}}")) {
+          String newValue=oldValue.replace("{{hdp_full_version}}","{{full_stack_version}}");
+          updates.put("spark.driver.extraJavaOptions",newValue);
+        }
+      }
+      if (sparkDefaultsProperties.containsKey("spark.yarn.am.extraJavaOptions")) {
+        LOG.info("Updating property spark.yarn.am.extraJavaOptions in spark-defaults");
+        String oldValue=sparkDefaultsProperties.get("spark.yarn.am.extraJavaOptions");
+        if (oldValue.contains("{{hdp_full_version}}")) {
+          String newValue=oldValue.replace("{{hdp_full_version}}","{{full_stack_version}}");
+          updates.put("spark.yarn.am.extraJavaOptions",newValue);
+        }
+      }
+      if (updates.size() != 0) {
+        updateConfigurationPropertiesForCluster(cluster,"spark-defaults",updates,null,true,false);
+      }
+    }
+    Config sparkJavaOptsConfig=cluster.getDesiredConfigByType("spark-javaopts-properties");
+    if (sparkJavaOptsConfig != null) {
+      Map<String,String> updates=new HashMap<>();
+      Map<String,String> sparkJavaOptsProperties=sparkJavaOptsConfig.getProperties();
+      if (sparkJavaOptsProperties.containsKey("content")) {
+        String oldValue=sparkJavaOptsProperties.get("content");
+        if (oldValue.contains("{{hdp_full_version}}")) {
+          LOG.info("Updating property content in spark-javaopts-properties");
+          String newValue=oldValue.replace("{{hdp_full_version}}","{{full_stack_version}}");
+          updates.put("content",newValue);
+          updateConfigurationPropertiesForCluster(cluster,"spark-javaopts-properties",updates,null,true,false);
+        }
+      }
+    }
+  }
+}
