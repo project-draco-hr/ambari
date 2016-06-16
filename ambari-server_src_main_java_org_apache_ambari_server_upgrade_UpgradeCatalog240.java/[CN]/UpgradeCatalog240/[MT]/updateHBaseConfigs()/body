@@ -1,0 +1,45 @@
+{
+  final AmbariManagementController controller=injector.getInstance(AmbariManagementController.class);
+  final Clusters clusters=controller.getClusters();
+  if (null != clusters) {
+    Map<String,Cluster> clusterMap=clusters.getClusters();
+    if (null != clusterMap && !clusterMap.isEmpty()) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        Set<String> installedServices=cluster.getServices().keySet();
+        StackId stackId=cluster.getCurrentStackVersion();
+        if (installedServices.contains("HBASE") && SecurityType.KERBEROS == cluster.getSecurityType() && isAtLeastHdp25(stackId)) {
+          Config hbaseSite=cluster.getDesiredConfigByType(HBASE_SITE_CONFIG);
+          if (null != hbaseSite) {
+            Map<String,String> hbaseSiteProperties=hbaseSite.getProperties();
+            String principal=hbaseSiteProperties.get(HBASE_SPNEGO_PRINCIPAL_KEY);
+            String keytab=hbaseSiteProperties.get(HBASE_SPNEGO_KEYTAB_KEY);
+            final Map<String,String> updatedKerberosProperties=new HashMap<>();
+            if (null == principal) {
+              final KerberosDescriptor defaultDescriptor=getKerberosDescriptor(cluster);
+              final KerberosIdentityDescriptor spnegoDescriptor=defaultDescriptor.getIdentity("spnego");
+              if (null != spnegoDescriptor) {
+                KerberosPrincipalDescriptor principalDescriptor=spnegoDescriptor.getPrincipalDescriptor();
+                if (null != principalDescriptor) {
+                  updatedKerberosProperties.put(HBASE_SPNEGO_PRINCIPAL_KEY,principalDescriptor.getValue());
+                }
+              }
+            }
+            if (null == keytab) {
+              final KerberosDescriptor defaultDescriptor=getKerberosDescriptor(cluster);
+              final KerberosIdentityDescriptor spnegoDescriptor=defaultDescriptor.getIdentity("spnego");
+              if (null != spnegoDescriptor) {
+                KerberosKeytabDescriptor keytabDescriptor=spnegoDescriptor.getKeytabDescriptor();
+                if (null != keytabDescriptor) {
+                  updatedKerberosProperties.put(HBASE_SPNEGO_KEYTAB_KEY,keytabDescriptor.getFile());
+                }
+              }
+            }
+            if (!updatedKerberosProperties.isEmpty()) {
+              updateConfigurationProperties(HBASE_SITE_CONFIG,updatedKerberosProperties,true,false);
+            }
+          }
+        }
+      }
+    }
+  }
+}
