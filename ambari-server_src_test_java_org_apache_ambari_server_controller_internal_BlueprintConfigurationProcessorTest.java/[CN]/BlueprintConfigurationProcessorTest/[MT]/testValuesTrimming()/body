@@ -1,0 +1,35 @@
+{
+  reset(stack);
+  Map<String,Map<String,String>> properties=new HashMap<String,Map<String,String>>();
+  Map<String,String> hdfsSite=new HashMap<String,String>();
+  hdfsSite.put("test.spaces"," spaces at    the end should be deleted      ");
+  hdfsSite.put("test.directories","  /all/spaces , should/be  , deleted  ");
+  hdfsSite.put("test.password","  stays,   same    ");
+  hdfsSite.put("test.single.space"," ");
+  hdfsSite.put("test.host"," https://just.trims ");
+  properties.put("hdfs-site",hdfsSite);
+  Map<String,Stack.ConfigProperty> propertyConfigs=new HashMap<>();
+  ValueAttributesInfo valueAttributesInfoDirs=new ValueAttributesInfo();
+  valueAttributesInfoDirs.setType("directories");
+  ValueAttributesInfo valueAttributesInfoHost=new ValueAttributesInfo();
+  valueAttributesInfoHost.setType("host");
+  propertyConfigs.put("test.directories",new Stack.ConfigProperty(new StackConfigurationResponse(null,null,null,null,"hdfs-site",null,null,null,valueAttributesInfoDirs,null)));
+  propertyConfigs.put("test.password",new Stack.ConfigProperty(new StackConfigurationResponse(null,null,null,null,"hdfs-site",null,Collections.singleton(PropertyInfo.PropertyType.PASSWORD),null,null,null)));
+  propertyConfigs.put("test.host",new Stack.ConfigProperty(new StackConfigurationResponse(null,null,null,null,"hdfs-site",null,null,null,valueAttributesInfoHost,null)));
+  expect(stack.getServiceForConfigType("hdfs-site")).andReturn("HDFS").anyTimes();
+  expect(stack.getConfigurationPropertiesWithMetadata("HDFS","hdfs-site")).andReturn(propertyConfigs).anyTimes();
+  Map<String,Map<String,String>> parentProperties=new HashMap<String,Map<String,String>>();
+  Configuration parentClusterConfig=new Configuration(parentProperties,Collections.<String,Map<String,Map<String,String>>>emptyMap());
+  Configuration clusterConfig=new Configuration(properties,Collections.<String,Map<String,Map<String,String>>>emptyMap(),parentClusterConfig);
+  Collection<String> hgComponents1=new HashSet<String>();
+  TestHostGroup group1=new TestHostGroup("group1",hgComponents1,Collections.singleton("host1"));
+  Collection<TestHostGroup> hostGroups=Collections.singletonList(group1);
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor configProcessor=new BlueprintConfigurationProcessor(topology);
+  configProcessor.doUpdateForClusterCreate();
+  assertEquals(" spaces at    the end should be deleted",clusterConfig.getPropertyValue("hdfs-site","test.spaces"));
+  assertEquals("/all/spaces,should/be,deleted",clusterConfig.getPropertyValue("hdfs-site","test.directories"));
+  assertEquals("  stays,   same    ",clusterConfig.getPropertyValue("hdfs-site","test.password"));
+  assertEquals(" https://just.trims ".trim(),clusterConfig.getPropertyValue("hdfs-site","test.host"));
+  assertEquals(" ",clusterConfig.getPropertyValue("hdfs-site","test.single.space"));
+}
