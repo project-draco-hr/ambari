@@ -1,12 +1,17 @@
 {
+  LOGGER.info("Validating hostgroup: {}",group.getName());
   Map<String,Collection<DependencyInfo>> missingDependencies=new HashMap<String,Collection<DependencyInfo>>();
-  Collection<String> blueprintServices=blueprint.getServices();
-  Collection<String> groupComponents=group.getComponentNames();
-  for (  String component : new HashSet<String>(groupComponents)) {
-    Collection<DependencyInfo> dependenciesForComponent=stack.getDependenciesForComponent(component);
-    for (    DependencyInfo dependency : dependenciesForComponent) {
+  for (  String component : new HashSet<String>(group.getComponentNames())) {
+    LOGGER.debug("Processing component: {}",component);
+    for (    DependencyInfo dependency : stack.getDependenciesForComponent(component)) {
+      LOGGER.debug("Processing dependency [{}] for component [{}]",dependency.getName(),component);
       String conditionalService=stack.getConditionalServiceForDependency(dependency);
-      if (conditionalService != null && !blueprintServices.contains(conditionalService)) {
+      if (conditionalService != null && !blueprint.getServices().contains(conditionalService)) {
+        LOGGER.debug("Conditional service  [{}] is missing from the blueprint, skipping dependency [{}]",conditionalService,dependency.getName());
+        continue;
+      }
+      if (!blueprint.getServices().contains(dependency.getServiceName())) {
+        LOGGER.debug("The service [{}] for component [{}] is missing from the blueprint [{}], skipping dependency",dependency.getServiceName(),dependency.getComponentName(),blueprint.getName());
         continue;
       }
       String dependencyScope=dependency.getScope();
@@ -18,7 +23,7 @@
         resolved=missingDependencyInfo.isEmpty();
       }
  else       if (dependencyScope.equals("host")) {
-        if (groupComponents.contains(component) || (autoDeployInfo != null && autoDeployInfo.isEnabled())) {
+        if (group.getComponentNames().contains(component) || (autoDeployInfo != null && autoDeployInfo.isEnabled())) {
           resolved=true;
           group.addComponent(componentName);
         }
