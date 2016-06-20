@@ -1,0 +1,33 @@
+{
+  String bucketName=getStringValue("s3_bucket");
+  String s3LogDir=getStringValue("s3_log_dir");
+  HashMap<String,String> contextParam=buildContextParam();
+  s3LogDir=PlaceholderUtil.replaceVariables(s3LogDir,contextParam);
+  String s3AccessKey=getStringValue("s3_access_key");
+  String s3SecretKey=getStringValue("s3_secret_key");
+  String compressionAlgo=getStringValue("compression_algo");
+  String fileName=inputFile.getName();
+  String tmpDir=LogFeederUtil.getLogfeederTempDir();
+  File outputFile=new File(tmpDir + fileName + "_"+ new Date().getTime()+ "."+ compressionAlgo);
+  outputFile=CompressionUtil.compressFile(inputFile,outputFile,compressionAlgo);
+  String type=inputMarker.input.getStringValue("type");
+  String s3Path=s3LogDir + S3Util.INSTANCE.S3_PATH_SEPARATOR + type+ S3Util.INSTANCE.S3_PATH_SEPARATOR+ fileName+ "."+ compressionAlgo;
+  S3Util.INSTANCE.uploadFileTos3(bucketName,s3Path,outputFile,s3AccessKey,s3SecretKey);
+  outputFile.deleteOnExit();
+  ArrayList<Map<String,Object>> filters=new ArrayList<Map<String,Object>>();
+  addFilters(filters,inputMarker.input.getFirstFilter());
+  Map<String,Object> inputConfig=new HashMap<String,Object>();
+  inputConfig.putAll(inputMarker.input.getConfigs());
+  String s3CompletePath=S3Util.INSTANCE.S3_PATH_START_WITH + bucketName + S3Util.INSTANCE.S3_PATH_SEPARATOR+ s3Path;
+  inputConfig.put("path",s3CompletePath);
+  ArrayList<Map<String,Object>> inputConfigList=new ArrayList<Map<String,Object>>();
+  inputConfigList.add(inputConfig);
+  removeGlobalConfig(inputConfigList);
+  removeGlobalConfig(filters);
+  String s3Key=getComponentConfigFileName(type);
+  Map<String,Object> config=new HashMap<String,Object>();
+  config.put("filter",filters);
+  config.put("input",inputConfigList);
+  writeConfigToS3(config,bucketName,s3AccessKey,s3SecretKey,contextParam,s3Key);
+  writeGlobalConfig();
+}
