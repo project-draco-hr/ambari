@@ -1,0 +1,29 @@
+{
+  if (!isCommonService) {
+    throw new AmbariException("Not a common service");
+  }
+  moduleState=ModuleState.VISITED;
+  String parentString=serviceInfo.getParent();
+  if (parentString != null) {
+    String[] parentToks=parentString.split(StackManager.PATH_DELIMITER);
+    if (parentToks.length != 3) {
+      throw new AmbariException("The common service '" + serviceInfo.getName() + serviceInfo.getVersion()+ "' extends an invalid parent: '"+ parentString+ "'");
+    }
+    if (parentToks[0].equalsIgnoreCase(StackManager.COMMON_SERVICES)) {
+      String baseServiceKey=parentToks[1] + StackManager.PATH_DELIMITER + parentToks[2];
+      ServiceModule baseService=commonServices.get(baseServiceKey);
+      ModuleState baseModuleState=baseService.getModuleState();
+      if (baseModuleState == ModuleState.INIT) {
+        baseService.resolveCommonService(allStacks,commonServices,extensions);
+      }
+ else       if (baseModuleState == ModuleState.VISITED) {
+        throw new AmbariException("Cycle detected while parsing common service");
+      }
+      resolveExplicit(baseService,allStacks,commonServices,extensions);
+    }
+ else {
+      throw new AmbariException("Common service cannot inherit from a non common service");
+    }
+  }
+  moduleState=ModuleState.RESOLVED;
+}

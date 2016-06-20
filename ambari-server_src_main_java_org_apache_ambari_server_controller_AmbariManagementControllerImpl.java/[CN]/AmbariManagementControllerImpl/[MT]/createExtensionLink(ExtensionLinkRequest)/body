@@ -1,0 +1,21 @@
+{
+  validateCreateExtensionLinkRequest(request);
+  StackInfo stackInfo=ambariMetaInfo.getStack(request.getStackName(),request.getStackVersion());
+  if (stackInfo == null)   throw new StackAccessException("stackName=" + request.getStackName() + ", stackVersion="+ request.getStackVersion());
+  ExtensionInfo extensionInfo=ambariMetaInfo.getExtension(request.getExtensionName(),request.getExtensionVersion());
+  if (extensionInfo == null)   throw new StackAccessException("extensionName=" + request.getExtensionName() + ", extensionVersion="+ request.getExtensionVersion());
+  ExtensionHelper.validateCreateLink(stackInfo,extensionInfo);
+  ExtensionLinkEntity linkEntity=createExtensionLinkEntity(request);
+  ambariMetaInfo.getStackManager().linkStackToExtension(stackInfo,extensionInfo);
+  try {
+    linkDAO.create(linkEntity);
+    linkEntity=linkDAO.merge(linkEntity);
+  }
+ catch (  RollbackException e) {
+    String message="Unable to create extension link";
+    LOG.debug(message,e);
+    String errorMessage=message + ", stackName=" + request.getStackName()+ ", stackVersion="+ request.getStackVersion()+ ", extensionName="+ request.getExtensionName()+ ", extensionVersion="+ request.getExtensionVersion();
+    LOG.warn(errorMessage);
+    throw new AmbariException(errorMessage,e);
+  }
+}

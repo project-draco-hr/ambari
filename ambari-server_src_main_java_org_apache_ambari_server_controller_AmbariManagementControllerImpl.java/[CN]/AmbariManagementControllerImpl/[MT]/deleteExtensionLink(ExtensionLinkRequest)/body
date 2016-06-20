@@ -1,0 +1,24 @@
+{
+  if (request.getLinkId() == null) {
+    throw new IllegalArgumentException("Link ID should be provided");
+  }
+  ExtensionLinkEntity linkEntity=null;
+  try {
+    linkEntity=linkDAO.findById(new Long(request.getLinkId()));
+  }
+ catch (  RollbackException e) {
+    throw new AmbariException("Unable to find extension link" + ", linkId=" + request.getLinkId(),e);
+  }
+  StackInfo stackInfo=ambariMetaInfo.getStack(linkEntity.getStack().getStackName(),linkEntity.getStack().getStackVersion());
+  if (stackInfo == null)   throw new StackAccessException("stackName=" + linkEntity.getStack().getStackName() + ", stackVersion="+ linkEntity.getStack().getStackVersion());
+  ExtensionInfo extensionInfo=ambariMetaInfo.getExtension(linkEntity.getExtension().getExtensionName(),linkEntity.getExtension().getExtensionVersion());
+  if (extensionInfo == null)   throw new StackAccessException("extensionName=" + linkEntity.getExtension().getExtensionName() + ", extensionVersion="+ linkEntity.getExtension().getExtensionVersion());
+  ExtensionHelper.validateDeleteLink(getClusters(),stackInfo,extensionInfo);
+  ambariMetaInfo.getStackManager().unlinkStackAndExtension(stackInfo,extensionInfo);
+  try {
+    linkDAO.remove(linkEntity);
+  }
+ catch (  RollbackException e) {
+    throw new AmbariException("Unable to delete extension link" + ", linkId=" + request.getLinkId() + ", stackName="+ request.getStackName()+ ", stackVersion="+ request.getStackVersion()+ ", extensionName="+ request.getExtensionName()+ ", extensionVersion="+ request.getExtensionVersion(),e);
+  }
+}

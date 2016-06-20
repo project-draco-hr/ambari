@@ -1,0 +1,34 @@
+{
+  LOG.info("Initializing the stack manager...");
+  if (validate) {
+    validateStackDirectory(stackRoot);
+    validateCommonServicesDirectory(commonServicesRoot);
+    validateExtensionDirectory(extensionRoot);
+  }
+  stackMap=new HashMap<String,StackInfo>();
+  stackContext=new StackContext(metaInfoDAO,actionMetadata,osFamily);
+  extensionMap=new HashMap<String,ExtensionInfo>();
+  Map<String,ServiceModule> commonServiceModules=parseCommonServicesDirectory(commonServicesRoot);
+  Map<String,StackModule> stackModules=parseStackDirectory(stackRoot);
+  LOG.info("About to parse extension directories");
+  Map<String,ExtensionModule> extensionModules=null;
+  extensionModules=parseExtensionDirectory(extensionRoot);
+  for (  StackModule module : stackModules.values()) {
+    StackInfo stack=module.getModuleInfo();
+    List<ExtensionLinkEntity> entities=linkDao.findByStack(stack.getName(),stack.getVersion());
+    for (    ExtensionLinkEntity entity : entities) {
+      String name=entity.getExtension().getExtensionName();
+      String version=entity.getExtension().getExtensionVersion();
+      String key=name + StackManager.PATH_DELIMITER + version;
+      ExtensionModule extensionModule=extensionModules.get(key);
+      if (extensionModule != null) {
+        LOG.info("Adding extension to stack/version: " + stack.getName() + "/"+ stack.getVersion()+ " extension/version: "+ name+ "/"+ version);
+        module.getExtensionModules().put(key,extensionModule);
+      }
+    }
+  }
+  fullyResolveCommonServices(stackModules,commonServiceModules,extensionModules);
+  fullyResolveExtensions(stackModules,commonServiceModules,extensionModules);
+  fullyResolveStacks(stackModules,commonServiceModules,extensionModules);
+  populateDB(stackDao,extensionDao);
+}
