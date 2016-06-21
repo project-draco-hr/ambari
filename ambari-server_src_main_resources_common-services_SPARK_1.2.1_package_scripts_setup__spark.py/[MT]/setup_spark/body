@@ -1,21 +1,24 @@
-def setup_spark(env, type, upgrade_type=None, action=None):
+def setup_spark(env, type, upgrade_type=None, action=None, config_dir=None):
+    '\n  :param env: Python environment\n  :param type: Spark component type\n  :param upgrade_type: If in a stack upgrade, either UPGRADE_TYPE_ROLLING or UPGRADE_TYPE_NON_ROLLING\n  :param action: Action to perform, such as generate configs\n  :param config_dir: Optional config directory to write configs to.\n  '
     import params
+    if (config_dir is None):
+        config_dir = params.spark_conf
     Directory([params.spark_pid_dir, params.spark_log_dir], owner=params.spark_user, group=params.user_group, mode=509, create_parents=True)
     if ((type == 'server') and (action == 'config')):
         params.HdfsResource(params.spark_hdfs_user_dir, type='directory', action='create_on_execute', owner=params.spark_user, mode=509)
         params.HdfsResource(None, action='execute')
-    PropertiesFile(format('{spark_conf}/spark-defaults.conf'), properties=params.config['configurations']['spark-defaults'], key_value_delimiter=' ', owner=params.spark_user, group=params.spark_group)
-    File(os.path.join(params.spark_conf, 'spark-env.sh'), owner=params.spark_user, group=params.spark_group, content=InlineTemplate(params.spark_env_sh), mode=420)
-    File(os.path.join(params.spark_conf, 'log4j.properties'), owner=params.spark_user, group=params.spark_group, content=params.spark_log4j_properties, mode=420)
-    File(os.path.join(params.spark_conf, 'metrics.properties'), owner=params.spark_user, group=params.spark_group, content=InlineTemplate(params.spark_metrics_properties))
+    PropertiesFile(os.path.join(config_dir, 'spark-defaults.conf'), properties=params.config['configurations']['spark-defaults'], key_value_delimiter=' ', owner=params.spark_user, group=params.spark_group)
+    File(os.path.join(config_dir, 'spark-env.sh'), owner=params.spark_user, group=params.spark_group, content=InlineTemplate(params.spark_env_sh), mode=420)
+    File(os.path.join(config_dir, 'log4j.properties'), owner=params.spark_user, group=params.spark_group, content=params.spark_log4j_properties, mode=420)
+    File(os.path.join(config_dir, 'metrics.properties'), owner=params.spark_user, group=params.spark_group, content=InlineTemplate(params.spark_metrics_properties))
     File(os.path.join(params.spark_conf, 'java-opts'), owner=params.spark_user, group=params.spark_group, content=InlineTemplate(params.spark_javaopts_properties))
     Directory(params.spark_logs_dir, owner=params.spark_user, group=params.spark_group, mode=493)
     if params.is_hive_installed:
-        XmlConfig('hive-site.xml', conf_dir=params.spark_conf, configurations=params.spark_hive_properties, owner=params.spark_user, group=params.spark_group, mode=420)
+        XmlConfig('hive-site.xml', conf_dir=config_dir, configurations=params.spark_hive_properties, owner=params.spark_user, group=params.spark_group, mode=420)
     if params.has_spark_thriftserver:
         PropertiesFile(params.spark_thrift_server_conf_file, properties=params.config['configurations']['spark-thrift-sparkconf'], owner=params.hive_user, group=params.user_group, key_value_delimiter=' ')
     effective_version = (params.version if (upgrade_type is not None) else params.stack_version_formatted)
     if effective_version:
         effective_version = format_stack_version(effective_version)
     if (params.spark_thrift_fairscheduler_content and effective_version and check_stack_feature(StackFeature.SPARK_16PLUS, effective_version)):
-        File(os.path.join(params.spark_conf, 'spark-thrift-fairscheduler.xml'), owner=params.spark_user, group=params.spark_group, mode=493, content=InlineTemplate(params.spark_thrift_fairscheduler_content))
+        File(os.path.join(config_dir, 'spark-thrift-fairscheduler.xml'), owner=params.spark_user, group=params.spark_group, mode=493, content=InlineTemplate(params.spark_thrift_fairscheduler_content))
