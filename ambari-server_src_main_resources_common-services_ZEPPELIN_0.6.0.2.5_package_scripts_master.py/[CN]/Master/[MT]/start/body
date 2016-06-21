@@ -1,14 +1,19 @@
 def start(self, env):
     import params
     import status_params
+    import time
     self.configure(env)
+    if params.security_enabled:
+        spark_kinit_cmd = format('{kinit_path_local} -kt {zeppelin_kerberos_keytab} {zeppelin_kerberos_principal}; ')
+        Execute(spark_kinit_cmd, user=params.zeppelin_user)
     if (glob.glob((params.zeppelin_dir + '/interpreter/spark/dep/zeppelin-spark-dependencies-*.jar')) and os.path.exists(glob.glob((params.zeppelin_dir + '/interpreter/spark/dep/zeppelin-spark-dependencies-*.jar'))[0])):
         self.create_zeppelin_dir(params)
-    Execute(((params.zeppelin_dir + '/bin/zeppelin-daemon.sh start >> ') + params.zeppelin_log_file), user=params.zeppelin_user)
+    if ((not glob.glob((params.conf_dir + '/interpreter.json'))) and (not os.path.exists((params.conf_dir + '/interpreter.json')))):
+        Execute(((params.zeppelin_dir + '/bin/zeppelin-daemon.sh start >> ') + params.zeppelin_log_file), user=params.zeppelin_user)
+    time.sleep(20)
+    self.update_zeppelin_interpreter()
+    Execute(((params.zeppelin_dir + '/bin/zeppelin-daemon.sh restart >> ') + params.zeppelin_log_file), user=params.zeppelin_user)
     pidfile = glob.glob((((status_params.zeppelin_pid_dir + '/zeppelin-') + params.zeppelin_user) + '*.pid'))[0]
     Execute(('echo pid file is: ' + pidfile), user=params.zeppelin_user)
     contents = open(pidfile).read()
     Execute(('echo pid is ' + contents), user=params.zeppelin_user)
-    import time
-    time.sleep(20)
-    self.update_zeppelin_interpreter()
