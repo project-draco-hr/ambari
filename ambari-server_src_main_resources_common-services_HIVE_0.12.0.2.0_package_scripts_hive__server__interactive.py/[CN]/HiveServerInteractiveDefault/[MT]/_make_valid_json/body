@@ -1,0 +1,28 @@
+def _make_valid_json(self, output):
+    '\n\n      Note: It is assumed right now that extra lines will be only at the start and not at the end.\n\n      Sample expected JSON to be passed for \'loads\' is either of the form :\n\n      Case \'A\':\n      {\n          "amInfo" : {\n          "appName" : "llap0",\n          "appType" : "org-apache-slider",\n          "appId" : "APP1",\n          "containerId" : "container_1466036628595_0010_01_000001",\n          "hostname" : "hostName",\n          "amWebUrl" : "http://hostName:port/"\n        },\n        "state" : "LAUNCHING",\n        ....\n        "desiredInstances" : 1,\n        "liveInstances" : 0,\n        ....\n        ....\n      }\n\n      or\n\n      Case \'B\':\n      {\n        "state" : "APP_NOT_FOUND"\n      }\n\n      '
+    splits = output.split('\n')
+    len_splits = len(splits)
+    if (len_splits < 3):
+        raise Fail("Malformed JSON data received from 'llapstatus' command. Exiting ....")
+    marker_idx = None
+    for (idx, split) in enumerate(splits):
+        curr_elem = split.strip()
+        if ((idx + 2) > len_splits):
+            raise Fail("Iterated over the received 'llapstatus' comamnd. Couldn't validate the received output for JSON parsing.")
+        next_elem = splits[(idx + 1)].strip()
+        if (curr_elem == '{'):
+            if ((next_elem == '"amInfo" : {') and (splits[(len_splits - 1)].strip() == '}')):
+                marker_idx = idx
+                break
+            elif (((idx + 3) == len_splits) and next_elem.startswith('"state" : ') and (splits[(idx + 2)].strip() == '}')):
+                marker_idx = idx
+                break
+    Logger.info("Marker index for start of JSON data for 'llapsrtatus' comamnd : {0}".format(marker_idx))
+    if (marker_idx is None):
+        raise Fail("Couldn't validate the received output for JSON parsing.")
+    else:
+        del splits[0:marker_idx]
+        Logger.info("Removed lines: '1-{0}' from the received 'llapstatus' output to make it valid for JSON parsing.".format(marker_idx))
+    scanned_output = '\n'.join(splits)
+    llap_app_info = json.loads(scanned_output)
+    return llap_app_info
