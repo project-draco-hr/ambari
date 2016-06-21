@@ -1,9 +1,12 @@
-def create_collection(zookeeper_quorum, solr_znode, collection, config_set, java64_home, user, shards=1, replication_factor=1, max_shards=1, retry=5, interval=10, router_name=None, router_field=None):
+def create_collection(zookeeper_quorum, solr_znode, collection, config_set, java64_home, user, shards=1, replication_factor=1, max_shards=1, retry=5, interval=10, router_name=None, router_field=None, jaas_file=None):
     '\n  Create Solr collection based on a configuration set in zookeeper.\n  If this method called again the with higher shard number (or max_shard number), then it will indicate\n  the cli tool to add new shards to the Solr collection. This can be useful after added a new Solr Cloud\n  instance to the cluster.\n\n  If you would like to add shards later to a collection, then use implicit routing, e.g.:\n  router_name = "implicit", router_field = "_router_field_"\n  '
     solr_cli_prefix = __create_solr_cloud_cli_prefix(zookeeper_quorum, solr_znode, java64_home)
     if (max_shards == 1):
         max_shards = (replication_factor * shards)
     create_collection_cmd = format('{solr_cli_prefix} --create-collection -c {collection} -cs {config_set} -s {shards} -r {replication_factor} -m {max_shards} -rt {retry} -i {interval} -ns')
-    if ((router_name is not None) and (router_field is not None)):
-        create_collection_cmd += format(' -rn {router_name} -rf {router_field}')
+    appendableDict = {}
+    appendableDict['-rn'] = router_name
+    appendableDict['-rf'] = router_field
+    appendableDict['-jf'] = jaas_file
+    create_collection_cmd = __append_flags_if_exists(create_collection_cmd, appendableDict)
     Execute(create_collection_cmd, user=user)
