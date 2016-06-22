@@ -1,5 +1,5 @@
 def execute(configurations={}, parameters={}, host_name=None):
-    '\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  configurations (dictionary): a mapping of configuration key to value\n  parameters (dictionary): a mapping of script parameter key to value\n  host_name (string): the name of this host where the alert is running\n  '
+    '\n  Returns a tuple containing the result code and a pre-formatted result label\n\n  Keyword arguments:\n  configurations (dictionary): a mapping of configuration key to value\n  parameters (dictionary): a mapping of script parameter key to value\n  host_name (string): the name of this host where the alert is running\n\n  DataNode directories can be of the following formats and each needs to be supported:\n    /grid/dn/archive0\n    [SSD]/grid/dn/archive0\n    [ARCHIVE]file:///grid/dn/archive0\n  '
     warnings = []
     errors = []
     if (configurations is None):
@@ -12,8 +12,8 @@ def execute(configurations={}, parameters={}, host_name=None):
     data_dir_mount_file_exists = True
     if (not os.path.exists(DATA_DIR_MOUNT_FILE)):
         data_dir_mount_file_exists = False
-        warnings.append('File not found, {0} .'.format(DATA_DIR_MOUNT_FILE))
-    valid_data_dirs = set()
+        warnings.append('{0} was not found.'.format(DATA_DIR_MOUNT_FILE))
+    normalized_data_dirs = set()
     data_dirs_not_exist = set()
     data_dirs_unknown = set()
     data_dirs_on_root = set()
@@ -27,9 +27,10 @@ def execute(configurations={}, parameters={}, host_name=None):
             if data_dir.startswith(tag):
                 data_dir = data_dir.replace(tag, '')
                 continue
-        valid_data_dirs.add(data_dir)
-    valid_data_dirs = sorted(valid_data_dirs)
-    for data_dir in valid_data_dirs:
+        data_dir = urlparse.urlparse(data_dir).path
+        normalized_data_dirs.add(data_dir)
+    normalized_data_dirs = sorted(normalized_data_dirs)
+    for data_dir in normalized_data_dirs:
         if os.path.isdir(data_dir):
             curr_mount_point = file_system.get_mount_point_for_dir(data_dir)
             curr_mount_point = (curr_mount_point.strip() if curr_mount_point else curr_mount_point)
@@ -42,33 +43,33 @@ def execute(configurations={}, parameters={}, host_name=None):
                 data_dirs_unknown.add(data_dir)
         else:
             data_dirs_not_exist.add(data_dir)
-    valid_data_dirs = sorted(valid_data_dirs)
+    normalized_data_dirs = sorted(normalized_data_dirs)
     data_dirs_not_exist = sorted(data_dirs_not_exist)
     data_dirs_unknown = sorted(data_dirs_unknown)
     data_dirs_on_root = sorted(data_dirs_on_root)
     if data_dirs_not_exist:
-        errors.append('Data dir(s) not found: {0} .'.format(', '.join(data_dirs_not_exist)))
+        errors.append('The following data dir(s) were not found: {0}\n'.format('\n'.join(data_dirs_not_exist)))
     if data_dirs_unknown:
-        errors.append('Cannot find mount point for data dir(s): {0} .'.format(', '.join(data_dirs_unknown)))
+        errors.append('Cannot find the mount point for the following data dir(s):\n{0}'.format('\n'.join(data_dirs_unknown)))
     if data_dir_mount_file_exists:
         expected_data_dir_to_mount = mounted_dirs_helper.get_dir_to_mount_from_file(DATA_DIR_MOUNT_FILE)
         for data_dir in data_dirs_on_root:
             if ((data_dir in expected_data_dir_to_mount) and (expected_data_dir_to_mount[data_dir] != '/')):
                 data_dirs_unmounted.append(data_dir)
         if (len(data_dirs_unmounted) > 0):
-            errors.append('Detected data dir(s) that became unmounted and are now writing to the root partition: {0} .'.format(', '.join(data_dirs_unmounted)))
+            errors.append('Detected data dir(s) that became unmounted and are now writing to the root partition:\n{0}'.format('\n'.join(data_dirs_unmounted)))
     elif ((len(data_dirs_on_mount) >= 1) and (len(data_dirs_on_root) >= 1)):
-        errors.append('Detected at least one data dir on a mount point, but these are writing to the root partition: {0} .'.format(', '.join(data_dirs_on_root)))
+        errors.append('Detected at least one data dir on a mount point, but these are writing to the root partition:\n{0}'.format('\n'.join(data_dirs_on_root)))
     if (len(errors) == 0):
         status = RESULT_STATE_OK
         messages = []
         if (len(warnings) > 0):
             status = RESULT_STATE_WARNING
             messages += warnings
-        if (len(valid_data_dirs) > 0):
-            messages.append('Data dir(s) are fine, {0} .'.format(', '.join(valid_data_dirs)))
+        if (len(normalized_data_dirs) > 0):
+            messages.append('The following data dir(s) are valid:\n{0}'.format('\n'.join(normalized_data_dirs)))
         else:
-            messages.append('No data dirs to analyze.')
+            messages.append('There are no data directories to analyze.')
         return (status, ['\n'.join(messages)])
     else:
         return (RESULT_STATE_CRITICAL, ['\n'.join(errors)])
