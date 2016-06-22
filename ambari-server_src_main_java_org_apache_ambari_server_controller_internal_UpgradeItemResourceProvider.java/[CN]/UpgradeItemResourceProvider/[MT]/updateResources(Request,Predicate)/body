@@ -10,6 +10,17 @@
     HostRoleStatus desiredStatus=HostRoleStatus.valueOf(stageStatus);
     Set<Resource> resources=getResources(PropertyHelper.getReadRequest(),predicate);
     for (    Resource resource : resources) {
+      final String clusterName=(String)resource.getPropertyValue(UPGRADE_CLUSTER_NAME);
+      final Cluster cluster;
+      try {
+        cluster=getManagementController().getClusters().getCluster(clusterName);
+      }
+ catch (      AmbariException e) {
+        throw new NoSuchParentResourceException(String.format("Cluster %s could not be loaded",clusterName));
+      }
+      if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,cluster.getResourceId(),EnumSet.of(RoleAuthorization.CLUSTER_UPGRADE_DOWNGRADE_STACK))) {
+        throw new AuthorizationException("The authenticated user does not have authorization to " + "manage upgrade and downgrade");
+      }
       Long requestId=(Long)resource.getPropertyValue(UPGRADE_REQUEST_ID);
       Long stageId=(Long)resource.getPropertyValue(UPGRADE_ITEM_STAGE_ID);
       StageEntityPK primaryKey=new StageEntityPK();
