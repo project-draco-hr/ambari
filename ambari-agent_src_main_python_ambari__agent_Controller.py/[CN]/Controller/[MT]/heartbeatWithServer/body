@@ -3,15 +3,24 @@ def heartbeatWithServer(self):
     self.DEBUG_SUCCESSFULL_HEARTBEATS = 0
     retry = False
     certVerifFailed = False
-    hb_interval = self.config.get('heartbeat', 'state_interval')
+    state_interval = self.config.get('heartbeat', 'state_interval_seconds', '60')
+    last_state_timestamp = 0.0
+    heartbeat_running_msg_timestamp = 0.0
     while (not self.DEBUG_STOP_HEARTBEATING):
+        heartbeat_interval = self.netutil.HEARTBEAT_IDLE_INTERVAL_DEFAULT_MAX_SEC
         try:
+            crt_time = time.time()
+            if ((crt_time - heartbeat_running_msg_timestamp) > int(state_interval)):
+                logger.info('Heartbeat with server is running...')
+                heartbeat_running_msg_timestamp = crt_time
+            send_state = False
             if (not retry):
-                data = json.dumps(self.heartbeat.build(self.responseId, int(hb_interval), self.hasMappedComponents))
+                if ((crt_time - last_state_timestamp) > int(state_interval)):
+                    send_state = True
+                data = json.dumps(self.heartbeat.build(self.responseId, send_state, self.hasMappedComponents))
             else:
                 self.DEBUG_HEARTBEAT_RETRIES += 1
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug('Sending Heartbeat (id = %s): %s', self.responseId, data)
+            logger.debug('Sending Heartbeat (id = %s): %s', self.responseId, data)
             response = self.sendRequest(self.heartbeatUrl, data)
             exitStatus = 0
             if ('exitstatus' in response.keys()):
@@ -19,11 +28,15 @@ def heartbeatWithServer(self):
             if (exitStatus != 0):
                 raise Exception(response)
             serverId = int(response['responseId'])
-            logger.info('Heartbeat response received (id = %s)', serverId)
+            logger.debug('Heartbeat response received (id = %s)', serverId)
+            cluster_size = (int(response['clusterSize']) if ('clusterSize' in response.keys()) else (-1))
+            heartbeat_interval = (self.get_heartbeat_interval(cluster_size) if (cluster_size > 0) else self.netutil.HEARTBEAT_IDLE_INTERVAL_DEFAULT_MAX_SEC)
+            logger.debug('Heartbeat interval is %s seconds', heartbeat_interval)
             if ('hasMappedComponents' in response.keys()):
                 self.hasMappedComponents = (response['hasMappedComponents'] is not False)
             if ('hasPendingTasks' in response.keys()):
-                self.recovery_manager.set_paused(response['hasPendingTasks'])
+                has_pending_tasks = bool(response['hasPendingTasks'])
+                self.recovery_manager.set_paused(has_pending_tasks)
             if ('registrationCommand' in response.keys()):
                 if (response['registrationCommand'] is not None):
                     logger.info('RegistrationCommand received - repeat agent registration')
@@ -42,6 +55,8 @@ def heartbeatWithServer(self):
                 self.restartAgent()
             else:
                 self.responseId = serverId
+                if send_state:
+                    last_state_timestamp = time.time()
             self.cluster_configuration.update_configurations_from_heartbeat(response)
             response_keys = response.keys()
             if ('cancelCommands' in response_keys):
@@ -99,7 +114,7 @@ def heartbeatWithServer(self):
             retry = True
             delay = randint(0, self.range)
             time.sleep(delay)
-        timeout = (self.netutil.HEARTBEAT_IDDLE_INTERVAL_SEC - self.netutil.MINIMUM_INTERVAL_BETWEEN_HEARTBEATS)
+        timeout = (heartbeat_interval - self.netutil.MINIMUM_INTERVAL_BETWEEN_HEARTBEATS)
         if (0 == self.heartbeat_stop_callback.wait(timeout, self.netutil.MINIMUM_INTERVAL_BETWEEN_HEARTBEATS)):
             logger.info('Stop event received')
             self.DEBUG_STOP_HEARTBEATING = True
