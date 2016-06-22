@@ -1,0 +1,31 @@
+{
+  final RequestScheduleDAO requestScheduleDAO=createMock(RequestScheduleDAO.class);
+  final Users users=createMock(Users.class);
+  RequestScheduleEntity requestScheduleEntity=new RequestScheduleEntity();
+  requestScheduleEntity.setCreateUser("createdUser");
+  requestScheduleEntity.setClusterId(1L);
+  expect(requestScheduleDAO.findAll()).andReturn(Collections.singletonList(requestScheduleEntity)).once();
+  UserEntity userEntity=new UserEntity();
+  userEntity.setUserName("createdUser");
+  userEntity.setUserId(1);
+  userEntity.setPrincipal(new PrincipalEntity());
+  User user=new User(userEntity);
+  expect(users.getUserIfUnique("createdUser")).andReturn(user).once();
+  expect(requestScheduleDAO.merge(requestScheduleEntity)).andReturn(requestScheduleEntity).once();
+  final Injector injector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(RequestScheduleDAO.class).toInstance(requestScheduleDAO);
+      bind(Users.class).toInstance(users);
+      bind(PasswordEncoder.class).toInstance(createMock(PasswordEncoder.class));
+      bind(DBAccessor.class).toInstance(createMock(DBAccessor.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+      bind(EntityManager.class).toInstance(entityManager);
+    }
+  }
+);
+  UpgradeCatalog240 upgradeCatalog240=new UpgradeCatalog240(injector);
+  replay(requestScheduleDAO,users);
+  upgradeCatalog240.updateRequestScheduleEntityUserIds();
+  verify(requestScheduleDAO,users);
+  assertEquals(Integer.valueOf(1),requestScheduleEntity.getAuthenticatedUserId());
+}
