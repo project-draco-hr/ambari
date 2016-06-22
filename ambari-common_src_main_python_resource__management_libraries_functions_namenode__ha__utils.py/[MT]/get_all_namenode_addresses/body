@@ -1,0 +1,31 @@
+def get_all_namenode_addresses(hdfs_site):
+    '\n  - In non-ha mode it will return list of hdfs_site[dfs.namenode.http[s]-address]\n  - In ha-mode it will return list of hdfs_site[dfs.namenode.http-address.NS.Uid], where NS is the name of HA, and Uid is id of NameNode\n  '
+    nn_addresses = []
+    http_policy = 'HTTP_ONLY'
+    if (DFS_HTTP_POLICY in hdfs_site):
+        http_policy = hdfs_site[DFS_HTTP_POLICY]
+    if is_ha_enabled(hdfs_site):
+        name_service = get_nameservice(hdfs_site)
+        nn_unique_ids_key = ('dfs.ha.namenodes.' + name_service)
+        nn_unique_ids = hdfs_site[nn_unique_ids_key].split(',')
+        for nn_unique_id in nn_unique_ids:
+            rpc_key = NAMENODE_RPC_FRAGMENT.format(name_service, nn_unique_id)
+            if (http_policy == 'HTTPS_ONLY'):
+                key = NAMENODE_HTTPS_FRAGMENT.format(name_service, nn_unique_id)
+            else:
+                key = NAMENODE_HTTP_FRAGMENT.format(name_service, nn_unique_id)
+            if (key in hdfs_site):
+                value = str(hdfs_site[key])
+                if ((INADDR_ANY in value) and (rpc_key in hdfs_site)):
+                    rpc_value = str(hdfs_site[rpc_key])
+                    if (INADDR_ANY not in rpc_value):
+                        rpc_host = rpc_value.split(':')[0]
+                        value = value.replace(INADDR_ANY, rpc_host)
+                if (not (value in nn_addresses)):
+                    nn_addresses.append(value)
+    elif (http_policy == 'HTTPS_ONLY'):
+        if (NAMENODE_HTTPS_NON_HA in hdfs_site):
+            nn_addresses.append(hdfs_site[NAMENODE_HTTPS_NON_HA])
+    elif (NAMENODE_HTTP_NON_HA in hdfs_site):
+        nn_addresses.append(hdfs_site[NAMENODE_HTTP_NON_HA])
+    return nn_addresses

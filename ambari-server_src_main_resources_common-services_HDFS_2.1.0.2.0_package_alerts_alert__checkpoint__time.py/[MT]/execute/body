@@ -9,10 +9,8 @@ def execute(configurations={}, parameters={}, host_name=None):
     http_policy = 'HTTP_ONLY'
     checkpoint_tx = CHECKPOINT_TX_DEFAULT
     checkpoint_period = CHECKPOINT_PERIOD_DEFAULT
-    if (NN_HTTP_ADDRESS_KEY in configurations):
-        http_uri = configurations[NN_HTTP_ADDRESS_KEY]
-    if (NN_HTTPS_ADDRESS_KEY in configurations):
-        https_uri = configurations[NN_HTTPS_ADDRESS_KEY]
+    if (not (HDFS_SITE_KEY in configurations)):
+        return (RESULT_STATE_UNKNOWN, ['{0} is a required parameter for the script'.format(HDFS_SITE_KEY)])
     if (NN_HTTP_POLICY_KEY in configurations):
         http_policy = configurations[NN_HTTP_POLICY_KEY]
     if (NN_CHECKPOINT_TX_KEY in configurations):
@@ -50,11 +48,15 @@ def execute(configurations={}, parameters={}, host_name=None):
     if (CHECKPOINT_TX_MULTIPLIER_CRITICAL_KEY in parameters):
         checkpoint_txn_multiplier_critical = float(parameters[CHECKPOINT_TX_MULTIPLIER_CRITICAL_KEY])
     kinit_timer_ms = parameters.get(KERBEROS_KINIT_TIMER_PARAMETER, DEFAULT_KERBEROS_KINIT_TIMER_MS)
-    uri = http_uri
-    if (http_policy == 'HTTPS_ONLY'):
-        scheme = 'https'
-        if (https_uri is not None):
-            uri = https_uri
+    hdfs_site = configurations[HDFS_SITE_KEY]
+    scheme = ('https' if (http_policy == 'HTTPS_ONLY') else 'http')
+    nn_addresses = get_all_namenode_addresses(hdfs_site)
+    for nn_address in nn_addresses:
+        if nn_address.startswith((host_name + ':')):
+            uri = nn_address
+            break
+    if (not uri):
+        return (RESULT_STATE_SKIPPED, ['NameNode on host {0} not found (namenode adresses = {1})'.format(host_name, ', '.join(nn_addresses))])
     current_time = int(round((time.time() * 1000)))
     last_checkpoint_time_qry = '{0}://{1}/jmx?qry=Hadoop:service=NameNode,name=FSNamesystem'.format(scheme, uri)
     journal_transaction_info_qry = '{0}://{1}/jmx?qry=Hadoop:service=NameNode,name=NameNodeInfo'.format(scheme, uri)
