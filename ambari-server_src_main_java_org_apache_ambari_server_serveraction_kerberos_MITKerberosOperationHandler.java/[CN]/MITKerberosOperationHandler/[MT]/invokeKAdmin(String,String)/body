@@ -7,11 +7,15 @@
   String defaultRealm=getDefaultRealm();
   List<String> command=new ArrayList<String>();
   String adminPrincipal=(administratorCredential == null) ? null : administratorCredential.getPrincipal();
+  ShellCommandUtil.InteractiveHandler interactiveHandler=null;
   if (StringUtils.isEmpty(adminPrincipal)) {
     if (StringUtils.isEmpty(executableKadminLocal)) {
       throw new KerberosOperationException("No path for kadmin.local is available - this KerberosOperationHandler may not have been opened.");
     }
     command.add(executableKadminLocal);
+    if (userPassword != null) {
+      interactiveHandler=new InteractivePasswordHandler(null,userPassword);
+    }
   }
  else {
     if (StringUtils.isEmpty(executableKadmin)) {
@@ -19,15 +23,17 @@
     }
     char[] adminPassword=administratorCredential.getKey();
     command.add(executableKadmin);
-    if (getAdminServerHost() != null) {
+    if (!StringUtils.isEmpty(getAdminServerHost())) {
       command.add("-s");
       command.add(getAdminServerHost());
     }
     command.add("-p");
     command.add(adminPrincipal);
     if (!ArrayUtils.isEmpty(adminPassword)) {
-      command.add("-w");
-      command.add(String.valueOf(adminPassword));
+      interactiveHandler=new InteractivePasswordHandler(String.valueOf(adminPassword),userPassword);
+    }
+ else     if (userPassword != null) {
+      interactiveHandler=new InteractivePasswordHandler(null,userPassword);
     }
   }
   if (!StringUtils.isEmpty(defaultRealm)) {
@@ -37,11 +43,11 @@
   command.add("-q");
   command.add(query);
   if (LOG.isDebugEnabled()) {
-    LOG.debug(String.format("Executing: %s",createCleanCommand(command)));
+    LOG.debug(String.format("Executing: %s",command));
   }
-  result=executeCommand(command.toArray(new String[command.size()]));
+  result=executeCommand(command.toArray(new String[command.size()]),null,interactiveHandler);
   if (!result.isSuccessful()) {
-    String message=String.format("Failed to execute kadmin:\n\tCommand: %s\n\tExitCode: %s\n\tSTDOUT: %s\n\tSTDERR: %s",createCleanCommand(command),result.getExitCode(),result.getStdout(),result.getStderr());
+    String message=String.format("Failed to execute kadmin:\n\tCommand: %s\n\tExitCode: %s\n\tSTDOUT: %s\n\tSTDERR: %s",command,result.getExitCode(),result.getStdout(),result.getStderr());
     LOG.warn(message);
     String stdErr=result.getStderr();
     if (stdErr.contains("Client not found in Kerberos database")) {

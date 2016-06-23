@@ -1,0 +1,48 @@
+{
+  String[] processArgs;
+  if (sudo) {
+    processArgs=new String[args.length + 1];
+    processArgs[0]=AMBARI_SUDO;
+    System.arraycopy(args,0,processArgs,1,args.length);
+  }
+ else {
+    processArgs=args;
+  }
+  ProcessBuilder builder=new ProcessBuilder(processArgs);
+  if (vars != null) {
+    Map<String,String> env=builder.environment();
+    env.putAll(vars);
+  }
+  Process process;
+  if (WINDOWS) {
+synchronized (WindowsProcessLaunchLock) {
+      process=builder.start();
+    }
+  }
+ else {
+    process=builder.start();
+  }
+  InputStream inputStream=process.getInputStream();
+  if (interactiveHandler != null) {
+    BufferedWriter writer=new BufferedWriter(new OutputStreamWriter(process.getOutputStream()));
+    BufferedReader reader=new BufferedReader(new InputStreamReader(inputStream));
+    while (!interactiveHandler.done()) {
+      StringBuilder query=new StringBuilder();
+      while (reader.ready()) {
+        query.append((char)reader.read());
+      }
+      String response=interactiveHandler.getResponse(query.toString());
+      if (response != null) {
+        writer.write(response);
+        writer.newLine();
+        writer.flush();
+      }
+    }
+    writer.close();
+  }
+  process.waitFor();
+  String stdout=streamToString(inputStream);
+  String stderr=streamToString(process.getErrorStream());
+  int exitCode=process.exitValue();
+  return new Result(exitCode,stdout,stderr);
+}
