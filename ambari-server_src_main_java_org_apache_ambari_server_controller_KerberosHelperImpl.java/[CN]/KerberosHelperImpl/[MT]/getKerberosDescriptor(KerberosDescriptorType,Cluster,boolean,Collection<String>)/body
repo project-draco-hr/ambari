@@ -1,0 +1,50 @@
+{
+  KerberosDescriptor kerberosDescriptor;
+  KerberosDescriptor stackDescriptor=(kerberosDescriptorType == KerberosDescriptorType.STACK || kerberosDescriptorType == KerberosDescriptorType.COMPOSITE) ? getKerberosDescriptorFromStack(cluster) : null;
+  KerberosDescriptor userDescriptor=(kerberosDescriptorType == KerberosDescriptorType.USER || kerberosDescriptorType == KerberosDescriptorType.COMPOSITE) ? getKerberosDescriptorUpdates(cluster) : null;
+  if (stackDescriptor == null) {
+    if (userDescriptor == null) {
+      return new KerberosDescriptor();
+    }
+ else {
+      kerberosDescriptor=userDescriptor;
+    }
+  }
+ else {
+    if (userDescriptor != null) {
+      stackDescriptor.update(userDescriptor);
+    }
+    kerberosDescriptor=stackDescriptor;
+  }
+  if (evaluateWhenClauses) {
+    Set<String> services=new HashSet<String>(cluster.getServices().keySet());
+    if (additionalServices != null) {
+      services.addAll(additionalServices);
+    }
+    Map<String,Object> context=new HashMap<String,Object>();
+    context.put("configurations",calculateConfigurations(cluster,null,kerberosDescriptor.getProperties()));
+    context.put("services",services);
+    Map<String,Set<String>> identitiesToRemove=processWhenClauses("",kerberosDescriptor,context,new HashMap<String,Set<String>>());
+    for (    Map.Entry<String,Set<String>> identity : identitiesToRemove.entrySet()) {
+      String[] path=identity.getKey().split("/");
+      AbstractKerberosDescriptorContainer container=null;
+      for (      String name : path) {
+        if (container == null) {
+          container=kerberosDescriptor;
+        }
+ else {
+          container=container.getChildContainer(name);
+          if (container == null) {
+            break;
+          }
+        }
+      }
+      if (container != null) {
+        for (        String identityName : identity.getValue()) {
+          container.removeIdentity(identityName);
+        }
+      }
+    }
+  }
+  return kerberosDescriptor;
+}

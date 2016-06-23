@@ -38,11 +38,7 @@
   final Map<String,String> krb5ConfProperties=createMock(Map.class);
   final Config krb5ConfConfig=createMock(Config.class);
   expect(krb5ConfConfig.getProperties()).andReturn(krb5ConfProperties).anyTimes();
-  final Cluster cluster=createNiceMock(Cluster.class);
-  expect(cluster.getHosts()).andReturn(Collections.singleton(host)).anyTimes();
-  expect(cluster.getDesiredConfigByType("krb5-conf")).andReturn(krb5ConfConfig).anyTimes();
-  expect(cluster.getDesiredConfigByType("kerberos-env")).andReturn(kerberosEnvConfig).anyTimes();
-  expect(cluster.getClusterName()).andReturn("c1").anyTimes();
+  final Cluster cluster=createMockCluster(Collections.singleton(host),SecurityType.KERBEROS,krb5ConfConfig,kerberosEnvConfig);
   expect(cluster.getServices()).andReturn(new HashMap<String,Service>(){
 {
       put(Service.Type.KERBEROS.name(),serviceKerberos);
@@ -57,8 +53,6 @@
     }
   }
 ).anyTimes();
-  expect(cluster.getCurrentStackVersion()).andReturn(new StackId("HDP","2.2")).anyTimes();
-  expect(cluster.getSessionAttributes()).andReturn(new HashMap<String,Object>()).anyTimes();
   final Clusters clusters=injector.getInstance(Clusters.class);
   expect(clusters.getHost("host1")).andReturn(host).once();
   final AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
@@ -78,17 +72,8 @@
 ).times(1);
   final KerberosDescriptor kerberosDescriptor=createStrictMock(KerberosDescriptor.class);
   expect(kerberosDescriptor.getProperties()).andReturn(null).once();
-  setupGetDescriptorFromCluster(kerberosDescriptor);
-  final StageFactory stageFactory=injector.getInstance(StageFactory.class);
-  expect(stageFactory.createNew(anyLong(),anyObject(String.class),anyObject(String.class),anyLong(),anyObject(String.class),anyObject(String.class),anyObject(String.class),anyObject(String.class))).andAnswer(new IAnswer<Stage>(){
-    @Override public Stage answer() throws Throwable {
-      Stage stage=createNiceMock(Stage.class);
-      expect(stage.getHostRoleCommands()).andReturn(Collections.<String,Map<String,HostRoleCommand>>emptyMap()).anyTimes();
-      replay(stage);
-      return stage;
-    }
-  }
-).anyTimes();
+  setupKerberosDescriptor(kerberosDescriptor,1);
+  setupStageFactory();
   final RequestStageContainer requestStageContainer=createStrictMock(RequestStageContainer.class);
   expect(requestStageContainer.getLastStageId()).andReturn(-1L).anyTimes();
   expect(requestStageContainer.getId()).andReturn(1L).once();

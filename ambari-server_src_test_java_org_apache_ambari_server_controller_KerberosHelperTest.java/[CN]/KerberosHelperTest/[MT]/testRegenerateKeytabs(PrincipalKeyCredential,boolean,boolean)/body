@@ -69,17 +69,8 @@
   final Map<String,String> krb5ConfProperties=createMock(Map.class);
   final Config krb5ConfConfig=createMock(Config.class);
   expect(krb5ConfConfig.getProperties()).andReturn(krb5ConfProperties).anyTimes();
-  final Cluster cluster=createNiceMock(Cluster.class);
-  if (testInvalidHost) {
-    expect(cluster.getHosts()).andReturn(Arrays.asList(host,hostInvalid)).anyTimes();
-  }
- else {
-    expect(cluster.getHosts()).andReturn(Arrays.asList(host)).anyTimes();
-  }
-  expect(cluster.getSecurityType()).andReturn(SecurityType.KERBEROS).anyTimes();
-  expect(cluster.getDesiredConfigByType("krb5-conf")).andReturn(krb5ConfConfig).anyTimes();
-  expect(cluster.getDesiredConfigByType("kerberos-env")).andReturn(kerberosEnvConfig).anyTimes();
-  expect(cluster.getClusterName()).andReturn("c1").anyTimes();
+  final Collection<Host> hosts=(testInvalidHost) ? Arrays.asList(host,hostInvalid) : Collections.singleton(host);
+  final Cluster cluster=createMockCluster(hosts,SecurityType.KERBEROS,krb5ConfConfig,kerberosEnvConfig);
   expect(cluster.getServices()).andReturn(new HashMap<String,Service>(){
 {
       put(Service.Type.KERBEROS.name(),serviceKerberos);
@@ -95,28 +86,21 @@
       add(sch2);
     }
   }
-).once();
-  expect(cluster.getCurrentStackVersion()).andReturn(new StackId("HDP","2.2")).anyTimes();
+).atLeastOnce();
+  expect(cluster.getServiceComponentHosts("KERBEROS","KERBEROS_CLIENT")).andReturn(Collections.singletonList(schKerberosClient)).once();
+  final Clusters clusters=injector.getInstance(Clusters.class);
+  expect(clusters.getHost("host1")).andReturn(host).once();
   final AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
   expect(ambariManagementController.findConfigurationTagsWithOverrides(cluster,null)).andReturn(Collections.<String,Map<String,String>>emptyMap()).once();
   expect(ambariManagementController.getRoleCommandOrder(cluster)).andReturn(createMock(RoleCommandOrder.class)).once();
   final KerberosServiceDescriptor serviceDescriptor1=createMock(KerberosServiceDescriptor.class);
   final KerberosServiceDescriptor serviceDescriptor2=createMock(KerberosServiceDescriptor.class);
   final KerberosDescriptor kerberosDescriptor=createMock(KerberosDescriptor.class);
-  expect(kerberosDescriptor.getService("KERBEROS")).andReturn(null).once();
-  expect(kerberosDescriptor.getService("SERVICE1")).andReturn(serviceDescriptor1).once();
-  expect(kerberosDescriptor.getService("SERVICE2")).andReturn(serviceDescriptor2).once();
-  setupGetDescriptorFromCluster(kerberosDescriptor);
-  final StageFactory stageFactory=injector.getInstance(StageFactory.class);
-  expect(stageFactory.createNew(anyLong(),anyObject(String.class),anyObject(String.class),anyLong(),anyObject(String.class),anyObject(String.class),anyObject(String.class),anyObject(String.class))).andAnswer(new IAnswer<Stage>(){
-    @Override public Stage answer() throws Throwable {
-      Stage stage=createNiceMock(Stage.class);
-      expect(stage.getHostRoleCommands()).andReturn(Collections.<String,Map<String,HostRoleCommand>>emptyMap()).anyTimes();
-      replay(stage);
-      return stage;
-    }
-  }
-).anyTimes();
+  expect(kerberosDescriptor.getService("KERBEROS")).andReturn(null).atLeastOnce();
+  expect(kerberosDescriptor.getService("SERVICE1")).andReturn(serviceDescriptor1).atLeastOnce();
+  expect(kerberosDescriptor.getService("SERVICE2")).andReturn(serviceDescriptor2).atLeastOnce();
+  setupKerberosDescriptor(kerberosDescriptor,1);
+  setupStageFactory();
   final RequestStageContainer requestStageContainer;
   if (mockRequestStageContainer) {
     requestStageContainer=createStrictMock(RequestStageContainer.class);
