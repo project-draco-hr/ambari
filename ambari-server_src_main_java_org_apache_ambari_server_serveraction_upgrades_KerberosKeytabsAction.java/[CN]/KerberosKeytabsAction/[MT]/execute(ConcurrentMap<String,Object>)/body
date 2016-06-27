@@ -1,0 +1,28 @@
+{
+  String clusterName=getExecutionCommand().getClusterName();
+  Cluster cluster=m_clusters.getCluster(clusterName);
+  StringBuilder stdout=new StringBuilder();
+  stdout.append(String.format("Checking %s is secured by Kerberos... %s",clusterName,m_kerberosHelper.isClusterKerberosEnabled(cluster))).append(System.lineSeparator());
+  if (!m_kerberosHelper.isClusterKerberosEnabled(cluster)) {
+    stdout.append(String.format("Cluster %s is not secured by Kerberos.  No action required.",clusterName));
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",stdout.toString(),"");
+  }
+  stdout.append(String.format("Loading %s for cluster %s",KERBEROS_ENV,clusterName)).append(System.lineSeparator());
+  Config kerberosEnv=cluster.getDesiredConfigByType(KERBEROS_ENV);
+  if (kerberosEnv == null) {
+    stdout.append(String.format("Configuration %s was not found.  No action required.",KERBEROS_ENV));
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",stdout.toString(),"");
+  }
+  Map<String,String> kerbProperties=kerberosEnv.getProperties();
+  KDCType kdcType=KDCType.NONE;
+  if (null != kerbProperties && kerbProperties.containsKey(KDC_TYPE_KEY)) {
+    kdcType=KDCType.translate(kerbProperties.get(KDC_TYPE_KEY));
+  }
+  stdout.append(String.format("Checking KDC type... %s",kdcType)).append(System.lineSeparator());
+  if (KDCType.NONE == kdcType) {
+    stdout.append(String.format("KDC Type is %s, keytabs are managed manually.  No action required.",kdcType));
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",stdout.toString(),"");
+  }
+  stdout.append(String.format("Ambari is managing Kerberos keytabs.  Regenerate " + "keytabs after upgrade is complete."));
+  return createCommandReport(0,HostRoleStatus.HOLDING,"{}",stdout.toString(),"");
+}
