@@ -1,0 +1,26 @@
+{
+  String baseDn=ldapServerProperties.getBaseDN().toLowerCase();
+  String groupBase=ldapServerProperties.getGroupBase().toLowerCase();
+  final String groupNamingAttribute=ldapServerProperties.getGroupNamingAttr();
+  final String adminGroupMappingMemberAttr=ldapServerProperties.getAdminGroupMappingMemberAttr();
+  int indexOfBaseDn=groupBase.indexOf(baseDn);
+  groupBase=indexOfBaseDn <= 0 ? "" : groupBase.substring(0,indexOfBaseDn - 1);
+  String memberValue=StringUtils.isNotEmpty(adminGroupMappingMemberAttr) ? user.getStringAttribute(adminGroupMappingMemberAttr) : user.getNameInNamespace();
+  LOG.debug("LDAP login - set '{}' as member attribute for adminGroupMappingRules",memberValue);
+  String setAmbariAdminAttrFilter=resolveAmbariAdminAttrFilter(ldapServerProperties,memberValue);
+  LOG.debug("LDAP login - set admin attr filter: {}",setAmbariAdminAttrFilter);
+  AttributesMapper attributesMapper=new AttributesMapper(){
+    public Object mapFromAttributes(    Attributes attrs) throws NamingException {
+      return attrs.get(groupNamingAttribute).get();
+    }
+  }
+;
+  LdapTemplate ldapTemplate=new LdapTemplate((getContextSource()));
+  ldapTemplate.setIgnorePartialResultException(true);
+  ldapTemplate.setIgnoreNameNotFoundException(true);
+  List<String> ambariAdminGroups=ldapTemplate.search(groupBase,setAmbariAdminAttrFilter,attributesMapper);
+  if (ambariAdminGroups.size() > 0) {
+    user.setAttributeValue(AMBARI_ADMIN_LDAP_ATTRIBUTE_KEY,true);
+  }
+  return user;
+}
