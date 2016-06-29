@@ -1,15 +1,27 @@
 {
+  EasyMock.reset(actionManager,hostRoleCommand);
   InMemoryDefaultTestModule module=new InMemoryDefaultTestModule(){
     @Override protected void configure(){
       super.configure();
-      bind(ActionManager.class).toInstance(am);
+      bind(ActionManager.class).toInstance(actionManager);
     }
   }
 ;
   injector=Guice.createInjector(module);
   injector.getInstance(GuiceJpaInitializer.class);
-  controller=injector.getInstance(AmbariManagementController.class);
+  ambariManagementController=injector.getInstance(AmbariManagementController.class);
   clusters=injector.getInstance(Clusters.class);
   StageUtils.setTopologyManager(injector.getInstance(TopologyManager.class));
   StageUtils.setConfiguration(injector.getInstance(Configuration.class));
+  SecurityContextHolder.getContext().setAuthentication(TestAuthenticationFactory.createAdministrator());
+  createClusterFixture("c1","HDP-2.0.6","c1");
+  EasyMock.expect(hostRoleCommand.getTaskId()).andReturn(1L);
+  EasyMock.expect(hostRoleCommand.getStageId()).andReturn(1L);
+  EasyMock.expect(hostRoleCommand.getRoleCommand()).andReturn(RoleCommand.CUSTOM_COMMAND);
+  EasyMock.expect(hostRoleCommand.getRole()).andReturn(Role.AMBARI_SERVER_ACTION);
+  EasyMock.expect(hostRoleCommand.getStatus()).andReturn(HostRoleStatus.PENDING);
+  EasyMock.expect(actionManager.getNextRequestId()).andReturn(1L).anyTimes();
+  EasyMock.expect(actionManager.getRequestTasks(1L)).andReturn(Collections.singletonList(hostRoleCommand));
+  actionManager.sendActions(EasyMock.capture(requestCapture),EasyMock.anyObject(ExecuteActionRequest.class));
+  EasyMock.expectLastCall();
 }
