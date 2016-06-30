@@ -1,0 +1,28 @@
+def polling_request(url, user=None, password=None, timer=DEFAULT_POLLING_TIMER_REQUEST):
+    '\n  @param url: Request URL returned by the Ambari Server\n  @param user: User for Ambari REST API authentication\n  @param password: Password for the user used to authenticate the Ambari REST API call\n  @param timer: Time interval between two check status REST API call. Default is 10 seconds.\n  '
+    out = None
+    err = None
+    ec = 0
+    request_in_progress = True
+    logger.debug('Polling status for {0} every {1} seconds'.format(url, timer))
+    logger.debug('Polling started at {0}'.format(str(get_current_time())))
+    previous_percentage = 0
+    while request_in_progress:
+        (out, err, ec) = execute_curl_command(url, user=user, password=password)
+        if (CODE_SUCCESS != ec):
+            logger.debug('Server became offline')
+            request_in_progress = False
+        else:
+            (is_finished, is_finished_successfully, percentage) = is_request_finished(out)
+            if (percentage >= 0):
+                if (percentage != previous_percentage):
+                    previous_percentage = percentage
+                    logger.debug(' {0}%'.format(percentage))
+                else:
+                    logger.debug('.')
+            if is_finished:
+                request_in_progress = False
+            else:
+                time.sleep(timer)
+    logger.debug('Stopped polling {0} at {1}. Request finished.'.format(url, str(get_current_time())))
+    return (out, err, ec)

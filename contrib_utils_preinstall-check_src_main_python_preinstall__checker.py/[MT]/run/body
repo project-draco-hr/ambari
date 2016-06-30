@@ -1,0 +1,32 @@
+def run(options):
+    server_url = get_server_url(options.port)
+    label_check = 'Ambari server reachable by user credentials'
+    step(label_check)
+    (out, ec) = server_reachable_by_credentials_with_retry(server_url, options.user, options.password)
+    if (CODE_SUCCESS == ec):
+        print_check_result(label_check, ['Ambari server reachable via {0}'.format(server_url)], ec)
+    elif (CODE_ERROR == ec):
+        print_check_result(label_check, ['Failed to establish connection to {0}.'.format(server_url)], ec)
+        return ec
+    elif (HTTP_FORBIDDEN == ec):
+        print_check_result(label_check, ['Wrong credentials provided.'], ec)
+        return ec
+    agents = get_ambari_agent_nodes(server_url, options.user, options.password)
+    logger.info('Total number of agents {0}'.format(len(agents)))
+    if (OPERATION_CHECK == options.operation):
+        run_host_checks(options, agents, server_url)
+        run_java_home_checks(options, agents, server_url)
+        run_agent_checks(options, agents, server_url)
+        logger.info('')
+        global has_warnings
+        global has_errors
+        if has_errors:
+            logger.error('Checks finished with errors')
+        elif has_warnings:
+            logger.warning('Checks finished with warnings')
+        else:
+            logger.info('Checks finished')
+        return CODE_SUCCESS
+    else:
+        logger.error('Unknown operation {0}'.options.operation)
+        return CODE_ERROR

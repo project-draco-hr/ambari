@@ -1,0 +1,64 @@
+def run_agent_checks(options, agents, server_url):
+    logger.info('')
+    logger.info('Prepare for Ambari Agent host check')
+    label_check = 'Ambari Agent host check'
+    url = '{0}/api/v1/requests'.format(server_url)
+    data = '{{"RequestInfo":{{"action":"check_host","context":"Check host","parameters":{{"check_execute_list":"last_agent_env_check,installed_packages,existing_repos,transparentHugePage","jdk_location":"{0}/resources/","threshold":"20"}}}},"Requests/resource_filters":[{{"hosts":"{1}"}}]}}'.format(server_url, ','.join(agents))
+    logger.debug('Agent enviornment check data to submit {0}'.format(data))
+    (task_results_by_host, results_to_print) = run_check(options, url, label_check, data)
+    step('Transparent Huge Pages')
+    thp_checks_parser(task_results_by_host, results_to_print)
+    print_check_results(results_to_print)
+    host_info_url = '{0}/api/v1/hosts?fields=Hosts/total_mem,Hosts/cpu_count,Hosts/disk_info,Hosts/last_agent_env,Hosts/host_name,Hosts/os_type,Hosts/os_arch,Hosts/os_family,Hosts/ip'.format(server_url)
+    (out, err, ec) = execute_curl_command(host_info_url, user=options.user, password=options.password)
+    logger.debug('Agent host information {0}'.format(out))
+    host_info_by_host = {}
+    if out:
+        response = json.loads(out)
+        items = response.get('items', {})
+        for item in items:
+            info = item.get('Hosts', {})
+            host_name = info.get('host_name', None)
+            if host_name:
+                host_info_by_host[host_name] = item
+    if host_info_by_host:
+        step('Disk space')
+        results_to_print = []
+        disk_space_checks_parser(host_info_by_host, results_to_print)
+        print_check_results(results_to_print)
+        step('Firewall enabled')
+        results_to_print = []
+        firewall_checks_parser(task_results_by_host, results_to_print)
+        print_check_results(results_to_print)
+        step('Java processes')
+        results_to_print = []
+        java_process_checks_parser(task_results_by_host, results_to_print)
+        print_check_results(results_to_print)
+        step('Installed packages')
+        results_to_print = []
+        install_packages_checks_parser(task_results_by_host, results_to_print)
+        print_check_results(results_to_print)
+        step('Stack files and directories')
+        results_to_print = []
+        file_and_folder_checks_parser(task_results_by_host, results_to_print)
+        print_check_results(results_to_print)
+        step('Live services')
+        results_to_print = []
+        live_services_checks_parser(task_results_by_host, results_to_print)
+        print_check_results(results_to_print)
+        step('Default user names')
+        results_to_print = []
+        default_user_ids_checks_parser(task_results_by_host, results_to_print)
+        print_check_results(results_to_print)
+        step('Umask')
+        results_to_print = []
+        umask_checks_parser(task_results_by_host, results_to_print)
+        print_check_results(results_to_print)
+        step('Alternatives')
+        results_to_print = []
+        alternatives_checks_parser(task_results_by_host, results_to_print)
+        print_check_results(results_to_print)
+        step('Reverse lookup')
+        results_to_print = []
+        reverse_lookup_checks_parser(task_results_by_host, results_to_print)
+        print_check_results(results_to_print)

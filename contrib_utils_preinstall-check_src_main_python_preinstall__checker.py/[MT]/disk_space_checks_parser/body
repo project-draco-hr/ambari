@@ -1,0 +1,31 @@
+def disk_space_checks_parser(host_info_by_host, results_to_print):
+    min_disk_space = ((DEFAULT_MINDISKSPACE * 1024) * 1024)
+    min_disk_space_usrlib = ((DEFAULT_MINDISKSPACEUSRLIB * 1024) * 1024)
+    for key in host_info_by_host:
+        host_summary = host_info_by_host[key]
+        info = host_summary.get('Hosts', {})
+        disk_info = info.get('disk_info', [])
+        for disk in disk_info:
+            errors = []
+            passes = 0
+            mountpoint = disk.get('mountpoint', None)
+            if ('/' == mountpoint):
+                free_space = disk.get('available', (-1))
+                if (free_space == (-1)):
+                    errors.append('Failed to obtain free space for mountpoint /')
+                elif (free_space < min_disk_space):
+                    errors.append('A miminum of {} GB free space for mountpoint /'.format(DEFAULT_MINDISKSPACE))
+                else:
+                    passes += 1
+            elif (('/usr' == mountpoint) or ('/usr/lib' == mountpoint)):
+                free_space = disk.get('available', (-1))
+                if (free_space == (-1)):
+                    errors.append('Failed to obtain free space for mountpoint /usr or /usr/lib')
+                elif (free_space < min_disk_space_usrlib):
+                    errors.append('A miminum of {} GB free space for mountpoint /usr or /usr/lib'.format(DEFAULT_MINDISKSPACEUSRLIB))
+                else:
+                    passes += 1
+            if (passes > 0):
+                results_to_print.append({'key': key, 'status': STATUS_PASSED, })
+            elif errors:
+                results_to_print.append({'key': key, 'status': STATUS_FAILED, 'error': errors, })

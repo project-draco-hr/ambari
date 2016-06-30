@@ -1,0 +1,30 @@
+def summarize_tasks_by_hosts(request_url, user, password):
+    '\n  @param request_url: Request URL returned by the Ambari Server\n  @param user: User for Ambari REST API authentication\n  @param password: Password for the user used to authenticate the Ambari REST API call\n  '
+    task_results_by_host = {}
+    results_to_print = []
+    (out, err, ec) = execute_curl_command(request_url, user=user, password=password)
+    if (CODE_SUCCESS == ec):
+        if out:
+            (is_erroneous_response, http_ec, http_err) = is_erroneous_response_by_server(out)
+            if is_erroneous_response:
+                results_to_print = [{'key': 'Error response from server', 'status': http_ec, 'error': [http_err], }]
+            else:
+                urls = get_tasks_urls(out)
+                if urls:
+                    for task_url in urls:
+                        (task_out, err, ec) = execute_curl_command(task_url, user=user, password=password)
+                        logger.debug(task_out)
+                        if (CODE_SUCCESS == ec):
+                            host = get_host(task_out)
+                            if host:
+                                task_results_by_host[host] = task_out
+                        else:
+                            results_to_print = [{'key': 'Connection refused', 'status': STATUS_FAILED, 'error': [err], }]
+                            break
+                else:
+                    results_to_print = [{'key': 'Empty task list', 'status': STATUS_FAILED, }]
+        else:
+            results_to_print = [{'key': 'Empty response from server', 'status': STATUS_FAILED, }]
+    else:
+        results_to_print = [{'key': 'Connection refused', 'status': STATUS_FAILED, 'error': [err], }]
+    return (task_results_by_host, results_to_print)

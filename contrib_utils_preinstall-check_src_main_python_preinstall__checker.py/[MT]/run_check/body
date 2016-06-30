@@ -1,0 +1,25 @@
+def run_check(options, url, label_check, data):
+    '\n  @param options: Parameters passed in from the command line\n  @param url: Ambari Server URL\n  @param label_check: Text to display for the check result section\n  @param data: Data to be submitted to the Ambari Server via a REST API call\n  '
+    (out, err, ec) = execute_curl_command(url, request_type=HTTP_REQUEST_POST, request_body=data, user=options.user, password=options.password)
+    if ((CODE_SUCCESS != ec) or (not out)):
+        logger.debug(out)
+        logger.debug(ec)
+        logger.debug(err)
+        print_check_result(label_check, ['Failed to connect to Ambari server'], ec)
+        return ec
+    else:
+        (is_erroneous_response, http_ec, http_err) = is_erroneous_response_by_server(out)
+        if is_erroneous_response:
+            print_check_result(label_check, [http_err], http_ec)
+            return http_ec
+        elif is_request_accepted(out):
+            request_url = get_request_url(out)
+            (finalresult, err, ec) = polling_request(request_url, options.user, options.password)
+            logger.debug(finalresult)
+            if is_request_finished_successfully(finalresult):
+                request_url = get_request_url(out, summary_only=False)
+                return summarize_tasks_by_hosts(request_url, options.user, options.password)
+            else:
+                print_check_result(label_check, [err], CODE_ERROR)
+        else:
+            print_check_result(label_check, [out], CODE_ERROR)
