@@ -1,0 +1,146 @@
+{
+  long startTime=System.currentTimeMillis();
+  final Logger logger=Logger.getLogger(HiveSavedQueryMigrationUtility.class);
+  Connection connectionAmbaridb=null;
+  Connection connectionHuedb=null;
+  int i=0;
+  logger.info("-------------------------------------");
+  logger.info("hive saved query Migration started");
+  logger.info("-------------------------------------");
+  logger.info("start date: " + startDate);
+  logger.info("enddate date: " + endDate);
+  logger.info("instance is: " + instance);
+  logger.info("hue username is : " + username);
+  HiveSavedQueryMigrationImplementation hivesavedqueryimpl=new HiveSavedQueryMigrationImplementation();
+  QuerySet huedatabase=null;
+  if (view.getProperties().get("huedrivername").contains("mysql")) {
+    huedatabase=new MysqlQuerySet();
+  }
+ else   if (view.getProperties().get("huedrivername").contains("postgresql")) {
+    huedatabase=new PostgressQuerySet();
+  }
+ else   if (view.getProperties().get("huedrivername").contains("sqlite")) {
+    huedatabase=new SqliteQuerySet();
+  }
+ else   if (view.getProperties().get("huedrivername").contains("oracle")) {
+    huedatabase=new OracleQuerySet();
+  }
+  QuerySetAmbariDB ambaridatabase=null;
+  if (view.getProperties().get("ambaridrivername").contains("mysql")) {
+    ambaridatabase=new MysqlQuerySetAmbariDB();
+  }
+ else   if (view.getProperties().get("ambaridrivername").contains("postgresql")) {
+    ambaridatabase=new PostgressQuerySetAmbariDB();
+  }
+ else   if (view.getProperties().get("ambaridrivername").contains("oracle")) {
+    ambaridatabase=new OracleQuerySetAmbariDB();
+  }
+  int maxcountForHivehistroryAmbaridb, maxCountforSavequeryAmbaridb;
+  String time=null;
+  Long epochtime=null;
+  String dirNameforHiveSavedquery;
+  ArrayList<HiveModel> dbpojoHiveSavedQuery=new ArrayList<HiveModel>();
+  try {
+    connectionHuedb=DataSourceHueDatabase.getInstance(view.getProperties().get("huedrivername"),view.getProperties().get("huejdbcurl"),view.getProperties().get("huedbusername"),view.getProperties().get("huedbpassword")).getConnection();
+    dbpojoHiveSavedQuery=hivesavedqueryimpl.fetchFromHuedb(username,startDate,endDate,connectionHuedb,huedatabase);
+    for (int j=0; j < dbpojoHiveSavedQuery.size(); j++) {
+      logger.info("the query fetched from hue" + dbpojoHiveSavedQuery.get(j).getQuery());
+    }
+    if (dbpojoHiveSavedQuery.size() == 0) {
+      migrationresult.setIsNoQuerySelected("yes");
+      migrationresult.setProgressPercentage(0);
+      migrationresult.setNumberOfQueryTransfered(0);
+      migrationresult.setTotalNoQuery(dbpojoHiveSavedQuery.size());
+      getResourceManager(view).update(migrationresult,jobid);
+      logger.info("No queries has been selected acccording to your criteria");
+      logger.info("no hive saved query has been selected from hue according to your criteria of searching");
+    }
+ else {
+      connectionAmbaridb=DataSourceAmbariDatabase.getInstance(view.getProperties().get("ambaridrivername"),view.getProperties().get("ambarijdbcurl"),view.getProperties().get("ambaridbusername"),view.getProperties().get("ambaridbpassword")).getConnection();
+      connectionAmbaridb.setAutoCommit(false);
+      for (i=0; i < dbpojoHiveSavedQuery.size(); i++) {
+        logger.info("_____________________");
+        logger.info("Loop No." + (i + 1));
+        logger.info("_____________________");
+        float calc=((float)(i + 1)) / dbpojoHiveSavedQuery.size() * 100;
+        int progressPercentage=Math.round(calc);
+        migrationresult.setIsNoQuerySelected("no");
+        migrationresult.setProgressPercentage(progressPercentage);
+        migrationresult.setNumberOfQueryTransfered(i + 1);
+        migrationresult.setTotalNoQuery(dbpojoHiveSavedQuery.size());
+        getResourceManager(view).update(migrationresult,jobid);
+        logger.info("query fetched from hue:-  " + dbpojoHiveSavedQuery.get(i).getQuery());
+        int tableIdSavedQuery=hivesavedqueryimpl.fetchInstancetablenameForSavedqueryHive(connectionAmbaridb,instance,ambaridatabase);
+        int tableIdHistoryHive=hivesavedqueryimpl.fetchInstanceTablenameHiveHistory(connectionAmbaridb,instance,ambaridatabase);
+        logger.info("Table name are fetched from instance name.");
+        hivesavedqueryimpl.writetoFilequeryHql(dbpojoHiveSavedQuery.get(i).getQuery(),ConfigurationCheckImplementation.getHomeDir());
+        hivesavedqueryimpl.writetoFileLogs(ConfigurationCheckImplementation.getHomeDir());
+        logger.info(".hql and logs file are saved in temporary directory");
+        maxcountForHivehistroryAmbaridb=(hivesavedqueryimpl.fetchMaxdsidFromHiveHistory(connectionAmbaridb,tableIdHistoryHive,ambaridatabase) + 1);
+        maxCountforSavequeryAmbaridb=(hivesavedqueryimpl.fetchMaxidforSavedQueryHive(connectionAmbaridb,tableIdSavedQuery,ambaridatabase) + 1);
+        time=hivesavedqueryimpl.getTime();
+        epochtime=hivesavedqueryimpl.getEpochTime();
+        dirNameforHiveSavedquery="/user/admin/migration/jobs/migration-job-" + maxcountForHivehistroryAmbaridb + "-"+ time+ "/";
+        logger.info("Directory will be creted in HDFS" + dirNameforHiveSavedquery);
+        hivesavedqueryimpl.insertRowHiveHistory(dirNameforHiveSavedquery,maxcountForHivehistroryAmbaridb,epochtime,connectionAmbaridb,tableIdHistoryHive,instance,i,ambaridatabase);
+        logger.info("Row inserted in hive History table.");
+        if (view.getProperties().get("KerberoseEnabled").equals("y")) {
+          logger.info("Kerberose Enabled");
+          hivesavedqueryimpl.createDirHiveSecured(dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
+          hivesavedqueryimpl.putFileinHdfsSecured(ConfigurationCheckImplementation.getHomeDir() + "query.hql",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
+          hivesavedqueryimpl.putFileinHdfsSecured(ConfigurationCheckImplementation.getHomeDir() + "logs",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
+        }
+ else {
+          logger.info("Kerberose Not Enabled");
+          hivesavedqueryimpl.createDirHive(dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
+          hivesavedqueryimpl.putFileinHdfs(ConfigurationCheckImplementation.getHomeDir() + "query.hql",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
+          hivesavedqueryimpl.putFileinHdfs(ConfigurationCheckImplementation.getHomeDir() + "logs",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
+        }
+        hivesavedqueryimpl.insertRowinSavedQuery(maxCountforSavequeryAmbaridb,dbpojoHiveSavedQuery.get(i).getDatabase(),dirNameforHiveSavedquery,dbpojoHiveSavedQuery.get(i).getQuery(),dbpojoHiveSavedQuery.get(i).getOwner(),connectionAmbaridb,tableIdSavedQuery,instance,i,ambaridatabase);
+      }
+      connectionAmbaridb.commit();
+    }
+  }
+ catch (  SQLException e) {
+    logger.error("SQL exception: ",e);
+    try {
+      connectionAmbaridb.rollback();
+      logger.info("roll back done");
+    }
+ catch (    SQLException e1) {
+      logger.error("Rollback error: ",e1);
+    }
+  }
+catch (  ClassNotFoundException e1) {
+    logger.error("Class not found : ",e1);
+  }
+catch (  ParseException e) {
+    logger.error("ParseException: ",e);
+  }
+catch (  URISyntaxException e) {
+    logger.error("URISyntaxException: ",e);
+  }
+catch (  PropertyVetoException e) {
+    logger.error("PropertyVetoException:",e);
+  }
+ finally {
+    if (null != connectionAmbaridb)     try {
+      connectionAmbaridb.close();
+    }
+ catch (    SQLException e) {
+      logger.error("Error in connection close",e);
+    }
+  }
+  hivesavedqueryimpl.deleteFileQueryhql(ConfigurationCheckImplementation.getHomeDir());
+  hivesavedqueryimpl.deleteFileQueryLogs(ConfigurationCheckImplementation.getHomeDir());
+  long stopTime=System.currentTimeMillis();
+  long elapsedTime=stopTime - startTime;
+  MigrationModel model=new MigrationModel();
+  migrationresult.setJobtype("hivesavedquerymigration");
+  migrationresult.setTotalTimeTaken(String.valueOf(elapsedTime));
+  getResourceManager(view).update(migrationresult,jobid);
+  logger.info("-------------------------------");
+  logger.info("hive saved query Migration end");
+  logger.info("--------------------------------");
+  return model;
+}
