@@ -1,46 +1,27 @@
 {
-  if (ParseOptions.InputFileType.CSV.toString().equals(input.getInputFileType()) && input.getIsFirstRowHeader().equals(Boolean.FALSE)) {
-    try {
-      LoadQueryInput loadQueryInput=new LoadQueryInput(input.getHdfsPath(),input.getDatabaseName(),input.getTableName());
-      String loadQuery=new QueryGenerator().generateLoadQuery(loadQueryInput);
-      Job job=createJob(loadQuery,input.getDatabaseName());
-      JSONObject jo=new JSONObject();
-      jo.put("jobId",job.getId());
-      return Response.ok(jo).build();
-    }
- catch (    WebApplicationException e) {
-      LOG.error(getErrorMessage(e),e);
-      throw e;
-    }
-catch (    Throwable e) {
-      LOG.error(e.getMessage(),e);
-      throw new ServiceFormattedException(e);
-    }
+  InputStream hdfsStream=null;
+  try {
+    hdfsStream=getHDFSFileStream(input.getHdfsPath());
+    CSVParams csvParams=getCsvParams(input.getCsvDelimiter(),input.getCsvQuote(),input.getCsvEscape());
+    String path=uploadFileFromStream(hdfsStream,input.getIsFirstRowHeader(),input.getInputFileType(),input.getTableName(),input.getDatabaseName(),input.getHeader(),input.isContainsEndlines(),csvParams);
+    JSONObject jo=new JSONObject();
+    jo.put("uploadedPath",path);
+    return Response.ok(jo).build();
   }
- else {
-    InputStream hdfsStream=null;
-    try {
-      hdfsStream=getHDFSFileStream(input.getHdfsPath());
-      String path=uploadFileFromStream(hdfsStream,input.getIsFirstRowHeader(),input.getInputFileType(),input.getTableName(),input.getDatabaseName());
-      JSONObject jo=new JSONObject();
-      jo.put("uploadedPath",path);
-      return Response.ok(jo).build();
-    }
- catch (    WebApplicationException e) {
-      LOG.error(getErrorMessage(e),e);
-      throw e;
-    }
-catch (    Exception e) {
-      LOG.error(e.getMessage(),e);
-      throw new ServiceFormattedException(e);
-    }
+ catch (  WebApplicationException e) {
+    LOG.error(getErrorMessage(e),e);
+    throw e;
+  }
+catch (  Exception e) {
+    LOG.error(e.getMessage(),e);
+    throw new ServiceFormattedException(e);
+  }
  finally {
-      if (null != hdfsStream)       try {
-        hdfsStream.close();
-      }
- catch (      IOException e) {
-        LOG.error("Exception occured while closing the HDFS stream for path : " + input.getHdfsPath(),e);
-      }
+    if (null != hdfsStream)     try {
+      hdfsStream.close();
+    }
+ catch (    IOException e) {
+      LOG.error("Exception occured while closing the HDFS stream for path : " + input.getHdfsPath(),e);
     }
   }
 }
