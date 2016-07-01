@@ -1,18 +1,21 @@
 def validateHiveInteractiveSiteConfigurations(self, properties, recommendedDefaults, configurations, services, hosts):
     validationItems = []
     hsi_hosts = self.__getHostsForComponent(services, 'HIVE', 'HIVE_SERVER_INTERACTIVE')
+    curr_selected_queue_for_llap = None
+    curr_selected_queue_for_llap_cap_perc = None
+    MIN_ASSUMED_CAP_REQUIRED_FOR_SERVICE_CHECKS = 512
     if (len(hsi_hosts) > 0):
         (capacity_scheduler_properties, received_as_key_value_pair) = self.getCapacitySchedulerProperties(services)
         if capacity_scheduler_properties:
             if ((self.HIVE_INTERACTIVE_SITE in services['configurations']) and ('hive.llap.daemon.queue.name' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties'])):
                 curr_selected_queue_for_llap = services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.llap.daemon.queue.name']
                 if curr_selected_queue_for_llap:
-                    curr_selected_queue_for_llap_cap = capacity_scheduler_properties.get((('yarn.scheduler.capacity.root.' + curr_selected_queue_for_llap) + '.capacity'))
-                    if curr_selected_queue_for_llap_cap:
-                        curr_selected_queue_for_llap_cap = int(float(curr_selected_queue_for_llap_cap))
+                    curr_selected_queue_for_llap_cap_perc = capacity_scheduler_properties.get((('yarn.scheduler.capacity.root.' + curr_selected_queue_for_llap) + '.capacity'))
+                    if curr_selected_queue_for_llap_cap_perc:
+                        curr_selected_queue_for_llap_cap_perc = int(float(curr_selected_queue_for_llap_cap_perc))
                         min_reqd_queue_cap_perc = self.min_queue_perc_reqd_for_llap_and_hive_app(services, hosts, configurations)
-                        if (curr_selected_queue_for_llap_cap < min_reqd_queue_cap_perc):
-                            errMsg1 = "Selected queue '{0}' capacity ({1}%) is less than minimum required capacity ({2}%) for LLAP app to run".format(curr_selected_queue_for_llap, curr_selected_queue_for_llap_cap, min_reqd_queue_cap_perc)
+                        if (curr_selected_queue_for_llap_cap_perc < min_reqd_queue_cap_perc):
+                            errMsg1 = "Selected queue '{0}' capacity ({1}%) is less than minimum required capacity ({2}%) for LLAP app to run".format(curr_selected_queue_for_llap, curr_selected_queue_for_llap_cap_perc, min_reqd_queue_cap_perc)
                             validationItems.append({'config-name': 'hive.llap.daemon.queue.name', 'item': self.getErrorItem(errMsg1), })
                     else:
                         Logger.error("Couldn't retrieve '{0}' queue's capacity from 'capacity-scheduler' while doing validation checks for Hive Server Interactive.".format(curr_selected_queue_for_llap))
@@ -36,5 +39,15 @@ def validateHiveInteractiveSiteConfigurations(self, properties, recommendedDefau
                 hive2_enable_do_as = services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']['hive.server2.enable.doAs']
                 if (hive2_enable_do_as == 'true'):
                     validationItems.append({'config-name': 'hive.server2.enable.doAs', 'item': self.getErrorItem("Value should be set to 'false' for Hive2."), })
+        if (curr_selected_queue_for_llap and curr_selected_queue_for_llap_cap_perc and (curr_selected_queue_for_llap == self.AMBARI_MANAGED_LLAP_QUEUE_NAME)):
+            node_manager_host_list = self.get_node_manager_hosts(services, hosts)
+            node_manager_cnt = len(node_manager_host_list)
+            yarn_nm_mem_in_mb = self.get_yarn_nm_mem_in_mb(services, configurations)
+            total_cluster_capacity = (node_manager_cnt * yarn_nm_mem_in_mb)
+            curr_selected_queue_for_llap_cap = ((float(curr_selected_queue_for_llap_cap_perc) / 100) * total_cluster_capacity)
+            available_cap_in_cluster = (total_cluster_capacity - curr_selected_queue_for_llap_cap)
+            if (available_cap_in_cluster < MIN_ASSUMED_CAP_REQUIRED_FOR_SERVICE_CHECKS):
+                errMsg3 = "Capacity used by '{0}' queue is '{1}'. Service checks may not run as remaining available capacity ({2}) in cluster is less than 512 MB.".format(self.AMBARI_MANAGED_LLAP_QUEUE_NAME, curr_selected_queue_for_llap_cap, available_cap_in_cluster)
+                validationItems.append({'config-name': 'hive.llap.daemon.queue.name', 'item': self.getWarnItem(errMsg3), })
     validationProblems = self.toConfigurationValidationProblems(validationItems, 'hive-interactive-site')
     return validationProblems
