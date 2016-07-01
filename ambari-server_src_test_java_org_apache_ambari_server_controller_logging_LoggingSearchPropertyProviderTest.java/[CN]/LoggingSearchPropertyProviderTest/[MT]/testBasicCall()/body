@@ -15,8 +15,6 @@
   expect(resourceMock.getPropertyValue(PropertyHelper.getPropertyId("HostRoles","cluster_name"))).andReturn("clusterone").atLeastOnce();
   Capture<HostComponentLoggingInfo> captureLogInfo=new Capture<HostComponentLoggingInfo>();
   resourceMock.setProperty(eq("logging"),capture(captureLogInfo));
-  LoggingRequestHelperFactory helperFactoryMock=mockSupport.createMock(LoggingRequestHelperFactory.class);
-  LoggingRequestHelper helperMock=mockSupport.createMock(LoggingRequestHelper.class);
   LogLevelQueryResponse levelQueryResponse=new LogLevelQueryResponse();
   levelQueryResponse.setTotalCount("3");
   List<NameValuePair> testListOfLogLevels=new LinkedList<NameValuePair>();
@@ -24,12 +22,8 @@
   testListOfLogLevels.add(new NameValuePair("WARN","500"));
   testListOfLogLevels.add(new NameValuePair("INFO","2200"));
   levelQueryResponse.setNameValueList(testListOfLogLevels);
-  expect(helperMock.sendGetLogFileNamesRequest(expectedLogSearchComponentName,"c6401.ambari.apache.org")).andReturn(Collections.singleton(expectedLogFilePath));
-  expect(helperMock.sendLogLevelQueryRequest(expectedLogSearchComponentName,"c6401.ambari.apache.org")).andReturn(levelQueryResponse).atLeastOnce();
-  expect(helperMock.createLogFileTailURI(expectedAmbariURL + expectedSearchEnginePath,expectedLogSearchComponentName,"c6401.ambari.apache.org")).andReturn("").atLeastOnce();
   Request requestMock=mockSupport.createMock(Request.class);
   Predicate predicateMock=mockSupport.createMock(Predicate.class);
-  LoggingSearchPropertyProvider.ControllerFactory factoryMock=mockSupport.createMock(LoggingSearchPropertyProvider.ControllerFactory.class);
   AmbariManagementController controllerMock=mockSupport.createMock(AmbariManagementController.class);
   AmbariMetaInfo metaInfoMock=mockSupport.createMock(AmbariMetaInfo.class);
   Clusters clustersMock=mockSupport.createMock(Clusters.class);
@@ -37,7 +31,9 @@
   StackId stackIdMock=mockSupport.createMock(StackId.class);
   ComponentInfo componentInfoMock=mockSupport.createMock(ComponentInfo.class);
   LogDefinition logDefinitionMock=mockSupport.createMock(LogDefinition.class);
-  expect(factoryMock.getAmbariManagementController()).andReturn(controllerMock);
+  LogSearchDataRetrievalService dataRetrievalServiceMock=mockSupport.createMock(LogSearchDataRetrievalService.class);
+  expect(dataRetrievalServiceMock.getLogFileNames(expectedLogSearchComponentName,"c6401.ambari.apache.org","clusterone")).andReturn(Collections.singleton(expectedLogFilePath)).atLeastOnce();
+  expect(dataRetrievalServiceMock.getLogFileTailURI(expectedAmbariURL + expectedSearchEnginePath,expectedLogSearchComponentName,"c6401.ambari.apache.org","clusterone")).andReturn("").atLeastOnce();
   expect(controllerMock.getAmbariServerURI(expectedSearchEnginePath)).andReturn(expectedAmbariURL + expectedSearchEnginePath).atLeastOnce();
   expect(controllerMock.getAmbariMetaInfo()).andReturn(metaInfoMock).atLeastOnce();
   expect(controllerMock.getClusters()).andReturn(clustersMock).atLeastOnce();
@@ -49,9 +45,10 @@
   expect(metaInfoMock.getComponent(expectedStackName,expectedStackVersion,expectedServiceName,expectedComponentName)).andReturn(componentInfoMock).atLeastOnce();
   expect(componentInfoMock.getLogs()).andReturn(Collections.singletonList(logDefinitionMock)).atLeastOnce();
   expect(logDefinitionMock.getLogId()).andReturn(expectedLogSearchComponentName).atLeastOnce();
-  expect(helperFactoryMock.getHelper(controllerMock,"clusterone")).andReturn(helperMock).atLeastOnce();
   mockSupport.replayAll();
-  PropertyProvider propertyProvider=new LoggingSearchPropertyProvider(helperFactoryMock,factoryMock);
+  LoggingSearchPropertyProvider propertyProvider=new LoggingSearchPropertyProvider();
+  propertyProvider.setAmbariManagementController(controllerMock);
+  propertyProvider.setLogSearchDataRetrievalService(dataRetrievalServiceMock);
   Set<Resource> returnedResources=propertyProvider.populateResources(Collections.singleton(resourceMock),requestMock,predicateMock);
   assertEquals("Returned resource set was of an incorrect size",1,returnedResources.size());
   HostComponentLoggingInfo returnedLogInfo=captureLogInfo.getValue();
@@ -62,14 +59,6 @@
   assertEquals("Incorrect log file type was found",LogFileType.SERVICE,definitionInfo.getLogFileType());
   assertEquals("Incorrect log file path found",expectedLogFilePath,definitionInfo.getLogFileName());
   assertEquals("Incorrect URL path to searchEngine",expectedAmbariURL + expectedSearchEnginePath,definitionInfo.getSearchEngineURL());
-  assertNotNull("LogLevel counts should not be null",returnedLogInfo.getListOfLogLevels());
-  assertEquals("LogLevel counts were of an incorrect size",3,returnedLogInfo.getListOfLogLevels().size());
-  List<NameValuePair> returnedLevelList=returnedLogInfo.getListOfLogLevels();
-  assertEquals("NameValue name for log level was incorrect","ERROR",returnedLevelList.get(0).getName());
-  assertEquals("NameValue name for log level was incorrect","150",returnedLevelList.get(0).getValue());
-  assertEquals("NameValue name for log level was incorrect","WARN",returnedLevelList.get(1).getName());
-  assertEquals("NameValue name for log level was incorrect","500",returnedLevelList.get(1).getValue());
-  assertEquals("NameValue name for log level was incorrect","INFO",returnedLevelList.get(2).getName());
-  assertEquals("NameValue name for log level was incorrect","2200",returnedLevelList.get(2).getValue());
+  assertNull(returnedLogInfo.getListOfLogLevels());
   mockSupport.verifyAll();
 }
