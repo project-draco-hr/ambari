@@ -1,0 +1,44 @@
+{
+  if (aliasNameIn == null || collectionListIn == null || collectionListIn.size() == 0 || solrClouldClient == null) {
+    logger.info("Will not create alias " + aliasNameIn + " for "+ (collectionListIn == null ? null : collectionListIn.toString())+ ", solrCloudClient="+ solrClouldClient);
+    return;
+  }
+  logger.info("setupAlias " + aliasNameIn + " for "+ (collectionListIn == null ? null : collectionListIn.toString()));
+  aliasName=aliasNameIn;
+  aliasCollectionList=collectionListIn;
+  Thread setupThread=new Thread("setup_alias_" + aliasNameIn){
+    @Override public void run(){
+      logger.info("Started monitoring thread to check availability of Solr server. alias=" + aliasNameIn + ", collections="+ collectionListIn.toString());
+      int retryCount=0;
+      while (true) {
+        try {
+          int count=createAlias(aliasNameIn,collectionListIn);
+          if (count > 0) {
+            solrClouldClient.setDefaultCollection(aliasNameIn);
+            if (count == collectionListIn.size()) {
+              logger.info("Setup for alias " + aliasNameIn + " is successful. Exiting setup retry thread. Collections="+ collectionListIn);
+              break;
+            }
+          }
+ else {
+            logger.warn("Not able to create alias=" + aliasNameIn + ", retryCount="+ retryCount);
+          }
+        }
+ catch (        Exception e) {
+          logger.error("Error setting up alias=" + aliasNameIn,e);
+        }
+        try {
+          Thread.sleep(ALIAS_SETUP_RETRY_SECOND * 1000);
+        }
+ catch (        InterruptedException sleepInterrupted) {
+          logger.info("Sleep interrupted while setting up alias " + aliasNameIn);
+          break;
+        }
+        retryCount++;
+      }
+    }
+  }
+;
+  setupThread.setDaemon(true);
+  setupThread.start();
+}
