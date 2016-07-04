@@ -1,0 +1,30 @@
+{
+  long timestamp=clusterInfo.getTimestamp();
+  List<TimelineMetric> totalMetrics=new ArrayList<>();
+  for (  DataPoint dataPoint : dataPoints) {
+    LOG.debug(dataPoint.getName() + " = " + dataPoint.getValue());
+    List<DataPoint> populatedDataPoints=populateDataPoints(dataPoint);
+    for (    DataPoint populatedDataPoint : populatedDataPoints) {
+      LOG.debug("Populated datapoint: " + dataPoint.getName() + " = "+ dataPoint.getValue());
+      try {
+        StormAmbariMappedMetric mappedMetric=StormAmbariMappedMetric.valueOf(populatedDataPoint.getName());
+        TimelineMetric timelineMetric=createTimelineMetric(timestamp * 1000,applicationId,mappedMetric.getAmbariMetricName(),Double.valueOf(populatedDataPoint.getValue().toString()));
+        totalMetrics.add(timelineMetric);
+      }
+ catch (      IllegalArgumentException e) {
+        LOG.debug("Not interested metrics, skip: " + populatedDataPoint.getName());
+      }
+    }
+  }
+  if (totalMetrics.size() <= 0) {
+    return;
+  }
+  TimelineMetrics timelineMetrics=new TimelineMetrics();
+  timelineMetrics.setMetrics(totalMetrics);
+  try {
+    emitMetrics(timelineMetrics);
+  }
+ catch (  UnableToConnectException e) {
+    LOG.warn("Unable to connect to Metrics Collector " + e.getConnectUrl() + ". "+ e.getMessage());
+  }
+}
