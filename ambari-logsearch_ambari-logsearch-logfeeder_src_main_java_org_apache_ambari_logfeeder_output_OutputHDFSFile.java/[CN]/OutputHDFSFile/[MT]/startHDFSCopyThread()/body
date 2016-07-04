@@ -1,0 +1,43 @@
+{
+  hdfsCopyThread=new Thread("hdfsCopyThread"){
+    @Override public void run(){
+      try {
+        while (true) {
+          Iterator<File> localFileIterator=localReadyFiles.iterator();
+          while (localFileIterator.hasNext()) {
+            File localFile=localFileIterator.next();
+            fileSystem=LogfeederHDFSUtil.INSTANCE.buildFileSystem(hdfsHost,hdfsPort);
+            if (fileSystem != null && localFile.exists()) {
+              String destFilePath=hdfsOutDir + "/" + localFile.getName();
+              String localPath=localFile.getAbsolutePath();
+              boolean overWrite=true;
+              boolean delSrc=true;
+              boolean isCopied=LogfeederHDFSUtil.INSTANCE.copyFromLocal(localFile.getAbsolutePath(),destFilePath,fileSystem,overWrite,delSrc);
+              if (isCopied) {
+                logger.debug("File copy to hdfs hdfspath :" + destFilePath + " and deleted local file :"+ localPath);
+              }
+ else {
+                logger.error("Hdfs file copy  failed for hdfspath :" + destFilePath + " and localpath :"+ localPath);
+              }
+            }
+          }
+          try {
+synchronized (readyMonitor) {
+              if (localReadyFiles.size() == 0) {
+                readyMonitor.wait();
+              }
+            }
+          }
+ catch (          InterruptedException e) {
+          }
+        }
+      }
+ catch (      Exception e) {
+        logger.error("Exception in hdfsCopyThread errorMsg:" + e.getLocalizedMessage(),e);
+      }
+    }
+  }
+;
+  hdfsCopyThread.setDaemon(true);
+  hdfsCopyThread.start();
+}
