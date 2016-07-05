@@ -5,8 +5,7 @@
   for (  CommandReport report : reports) {
     taskIds.add(report.getTaskId());
   }
-  Collection<HostRoleCommand> commands=actionManager.getTasks(taskIds);
-  Iterator<HostRoleCommand> hostRoleCommandIterator=commands.iterator();
+  Map<Long,HostRoleCommand> commands=actionManager.getTasksMap(taskIds);
   for (  CommandReport report : reports) {
     Long clusterId=null;
     if (report.getClusterName() != null) {
@@ -18,7 +17,6 @@
       }
     }
     LOG.debug("Received command report: " + report);
-    HostRoleCommand hostRoleCommand=hostRoleCommandIterator.next();
     Host host=clusterFsm.getHost(hostname);
     if (host == null) {
       LOG.error("Received a command report and was unable to retrieve Host for hostname = " + hostname);
@@ -28,13 +26,19 @@
       ActionFinalReportReceivedEvent event=new ActionFinalReportReceivedEvent(clusterId,hostname,report,false);
       ambariEventPublisher.publish(event);
     }
-    if (hostRoleCommand.getStatus() == HostRoleStatus.ABORTED) {
-      continue;
+    HostRoleCommand hostRoleCommand=commands.get(report.getTaskId());
+    if (hostRoleCommand == null) {
+      LOG.warn("Can't fetch HostRoleCommand with taskId = " + report.getTaskId());
     }
-    if (hostRoleCommand.getStatus() == HostRoleStatus.QUEUED && report.getStatus().equals("IN_PROGRESS")) {
-      hostRoleCommand.setStartTime(now);
-      if (hostRoleCommand.getOriginalStartTime() == -1) {
-        hostRoleCommand.setOriginalStartTime(now);
+ else {
+      if (hostRoleCommand.getStatus() == HostRoleStatus.ABORTED) {
+        continue;
+      }
+      if (hostRoleCommand.getStatus() == HostRoleStatus.QUEUED && report.getStatus().equals("IN_PROGRESS")) {
+        hostRoleCommand.setStartTime(now);
+        if (hostRoleCommand.getOriginalStartTime() == -1) {
+          hostRoleCommand.setOriginalStartTime(now);
+        }
       }
     }
     if (Service.Type.KERBEROS.name().equalsIgnoreCase(report.getServiceName()) && Role.KERBEROS_CLIENT.name().equalsIgnoreCase(report.getRole()) && RoleCommand.CUSTOM_COMMAND.name().equalsIgnoreCase(report.getRoleCommand())&& RequestExecution.Status.COMPLETED.name().equalsIgnoreCase(report.getStatus())) {
