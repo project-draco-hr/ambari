@@ -1,0 +1,18 @@
+def test_getComponentLayoutValidations_pxf_not_co_located_with_nn(self):
+    ' Test warning is generated when PXF is not co-located with NAMENODE '
+    services = self.load_json('services-hawq-pxf-hdfs.json')
+    componentsListList = [service['components'] for service in services['services']]
+    componentsList = [item for sublist in componentsListList for item in sublist]
+    nameNodeComponent = self.getHosts(componentsList, 'NAMENODE')
+    dataNodeComponent = self.getHosts(componentsList, 'DATANODE')
+    pxfComponent = self.getHosts(componentsList, 'PXF')
+    nameNodeComponent['hostnames'] = ['c6401.ambari.apache.org']
+    dataNodeComponent['hostnames'] = ['c6402.ambari.apache.org', 'c6403.ambari.apache.org']
+    pxfComponent['hostnames'] = ['c6402.ambari.apache.org', 'c6403.ambari.apache.org']
+    hosts = self.load_json('hosts-3-hosts.json')
+    hostsList = [host['Hosts']['host_name'] for host in hosts['items']]
+    self.assertEquals(len(hostsList), 3)
+    validations = [validation for validation in self.serviceAdvisor.getServiceComponentLayoutValidations(services, hosts) if (validation['component-name'] == 'PXF')]
+    self.assertEquals(len(validations), 1)
+    expected = {'type': 'host-component', 'level': 'WARN', 'component-name': 'PXF', 'message': 'PXF must be installed on the NameNode, Standby NameNode and all DataNodes. The following 1 host(s) do not satisfy the colocation recommendation: c6401.ambari.apache.org', }
+    self.assertEquals(validations[0], expected)
