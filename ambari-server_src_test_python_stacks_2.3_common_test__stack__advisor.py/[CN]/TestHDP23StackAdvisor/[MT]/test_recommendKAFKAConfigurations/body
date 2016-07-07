@@ -1,15 +1,18 @@
 def test_recommendKAFKAConfigurations(self):
     configurations = {}
     clusterData = {'totalAvailableRam': 2048, 'hBaseInstalled': True, 'hbaseRam': 112, 'reservedRam': 128, }
-    services = {'services': [{'StackServices': {'service_name': 'KAFKA', 'service_version': '2.6.0.2.2', }, }, {'StackServices': {'service_name': 'AMBARI_METRICS', }, 'components': [{'StackServiceComponents': {'component_name': 'METRICS_COLLECTOR', 'hostnames': ['host1'], }, }, {'StackServiceComponents': {'component_name': 'METRICS_MONITOR', 'hostnames': ['host1'], }, }], }], 'Versions': {'stack_version': '2.3', }, 'configurations': {'core-site': {'properties': {}, }, 'kafka-broker': {'properties': {'authorizer.class.name': 'kafka.security.auth.SimpleAclAuthorizer', }, 'property_attributes': {}, }, 'ranger-kafka-plugin-properties': {'properties': {'ranger-kafka-plugin-enabled': 'No', }, }, 'kafka-log4j': {'properties': {'content': 'kafka.logs.dir=logs', }, }, }, }
+    services = {'services': [{'StackServices': {'service_name': 'KAFKA', 'service_version': '2.6.0.2.2', }, }, {'StackServices': {'service_name': 'RANGER', 'service_version': '0.5.0.2.3', }, }, {'StackServices': {'service_name': 'AMBARI_METRICS', }, 'components': [{'StackServiceComponents': {'component_name': 'METRICS_COLLECTOR', 'hostnames': ['host1'], }, }, {'StackServiceComponents': {'component_name': 'METRICS_MONITOR', 'hostnames': ['host1'], }, }], }], 'Versions': {'stack_version': '2.3', }, 'configurations': {'core-site': {'properties': {}, }, 'cluster-env': {'properties': {'security_enabled': 'true', }, 'property_attributes': {}, }, 'kafka-broker': {'properties': {'authorizer.class.name': 'kafka.security.auth.SimpleAclAuthorizer', }, 'property_attributes': {}, }, 'ranger-kafka-plugin-properties': {'properties': {'ranger-kafka-plugin-enabled': 'No', }, }, 'kafka-log4j': {'properties': {'content': 'kafka.logs.dir=logs', }, }, }, }
+    services['configurations']['cluster-env']['properties']['security_enabled'] = 'false'
     self.stackAdvisor.recommendKAFKAConfigurations(configurations, clusterData, services, None)
     self.assertEquals(configurations['kafka-broker']['property_attributes']['authorizer.class.name'], {'delete': 'true', }, 'Test authorizer.class.name with Ranger Kafka plugin is disabled in non-kerberos environment')
+    services['configurations']['cluster-env']['properties']['security_enabled'] = 'true'
     configurations['kafka-broker']['properties'] = {}
     configurations['kafka-broker']['property_attributes'] = {}
     services['configurations']['kafka-broker']['properties']['security.inter.broker.protocol'] = 'PLAINTEXTSASL'
     services['configurations']['kafka-broker']['properties']['authorizer.class.name'] = 'org.apache.ranger.authorization.kafka.authorizer.RangerKafkaAuthorizer'
     self.stackAdvisor.recommendKAFKAConfigurations(configurations, clusterData, services, None)
     self.assertEquals(configurations['kafka-broker']['properties']['authorizer.class.name'], 'kafka.security.auth.SimpleAclAuthorizer', 'Test authorizer.class.name with Ranger Kafka plugin disabled in kerberos environment')
+    services['configurations']['cluster-env']['properties']['security_enabled'] = 'false'
     configurations['kafka-broker']['properties'] = {}
     configurations['kafka-broker']['property_attributes'] = {}
     del services['configurations']['kafka-broker']['properties']['security.inter.broker.protocol']
@@ -17,6 +20,7 @@ def test_recommendKAFKAConfigurations(self):
     services['configurations']['ranger-kafka-plugin-properties']['properties']['ranger-kafka-plugin-enabled'] = 'Yes'
     self.stackAdvisor.recommendKAFKAConfigurations(configurations, clusterData, services, None)
     self.assertEquals(configurations['kafka-broker']['properties']['authorizer.class.name'], 'org.apache.ranger.authorization.kafka.authorizer.RangerKafkaAuthorizer', 'Test authorizer.class.name with Ranger Kafka plugin enabled in kerberos environment')
+    services['configurations']['cluster-env']['properties']['security_enabled'] = 'false'
     configurations['kafka-broker']['properties'] = {}
     configurations['kafka-broker']['property_attributes'] = {}
     services['configurations']['kafka-broker']['properties']['security.inter.broker.protocol'] = 'PLAINTEXTSASL'

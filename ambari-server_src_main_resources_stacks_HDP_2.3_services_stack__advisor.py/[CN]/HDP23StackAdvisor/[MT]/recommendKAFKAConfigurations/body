@@ -1,34 +1,54 @@
 def recommendKAFKAConfigurations(self, configurations, clusterData, services, hosts):
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
     kafka_broker = getServicesSiteProperties(services, 'kafka-broker')
-    security_enabled = ((kafka_broker is not None) and ('security.inter.broker.protocol' in kafka_broker) and ('SASL' in kafka_broker['security.inter.broker.protocol']))
+    security_enabled = isSecurityEnabled(services)
     putKafkaBrokerProperty = self.putProperty(configurations, 'kafka-broker', services)
     putKafkaLog4jProperty = self.putProperty(configurations, 'kafka-log4j', services)
     putKafkaBrokerAttributes = self.putPropertyAttribute(configurations, 'kafka-broker')
-    servicesList = [service['StackServices']['service_name'] for service in services['services']]
-    if ('AMBARI_METRICS' in servicesList):
-        putKafkaBrokerProperty('kafka.metrics.reporters', 'org.apache.hadoop.metrics2.sink.kafka.KafkaTimelineMetricsReporter')
+    if security_enabled:
+        kafka_env = getServicesSiteProperties(services, 'kafka-env')
+        kafka_user = (kafka_env.get('kafka_user') if (kafka_env is not None) else None)
+        if (kafka_user is not None):
+            kafka_super_users = (kafka_broker.get('super.users') if (kafka_broker is not None) else None)
+            if ((kafka_super_users is not None) and (kafka_super_users != '')):
+                user_names = set()
+                user_names.add(kafka_user)
+                for match in re.findall('User:([^;]*)', kafka_super_users):
+                    user_names.add(match)
+                kafka_super_users = ('User:' + ';User:'.join(user_names))
+            else:
+                kafka_super_users = ('User:' + kafka_user)
+            putKafkaBrokerProperty('super.users', kafka_super_users)
+        putKafkaBrokerProperty('principal.to.local.class', 'kafka.security.auth.KerberosPrincipalToLocal')
+        putKafkaBrokerProperty('security.inter.broker.protocol', 'PLAINTEXTSASL')
+        putKafkaBrokerProperty('zookeeper.set.acl', 'true')
+    else:
+        putKafkaBrokerAttributes('super.users', 'delete', 'true')
+        putKafkaBrokerAttributes('principal.to.local.class', 'delete', 'true')
+        putKafkaBrokerAttributes('security.inter.broker.protocol', 'delete', 'true')
     if (('ranger-env' in services['configurations']) and ('ranger-kafka-plugin-properties' in services['configurations']) and ('ranger-kafka-plugin-enabled' in services['configurations']['ranger-env']['properties'])):
         putKafkaRangerPluginProperty = self.putProperty(configurations, 'ranger-kafka-plugin-properties', services)
-        rangerEnvKafkaPluginProperty = services['configurations']['ranger-env']['properties']['ranger-kafka-plugin-enabled']
-        putKafkaRangerPluginProperty('ranger-kafka-plugin-enabled', rangerEnvKafkaPluginProperty)
-    if (('ranger-kafka-plugin-properties' in services['configurations']) and ('ranger-kafka-plugin-enabled' in services['configurations']['ranger-kafka-plugin-properties']['properties'])):
-        kafkaLog4jRangerLines = [{'name': 'log4j.appender.rangerAppender', 'value': 'org.apache.log4j.DailyRollingFileAppender', }, {'name': 'log4j.appender.rangerAppender.DatePattern', 'value': "'.'yyyy-MM-dd-HH", }, {'name': 'log4j.appender.rangerAppender.File', 'value': '${kafka.logs.dir}/ranger_kafka.log', }, {'name': 'log4j.appender.rangerAppender.layout', 'value': 'org.apache.log4j.PatternLayout', }, {'name': 'log4j.appender.rangerAppender.layout.ConversionPattern', 'value': '%d{ISO8601} %p [%t] %C{6} (%F:%L) - %m%n', }, {'name': 'log4j.logger.org.apache.ranger', 'value': 'INFO, rangerAppender', }]
-        rangerPluginEnabled = ''
+        ranger_kafka_plugin_enabled = services['configurations']['ranger-env']['properties']['ranger-kafka-plugin-enabled']
+        putKafkaRangerPluginProperty('ranger-kafka-plugin-enabled', ranger_kafka_plugin_enabled)
+    ranger_plugin_enabled = ('RANGER' in servicesList)
+    if ranger_plugin_enabled:
         if (('ranger-kafka-plugin-properties' in configurations) and ('ranger-kafka-plugin-enabled' in configurations['ranger-kafka-plugin-properties']['properties'])):
-            rangerPluginEnabled = configurations['ranger-kafka-plugin-properties']['properties']['ranger-kafka-plugin-enabled']
+            ranger_plugin_enabled = (configurations['ranger-kafka-plugin-properties']['properties']['ranger-kafka-plugin-enabled'].lower() == 'yes')
         elif (('ranger-kafka-plugin-properties' in services['configurations']) and ('ranger-kafka-plugin-enabled' in services['configurations']['ranger-kafka-plugin-properties']['properties'])):
-            rangerPluginEnabled = services['configurations']['ranger-kafka-plugin-properties']['properties']['ranger-kafka-plugin-enabled']
-        if (rangerPluginEnabled and (rangerPluginEnabled.lower() == 'Yes'.lower())):
-            putKafkaBrokerProperty('authorizer.class.name', 'org.apache.ranger.authorization.kafka.authorizer.RangerKafkaAuthorizer')
-            if (('kafka-log4j' in services['configurations']) and ('content' in services['configurations']['kafka-log4j']['properties'])):
-                kafkaLog4jContent = services['configurations']['kafka-log4j']['properties']['content']
-                for item in range(len(kafkaLog4jRangerLines)):
-                    if (kafkaLog4jRangerLines[item]['name'] not in kafkaLog4jContent):
-                        kafkaLog4jContent += ((('\n' + kafkaLog4jRangerLines[item]['name']) + '=') + kafkaLog4jRangerLines[item]['value'])
-                putKafkaLog4jProperty('content', kafkaLog4jContent)
-        elif (security_enabled and ('kafka-broker' in services['configurations']) and ('authorizer.class.name' in services['configurations']['kafka-broker']['properties']) and (services['configurations']['kafka-broker']['properties']['authorizer.class.name'] == 'org.apache.ranger.authorization.kafka.authorizer.RangerKafkaAuthorizer')):
-            putKafkaBrokerProperty('authorizer.class.name', 'kafka.security.auth.SimpleAclAuthorizer')
-        else:
-            putKafkaBrokerAttributes('authorizer.class.name', 'delete', 'true')
-    elif (not security_enabled):
+            ranger_plugin_enabled = (services['configurations']['ranger-kafka-plugin-properties']['properties']['ranger-kafka-plugin-enabled'].lower() == 'yes')
+    if ranger_plugin_enabled:
+        putKafkaBrokerProperty('authorizer.class.name', 'org.apache.ranger.authorization.kafka.authorizer.RangerKafkaAuthorizer')
+    elif security_enabled:
+        putKafkaBrokerProperty('authorizer.class.name', 'kafka.security.auth.SimpleAclAuthorizer')
+    else:
         putKafkaBrokerAttributes('authorizer.class.name', 'delete', 'true')
+    if ('AMBARI_METRICS' in servicesList):
+        putKafkaBrokerProperty('kafka.metrics.reporters', 'org.apache.hadoop.metrics2.sink.kafka.KafkaTimelineMetricsReporter')
+    if ranger_plugin_enabled:
+        kafkaLog4jRangerLines = [{'name': 'log4j.appender.rangerAppender', 'value': 'org.apache.log4j.DailyRollingFileAppender', }, {'name': 'log4j.appender.rangerAppender.DatePattern', 'value': "'.'yyyy-MM-dd-HH", }, {'name': 'log4j.appender.rangerAppender.File', 'value': '${kafka.logs.dir}/ranger_kafka.log', }, {'name': 'log4j.appender.rangerAppender.layout', 'value': 'org.apache.log4j.PatternLayout', }, {'name': 'log4j.appender.rangerAppender.layout.ConversionPattern', 'value': '%d{ISO8601} %p [%t] %C{6} (%F:%L) - %m%n', }, {'name': 'log4j.logger.org.apache.ranger', 'value': 'INFO, rangerAppender', }]
+        if (('kafka-log4j' in services['configurations']) and ('content' in services['configurations']['kafka-log4j']['properties'])):
+            kafkaLog4jContent = services['configurations']['kafka-log4j']['properties']['content']
+            for item in range(len(kafkaLog4jRangerLines)):
+                if (kafkaLog4jRangerLines[item]['name'] not in kafkaLog4jContent):
+                    kafkaLog4jContent += ((('\n' + kafkaLog4jRangerLines[item]['name']) + '=') + kafkaLog4jRangerLines[item]['value'])
+            putKafkaLog4jProperty('content', kafkaLog4jContent)
