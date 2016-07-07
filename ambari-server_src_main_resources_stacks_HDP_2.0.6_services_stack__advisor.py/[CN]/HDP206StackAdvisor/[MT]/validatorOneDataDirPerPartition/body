@@ -1,0 +1,19 @@
+def validatorOneDataDirPerPartition(self, properties, propertyName, services, hosts, clusterEnv):
+    if (not (propertyName in properties)):
+        return self.getErrorItem('Value should be set')
+    dirs = properties[propertyName]
+    if (not (clusterEnv and ('one_dir_per_partition' in clusterEnv) and (clusterEnv['one_dir_per_partition'].lower() == 'true'))):
+        return None
+    dataNodeHosts = self.getDataNodeHosts(services, hosts)
+    warnings = set()
+    for host in dataNodeHosts:
+        hostName = host['Hosts']['host_name']
+        mountPoints = []
+        for diskInfo in host['Hosts']['disk_info']:
+            mountPoints.append(diskInfo['mountpoint'])
+        if get_mounts_with_multiple_data_dirs(mountPoints, dirs):
+            warnings.add(hostName)
+            break
+    if (len(warnings) > 0):
+        return self.getWarnItem('cluster-env/one_dir_per_partition is enabled but there are multiple data directories on the same mount. Affected hosts: {0}'.format(', '.join(sorted(warnings))))
+    return None
