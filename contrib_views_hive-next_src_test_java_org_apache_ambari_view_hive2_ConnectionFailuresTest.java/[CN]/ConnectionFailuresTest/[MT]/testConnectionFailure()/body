@@ -1,0 +1,34 @@
+{
+  ViewContext viewContext=createNiceMock(ViewContext.class);
+  ConnectionSupplier connectionSupplier=createNiceMock(ConnectionSupplier.class);
+  DataStorageSupplier dataStorageSupplier=createNiceMock(DataStorageSupplier.class);
+  HdfsApi hdfsApi=createNiceMock(HdfsApi.class);
+  HdfsApiSupplier hdfsApiSupplier=createNiceMock(HdfsApiSupplier.class);
+  Connect connect=createNiceMock(Connect.class);
+  Storage storage=createNiceMock(Storage.class);
+  JobImpl jobImpl=createNiceMock(JobImpl.class);
+  ResultSet resultSet=createNiceMock(HiveQueryResultSet.class);
+  HiveStatement statement=createNiceMock(HiveStatement.class);
+  ConnectionDelegate delegate=createNiceMock(ConnectionDelegate.class);
+  HiveConnectionWrapper connectionWrapper=createNiceMock(HiveConnectionWrapper.class);
+  HiveConnection hiveConnection=createNiceMock(HiveConnection.class);
+  HiveJob test=new SQLStatementJob(HiveJob.Type.ASYNC,new String[]{"select * from test"},"test","1","test.log");
+  ExecuteJob executeJob=new ExecuteJob(connect,test);
+  ActorRef deathwatch=actorSystem.actorOf(Props.create(DeathWatch.class));
+  ActorRef operationControl=actorSystem.actorOf(Props.create(OperationController.class,actorSystem,deathwatch,viewContext,connectionSupplier,dataStorageSupplier,hdfsApiSupplier),"operationController-test");
+  expect(hdfsApiSupplier.get(viewContext)).andReturn(Optional.of(hdfsApi));
+  expect(viewContext.getInstanceName()).andReturn("test").anyTimes();
+  expect(connect.getConnectable()).andReturn(connectionWrapper);
+  expect(connectionWrapper.isOpen()).andReturn(false).anyTimes();
+  expect(connectionWrapper.getConnection()).andReturn(Optional.<HiveConnection>absent()).anyTimes();
+  expect(dataStorageSupplier.get(viewContext)).andReturn(storage);
+  expect(connectionSupplier.get(viewContext)).andReturn(delegate);
+  expect(storage.load(JobImpl.class,"1")).andReturn(jobImpl).anyTimes();
+  connectionWrapper.connect();
+  jobImpl.setStatus(Job.JOB_STATE_ERROR);
+  storage.store(JobImpl.class,jobImpl);
+  replay(viewContext,connect,hdfsApiSupplier,dataStorageSupplier,connectionWrapper,storage,jobImpl,connectionSupplier,delegate,statement,resultSet);
+  operationControl.tell(executeJob,ActorRef.noSender());
+  Thread.sleep(5000);
+  verify(connect,hdfsApiSupplier,dataStorageSupplier,connectionWrapper,storage,jobImpl,connectionSupplier,delegate,statement,resultSet);
+}
