@@ -1,0 +1,158 @@
+{
+  String serviceName=scHost.getServiceName();
+  stage.addHostRoleExecutionCommand(scHost.getHost(),Role.valueOf(scHost.getServiceComponentName()),roleCommand,event,cluster,serviceName,false,skipFailure);
+  String componentName=scHost.getServiceComponentName();
+  String hostname=scHost.getHostName();
+  String osFamily=clusters.getHost(hostname).getOsFamily();
+  StackId stackId=cluster.getDesiredStackVersion();
+  ServiceInfo serviceInfo=ambariMetaInfo.getService(stackId.getStackName(),stackId.getStackVersion(),serviceName);
+  ComponentInfo componentInfo=ambariMetaInfo.getComponent(stackId.getStackName(),stackId.getStackVersion(),serviceName,componentName);
+  StackInfo stackInfo=ambariMetaInfo.getStack(stackId.getStackName(),stackId.getStackVersion());
+  ExecutionCommand execCmd=stage.getExecutionCommandWrapper(scHost.getHostName(),scHost.getServiceComponentName()).getExecutionCommand();
+  Host host=clusters.getHost(scHost.getHostName());
+  execCmd.setConfigurations(configurations);
+  execCmd.setConfigurationAttributes(configurationAttributes);
+  execCmd.setConfigurationTags(configTags);
+  Map<String,String> commandParams=new TreeMap<String,String>();
+  if (commandParamsInp != null) {
+    commandParams.putAll(commandParamsInp);
+  }
+  Iterator<Service> it=cluster.getServices().values().iterator();
+  while (it.hasNext()) {
+    ServiceInfo serviceInfoInstance=ambariMetaInfo.getService(stackId.getStackName(),stackId.getStackVersion(),it.next().getName());
+    LOG.info("Iterating service type Instance in createHostAction:: " + serviceInfoInstance.getName());
+    if (serviceInfoInstance.getServiceType() != null) {
+      LOG.info("Adding service type info in createHostAction:: " + serviceInfoInstance.getServiceType());
+      commandParams.put("dfs_type",serviceInfoInstance.getServiceType());
+      break;
+    }
+  }
+  boolean isInstallCommand=roleCommand.equals(RoleCommand.INSTALL);
+  String agentDefaultCommandTimeout=configs.getDefaultAgentTaskTimeout(isInstallCommand);
+  String scriptCommandTimeout="";
+  CommandScriptDefinition script=componentInfo.getCommandScript();
+  if (serviceInfo.getSchemaVersion().equals(AmbariMetaInfo.SCHEMA_VERSION_2)) {
+    if (script != null) {
+      commandParams.put(SCRIPT,script.getScript());
+      commandParams.put(SCRIPT_TYPE,script.getScriptType().toString());
+      boolean retryEnabled=false;
+      Integer retryMaxTime=0;
+      if (commandParams.containsKey(CLUSTER_PHASE_PROPERTY) && (commandParams.get(CLUSTER_PHASE_PROPERTY).equals(CLUSTER_PHASE_INITIAL_INSTALL) || commandParams.get(CLUSTER_PHASE_PROPERTY).equals(CLUSTER_PHASE_INITIAL_START))) {
+        String retryEnabledStr=configHelper.getValueFromDesiredConfigurations(cluster,ConfigHelper.CLUSTER_ENV,ConfigHelper.CLUSTER_ENV_RETRY_ENABLED);
+        String commandsStr=configHelper.getValueFromDesiredConfigurations(cluster,ConfigHelper.CLUSTER_ENV,ConfigHelper.CLUSTER_ENV_RETRY_COMMANDS);
+        String retryMaxTimeStr=configHelper.getValueFromDesiredConfigurations(cluster,ConfigHelper.CLUSTER_ENV,ConfigHelper.CLUSTER_ENV_RETRY_MAX_TIME_IN_SEC);
+        if (StringUtils.isNotEmpty(retryEnabledStr)) {
+          retryEnabled=Boolean.TRUE.toString().equals(retryEnabledStr);
+        }
+        if (retryEnabled) {
+          retryMaxTime=NumberUtils.toInt(retryMaxTimeStr,0);
+          if (retryMaxTime < 0) {
+            retryMaxTime=0;
+          }
+          if (StringUtils.isNotEmpty(commandsStr)) {
+            boolean commandMayBeRetried=false;
+            String[] commands=commandsStr.split(",");
+            for (            String command : commands) {
+              if (roleCommand.toString().equals(command.trim())) {
+                commandMayBeRetried=true;
+              }
+            }
+            retryEnabled=commandMayBeRetried;
+          }
+        }
+        LOG.info("Auto retry setting for {}-{} on {} is retryEnabled={} and retryMaxTime={}",serviceName,componentName,scHost.getHostName(),retryEnabled,retryMaxTime);
+      }
+      commandParams.put(MAX_DURATION_OF_RETRIES,Integer.toString(retryMaxTime));
+      commandParams.put(COMMAND_RETRY_ENABLED,Boolean.toString(retryEnabled));
+      ClusterVersionEntity effectiveClusterVersion=cluster.getEffectiveClusterVersion();
+      if (effectiveClusterVersion != null) {
+        commandParams.put(VERSION,effectiveClusterVersion.getRepositoryVersion().getVersion());
+      }
+      if (script.getTimeout() > 0) {
+        scriptCommandTimeout=String.valueOf(script.getTimeout());
+      }
+    }
+ else {
+      String message=String.format("Component %s of service %s has no " + "command script defined",componentName,serviceName);
+      throw new AmbariException(message);
+    }
+  }
+  String actualTimeout=(!scriptCommandTimeout.equals("") ? scriptCommandTimeout : agentDefaultCommandTimeout);
+  if (roleCommand.equals(RoleCommand.INSTALL) && !agentDefaultCommandTimeout.equals("") && Integer.parseInt(actualTimeout) < Integer.parseInt(agentDefaultCommandTimeout)) {
+    actualTimeout=agentDefaultCommandTimeout;
+  }
+  commandParams.put(COMMAND_TIMEOUT,actualTimeout);
+  commandParams.put(SERVICE_PACKAGE_FOLDER,serviceInfo.getServicePackageFolder());
+  commandParams.put(HOOKS_FOLDER,stackInfo.getStackHooksFolder());
+  String clusterName=cluster.getClusterName();
+  if (customCommandExecutionHelper.isTopologyRefreshRequired(roleCommand.name(),clusterName,serviceName)) {
+    commandParams.put(ExecutionCommand.KeyNames.REFRESH_TOPOLOGY,"True");
+  }
+  execCmd.setCommandParams(commandParams);
+  String repoInfo=customCommandExecutionHelper.getRepoInfo(cluster,host);
+  if (LOG.isDebugEnabled()) {
+    LOG.debug("Sending repo information to agent" + ", hostname=" + scHost.getHostName() + ", clusterName="+ clusterName+ ", stackInfo="+ stackId.getStackId()+ ", repoInfo="+ repoInfo);
+  }
+  Map<String,String> hostParams=new TreeMap<String,String>();
+  hostParams.put(REPO_INFO,repoInfo);
+  hostParams.putAll(getRcaParameters());
+  RepositoryVersionEntity repoVersion=null;
+  ClusterVersionEntity effectiveClusterVersion=cluster.getEffectiveClusterVersion();
+  if (null != effectiveClusterVersion) {
+    repoVersion=effectiveClusterVersion.getRepositoryVersion();
+  }
+ else {
+    List<ClusterVersionEntity> list=clusterVersionDAO.findByClusterAndState(cluster.getClusterName(),RepositoryVersionState.INIT);
+    if (1 == list.size()) {
+      repoVersion=list.get(0).getRepositoryVersion();
+    }
+  }
+  if (null != repoVersion) {
+    try {
+      VersionDefinitionXml xml=repoVersion.getRepositoryXml();
+      if (null != xml && !StringUtils.isBlank(xml.getPackageVersion(osFamily))) {
+        hostParams.put(PACKAGE_VERSION,xml.getPackageVersion(osFamily));
+      }
+    }
+ catch (    Exception e) {
+      throw new AmbariException(String.format("Could not load version xml from repo version %s",repoVersion.getVersion()),e);
+    }
+    hostParams.put(KeyNames.REPO_VERSION_ID,repoVersion.getId().toString());
+  }
+  List<ServiceOsSpecific.Package> packages=getPackagesForServiceHost(serviceInfo,hostParams,osFamily);
+  String packageList=gson.toJson(packages);
+  hostParams.put(PACKAGE_LIST,packageList);
+  Set<String> userSet=configHelper.getPropertyValuesWithPropertyType(stackId,PropertyType.USER,cluster);
+  String userList=gson.toJson(userSet);
+  hostParams.put(USER_LIST,userList);
+  Set<String> groupSet=configHelper.getPropertyValuesWithPropertyType(stackId,PropertyType.GROUP,cluster);
+  String groupList=gson.toJson(groupSet);
+  hostParams.put(GROUP_LIST,groupList);
+  Set<String> notManagedHdfsPathSet=configHelper.getPropertyValuesWithPropertyType(stackId,PropertyType.NOT_MANAGED_HDFS_PATH,cluster);
+  String notManagedHdfsPathList=gson.toJson(notManagedHdfsPathSet);
+  hostParams.put(NOT_MANAGED_HDFS_PATH_LIST,notManagedHdfsPathList);
+  DatabaseType databaseType=configs.getDatabaseType();
+  if (databaseType == DatabaseType.ORACLE) {
+    hostParams.put(DB_DRIVER_FILENAME,configs.getOjdbcJarName());
+  }
+ else   if (databaseType == DatabaseType.MYSQL) {
+    hostParams.put(DB_DRIVER_FILENAME,configs.getMySQLJarName());
+  }
+  List<String> clientsToUpdateConfigsList=componentInfo.getClientsToUpdateConfigs();
+  if (clientsToUpdateConfigsList == null) {
+    clientsToUpdateConfigsList=new ArrayList<String>();
+    clientsToUpdateConfigsList.add("*");
+  }
+  String clientsToUpdateConfigs=gson.toJson(clientsToUpdateConfigsList);
+  hostParams.put(CLIENTS_TO_UPDATE_CONFIGS,clientsToUpdateConfigs);
+  execCmd.setHostLevelParams(hostParams);
+  Map<String,String> roleParams=new TreeMap<String,String>();
+  if (cluster.isUpgradeSuspended()) {
+    roleParams.put(KeyNames.UPGRADE_SUSPENDED,Boolean.TRUE.toString().toLowerCase());
+  }
+  execCmd.setRoleParams(roleParams);
+  execCmd.setAvailableServices(ambariMetaInfo.getServices(stackId.getStackName(),stackId.getStackVersion()).keySet());
+  if ((execCmd != null) && (execCmd.getConfigurationTags().containsKey("cluster-env"))) {
+    LOG.info("AmbariManagementControllerImpl.createHostAction: created ExecutionCommand for host {}, role {}, roleCommand {}, and command ID {}, with cluster-env tags {}",execCmd.getHostname(),execCmd.getRole(),execCmd.getRoleCommand(),execCmd.getCommandId(),execCmd.getConfigurationTags().get("cluster-env").get("tag"));
+  }
+}

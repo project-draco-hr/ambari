@@ -1,0 +1,40 @@
+{
+  topologyTasks.add(new PersistHostResourcesTask());
+  topologyTasks.add(new RegisterWithConfigGroupTask());
+  InstallHostTask installTask=new InstallHostTask(skipFailure);
+  topologyTasks.add(installTask);
+  logicalTaskMap.put(installTask,new HashMap<String,Long>());
+  boolean skipStartTaskCreate=topology.getProvisionAction().equals(INSTALL_ONLY);
+  StartHostTask startTask=null;
+  if (!skipStartTaskCreate) {
+    startTask=new StartHostTask(skipFailure);
+    topologyTasks.add(startTask);
+    logicalTaskMap.put(startTask,new HashMap<String,Long>());
+  }
+ else {
+    LOG.info("Skipping Start task creation since provision action = " + topology.getProvisionAction());
+  }
+  HostGroup hostGroup=getHostGroup();
+  for (  String component : hostGroup.getComponentNames()) {
+    if (component == null || component.equals("AMBARI_SERVER")) {
+      LOG.info("Skipping component {} when creating request\n",component);
+      continue;
+    }
+    String hostName=getHostName() != null ? getHostName() : "PENDING HOST ASSIGNMENT : HOSTGROUP=" + getHostgroupName();
+    AmbariContext context=topology.getAmbariContext();
+    Stack stack=hostGroup.getStack();
+    if (context.shouldSkipInstallTasks() && stack != null && !stack.getComponentInfo(component).isClient()) {
+      LOG.info("Skipping create of INSTALL task for {} on {} because host is sysprepped.",component,hostName);
+    }
+ else {
+      HostRoleCommand logicalInstallTask=context.createAmbariTask(getRequestId(),id,component,hostName,AmbariContext.TaskType.INSTALL,skipFailure);
+      logicalTasks.put(logicalInstallTask.getTaskId(),logicalInstallTask);
+      logicalTaskMap.get(installTask).put(component,logicalInstallTask.getTaskId());
+    }
+    if (!skipStartTaskCreate && stack != null && !stack.getComponentInfo(component).isClient()) {
+      HostRoleCommand logicalStartTask=context.createAmbariTask(getRequestId(),id,component,hostName,AmbariContext.TaskType.START,skipFailure);
+      logicalTasks.put(logicalStartTask.getTaskId(),logicalStartTask);
+      logicalTaskMap.get(startTask).put(component,logicalStartTask.getTaskId());
+    }
+  }
+}

@@ -13,8 +13,14 @@
     String clusterHostInfoJson=StageUtils.getGson().toJson(clusterHostInfo);
     String hostParamsJson=StageUtils.getGson().toJson(customCommandExecutionHelper.createDefaultHostParams(cluster));
     Stage stage=createNewStage(requestStages.getLastStageId(),cluster,requestStages.getId(),requestProperties.get(REQUEST_CONTEXT_PROPERTY),clusterHostInfoJson,"{}",hostParamsJson);
-    Collection<ServiceComponentHost> componentsToEnableKerberos=new ArrayList<ServiceComponentHost>();
-    Set<String> hostsToForceKerberosOperations=new HashSet<String>();
+    boolean skipFailure=false;
+    if (requestProperties.containsKey(Setting.SETTING_NAME_SKIP_FAILURE) && requestProperties.get(Setting.SETTING_NAME_SKIP_FAILURE).equalsIgnoreCase("true")) {
+      skipFailure=true;
+    }
+    stage.setAutoSkipFailureSupported(skipFailure);
+    stage.setSkippable(skipFailure);
+    Collection<ServiceComponentHost> componentsToEnableKerberos=new ArrayList<>();
+    Set<String> hostsToForceKerberosOperations=new HashSet<>();
     for (    String compName : changedScHosts.keySet()) {
       for (      State newState : changedScHosts.get(compName).keySet()) {
         for (        ServiceComponentHost scHost : changedScHosts.get(compName).get(newState)) {
@@ -133,7 +139,7 @@ LOG.info("Skipping create of INSTALL task for {} on {} because host is syspreppe
 scHost.setState(State.INSTALLED);
 }
  else {
-createHostAction(cluster,stage,scHost,configurations,configurationAttributes,configTags,roleCommand,requestParameters,event);
+createHostAction(cluster,stage,scHost,configurations,configurationAttributes,configTags,roleCommand,requestParameters,event,skipFailure);
 }
 }
 }
