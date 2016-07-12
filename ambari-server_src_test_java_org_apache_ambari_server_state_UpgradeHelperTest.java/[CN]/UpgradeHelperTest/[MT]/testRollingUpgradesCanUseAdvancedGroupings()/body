@@ -1,0 +1,24 @@
+{
+  final String clusterName="c1";
+  final String upgradeFromVersion="2.1.1";
+  final String upgradeToVersion="2.2.0";
+  final Direction upgradeDirection=Direction.UPGRADE;
+  final UpgradeType upgradeType=UpgradeType.ROLLING;
+  makeCluster();
+  String preferredUpgradePackName="upgrade_grouping_rolling";
+  UpgradePack upgradePack=m_upgradeHelper.suggestUpgradePack(clusterName,upgradeFromVersion,upgradeToVersion,upgradeDirection,upgradeType,preferredUpgradePackName);
+  assertEquals(upgradeType,upgradePack.getType());
+  UpgradeContext context=new UpgradeContext(m_masterHostResolver,HDP_21,HDP_21,UPGRADE_VERSION,Direction.UPGRADE,UpgradeType.ROLLING);
+  context.setSupportedServices(Collections.singleton("ZOOKEEPER"));
+  context.setScope(UpgradeScope.COMPLETE);
+  List<Grouping> groupings=upgradePack.getGroups(Direction.UPGRADE);
+  assertEquals(2,groupings.size());
+  assertEquals("STOP_ZOOKEEPER",groupings.get(0).name);
+  assertEquals("RESTART_ZOOKEEPER",groupings.get(1).name);
+  List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgradePack,context);
+  assertEquals(2,groups.size());
+  assertEquals("STOP_ZOOKEEPER",groups.get(0).name);
+  assertEquals("RESTART_ZOOKEEPER",groups.get(1).name);
+  UpgradeGroupHolder group=groups.get(0);
+  assertEquals("Stopping ZooKeeper Server on h1 (Batch 1 of 3)",group.items.get(0).getText());
+}

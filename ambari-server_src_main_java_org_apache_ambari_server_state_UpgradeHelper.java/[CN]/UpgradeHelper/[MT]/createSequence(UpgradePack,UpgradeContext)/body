@@ -19,17 +19,11 @@
       groupHolder.skippable=true;
     }
     Task.Type functionName=null;
+    if (group instanceof UpgradeFunction) {
+      functionName=((UpgradeFunction)group).getFunction();
+    }
     if (upgradePack.getType() == UpgradeType.NON_ROLLING) {
       group.performServiceCheck=false;
-      if (RestartGrouping.class.isInstance(group)) {
-        functionName=((RestartGrouping)group).getFunction();
-      }
-      if (StartGrouping.class.isInstance(group)) {
-        functionName=((StartGrouping)group).getFunction();
-      }
-      if (StopGrouping.class.isInstance(group)) {
-        functionName=((StopGrouping)group).getFunction();
-      }
     }
     StageWrapperBuilder builder=group.getBuilder();
     List<UpgradePack.OrderService> services=group.services;
@@ -60,31 +54,29 @@
         }
         Service svc=cluster.getService(service.serviceName);
         ProcessingComponent pc=null;
-        if (upgradePack.getType() == UpgradeType.ROLLING) {
+        if (null == functionName) {
           pc=allTasks.get(service.serviceName).get(component);
         }
- else         if (upgradePack.getType() == UpgradeType.NON_ROLLING) {
-          if (null != functionName) {
-            if (functionName == Type.STOP) {
+ else {
+          if (functionName == Type.STOP) {
+            pc=new ProcessingComponent();
+            pc.name=component;
+            pc.tasks=new ArrayList<>();
+            pc.tasks.add(new StopTask());
+          }
+ else {
+            if (allTasks.containsKey(service.serviceName) && allTasks.get(service.serviceName).containsKey(component)) {
+              pc=allTasks.get(service.serviceName).get(component);
+            }
+ else {
               pc=new ProcessingComponent();
               pc.name=component;
               pc.tasks=new ArrayList<>();
-              pc.tasks.add(new StopTask());
-            }
- else {
-              if (allTasks.containsKey(service.serviceName) && allTasks.get(service.serviceName).containsKey(component)) {
-                pc=allTasks.get(service.serviceName).get(component);
+              if (functionName == Type.START) {
+                pc.tasks.add(new StartTask());
               }
- else {
-                pc=new ProcessingComponent();
-                pc.name=component;
-                pc.tasks=new ArrayList<>();
-                if (functionName == Type.START) {
-                  pc.tasks.add(new StartTask());
-                }
-                if (functionName == Type.RESTART) {
-                  pc.tasks.add(new RestartTask());
-                }
+              if (functionName == Type.RESTART) {
+                pc.tasks.add(new RestartTask());
               }
             }
           }
