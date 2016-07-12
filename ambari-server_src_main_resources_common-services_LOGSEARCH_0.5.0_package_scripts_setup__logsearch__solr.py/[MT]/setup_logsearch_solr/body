@@ -8,16 +8,13 @@ def setup_logsearch_solr(name=None):
         File(format('{logsearch_solr_datadir}/solr.xml'), content=InlineTemplate(params.solr_xml_content), owner=params.logsearch_solr_user, group=params.user_group)
         File(format('{logsearch_solr_conf}/log4j.properties'), content=InlineTemplate(params.solr_log4j_content), owner=params.logsearch_solr_user, group=params.user_group)
         File(format('{logsearch_solr_datadir}/zoo.cfg'), content=Template('zoo.cfg.j2'), owner=params.logsearch_solr_user, group=params.user_group)
-        zk_cli_prefix = format('export JAVA_HOME={java64_home}; {cloud_scripts}/zkcli.sh -zkhost {zookeeper_quorum}')
-        create_ambari_solr_znode(zk_cli_prefix)
+        jaas_file = (params.logsearch_solr_jaas_file if params.security_enabled else None)
         url_scheme = ('https' if params.logsearch_solr_ssl_enabled else 'http')
-        Execute(format('{zk_cli_prefix}{logsearch_solr_znode} -cmd clusterprop -name urlScheme -val {url_scheme}'), user=params.logsearch_solr_user)
+        create_ambari_solr_znode()
         if params.security_enabled:
             File(format('{logsearch_solr_jaas_file}'), content=Template('logsearch_solr_jaas.conf.j2'), owner=params.logsearch_solr_user)
-            security_content = '\'{"authentication":{"class": "org.apache.solr.security.KerberosPlugin"}}\''
-        else:
-            security_content = "'{}'"
-        Execute((format('{zk_cli_prefix} -cmd put {logsearch_solr_znode}/security.json ') + security_content), user=params.logsearch_solr_user)
+        solr_cloud_util.set_cluster_prop(zookeeper_quorum=params.zookeeper_quorum, solr_znode=params.logsearch_solr_znode, java64_home=params.java64_home, user=params.logsearch_solr_user, prop_name='urlScheme', prop_value=url_scheme, jaas_file=jaas_file)
+        solr_cloud_util.setup_kerberos_plugin(zookeeper_quorum=params.zookeeper_quorum, solr_znode=params.logsearch_solr_znode, user=params.logsearch_solr_user, jaas_file=jaas_file, java64_home=params.java64_home, secure=params.security_enabled)
     elif (name == 'client'):
         solr_cloud_util.setup_solr_client(params.config)
         if params.security_enabled:
