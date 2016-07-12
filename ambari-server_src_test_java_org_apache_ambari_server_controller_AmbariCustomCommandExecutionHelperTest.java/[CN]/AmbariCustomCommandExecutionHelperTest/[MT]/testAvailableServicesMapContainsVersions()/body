@@ -1,0 +1,27 @@
+{
+  Map<String,String> requestProperties=new HashMap<String,String>(){
+{
+      put(REQUEST_CONTEXT_PROPERTY,"Refresh YARN Capacity Scheduler");
+      put("command","REFRESHQUEUES");
+    }
+  }
+;
+  ExecuteActionRequest actionRequest=new ExecuteActionRequest("c1","REFRESHQUEUES",new HashMap<String,String>(){
+{
+      put("forceRefreshConfigTags","capacity-scheduler");
+    }
+  }
+,false);
+  actionRequest.getResourceFilters().add(new RequestResourceFilter("YARN","RESOURCEMANAGER",Collections.singletonList("c1-c6401")));
+  EasyMock.replay(hostRoleCommand,actionManager);
+  ambariManagementController.createAction(actionRequest,requestProperties);
+  StackId stackId=clusters.getCluster("c1").getDesiredStackVersion();
+  Map<String,ServiceInfo> services=ambariManagementController.getAmbariMetaInfo().getServices(stackId.getStackName(),stackId.getStackVersion());
+  Request request=requestCapture.getValue();
+  Stage stage=request.getStages().iterator().next();
+  List<ExecutionCommandWrapper> commands=stage.getExecutionCommands("c1-c6401");
+  ExecutionCommand command=commands.get(0).getExecutionCommand();
+  for (  String service : services.keySet()) {
+    Assert.assertEquals(command.getAvailableServices().get(service),services.get(service).getVersion());
+  }
+}
