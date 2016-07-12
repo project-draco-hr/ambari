@@ -1,0 +1,44 @@
+{
+  PreparedStatement stmt=null;
+  SplitByMetricNamesCondition splitCondition=new SplitByMetricNamesCondition(condition);
+  for (  String metricName : splitCondition.getOriginalMetricNames()) {
+    splitCondition.setCurrentMetric(metricName);
+    stmt=PhoenixTransactSQL.prepareGetLatestAggregateMetricSqlStmt(conn,splitCondition);
+    ResultSet rs=null;
+    try {
+      rs=stmt.executeQuery();
+      while (rs.next()) {
+        Collection<List<Function>> functionList=findMetricFunctions(metricFunctions,metricName);
+        for (        List<Function> functions : functionList) {
+          if (functions != null) {
+            for (            Function f : functions) {
+              SingleValuedTimelineMetric metric=getAggregateTimelineMetricFromResultSet(rs,f,true);
+              if (condition.isGrouped()) {
+                metrics.addOrMergeTimelineMetric(metric);
+              }
+ else {
+                metrics.getMetrics().add(metric.getTimelineMetric());
+              }
+            }
+          }
+ else {
+            SingleValuedTimelineMetric metric=getAggregateTimelineMetricFromResultSet(rs,new Function(),true);
+            metrics.getMetrics().add(metric.getTimelineMetric());
+          }
+        }
+      }
+    }
+  finally {
+      if (rs != null) {
+        try {
+          rs.close();
+        }
+ catch (        SQLException e) {
+        }
+      }
+      if (stmt != null) {
+        stmt.close();
+      }
+    }
+  }
+}
