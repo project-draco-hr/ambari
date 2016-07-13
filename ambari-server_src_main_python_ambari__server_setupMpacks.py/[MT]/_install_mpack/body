@@ -1,4 +1,4 @@
-def _install_mpack(options, replay_mode=False):
+def _install_mpack(options, replay_mode=False, is_upgrade=False):
     '\n  Install management pack\n  :param options: Command line options\n  :param replay_mode: Flag to indicate if executing command in replay mode\n  '
     mpack_path = options.mpack_path
     if (not mpack_path):
@@ -15,6 +15,10 @@ def _install_mpack(options, replay_mode=False):
         raise FatalException((-1), 'Malformed management pack {0}. Metadata file missing!'.format(mpack_path))
     if (not replay_mode):
         validate_mpack_prerequisites(mpack_metadata)
+    if is_upgrade:
+        _execute_hook(mpack_metadata, BEFORE_UPGRADE_HOOK_NAME, tmp_root_dir)
+    else:
+        _execute_hook(mpack_metadata, BEFORE_INSTALL_HOOK_NAME, tmp_root_dir)
     if (options.purge and options.purge_list):
         purge_stacks_and_mpacks(options.purge_list.split(','), replay_mode)
     (stack_location, extension_location, service_definitions_location, mpacks_staging_location) = get_mpack_properties()
@@ -50,15 +54,15 @@ def _install_mpack(options, replay_mode=False):
         artifact_type = artifact.type
         artifact_source_dir = os.path.join(mpack_staging_dir, artifact.source_dir)
         print_info_msg('Processing artifact {0} of type {1} in {2}'.format(artifact_name, artifact_type, artifact_source_dir))
-        if (artifact.type == 'stack-definitions'):
+        if (artifact.type == STACK_DEFINITIONS_ARTIFACT_NAME):
             process_stack_definitions_artifact(artifact, artifact_source_dir, options)
-        elif (artifact.type == 'extension-definitions'):
+        elif (artifact.type == EXTENSION_DEFINITIONS_ARTIFACT_NAME):
             process_extension_definitions_artifact(artifact, artifact_source_dir, options)
-        elif (artifact.type == 'service-definitions'):
+        elif (artifact.type == SERVICE_DEFINITIONS_ARTIFACT_NAME):
             process_service_definitions_artifact(artifact, artifact_source_dir, options)
-        elif (artifact.type == 'stack-addon-service-definitions'):
+        elif (artifact.type == STACK_ADDON_SERVICE_DEFINITIONS_ARTIFACT_NAME):
             process_stack_addon_service_definitions_artifact(artifact, artifact_source_dir, options)
         else:
             print_info_msg('Unknown artifact {0} of type {1}'.format(artifact_name, artifact_type))
     print_info_msg('Management pack {0}-{1} successfully installed!'.format(mpack_name, mpack_version))
-    return (mpack_name, mpack_version, mpack_staging_dir, mpack_archive_path)
+    return (mpack_metadata, mpack_name, mpack_version, mpack_staging_dir, mpack_archive_path)
