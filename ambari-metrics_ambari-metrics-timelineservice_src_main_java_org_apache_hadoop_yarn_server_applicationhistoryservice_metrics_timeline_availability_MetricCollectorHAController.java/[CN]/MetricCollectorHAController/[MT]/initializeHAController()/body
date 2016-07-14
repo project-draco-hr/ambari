@@ -1,22 +1,23 @@
 {
+  String clusterName=getClusterName();
   admin=new ZKHelixAdmin(zkConnectUrl);
-  LOG.info("Creating zookeeper cluster node: " + CLUSTER_NAME);
-  admin.addCluster(CLUSTER_NAME,false);
-  List<String> nodes=admin.getInstancesInCluster(CLUSTER_NAME);
+  LOG.info("Creating zookeeper cluster node: " + clusterName);
+  admin.addCluster(clusterName,false);
+  List<String> nodes=admin.getInstancesInCluster(clusterName);
   if (nodes == null || !nodes.contains(instanceConfig.getInstanceName())) {
     LOG.info("Adding participant instance " + instanceConfig);
-    admin.addInstance(CLUSTER_NAME,instanceConfig);
+    admin.addInstance(clusterName,instanceConfig);
   }
-  if (admin.getStateModelDef(CLUSTER_NAME,STATE_MODEL_NAME) == null) {
+  if (admin.getStateModelDef(clusterName,DEFAULT_STATE_MODEL) == null) {
     LOG.info("Adding ONLINE-OFFLINE state model to the cluster");
-    admin.addStateModelDef(CLUSTER_NAME,STATE_MODEL_NAME,OnlineOfflineSMD.build());
+    admin.addStateModelDef(clusterName,DEFAULT_STATE_MODEL,new StateModelDefinition(StateModelConfigGenerator.generateConfigForOnlineOffline()));
   }
-  List<String> resources=admin.getResourcesInCluster(CLUSTER_NAME);
+  List<String> resources=admin.getResourcesInCluster(clusterName);
   if (!resources.contains(METRIC_AGGREGATORS)) {
     LOG.info("Adding resource " + METRIC_AGGREGATORS + " with 2 partitions and 1 replicas");
-    admin.addResource(CLUSTER_NAME,METRIC_AGGREGATORS,2,OnlineOfflineSMD.name,FULL_AUTO.toString());
+    admin.addResource(clusterName,METRIC_AGGREGATORS,2,DEFAULT_STATE_MODEL,FULL_AUTO.toString());
   }
-  admin.rebalance(CLUSTER_NAME,METRIC_AGGREGATORS,1);
+  admin.rebalance(clusterName,METRIC_AGGREGATORS,1);
   startAggregators();
   startController();
   Runtime.getRuntime().addShutdownHook(new Thread(){
