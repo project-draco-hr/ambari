@@ -15,14 +15,15 @@
         String userName=jwtToken.getJWTClaimsSet().getSubject();
         User user=users.getUser(userName,UserType.JWT);
         if (user == null) {
-          User existingUser=users.getAnyUser(userName);
-          if (existingUser != null && existingUser.getUserType() != UserType.JWT) {
+          user=users.getUser(userName,UserType.LDAP);
+        }
+        if (user == null) {
+          User existingUser=users.getUser(userName,UserType.LOCAL);
+          if (existingUser != null) {
             LOG.error("Access for JWT user [{}] restricted. Detected conflict with local user ",userName);
-            httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,"Cannot create JWT user: conflict detected");
-            return;
           }
-          users.createUser(userName,null,UserType.JWT,true,false);
-          user=users.getUser(userName,UserType.JWT);
+          httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,"Cannot find user from JWT. Please, ensure LDAP is configured and users are synced.");
+          return;
         }
         Collection<AmbariGrantedAuthority> userAuthorities=users.getUserAuthorities(user.getUserName(),user.getUserType());
         JwtAuthentication authentication=new JwtAuthentication(serializedJWT,user,userAuthorities);
