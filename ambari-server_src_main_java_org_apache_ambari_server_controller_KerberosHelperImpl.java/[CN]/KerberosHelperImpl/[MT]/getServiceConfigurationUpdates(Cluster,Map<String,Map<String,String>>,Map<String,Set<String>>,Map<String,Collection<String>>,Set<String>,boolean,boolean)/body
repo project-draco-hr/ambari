@@ -1,0 +1,57 @@
+{
+  Map<String,Map<String,String>> kerberosConfigurations=new HashMap<String,Map<String,String>>();
+  KerberosDetails kerberosDetails=getKerberosDetails(cluster,null);
+  KerberosDescriptor kerberosDescriptor=getKerberosDescriptor(cluster);
+  Map<String,String> kerberosDescriptorProperties=kerberosDescriptor.getProperties();
+  Map<String,Map<String,String>> configurations=addAdditionalConfigurations(cluster,deepCopy(existingConfigurations),null,kerberosDescriptorProperties);
+  Map<String,Set<String>> propertiesToIgnore=new HashMap<String,Set<String>>();
+  Map<String,Object> filterContext=new HashMap<String,Object>();
+  filterContext.put("configurations",configurations);
+  filterContext.put("services",installedServices.keySet());
+  for (  Map.Entry<String,Set<String>> installedServiceEntry : installedServices.entrySet()) {
+    String installedService=installedServiceEntry.getKey();
+    if ((serviceFilter == null) || (serviceFilter.containsKey(installedService))) {
+      Collection<String> componentFilter=(serviceFilter == null) ? null : serviceFilter.get(installedService);
+      Set<String> installedComponents=installedServiceEntry.getValue();
+      KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(installedService);
+      if (serviceDescriptor != null) {
+        if (installedComponents != null) {
+          boolean servicePreviouslyExisted=(previouslyExistingServices != null) && previouslyExistingServices.contains(installedService);
+          for (          String installedComponent : installedComponents) {
+            if ((componentFilter == null) || componentFilter.contains(installedComponent)) {
+              KerberosComponentDescriptor componentDescriptor=serviceDescriptor.getComponent(installedComponent);
+              if (componentDescriptor != null) {
+                Map<String,Map<String,String>> identityConfigurations;
+                identityConfigurations=getIdentityConfigurations(serviceDescriptor.getIdentities(true,filterContext));
+                processIdentityConfigurations(identityConfigurations,kerberosConfigurations,configurations,propertiesToIgnore);
+                identityConfigurations=getIdentityConfigurations(componentDescriptor.getIdentities(true,filterContext));
+                processIdentityConfigurations(identityConfigurations,kerberosConfigurations,configurations,propertiesToIgnore);
+                mergeConfigurations(kerberosConfigurations,componentDescriptor.getConfigurations(!servicePreviouslyExisted),configurations);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if (kerberosDetails.createAmbariPrincipal()) {
+    KerberosIdentityDescriptor ambariServerIdentityDescriptor=kerberosDescriptor.getIdentity(KerberosHelper.AMBARI_IDENTITY_NAME);
+    Map<String,Map<String,String>> map=new HashMap<String,Map<String,String>>();
+    if (ambariServerIdentityDescriptor != null) {
+      KerberosPrincipalDescriptor principalDescriptor=ambariServerIdentityDescriptor.getPrincipalDescriptor();
+      if (principalDescriptor != null) {
+        putConfiguration(map,principalDescriptor.getConfiguration(),principalDescriptor.getValue());
+      }
+      KerberosKeytabDescriptor keytabDescriptor=ambariServerIdentityDescriptor.getKeytabDescriptor();
+      if (keytabDescriptor != null) {
+        putConfiguration(map,keytabDescriptor.getConfiguration(),keytabDescriptor.getFile());
+      }
+      for (      Map.Entry<String,Map<String,String>> entry : map.entrySet()) {
+        String configType=entry.getKey();
+        mergeConfigurations(kerberosConfigurations,configType,entry.getValue(),configurations);
+      }
+    }
+  }
+  setAuthToLocalRules(kerberosDescriptor,kerberosDetails.getDefaultRealm(),installedServices,configurations,kerberosConfigurations);
+  return (applyStackAdvisorUpdates) ? applyStackAdvisorUpdates(cluster,installedServices.keySet(),configurations,kerberosConfigurations,propertiesToIgnore,null,new HashMap<String,Set<String>>(),kerberosEnabled) : kerberosConfigurations;
+}

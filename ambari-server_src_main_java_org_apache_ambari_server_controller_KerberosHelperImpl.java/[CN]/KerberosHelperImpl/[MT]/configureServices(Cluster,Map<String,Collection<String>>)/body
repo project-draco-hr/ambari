@@ -1,0 +1,36 @@
+{
+  Map<String,Map<String,String>> existingConfigurations=calculateExistingConfigurations(cluster,null);
+  Map<String,Set<String>> installedServices=new HashMap<String,Set<String>>();
+  Set<String> previouslyExistingServices=new HashSet<String>();
+  Map<String,Service> clusterServices=cluster.getServices();
+  if (clusterServices != null) {
+    for (    Service clusterService : clusterServices.values()) {
+      Set<String> installedComponents=installedServices.get(clusterService.getName());
+      if (installedComponents == null) {
+        installedComponents=new HashSet<String>();
+        installedServices.put(clusterService.getName(),installedComponents);
+      }
+      Map<String,ServiceComponent> clusterServiceComponents=clusterService.getServiceComponents();
+      if (clusterServiceComponents != null) {
+        for (        ServiceComponent clusterServiceComponent : clusterServiceComponents.values()) {
+          installedComponents.add(clusterServiceComponent.getName());
+          if (!previouslyExistingServices.contains(clusterService.getName())) {
+            Map<String,ServiceComponentHost> clusterServiceComponentHosts=clusterServiceComponent.getServiceComponentHosts();
+            if (clusterServiceComponentHosts != null) {
+              for (              ServiceComponentHost clusterServiceComponentHost : clusterServiceComponentHosts.values()) {
+                if (PREVIOUSLY_INSTALLED_STATES.contains(clusterServiceComponentHost.getState())) {
+                  previouslyExistingServices.add(clusterService.getName());
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  Map<String,Map<String,String>> updates=getServiceConfigurationUpdates(cluster,existingConfigurations,installedServices,serviceFilter,previouslyExistingServices,true,true);
+  for (  Map.Entry<String,Map<String,String>> entry : updates.entrySet()) {
+    configHelper.updateConfigType(cluster,ambariManagementController,entry.getKey(),entry.getValue(),null,ambariManagementController.getAuthName(),"Enabling Kerberos for added components");
+  }
+}

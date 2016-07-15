@@ -19,6 +19,7 @@
     }
     stage.setAutoSkipFailureSupported(skipFailure);
     stage.setSkippable(skipFailure);
+    Collection<ServiceComponentHost> componentsToConfigureForKerberos=new ArrayList<>();
     Collection<ServiceComponentHost> componentsToEnableKerberos=new ArrayList<>();
     Set<String> hostsToForceKerberosOperations=new HashSet<>();
     for (    String compName : changedScHosts.keySet()) {
@@ -43,12 +44,7 @@ case INSTALLED:
               }
               if ((oldSchState == State.INIT || oldSchState == State.INSTALL_FAILED) && kerberosHelper.isClusterKerberosEnabled(cluster)) {
                 if (!hostComponentAlreadyExists(cluster,scHost) && !("INITIAL_INSTALL".equals(requestProperties.get("phase")))) {
-                  try {
-                    kerberosHelper.configureService(cluster,scHost);
-                  }
- catch (                  KerberosInvalidConfigurationException e) {
-                    throw new AmbariException(e.getMessage(),e);
-                  }
+                  componentsToConfigureForKerberos.add(scHost);
                 }
                 componentsToEnableKerberos.add(scHost);
                 if (Service.Type.KERBEROS.name().equalsIgnoreCase(scHost.getServiceName()) && Role.KERBEROS_CLIENT.name().equalsIgnoreCase(scHost.getServiceComponentName())) {
@@ -160,6 +156,24 @@ RoleCommandOrder rco=getRoleCommandOrder(cluster);
 RoleGraph rg=roleGraphFactory.createNew(rco);
 rg.build(stage);
 requestStages.addStages(rg.getStages());
+if (!componentsToConfigureForKerberos.isEmpty()) {
+Map<String,Collection<String>> serviceFilter=new HashMap<String,Collection<String>>();
+for (ServiceComponentHost scHost : componentsToConfigureForKerberos) {
+String serviceName=scHost.getServiceName();
+Collection<String> componentFilter=serviceFilter.get(serviceName);
+if (componentFilter == null) {
+componentFilter=new HashSet<String>();
+serviceFilter.put(serviceName,componentFilter);
+}
+componentFilter.add(scHost.getServiceComponentName());
+}
+try {
+kerberosHelper.configureServices(cluster,serviceFilter);
+}
+ catch (KerberosInvalidConfigurationException e) {
+throw new AmbariException(e.getMessage(),e);
+}
+}
 if (!componentsToEnableKerberos.isEmpty()) {
 Map<String,Collection<String>> serviceFilter=new HashMap<String,Collection<String>>();
 Set<String> hostFilter=new HashSet<String>();

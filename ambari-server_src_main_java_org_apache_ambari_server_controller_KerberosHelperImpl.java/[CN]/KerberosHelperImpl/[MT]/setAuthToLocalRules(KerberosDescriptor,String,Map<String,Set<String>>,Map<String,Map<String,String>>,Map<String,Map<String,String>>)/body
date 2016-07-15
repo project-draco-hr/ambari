@@ -11,54 +11,33 @@
     String additionalRealms=kerberosDescriptor.getProperty("additional_realms");
     Map<String,Object> filterContext=new HashMap<String,Object>();
     filterContext.put("configurations",existingConfigurations);
-    filterContext.put("services",cluster.getServices().keySet());
+    filterContext.put("services",installedServices.keySet());
     AuthToLocalBuilder authToLocalBuilder=new AuthToLocalBuilder(realm,additionalRealms,caseInsensitiveUser);
     addIdentities(authToLocalBuilder,kerberosDescriptor.getIdentities(true,filterContext),null,existingConfigurations);
     authToLocalProperties=kerberosDescriptor.getAuthToLocalProperties();
     if (authToLocalProperties != null) {
       authToLocalPropertiesToSet.addAll(authToLocalProperties);
     }
-    Map<String,KerberosServiceDescriptor> services=kerberosDescriptor.getServices();
-    if (services != null) {
-      Map<String,Service> installedServices=cluster.getServices();
-      for (      KerberosServiceDescriptor service : services.values()) {
-        if (installedServices.containsKey(service.getName())) {
-          Service svc=installedServices.get(service.getName());
-          addIdentities(authToLocalBuilder,service.getIdentities(true,filterContext),null,existingConfigurations);
-          authToLocalProperties=service.getAuthToLocalProperties();
-          if (authToLocalProperties != null) {
-            authToLocalPropertiesToSet.addAll(authToLocalProperties);
-          }
-          Map<String,KerberosComponentDescriptor> components=service.getComponents();
-          if (components != null) {
-            Map<String,ServiceComponent> serviceComponents=svc.getServiceComponents();
-            for (            KerberosComponentDescriptor component : components.values()) {
-              ServiceComponent svcComp=null;
-              if (!serviceComponents.containsKey(component.getName())) {
-                continue;
-              }
-              svcComp=serviceComponents.get(component.getName());
-              boolean addSvcCompIdentities=false;
-              if (cluster.isBluePrintDeployed()) {
-                if (svcComp.getDesiredState() == State.INSTALLED || svcComp.getDesiredState() == State.STARTED) {
-                  addSvcCompIdentities=true;
-                }
-              }
- else {
-                for (                ServiceComponentHost svcCompHost : svcComp.getServiceComponentHosts().values()) {
-                  if (svcCompHost.getDesiredState() != State.UNKNOWN && svcCompHost.getDesiredState() != State.UNINSTALLING && svcCompHost.getDesiredState() != State.UNINSTALLED && svcCompHost.getDesiredState() != State.INSTALL_FAILED && svcCompHost.getDesiredState() != State.WIPING_OUT) {
-                    addSvcCompIdentities=true;
-                    break;
-                  }
-                }
-              }
-              if (addSvcCompIdentities) {
-                LOG.info("Adding identity for " + component.getName() + " to auth to local mapping");
-                addIdentities(authToLocalBuilder,component.getIdentities(true,filterContext),null,existingConfigurations);
-                authToLocalProperties=component.getAuthToLocalProperties();
-                if (authToLocalProperties != null) {
-                  authToLocalPropertiesToSet.addAll(authToLocalProperties);
-                }
+    for (    Map.Entry<String,Set<String>> installedService : installedServices.entrySet()) {
+      String serviceName=installedService.getKey();
+      KerberosServiceDescriptor serviceDescriptor=kerberosDescriptor.getService(serviceName);
+      if (serviceDescriptor != null) {
+        LOG.info("Adding identities for service {} to auth to local mapping",installedService);
+        addIdentities(authToLocalBuilder,serviceDescriptor.getIdentities(true,filterContext),null,existingConfigurations);
+        authToLocalProperties=serviceDescriptor.getAuthToLocalProperties();
+        if (authToLocalProperties != null) {
+          authToLocalPropertiesToSet.addAll(authToLocalProperties);
+        }
+        Set<String> installedComponents=installedService.getValue();
+        if (installedComponents != null) {
+          for (          String installedComponent : installedComponents) {
+            KerberosComponentDescriptor componentDescriptor=serviceDescriptor.getComponent(installedComponent);
+            if (componentDescriptor != null) {
+              LOG.info("Adding identities for component {} to auth to local mapping",installedComponent);
+              addIdentities(authToLocalBuilder,componentDescriptor.getIdentities(true,filterContext),null,existingConfigurations);
+              authToLocalProperties=componentDescriptor.getAuthToLocalProperties();
+              if (authToLocalProperties != null) {
+                authToLocalPropertiesToSet.addAll(authToLocalProperties);
               }
             }
           }
