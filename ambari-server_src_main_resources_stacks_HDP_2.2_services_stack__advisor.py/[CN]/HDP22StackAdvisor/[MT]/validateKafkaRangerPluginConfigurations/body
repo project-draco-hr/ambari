@@ -2,8 +2,12 @@ def validateKafkaRangerPluginConfigurations(self, properties, recommendedDefault
     validationItems = []
     ranger_plugin_properties = getSiteProperties(configurations, 'ranger-kafka-plugin-properties')
     ranger_plugin_enabled = (ranger_plugin_properties['ranger-kafka-plugin-enabled'] if ranger_plugin_properties else 'No')
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    security_enabled = self.isSecurityEnabled(services)
     if (ranger_plugin_enabled.lower() == 'yes'):
         ranger_env = getServicesSiteProperties(services, 'ranger-env')
         if ((not ranger_env) or (not ('ranger-kafka-plugin-enabled' in ranger_env)) or (ranger_env['ranger-kafka-plugin-enabled'].lower() != 'yes')):
             validationItems.append({'config-name': 'ranger-kafka-plugin-enabled', 'item': self.getWarnItem('ranger-kafka-plugin-properties/ranger-kafka-plugin-enabled must correspond ranger-env/ranger-kafka-plugin-enabled'), })
+    if (('RANGER' in servicesList) and (ranger_plugin_enabled.lower() == 'yes') and (not security_enabled)):
+        validationItems.append({'config-name': 'ranger-kafka-plugin-enabled', 'item': self.getWarnItem('Ranger Kafka plugin should not be enabled in non-kerberos environment.'), })
     return self.toConfigurationValidationProblems(validationItems, 'ranger-kafka-plugin-properties')
