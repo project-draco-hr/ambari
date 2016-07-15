@@ -50,25 +50,27 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
             return
         node_manager_host_list = self.get_node_manager_hosts(services, hosts)
         node_manager_cnt = len(node_manager_host_list)
-        current_selected_queue_for_llap_cap = None
-        if ((llap_queue_selected_in_current_call == llap_queue_name) or (llap_daemon_selected_queue_name == llap_queue_name)):
-            current_selected_queue_for_llap_cap = self.get_llap_cap_percent_slider(services, configurations)
-        else:
-            current_selected_queue_for_llap_cap = self.__getQueueCapFromCapacityScheduler(capacity_scheduler_properties, llap_daemon_selected_queue_name)
-        assert (current_selected_queue_for_llap_cap >= 1), "Current selected queue '{0}' capacity value : {1}. Expected value : >= 1".format(llap_daemon_selected_queue_name, current_selected_queue_for_llap_cap)
         yarn_nm_mem_in_mb = self.get_yarn_nm_mem_in_mb(services, configurations)
         total_cluster_capacity = (node_manager_cnt * yarn_nm_mem_in_mb)
         Logger.info('\n\nCalculated total_cluster_capacity : {0}, using following : node_manager_cnt : {1}, yarn_nm_mem_in_mb : {2}'.format(total_cluster_capacity, node_manager_cnt, yarn_nm_mem_in_mb))
+        current_selected_queue_for_llap_cap = None
+        yarn_root_queues = capacity_scheduler_properties.get('yarn.scheduler.capacity.root.queues')
+        if ((llap_queue_selected_in_current_call == llap_queue_name) or ((llap_daemon_selected_queue_name == llap_queue_name) and ((llap_queue_name in yarn_root_queues) and (len(leafQueueNames) == 2)))):
+            current_selected_queue_for_llap_cap_perc = self.get_llap_cap_percent_slider(services, configurations)
+            current_selected_queue_for_llap_cap = ((current_selected_queue_for_llap_cap_perc / 100) * total_cluster_capacity)
+        else:
+            current_selected_queue_for_llap_cap = self.__getSelectedQueueTotalCap(capacity_scheduler_properties, llap_daemon_selected_queue_name, total_cluster_capacity)
+        assert (current_selected_queue_for_llap_cap >= 1), "Current selected queue '{0}' capacity value : {1}. Expected value : >= 1".format(llap_daemon_selected_queue_name, current_selected_queue_for_llap_cap)
         yarn_min_container_size = self.get_yarn_min_container_size(services, configurations)
         tez_am_container_size = self.calculate_tez_am_container_size(long(total_cluster_capacity))
         normalized_tez_am_container_size = self._normalizeUp(tez_am_container_size, yarn_min_container_size)
         Logger.info('Calculated normalized_tez_am_container_size : {0}, using following : tez_am_container_size : {1}, total_cluster_capacity : {2}'.format(normalized_tez_am_container_size, tez_am_container_size, total_cluster_capacity))
-        total_llap_queue_size = long(self._normalizeDown(((float(current_selected_queue_for_llap_cap) / 100) * total_cluster_capacity), yarn_min_container_size))
+        normalized_selected_queue_for_llap_cap = long(self._normalizeDown(current_selected_queue_for_llap_cap, yarn_min_container_size))
         slider_am_container_size = self._normalizeUp(self.calculate_slider_am_size(yarn_min_container_size), yarn_min_container_size)
         if (not llap_concurrency_in_changed_configs):
-            llap_concurrency = float(((total_llap_queue_size * 0.25) / normalized_tez_am_container_size))
+            llap_concurrency = float(((normalized_selected_queue_for_llap_cap * 0.25) / normalized_tez_am_container_size))
             llap_concurrency = max(long(llap_concurrency), 1)
-            Logger.info('Calculated llap_concurrency : {0}, using following : total_llap_queue_size : {1}, normalized_tez_am_container_size : {2}'.format(llap_concurrency, total_llap_queue_size, normalized_tez_am_container_size))
+            Logger.info('Calculated llap_concurrency : {0}, using following : normalized_selected_queue_for_llap_cap : {1}, normalized_tez_am_container_size : {2}'.format(llap_concurrency, normalized_selected_queue_for_llap_cap, normalized_tez_am_container_size))
             if (llap_concurrency > LLAP_MAX_CONCURRENCY):
                 llap_concurrency = LLAP_MAX_CONCURRENCY
         elif ('hive.server2.tez.sessions.per.default.queue' in services['configurations'][self.HIVE_INTERACTIVE_SITE]['properties']):
@@ -77,8 +79,8 @@ def updateLlapConfigs(self, configurations, services, hosts, llap_queue_name):
         else:
             raise Fail("Couldn't retrieve Hive Server interactive's 'hive.server2.tez.sessions.per.default.queue' config.")
         total_am_capacity_required = ((normalized_tez_am_container_size * llap_concurrency) + slider_am_container_size)
-        cap_available_for_daemons = (total_llap_queue_size - total_am_capacity_required)
-        Logger.info('Calculated cap_available_for_daemons : {0}, using following : current_selected_queue_for_llap_cap : {1}, yarn_nm_mem_in_mb : {2}, total_cluster_capacity : {3}, total_llap_queue_size : {4}, normalized_tez_am_container_size : {5}, yarn_min_container_size : {6}, llap_concurrency : {7}, total_am_capacity_required : {8}'.format(cap_available_for_daemons, current_selected_queue_for_llap_cap, yarn_nm_mem_in_mb, total_cluster_capacity, total_llap_queue_size, normalized_tez_am_container_size, yarn_min_container_size, llap_concurrency, total_am_capacity_required))
+        cap_available_for_daemons = (normalized_selected_queue_for_llap_cap - total_am_capacity_required)
+        Logger.info('Calculated cap_available_for_daemons : {0}, using following : current_selected_queue_for_llap_cap : {1}, yarn_nm_mem_in_mb : {2}, total_cluster_capacity : {3}, normalized_selected_queue_for_llap_cap : {4}, normalized_tez_am_container_size : {5}, yarn_min_container_size : {6}, llap_concurrency : {7}, total_am_capacity_required : {8}'.format(cap_available_for_daemons, current_selected_queue_for_llap_cap, yarn_nm_mem_in_mb, total_cluster_capacity, normalized_selected_queue_for_llap_cap, normalized_tez_am_container_size, yarn_min_container_size, llap_concurrency, total_am_capacity_required))
         if (cap_available_for_daemons < yarn_min_container_size):
             raise Fail("'Capacity available for LLAP daemons'({0}) < 'YARN minimum container size'({1}). Invalid configuration detected. Increase LLAP queue size.".format(cap_available_for_daemons, yarn_min_container_size))
         num_llap_nodes_raw = (cap_available_for_daemons / yarn_nm_mem_in_mb)
