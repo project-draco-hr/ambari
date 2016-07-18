@@ -1,0 +1,45 @@
+{
+  Server server=new Server();
+  ServerConnector connector=new ServerConnector(server);
+  boolean portSpecified=argv.length > 0;
+  String protcolProperty=PropertiesUtil.getProperty(LOGSEARCH_PROTOCOL_PROP,HTTP_PROTOCOL);
+  if (StringUtils.isEmpty(protcolProperty)) {
+    protcolProperty=HTTP_PROTOCOL;
+  }
+  String port=null;
+  String keystoreLocation=System.getProperty(KEYSTORE_LOCATION_ARG);
+  String keystorePassword=System.getProperty(KEYSTORE_PASSWORD_ARG);
+  String keystoreType=System.getProperty(KEYSTORE_TYPE_ARG,DEFAULT_KEYSTORE_TYPE);
+  String trustStoreLocation=System.getProperty(TRUSTSTORE_LOCATION_ARG);
+  String trustStorePassword=System.getProperty(TRUSTSTORE_PASSWORD_ARG);
+  String trustStoreType=System.getProperty(TRUSTSTORE_TYPE_ARG,DEFAULT_TRUSTSTORE_TYPE);
+  if (HTTPS_PROTOCOL.equals(protcolProperty) && !StringUtils.isEmpty(keystoreLocation) && !StringUtils.isEmpty(keystorePassword)) {
+    logger.info("Building https server...........");
+    port=portSpecified ? argv[0] : HTTPS_PORT;
+    checkPort(Integer.parseInt(port));
+    HttpConfiguration https=new HttpConfiguration();
+    https.addCustomizer(new SecureRequestCustomizer());
+    SslContextFactory sslContextFactory=new SslContextFactory();
+    sslContextFactory.setKeyStorePath(keystoreLocation);
+    sslContextFactory.setKeyStorePassword(keystorePassword);
+    sslContextFactory.setKeyStoreType(keystoreType);
+    if (!StringUtils.isEmpty(trustStoreLocation) && !StringUtils.isEmpty(trustStorePassword)) {
+      sslContextFactory.setTrustStorePath(trustStoreLocation);
+      sslContextFactory.setTrustStorePassword(trustStorePassword);
+      sslContextFactory.setTrustStoreType(trustStoreType);
+    }
+    ServerConnector sslConnector=new ServerConnector(server,new SslConnectionFactory(sslContextFactory,"http/1.1"),new HttpConnectionFactory(https));
+    sslConnector.setPort(Integer.parseInt(port));
+    server.setConnectors(new Connector[]{sslConnector});
+  }
+ else {
+    logger.info("Building http server...........");
+    port=portSpecified ? argv[0] : HTTP_PORT;
+    checkPort(Integer.parseInt(port));
+    connector.setPort(Integer.parseInt(port));
+    server.setConnectors(new Connector[]{connector});
+  }
+  URI logsearchURI=URI.create(String.format("%s://0.0.0.0:%s",protcolProperty,port));
+  logger.info("Starting logsearch server URI=" + logsearchURI);
+  return server;
+}
