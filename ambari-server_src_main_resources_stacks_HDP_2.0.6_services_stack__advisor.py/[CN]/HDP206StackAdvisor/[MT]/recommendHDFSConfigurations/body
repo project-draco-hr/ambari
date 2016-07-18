@@ -22,18 +22,23 @@ def recommendHDFSConfigurations(self, configurations, clusterData, services, hos
         putHDFSSiteProperty('dfs.datanode.data.dir', dataDirs)
     else:
         dataDirs = hdfsSiteProperties['dfs.datanode.data.dir'].split(',')
-    mountPoints = []
-    mountPointDiskAvailableSpace = []
+    reservedSizeRecommendation = 0L
     for host in hosts['items']:
+        mountPoints = []
+        mountPointDiskAvailableSpace = []
         for diskInfo in host['Hosts']['disk_info']:
             mountPoints.append(diskInfo['mountpoint'])
             mountPointDiskAvailableSpace.append(long(diskInfo['size']))
-    maxFreeVolumeSize = 0L
-    for dataDir in dataDirs:
-        mp = getMountPointForDir(dataDir, mountPoints)
-        for i in range(len(mountPoints)):
-            if (mp == mountPoints[i]):
-                if (mountPointDiskAvailableSpace[i] > maxFreeVolumeSize):
-                    maxFreeVolumeSize = mountPointDiskAvailableSpace[i]
-    putHDFSSiteProperty('dfs.datanode.du.reserved', ((maxFreeVolumeSize * 1024) / 8))
+        maxFreeVolumeSizeForHost = 0L
+        for dataDir in dataDirs:
+            mp = getMountPointForDir(dataDir, mountPoints)
+            for i in range(len(mountPoints)):
+                if (mp == mountPoints[i]):
+                    if (mountPointDiskAvailableSpace[i] > maxFreeVolumeSizeForHost):
+                        maxFreeVolumeSizeForHost = mountPointDiskAvailableSpace[i]
+        if ((not reservedSizeRecommendation) or (maxFreeVolumeSizeForHost and (maxFreeVolumeSizeForHost < reservedSizeRecommendation))):
+            reservedSizeRecommendation = maxFreeVolumeSizeForHost
+    if reservedSizeRecommendation:
+        reservedSizeRecommendation = max(((reservedSizeRecommendation * 1024) / 8), 1073741824)
+        putHDFSSiteProperty('dfs.datanode.du.reserved', reservedSizeRecommendation)
     self.recommendHadoopProxyUsers(configurations, services, hosts)
