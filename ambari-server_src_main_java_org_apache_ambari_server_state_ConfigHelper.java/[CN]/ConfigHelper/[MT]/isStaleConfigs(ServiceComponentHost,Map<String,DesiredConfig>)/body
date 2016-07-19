@@ -1,14 +1,21 @@
 {
   Boolean stale=null;
-  if (STALE_CONFIGS_CACHE_ENABLED) {
-    stale=staleConfigsCache.getIfPresent(sch);
-  }
-  if (stale == null) {
-    stale=calculateIsStaleConfigs(sch,desiredConfigs);
-    staleConfigsCache.put(sch,stale);
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Cache configuration staleness for host {} and component {} as {}",sch.getHostName(),sch.getServiceComponentName(),stale);
+  staleConfigCacheLock.readLock().lock();
+  try {
+    if (STALE_CONFIGS_CACHE_ENABLED) {
+      stale=staleConfigsCache.getIfPresent(sch);
     }
+    if (stale == null) {
+      Map<String,DesiredConfig> desiredConfigs=staleConfigCacheDesiredConfigs != null ? staleConfigCacheDesiredConfigs : requestDesiredConfigs;
+      stale=calculateIsStaleConfigs(sch,desiredConfigs);
+      staleConfigsCache.put(sch,stale);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Cache configuration staleness for host {} and component {} as {}",sch.getHostName(),sch.getServiceComponentName(),stale);
+      }
+    }
+    return stale;
   }
-  return stale;
+  finally {
+    staleConfigCacheLock.readLock().unlock();
+  }
 }
