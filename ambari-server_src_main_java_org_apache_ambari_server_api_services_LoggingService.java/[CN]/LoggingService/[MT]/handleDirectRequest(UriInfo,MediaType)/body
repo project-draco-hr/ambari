@@ -9,24 +9,31 @@
   }
   AmbariManagementController controller=controllerFactory.getController();
   LoggingRequestHelper requestHelper=helperFactory.getHelper(controller,clusterName);
-  LogQueryResponse response=requestHelper.sendQueryRequest(enumeratedQueryParameters);
-  if (response != null) {
-    ResultSerializer serializer=mediaType == null ? getResultSerializer() : getResultSerializer(mediaType);
-    Result result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.OK));
-    Resource loggingResource=new ResourceImpl(Resource.Type.LoggingQuery);
-    loggingResource.setProperty("startIndex",response.getStartIndex());
-    loggingResource.setProperty("pageSize",response.getPageSize());
-    loggingResource.setProperty("resultSize",response.getResultSize());
-    loggingResource.setProperty("queryTimeMMS",response.getQueryTimeMS());
-    loggingResource.setProperty("totalCount",response.getTotalCount());
-    loggingResource.setProperty("logList",response.getListOfResults());
-    result.getResultTree().addChild(loggingResource,"logging");
-    Response.ResponseBuilder builder=Response.status(result.getStatus().getStatusCode()).entity(serializer.serialize(result));
-    if (mediaType != null) {
-      builder.type(mediaType);
+  if (requestHelper != null) {
+    LogQueryResponse response=requestHelper.sendQueryRequest(enumeratedQueryParameters);
+    if (response != null) {
+      ResultSerializer serializer=mediaType == null ? getResultSerializer() : getResultSerializer(mediaType);
+      Result result=new ResultImpl(new ResultStatus(ResultStatus.STATUS.OK));
+      Resource loggingResource=new ResourceImpl(Resource.Type.LoggingQuery);
+      loggingResource.setProperty("startIndex",response.getStartIndex());
+      loggingResource.setProperty("pageSize",response.getPageSize());
+      loggingResource.setProperty("resultSize",response.getResultSize());
+      loggingResource.setProperty("queryTimeMMS",response.getQueryTimeMS());
+      loggingResource.setProperty("totalCount",response.getTotalCount());
+      loggingResource.setProperty("logList",response.getListOfResults());
+      result.getResultTree().addChild(loggingResource,"logging");
+      Response.ResponseBuilder builder=Response.status(result.getStatus().getStatusCode()).entity(serializer.serialize(result));
+      if (mediaType != null) {
+        builder.type(mediaType);
+      }
+      RetryHelper.clearAffectedClusters();
+      return builder.build();
     }
-    RetryHelper.clearAffectedClusters();
-    return builder.build();
   }
-  return null;
+ else {
+    LOG.debug("LogSearch is not currently available, an empty response will be returned");
+  }
+  final Response.ResponseBuilder responseBuilder=Response.status(new ResultStatus(ResultStatus.STATUS.NOT_FOUND).getStatusCode());
+  responseBuilder.entity("LogSearch is not currently available.  If LogSearch is deployed in this cluster, please verify that the LogSearch services are running.");
+  return responseBuilder.build();
 }
