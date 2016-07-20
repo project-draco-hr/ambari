@@ -1,5 +1,5 @@
 def test_getServiceConfigurationRecommendations(self):
-    configurations = {'hawq-sysctl-env': {'properties': {'vm.overcommit_memory': 1, 'vm.overcommit_ratio': 50, }, }, 'hawq-site': {'properties': {'hawq_rm_memory_limit_perseg': '65535MB', 'hawq_rm_nvcore_limit_perseg': '16', 'hawq_global_rm_type': 'yarn', }, }, 'hdfs-site': {'properties': {}, }, 'core-site': {'properties': {}, }, 'cluster-env': {'properties': {}, }, }
+    configurations = {'hawq-sysctl-env': {'properties': {'vm.overcommit_memory': 1, 'vm.overcommit_ratio': 50, }, }, 'hawq-site': {'properties': {'hawq_rm_memory_limit_perseg': '65535MB', 'hawq_rm_nvcore_limit_perseg': '16', 'hawq_global_rm_type': 'yarn', 'default_hash_table_bucket_number': 18, }, }, 'hdfs-site': {'properties': {}, }, 'core-site': {'properties': {}, }, 'cluster-env': {'properties': {}, }, }
     services = {'services': [{'StackServices': {'service_name': 'HAWQ', 'service_version': '2.0', 'stack_name': 'HDP', 'stack_version': '2.3', }, 'components': [{'StackServiceComponents': {'component_name': 'HAWQMASTER', 'hostnames': ['c6401.ambari.apache.org'], }, }, {'StackServiceComponents': {'component_name': 'HAWQSEGMENT', 'hostnames': ['c6402.ambari.apache.org', 'c6404.ambari.apache.org'], }, }], }], 'configurations': configurations, }
     hosts = {'items': [{'Hosts': {'host_name': 'c6401.ambari.apache.org', 'cpu_count': 2, 'total_mem': 33554432, }, }, {'Hosts': {'host_name': 'c6402.ambari.apache.org', 'cpu_count': 4, 'total_mem': 33554433, }, }, {'Hosts': {'host_name': 'c6403.ambari.apache.org', 'cpu_count': 1, 'total_mem': 33554434, }, }, {'Hosts': {'host_name': 'c6404.ambari.apache.org', 'cpu_count': 2, 'total_mem': 33554435, }, }], }
     self.serviceAdvisor.getServiceConfigurationRecommendations(configurations, None, services, hosts)
@@ -60,6 +60,33 @@ def test_getServiceConfigurationRecommendations(self):
     services['configurations']['hawq-sysctl-env']['properties']['vm.overcommit_ratio'] = 75
     self.serviceAdvisor.getServiceConfigurationRecommendations(configurations, None, services, hosts)
     self.assertEqual(configurations['hawq-site']['properties']['hawq_rm_memory_limit_perseg'], '730GB')
+    hosts['items'][0]['Hosts']['total_mem'] = 2097152
+    hosts['items'][1]['Hosts']['total_mem'] = 2097152
+    hosts['items'][3]['Hosts']['total_mem'] = 2097152
+    services['configurations']['hawq-site']['properties']['hawq_global_rm_type'] = 'none'
+    services['configurations']['hawq-site']['properties']['hawq_rm_nvseg_perquery_limit'] = '512'
+    self.serviceAdvisor.getServiceConfigurationRecommendations(configurations, None, services, hosts)
+    self.assertEqual(configurations['hawq-site']['properties']['hawq_rm_memory_limit_perseg'], '1152MB')
+    self.assertEqual(configurations['hawq-site']['properties']['default_hash_table_bucket_number'], '8')
+    self.assertEqual(configurations['hawq-site']['properties']['hawq_rm_nvseg_perquery_perseg_limit'], '4')
+    hosts['items'][0]['Hosts']['total_mem'] = 1073741824
+    hosts['items'][1]['Hosts']['total_mem'] = 2073741824
+    hosts['items'][3]['Hosts']['total_mem'] = 3073741824
+    services['configurations']['hawq-site']['properties']['hawq_rm_nvseg_perquery_limit'] = '512'
+    services['configurations']['hawq-site']['properties']['hawq_rm_nvseg_perquery_perseg_limit'] = '4'
+    self.serviceAdvisor.getServiceConfigurationRecommendations(configurations, None, services, hosts)
+    self.assertEqual(configurations['hawq-site']['properties']['hawq_rm_memory_limit_perseg'], '730GB')
+    self.assertEqual(configurations['hawq-site']['properties']['default_hash_table_bucket_number'], '12')
+    self.assertEqual(configurations['hawq-site']['properties']['hawq_rm_nvseg_perquery_perseg_limit'], '6')
+    hosts['items'][0]['Hosts']['total_mem'] = 1073741824
+    hosts['items'][1]['Hosts']['total_mem'] = 2073741824
+    hosts['items'][3]['Hosts']['total_mem'] = 3073741824
+    services['configurations']['hawq-site']['properties']['hawq_rm_nvseg_perquery_limit'] = '512'
+    services['configurations']['hawq-site']['properties']['hawq_rm_nvseg_perquery_perseg_limit'] = '8'
+    self.serviceAdvisor.getServiceConfigurationRecommendations(configurations, None, services, hosts)
+    self.assertEqual(configurations['hawq-site']['properties']['hawq_rm_memory_limit_perseg'], '730GB')
+    self.assertEqual(configurations['hawq-site']['properties']['default_hash_table_bucket_number'], '12')
+    self.assertEqual(configurations['hawq-site']['properties']['hawq_rm_nvseg_perquery_perseg_limit'], '8')
     services['configurations']['hawq-site']['properties']['hawq_global_rm_type'] = 'yarn'
     properties_visible_status = {'hawq_rm_memory_limit_perseg': 'false', 'hawq_rm_nvcore_limit_perseg': 'false', 'hawq_rm_yarn_app_name': 'true', 'hawq_rm_yarn_queue_name': 'true', 'hawq_rm_yarn_scheduler_address': 'true', 'hawq_rm_yarn_address': 'true', }
     self.serviceAdvisor.getServiceConfigurationRecommendations(configurations, None, services, hosts)

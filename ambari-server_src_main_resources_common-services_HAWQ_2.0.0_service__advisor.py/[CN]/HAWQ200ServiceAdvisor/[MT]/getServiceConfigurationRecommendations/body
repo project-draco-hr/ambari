@@ -76,6 +76,17 @@ def getServiceConfigurationRecommendations(self, configurations, clusterData, se
                 recommended_mem = math.ceil(((float(host_ram_kb) / 1024) * recommended_mem_percentage))
                 unit = 'MB'
             putHawqSiteProperty('hawq_rm_memory_limit_perseg', '{0}{1}'.format(int(recommended_mem), unit))
+        if (('hawq_rm_nvseg_perquery_perseg_limit' in hawq_site) and (int(hawq_site['hawq_rm_nvseg_perquery_perseg_limit']) < 6)):
+            putHawqSiteProperty('hawq_rm_nvseg_perquery_perseg_limit', 6)
+        if (('hawq_global_rm_type' in hawq_site) and ('hawq_rm_memory_limit_perseg' in hawq_site)):
+            hawq_rm_memory_limit_perseg = hawq_site['hawq_rm_memory_limit_perseg'].strip()
+            unit = hawq_rm_memory_limit_perseg[(-2):]
+            value = hawq_rm_memory_limit_perseg[:(-2)]
+            if (((unit == 'GB') and (1 <= int(value) < 2)) or ((unit == 'MB') and (1024 <= int(value) < 2048))):
+                factor = 4
+                buckets = (min((factor * numSegments), int(hawq_site['default_hash_table_bucket_number'])) if ('default_hash_table_bucket_number' in hawq_site) else (factor * numSegments))
+                putHawqSiteProperty('default_hash_table_bucket_number', buckets)
+                putHawqSiteProperty('hawq_rm_nvseg_perquery_perseg_limit', factor)
         YARN_MODE = (True if (hawq_site['hawq_global_rm_type'].lower() == 'yarn') else False)
         yarn_mode_properties_visibility = {'hawq_rm_memory_limit_perseg': False, 'hawq_rm_nvcore_limit_perseg': False, 'hawq_rm_yarn_app_name': True, 'hawq_rm_yarn_queue_name': True, 'hawq_rm_yarn_scheduler_address': True, 'hawq_rm_yarn_address': True, }
         for (property, visible_status) in yarn_mode_properties_visibility.iteritems():

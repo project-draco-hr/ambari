@@ -59,7 +59,7 @@ def test_validateHAWQSiteConfigurations(self):
     self.assertEqual(len(problems), 0)
     services = {'services': [{'StackServices': {'service_name': 'HAWQ', }, 'components': [{'StackServiceComponents': {'component_name': 'HAWQSEGMENT', 'hostnames': [], }, }], }], 'configurations': {}, }
     configurations = services['configurations']
-    configurations['hawq-site'] = {'properties': {'default_hash_table_bucket_number': '600', 'hawq_rm_nvseg_perquery_limit': '500', }, }
+    configurations['hawq-site'] = {'properties': {'default_hash_table_bucket_number': '600', 'hawq_rm_nvseg_perquery_limit': '500', 'hawq_rm_nvseg_perquery_perseg_limit': '6', }, }
     properties = configurations['hawq-site']['properties']
     defaults = {}
     hosts = {}
@@ -68,6 +68,16 @@ def test_validateHAWQSiteConfigurations(self):
     self.assertEqual(len(problems), 1)
     self.assertEqual(problems[0], expected)
     configurations['hawq-site'] = {'properties': {'default_hash_table_bucket_number': '500', 'hawq_rm_nvseg_perquery_limit': '500', }, }
+    properties = configurations['hawq-site']['properties']
+    problems = self.serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 0)
+    configurations['hawq-site'] = {'properties': {'hawq_global_rm_type': 'none', 'hawq_rm_memory_limit_perseg': '1023MB', }, }
+    expected = {'config-type': 'hawq-site', 'message': 'HAWQ Segment Memory less than 1GB is not sufficient', 'type': 'configuration', 'config-name': 'hawq_global_rm_type', 'level': 'ERROR', }
+    properties = configurations['hawq-site']['properties']
+    problems = self.serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 1)
+    self.assertEqual(problems[0], expected)
+    configurations['hawq-site']['properties']['hawq_rm_memory_limit_perseg'] = '1GB'
     properties = configurations['hawq-site']['properties']
     problems = self.serviceAdvisor.validateHAWQSiteConfigurations(properties, defaults, configurations, services, hosts)
     self.assertEqual(len(problems), 0)
