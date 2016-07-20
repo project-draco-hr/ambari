@@ -1,0 +1,33 @@
+{
+  logger.debug("LogsearchKRBAuthenticationFilter private filter");
+  String userName=getUsernameFromResponse(response);
+  if (!StringUtils.isEmpty(userName)) {
+    Authentication existingAuth=SecurityContextHolder.getContext().getAuthentication();
+    if (existingAuth == null || !existingAuth.isAuthenticated()) {
+      final List<GrantedAuthority> grantedAuths=new ArrayList<>();
+      grantedAuths.add(new SimpleGrantedAuthority(DEFAULT_USER_ROLE));
+      final UserDetails principal=new User(userName,"",grantedAuths);
+      final Authentication finalAuthentication=new UsernamePasswordAuthenticationToken(principal,"",grantedAuths);
+      WebAuthenticationDetails webDetails=new WebAuthenticationDetails(request);
+      ((AbstractAuthenticationToken)finalAuthentication).setDetails(webDetails);
+      Authentication authentication=this.authenticate(finalAuthentication);
+      authentication=getGrantedAuthority(authentication);
+      SecurityContextHolder.getContext().setAuthentication(authentication);
+      request.getSession(true).setAttribute("SPRING_SECURITY_CONTEXT",SecurityContextHolder.getContext());
+      request.setAttribute("spnegoEnabled",true);
+      logger.info("Logged into Logsearch as = " + userName);
+      filterChain.doFilter(request,response);
+    }
+ else {
+      try {
+        super.doFilter(filterChain,request,response);
+      }
+ catch (      Exception e) {
+        logger.error("Error LogsearchKRBAuthenticationFilter : " + e.getMessage());
+      }
+    }
+  }
+ else {
+    filterChain.doFilter(request,response);
+  }
+}

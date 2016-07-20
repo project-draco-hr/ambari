@@ -1,0 +1,37 @@
+{
+  HttpServletRequest httpRequest=(HttpServletRequest)request;
+  logger.debug("LogsearchKRBAuthenticationFilter public filter path >>>>" + httpRequest.getPathInfo());
+  SecurityContextImpl securityContextImpl=(SecurityContextImpl)httpRequest.getSession(true).getAttribute("SPRING_SECURITY_CONTEXT");
+  Authentication existingAuth=null;
+  if (securityContextImpl != null) {
+    existingAuth=securityContextImpl.getAuthentication();
+  }
+  if (!isLoginRequest(httpRequest) && spnegoEnable && (existingAuth == null || !existingAuth.isAuthenticated())) {
+    KerberosName.setRules(PropertiesUtil.getProperty(NAME_RULES,"DEFAULT"));
+    String userName=getUsernameFromRequest(httpRequest);
+    if ((existingAuth == null || !existingAuth.isAuthenticated()) && (!StringUtils.isEmpty(userName))) {
+      final List<GrantedAuthority> grantedAuths=new ArrayList<>();
+      grantedAuths.add(new SimpleGrantedAuthority(DEFAULT_USER_ROLE));
+      final UserDetails principal=new User(userName,"",grantedAuths);
+      final Authentication finalAuthentication=new UsernamePasswordAuthenticationToken(principal,"",grantedAuths);
+      WebAuthenticationDetails webDetails=new WebAuthenticationDetails(httpRequest);
+      ((AbstractAuthenticationToken)finalAuthentication).setDetails(webDetails);
+      Authentication authentication=this.authenticate(finalAuthentication);
+      authentication=getGrantedAuthority(authentication);
+      SecurityContextHolder.getContext().setAuthentication(authentication);
+      request.setAttribute("spnegoEnabled",true);
+      logger.info("Logged into Logsearch as = " + userName);
+    }
+ else {
+      try {
+        super.doFilter(request,response,filterChain);
+      }
+ catch (      Exception e) {
+        logger.error("Error LogsearchKRBAuthenticationFilter : " + e.getMessage());
+      }
+    }
+  }
+ else {
+    filterChain.doFilter(request,response);
+  }
+}
