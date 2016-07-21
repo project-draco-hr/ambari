@@ -1,0 +1,30 @@
+{
+  String clusterName=getExecutionCommand().getClusterName();
+  Cluster cluster=clusters.getCluster(clusterName);
+  Config oozieConfig=cluster.getDesiredConfigByType(TARGET_OOZIE_CONFIG_TYPE);
+  Config falconConfig=cluster.getDesiredConfigByType(FALCON_CONFIG_TYPE);
+  if (falconConfig == null) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","Falcon configuration unavailable","");
+  }
+  if (oozieConfig == null) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","Oozie configuration unavailable","");
+  }
+  Map<String,String> oozieProperties=oozieConfig.getProperties();
+  String currentOozieAdmins=oozieProperties.get(OOZIE_ADMIN_USERS_PROP);
+  if (currentOozieAdmins.isEmpty()) {
+    currentOozieAdmins="";
+  }
+  Map<String,String> falconProperties=falconConfig.getProperties();
+  String falconUser=falconProperties.get(FALCON_USER_PROP);
+  if (StringUtils.isBlank(falconUser)) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","Falcon user not set","");
+  }
+  if (currentOozieAdmins.indexOf(falconUser) >= 0) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}","Falcon user already member of Oozie admins","");
+  }
+  String newOozieAdminUsers=currentOozieAdmins + "," + falconUser;
+  oozieProperties.put(OOZIE_ADMIN_USERS_PROP,newOozieAdminUsers);
+  oozieConfig.setProperties(oozieProperties);
+  oozieConfig.persist(false);
+  return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("Set oozie admin users to %s",newOozieAdminUsers),"");
+}

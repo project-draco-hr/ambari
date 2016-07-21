@@ -1,0 +1,28 @@
+{
+  Map<String,String> commandParams=new HashMap<String,String>();
+  commandParams.put("clusterName","c1");
+  ExecutionCommand executionCommand=new ExecutionCommand();
+  executionCommand.setCommandParams(commandParams);
+  executionCommand.setClusterName("c1");
+  HostRoleCommand hrc=EasyMock.createMock(HostRoleCommand.class);
+  expect(hrc.getRequestId()).andReturn(1L).anyTimes();
+  expect(hrc.getStageId()).andReturn(2L).anyTimes();
+  expect(hrc.getExecutionCommandWrapper()).andReturn(new ExecutionCommandWrapper(executionCommand)).anyTimes();
+  replay(cluster,hrc);
+  FixOozieAdminUsers action=new FixOozieAdminUsers();
+  clustersField.set(action,clusters);
+  action.setExecutionCommand(executionCommand);
+  action.setHostRoleCommand(hrc);
+  CommandReport report=action.execute(null);
+  assertNotNull(report);
+  Cluster c=clusters.getCluster("c1");
+  Config oozieConfig=c.getDesiredConfigByType("oozie-env");
+  Config falconConfig=c.getDesiredConfigByType("falcon-env");
+  Map<String,String> oozieConfigMap=oozieConfig.getProperties();
+  Map<String,String> falconConfigMap=falconConfig.getProperties();
+  assertTrue(oozieConfigMap.containsKey("oozie_admin_users"));
+  assertTrue(falconConfigMap.containsKey("falcon_user"));
+  String oozieAdminUsers=oozieConfigMap.get("oozie_admin_users");
+  String falconUser=falconConfigMap.get("falcon_user");
+  assertTrue(oozieAdminUsers.indexOf(falconUser) != -1);
+}
