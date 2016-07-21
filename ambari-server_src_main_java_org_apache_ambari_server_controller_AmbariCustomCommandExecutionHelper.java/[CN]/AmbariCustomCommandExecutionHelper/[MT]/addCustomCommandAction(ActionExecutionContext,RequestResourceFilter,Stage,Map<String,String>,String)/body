@@ -43,38 +43,39 @@
     stage.addHostRoleExecutionCommand(hostName,Role.valueOf(componentName),RoleCommand.CUSTOM_COMMAND,new ServiceComponentHostOpInProgressEvent(componentName,hostName,nowTimestamp),cluster.getClusterName(),serviceName,retryAllowed,autoSkipFailure);
     Map<String,Map<String,String>> configurations=new TreeMap<String,Map<String,String>>();
     Map<String,Map<String,Map<String,String>>> configurationAttributes=new TreeMap<String,Map<String,Map<String,String>>>();
-    Map<String,Map<String,String>> configTags=managementController.findConfigurationTagsWithOverrides(cluster,hostName);
+    Map<String,Map<String,String>> configTags=new TreeMap<String,Map<String,String>>();
+    ExecutionCommand execCmd=stage.getExecutionCommandWrapper(hostName,componentName).getExecutionCommand();
+    if (actionExecutionContext.getParameters() != null && actionExecutionContext.getParameters().containsKey(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION)) {
+      execCmd.setForceRefreshConfigTagsBeforeExecution(true);
+    }
+    if (!execCmd.getForceRefreshConfigTagsBeforeExecution()) {
+      configTags=managementController.findConfigurationTagsWithOverrides(cluster,hostName);
+    }
     HostRoleCommand cmd=stage.getHostRoleCommand(hostName,componentName);
     if (cmd != null) {
       cmd.setCommandDetail(commandDetail);
       cmd.setCustomCommandName(commandName);
     }
-    ExecutionCommand execCmd=stage.getExecutionCommandWrapper(hostName,componentName).getExecutionCommand();
     if (customCommandDefinition != null && customCommandDefinition.isBackground()) {
       execCmd.setCommandType(AgentCommandType.BACKGROUND_EXECUTION_COMMAND);
     }
     execCmd.setConfigurations(configurations);
     execCmd.setConfigurationAttributes(configurationAttributes);
     execCmd.setConfigurationTags(configTags);
-    if (actionExecutionContext.getParameters() != null && actionExecutionContext.getParameters().containsKey(KeyNames.REFRESH_ADITIONAL_COMPONENT_TAGS)) {
-      execCmd.setForceRefreshConfigTags(parseAndValidateComponentsMapping(actionExecutionContext.getParameters().get(KeyNames.REFRESH_ADITIONAL_COMPONENT_TAGS)));
-    }
-    if (actionExecutionContext.getParameters() != null && actionExecutionContext.getParameters().containsKey(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION)) {
-      execCmd.setForceRefreshConfigTagsBeforeExecution(parseAndValidateComponentsMapping(actionExecutionContext.getParameters().get(KeyNames.REFRESH_CONFIG_TAGS_BEFORE_EXECUTION)));
-    }
     execCmd.setAvailableServicesFromServiceInfoMap(ambariMetaInfo.getServices(stackId.getStackName(),stackId.getStackVersion()));
     Map<String,String> hostLevelParams=new TreeMap<String,String>();
     hostLevelParams.put(CUSTOM_COMMAND,commandName);
     hostLevelParams.put(REPO_INFO,getRepoInfo(cluster,host));
     hostLevelParams.put(STACK_NAME,stackId.getStackName());
     hostLevelParams.put(STACK_VERSION,stackId.getStackVersion());
-    Set<String> userSet=configHelper.getPropertyValuesWithPropertyType(stackId,PropertyType.USER,cluster);
+    Map<String,DesiredConfig> desiredConfigs=cluster.getDesiredConfigs();
+    Set<String> userSet=configHelper.getPropertyValuesWithPropertyType(stackId,PropertyType.USER,cluster,desiredConfigs);
     String userList=gson.toJson(userSet);
     hostLevelParams.put(USER_LIST,userList);
-    Set<String> groupSet=configHelper.getPropertyValuesWithPropertyType(stackId,PropertyType.GROUP,cluster);
+    Set<String> groupSet=configHelper.getPropertyValuesWithPropertyType(stackId,PropertyType.GROUP,cluster,desiredConfigs);
     String groupList=gson.toJson(groupSet);
     hostLevelParams.put(GROUP_LIST,groupList);
-    Set<String> notManagedHdfsPathSet=configHelper.getPropertyValuesWithPropertyType(stackId,PropertyType.NOT_MANAGED_HDFS_PATH,cluster);
+    Set<String> notManagedHdfsPathSet=configHelper.getPropertyValuesWithPropertyType(stackId,PropertyType.NOT_MANAGED_HDFS_PATH,cluster,desiredConfigs);
     String notManagedHdfsPathList=gson.toJson(notManagedHdfsPathSet);
     hostLevelParams.put(NOT_MANAGED_HDFS_PATH_LIST,notManagedHdfsPathList);
     execCmd.setHostLevelParams(hostLevelParams);
