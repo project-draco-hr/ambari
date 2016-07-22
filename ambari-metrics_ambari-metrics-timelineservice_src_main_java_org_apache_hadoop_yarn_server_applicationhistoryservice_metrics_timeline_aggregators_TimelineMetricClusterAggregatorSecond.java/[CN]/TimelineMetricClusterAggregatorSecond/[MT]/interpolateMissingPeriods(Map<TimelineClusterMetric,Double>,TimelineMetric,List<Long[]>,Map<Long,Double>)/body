@@ -21,6 +21,13 @@
     }
   }
  else {
+    Double defaultNextSeenValue=null;
+    if (MapUtils.isEmpty(timeSliceValueMap) && MapUtils.isNotEmpty(timelineMetric.getMetricValues())) {
+      LOG.debug("No value found within range for metric : " + timelineMetric.getMetricName());
+      Map.Entry<Long,Double> firstEntry=timelineMetric.getMetricValues().firstEntry();
+      defaultNextSeenValue=firstEntry.getValue();
+      LOG.debug("Found a data point outside timeslice range: " + new Date(firstEntry.getKey()) + ": "+ defaultNextSeenValue);
+    }
     for (int sliceNum=0; sliceNum < timeSlices.size(); sliceNum++) {
       Long[] timeSlice=timeSlices.get(sliceNum);
       if (!timeSliceValueMap.containsKey(timeSlice[1])) {
@@ -38,6 +45,9 @@
         while (nextSeenValue == null && index < timeSlices.size()) {
           nextTimeSlice=timeSlices.get(index++);
           nextSeenValue=timeSliceValueMap.get(nextTimeSlice[1]);
+        }
+        if (nextSeenValue == null) {
+          nextSeenValue=defaultNextSeenValue;
         }
         Double interpolatedValue=PostProcessingUtil.interpolate(timeSlice[1],(prevTimeSlice != null ? prevTimeSlice[1] : null),lastSeenValue,(nextTimeSlice != null ? nextTimeSlice[1] : null),nextSeenValue);
         if (interpolatedValue != null) {
