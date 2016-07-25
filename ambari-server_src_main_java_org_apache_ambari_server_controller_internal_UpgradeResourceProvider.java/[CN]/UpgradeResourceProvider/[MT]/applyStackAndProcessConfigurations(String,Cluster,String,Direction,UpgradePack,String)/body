@@ -81,6 +81,10 @@ Config currentClusterConfig=cluster.getDesiredConfigByType(configurationType);
 if (null == currentClusterConfig) {
 continue;
 }
+Map<String,String> configurationTypeDefaultConfigurations=oldStackDefaultConfigurationsByType.get(configurationType);
+if (null == configurationTypeDefaultConfigurations) {
+configurationTypeDefaultConfigurations=Collections.emptyMap();
+}
 Map<String,String> existingConfigurations=currentClusterConfig.getProperties();
 Map<String,String> newDefaultConfigurations=newConfigurationsByType.get(configurationType);
 if (null == newDefaultConfigurations) {
@@ -102,17 +106,23 @@ String existingConfigurationValue=existingConfigurationEntry.getValue();
 if (newDefaultConfigurations.containsKey(existingConfigurationKey)) {
   String newDefaultConfigurationValue=newDefaultConfigurations.get(existingConfigurationKey);
   if (!StringUtils.equals(existingConfigurationValue,newDefaultConfigurationValue)) {
-    Map<String,String> configurationTypeDefaultConfigurations=oldStackDefaultConfigurationsByType.get(configurationType);
-    if (null != configurationTypeDefaultConfigurations) {
-      String oldDefaultValue=configurationTypeDefaultConfigurations.get(existingConfigurationKey);
-      if (!StringUtils.equals(existingConfigurationValue,oldDefaultValue)) {
-        newDefaultConfigurations.put(existingConfigurationKey,existingConfigurationValue);
-      }
+    String oldDefaultValue=configurationTypeDefaultConfigurations.get(existingConfigurationKey);
+    if (!StringUtils.equals(existingConfigurationValue,oldDefaultValue)) {
+      newDefaultConfigurations.put(existingConfigurationKey,existingConfigurationValue);
     }
   }
 }
  else {
   newDefaultConfigurations.put(existingConfigurationKey,existingConfigurationValue);
+}
+}
+Iterator<Map.Entry<String,String>> newDefaultConfigurationsIterator=newDefaultConfigurations.entrySet().iterator();
+while (newDefaultConfigurationsIterator.hasNext()) {
+Map.Entry<String,String> newConfigurationEntry=newDefaultConfigurationsIterator.next();
+String newConfigurationPropertyName=newConfigurationEntry.getKey();
+if (configurationTypeDefaultConfigurations.containsKey(newConfigurationPropertyName) && !existingConfigurations.containsKey(newConfigurationPropertyName)) {
+  LOG.info("The property {}/{} exists in both {} and {} but is not part of the current set of configurations and will therefore not be included in the configuration merge",configurationType,newConfigurationPropertyName,currentStackId,targetStackId);
+  newDefaultConfigurationsIterator.remove();
 }
 }
 }
