@@ -21,6 +21,21 @@
     }
   }
   Map<String,String> requestProperties=request.getProperties();
+  Map<String,Map<String,String>> requestPropertiesAttributes=request.getPropertiesAttributes();
+  if (requestPropertiesAttributes != null && requestPropertiesAttributes.containsKey(PASSWORD)) {
+    for (    Map.Entry<String,String> requestEntry : requestPropertiesAttributes.get(PASSWORD).entrySet()) {
+      String passwordProperty=requestEntry.getKey();
+      if (requestProperties.containsKey(passwordProperty) && requestEntry.getValue().equals("true")) {
+        String passwordPropertyValue=requestProperties.get(passwordProperty);
+        if (!SecretReference.isSecret(passwordPropertyValue)) {
+          continue;
+        }
+        SecretReference ref=new SecretReference(passwordPropertyValue,cluster);
+        String refValue=ref.getValue();
+        requestProperties.put(passwordProperty,refValue);
+      }
+    }
+  }
   Map<PropertyInfo.PropertyType,Set<String>> propertiesTypes=cluster.getConfigPropertiesTypes(request.getType());
   if (propertiesTypes.containsKey(PropertyType.PASSWORD)) {
     for (    String passwordProperty : propertiesTypes.get(PropertyType.PASSWORD)) {
@@ -39,7 +54,6 @@
   if (null == configs) {
     configs=new HashMap<String,Config>();
   }
-  Map<String,Map<String,String>> requestPropertiesAttributes=request.getPropertiesAttributes();
   Map<String,Map<String,String>> propertiesAttributes=new HashMap<String,Map<String,String>>();
   StackId currentStackId=cluster.getCurrentStackVersion();
   StackInfo currentStackInfo=ambariMetaInfo.getStack(currentStackId.getStackName(),currentStackId.getStackVersion());
