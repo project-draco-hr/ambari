@@ -1,0 +1,56 @@
+{
+  String CLUSTER_NAME="cl1";
+  String RANGER_ADMIN_PROCESS="ranger_admin_process";
+  String pathname="src/test/resources/stacks/HDP/2.5.0/services/RANGER/alerts.json";
+  Cluster cluster=Mockito.mock(Cluster.class);
+  Mockito.when(m_clusters.getCluster(Mockito.anyString())).thenReturn(cluster);
+  Mockito.when(cluster.getClusterId()).thenReturn(1L);
+  Map<String,String> commandParams=new HashMap<String,String>();
+  commandParams.put("clusterName",CLUSTER_NAME);
+  ExecutionCommand m_executionCommand=new ExecutionCommand();
+  m_executionCommand.setCommandParams(commandParams);
+  m_executionCommand.setClusterName(CLUSTER_NAME);
+  HostRoleCommand hrc=EasyMock.createMock(HostRoleCommand.class);
+  expect(hrc.getRequestId()).andReturn(1L).anyTimes();
+  expect(hrc.getStageId()).andReturn(2L).anyTimes();
+  expect(hrc.getExecutionCommandWrapper()).andReturn(new ExecutionCommandWrapper(m_executionCommand)).anyTimes();
+  replay(hrc);
+  Mockito.when(alertDefinitionDAO.findByName(1L,RANGER_ADMIN_PROCESS)).thenReturn(alertDefinitionEntity);
+  try {
+    File alertsFile=new File(pathname);
+    Assert.assertTrue(alertsFile.exists());
+    StringBuilder rangerAlertsConfigFile=new StringBuilder((int)alertsFile.length());
+    Scanner scanner=new Scanner(alertsFile);
+    String lineSeparator=System.getProperty("line.separator");
+    try {
+      while (scanner.hasNextLine()) {
+        rangerAlertsConfigFile.append(scanner.nextLine() + lineSeparator);
+      }
+      Mockito.when(alertDefinitionEntity.getSource()).thenReturn(rangerAlertsConfigFile.toString());
+    }
+  finally {
+      scanner.close();
+    }
+  }
+ catch (  Exception e) {
+    e.printStackTrace();
+  }
+  rangerWebAlertConfigAction.alertDefinitionDAO=alertDefinitionDAO;
+  rangerWebAlertConfigAction.m_clusters=m_clusters;
+  rangerWebAlertConfigAction.alertDefinitionHash=alertDefinitionHash;
+  rangerWebAlertConfigAction.eventPublisher=eventPublisher;
+  rangerWebAlertConfigAction.setExecutionCommand(m_executionCommand);
+  rangerWebAlertConfigAction.setHostRoleCommand(hrc);
+  ConcurrentMap<String,Object> requestSharedDataContext=new ConcurrentHashMap<String,Object>();
+  CommandReport commandReport=null;
+  try {
+    commandReport=rangerWebAlertConfigAction.execute(requestSharedDataContext);
+  }
+ catch (  Exception e) {
+    e.printStackTrace();
+  }
+  Assert.assertNotNull(commandReport);
+  Assert.assertEquals(0,commandReport.getExitCode());
+  Assert.assertEquals(HostRoleStatus.COMPLETED.toString(),commandReport.getStatus());
+  Assert.assertEquals("Ranger service alert check configuration has been updated successfully.",commandReport.getStdOut());
+}
