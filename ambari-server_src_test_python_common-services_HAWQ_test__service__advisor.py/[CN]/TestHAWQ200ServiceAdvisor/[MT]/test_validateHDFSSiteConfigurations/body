@@ -1,0 +1,39 @@
+def test_validateHDFSSiteConfigurations(self):
+    services = {'services': [{'StackServices': {'service_name': 'HAWQ', }, 'components': [{'StackServiceComponents': {'component_name': 'HAWQSEGMENT', 'hostnames': [], }, }], }], 'configurations': {'hdfs-site': {}, 'core-site': {}, }, }
+    configurations = services['configurations']
+    configurations['cluster-env'] = {'properties': {'security_enabled': 'false', }, }
+    defaults = {}
+    hosts = {}
+    desired_values = self.getDesiredHDFSSiteValues(False)
+    configurations['hdfs-site']['properties'] = desired_values.copy()
+    problems = self.serviceAdvisor.validateHDFSSiteConfigurations(configurations['hdfs-site']['properties'], defaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 0)
+    configurations['hdfs-site']['properties'] = {}
+    problems = self.serviceAdvisor.validateHDFSSiteConfigurations(configurations['hdfs-site']['properties'], defaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 10)
+    for property in desired_values.keys():
+        configurations['hdfs-site']['properties'] = desired_values.copy()
+        configurations['hdfs-site']['properties'].pop(property)
+        expected = {'config-type': 'hdfs-site', 'message': ('HAWQ requires this property to be set to the recommended value of ' + desired_values[property]), 'type': 'configuration', 'config-name': property, 'level': ('ERROR' if (property == 'dfs.allow.truncate') else 'WARN'), }
+        problems = self.serviceAdvisor.validateHDFSSiteConfigurations(configurations['hdfs-site']['properties'], defaults, configurations, services, hosts)
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(problems[0], expected)
+        configurations['hdfs-site']['properties'][property] = 'foo'
+        problems = self.serviceAdvisor.validateHDFSSiteConfigurations(configurations['hdfs-site']['properties'], defaults, configurations, services, hosts)
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(problems[0], expected)
+    configurations['core-site']['properties'] = {'ipc.server.listen.queue.size': '3300', }
+    problems = self.serviceAdvisor.validateCORESiteConfigurations(configurations['core-site']['properties'], defaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 0)
+    configurations['core-site']['properties'] = {}
+    problems = self.serviceAdvisor.validateCORESiteConfigurations(configurations['core-site']['properties'], defaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 1)
+    expected = {'config-type': 'core-site', 'message': 'HAWQ requires this property to be set to the recommended value of 3300', 'type': 'configuration', 'config-name': 'ipc.server.listen.queue.size', 'level': 'WARN', }
+    configurations['core-site']['properties'] = {'ipc.server.listen.queue.size': '0', }
+    problems = self.serviceAdvisor.validateCORESiteConfigurations(configurations['core-site']['properties'], defaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 1)
+    self.assertEqual(problems[0], expected)
+    configurations['core-site']['properties'].pop('ipc.server.listen.queue.size')
+    problems = self.serviceAdvisor.validateCORESiteConfigurations(configurations['core-site']['properties'], defaults, configurations, services, hosts)
+    self.assertEqual(len(problems), 1)
+    self.assertEqual(problems[0], expected)
