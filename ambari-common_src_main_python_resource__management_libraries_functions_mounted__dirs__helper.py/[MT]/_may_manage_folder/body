@@ -1,0 +1,27 @@
+def _may_manage_folder(dir_, last_mount_point_for_dir, is_non_root_dir, dirs_unmounted, error_messages, manage_dirs_on_root, curr_mount_point):
+    may_manage_this_dir = True
+    if (last_mount_point_for_dir is None):
+        if is_non_root_dir:
+            may_manage_this_dir = True
+        elif manage_dirs_on_root:
+            may_manage_this_dir = True
+        else:
+            Logger.warning("Will not manage the directory {0} since it's on root mount and cluster-env/manage_dirs_on_root == {1}".format(dir_, str(manage_dirs_on_root)))
+            may_manage_this_dir = False
+            dirs_unmounted.add(dir_)
+    else:
+        Logger.debug('Last mount for {0} in the history file is {1}'.format(dir_, str(last_mount_point_for_dir)))
+        if (last_mount_point_for_dir == curr_mount_point):
+            if (is_non_root_dir or manage_dirs_on_root):
+                Logger.debug("Will manage {0} since it's on the same mount point: {1}".format(dir_, str(last_mount_point_for_dir)))
+                may_manage_this_dir = True
+            else:
+                Logger.warning("Will not manage {0} since it's on the root mount point and cluster-env/manage_dirs_on_root == {1}".format(dir_, str(manage_dirs_on_root)))
+                may_manage_this_dir = False
+        else:
+            may_manage_this_dir = False
+            dirs_unmounted.add(dir_)
+            msg = 'Directory {0} became unmounted from {1} . Current mount point: {2} .'.format(dir_, last_mount_point_for_dir, curr_mount_point)
+            error_messages.append(msg)
+            Logger.warning(msg)
+    return may_manage_this_dir
