@@ -1,0 +1,13 @@
+def apply_atlas_acl(self, hbase_user):
+    import params
+    if (params.security_enabled and params.has_atlas and params.atlas_with_managed_hbase):
+        current_host = params.hostname.lower()
+        sorted_rs_hosts = sorted([host.lower() for host in params.rs_hosts])
+        if (len(sorted_rs_hosts) == 0):
+            can_apply_permissions = True
+        else:
+            can_apply_permissions = (current_host == sorted_rs_hosts[0])
+        if can_apply_permissions:
+            kinit_cmd = format('{kinit_path_local} -kt {regionserver_keytab_path} {regionserver_jaas_princ}')
+            permissions_cmd = format('echo "grant \'{metadata_user}\', \'RWXCA\'" | hbase shell -n')
+            shell.checked_call(format('{kinit_cmd}; {permissions_cmd}'), tries=10, try_sleep=10)
