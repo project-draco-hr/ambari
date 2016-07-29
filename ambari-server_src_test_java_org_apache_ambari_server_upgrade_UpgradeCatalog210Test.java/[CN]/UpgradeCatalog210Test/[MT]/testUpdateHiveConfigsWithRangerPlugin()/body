@@ -1,0 +1,90 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final ConfigHelper mockConfigHelper=easyMockSupport.createMock(ConfigHelper.class);
+  final AmbariManagementController mockAmbariManagementController=easyMockSupport.createNiceMock(AmbariManagementController.class);
+  final Clusters mockClusters=easyMockSupport.createStrictMock(Clusters.class);
+  final Cluster mockClusterExpected=easyMockSupport.createNiceMock(Cluster.class);
+  final Config mockHiveEnv=easyMockSupport.createNiceMock(Config.class);
+  final Config mockHiveSite=easyMockSupport.createNiceMock(Config.class);
+  final Config mockHiveServerSite=easyMockSupport.createNiceMock(Config.class);
+  final Config mockHivePluginProperies=easyMockSupport.createNiceMock(Config.class);
+  final Map<String,String> propertiesExpectedHiveEnv=new HashMap<String,String>(){
+{
+      put("hive_security_authorization","none");
+    }
+  }
+;
+  final Map<String,String> propertiesExpectedHiveSite=new HashMap<String,String>(){
+{
+    }
+  }
+;
+  final Map<String,String> propertiesExpectedPluginProperies=new HashMap<String,String>(){
+{
+      put("ranger-hive-plugin-enabled","yes");
+    }
+  }
+;
+  final Map<String,String> propertiesExpectedHiveServerSite=new HashMap<String,String>(){
+{
+      put("hive.security.authorization.manager","test");
+      put("hive.security.authenticator.manager","test");
+    }
+  }
+;
+  final Map<String,Service> servicesExpected=new HashMap<String,Service>(){
+{
+      put("RANGER",null);
+    }
+  }
+;
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(AmbariManagementController.class).toInstance(mockAmbariManagementController);
+      bind(ConfigHelper.class).toInstance(mockConfigHelper);
+      bind(Clusters.class).toInstance(mockClusters);
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+    }
+  }
+);
+  final UpgradeCatalog210 upgradeCatalog210=mockInjector.getInstance(UpgradeCatalog210.class);
+  expect(mockAmbariManagementController.getClusters()).andReturn(mockClusters).once();
+  expect(mockClusters.getClusters()).andReturn(new HashMap<String,Cluster>(){
+{
+      put("normal",mockClusterExpected);
+    }
+  }
+).once();
+  Capture<Map<String,String>> configCreation=Capture.newInstance(CaptureType.ALL);
+  expect(mockClusterExpected.getDesiredConfigByType("hive-env")).andReturn(mockHiveEnv).atLeastOnce();
+  expect(mockClusterExpected.getDesiredConfigByType("hiveserver2-site")).andReturn(mockHiveServerSite).atLeastOnce();
+  expect(mockHiveEnv.getProperties()).andReturn(propertiesExpectedHiveEnv).anyTimes();
+  expect(mockHiveServerSite.getProperties()).andReturn(propertiesExpectedHiveServerSite).anyTimes();
+  expect(mockClusterExpected.getDesiredConfigByType("ranger-hive-plugin-properties")).andReturn(mockHivePluginProperies).once();
+  expect(mockClusterExpected.getDesiredConfigByType("hive-site")).andReturn(mockHiveSite).atLeastOnce();
+  expect(mockHiveSite.getProperties()).andReturn(propertiesExpectedHiveSite).anyTimes();
+  expect(mockHivePluginProperies.getProperties()).andReturn(propertiesExpectedPluginProperies).anyTimes();
+  expect(mockClusterExpected.getServices()).andReturn(servicesExpected).atLeastOnce();
+  expect(mockAmbariManagementController.createConfig((Cluster)anyObject(),anyString(),capture(configCreation),anyString(),(Map<String,Map<String,String>>)anyObject())).andReturn(null).atLeastOnce();
+  easyMockSupport.replayAll();
+  upgradeCatalog210.updateHiveConfigs();
+  easyMockSupport.verifyAll();
+  Assert.assertEquals(1,configCreation.getValues().size());
+  boolean result=false;
+  for (  Map<String,String> cfg : configCreation.getValues()) {
+    if (cfg.containsKey("hive.security.authorization.manager")) {
+      result=true;
+      break;
+    }
+  }
+  Assert.assertFalse(result);
+  result=false;
+  for (  Map<String,String> cfg : configCreation.getValues()) {
+    if (cfg.containsKey("hive.security.authenticator.manager")) {
+      result=true;
+      break;
+    }
+  }
+  Assert.assertFalse(result);
+}
