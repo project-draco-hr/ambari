@@ -1,0 +1,37 @@
+{
+  Pattern regex=Pattern.compile("^\\s*export\\s(?<property>HIVE_HOME|HIVE_CONF_DIR)\\s*=\\s*(?<value>.*)$",Pattern.MULTILINE);
+  Map<String,String> commandParams=new HashMap<String,String>();
+  commandParams.put("clusterName","c1");
+  ExecutionCommand executionCommand=new ExecutionCommand();
+  executionCommand.setCommandParams(commandParams);
+  executionCommand.setClusterName("c1");
+  HostRoleCommand hrc=EasyMock.createMock(HostRoleCommand.class);
+  expect(hrc.getRequestId()).andReturn(1L).anyTimes();
+  expect(hrc.getStageId()).andReturn(2L).anyTimes();
+  expect(hrc.getExecutionCommandWrapper()).andReturn(new ExecutionCommandWrapper(executionCommand)).anyTimes();
+  replay(hrc);
+  HiveEnvClasspathAction action=new HiveEnvClasspathAction();
+  m_clusterField.set(action,m_clusters);
+  action.setExecutionCommand(executionCommand);
+  action.setHostRoleCommand(hrc);
+  CommandReport report=action.execute(null);
+  assertNotNull(report);
+  Cluster c=m_clusters.getCluster("c1");
+  Config config=c.getDesiredConfigByType("hive-env");
+  Map<String,String> map=config.getProperties();
+  Assert.assertTrue(map.containsKey("content"));
+  String content=map.get("content");
+  Matcher m=regex.matcher(content);
+  int matches_found=0;
+  while (m.find()) {
+    if (m.group("property").equals("HIVE_HOME")) {
+      matches_found++;
+      assertEquals("${HIVE_HOME:-{{hive_home_dir}}}",m.group("value"));
+    }
+ else     if (m.group("property").equals("HIVE_CONF_DIR")) {
+      matches_found++;
+      assertEquals("test",m.group("value"));
+    }
+  }
+  Assert.assertEquals(2,matches_found);
+}

@@ -1,0 +1,40 @@
+{
+  String clusterName=getExecutionCommand().getClusterName();
+  Cluster cluster=clusters.getCluster(clusterName);
+  Config config=cluster.getDesiredConfigByType(TARGET_CONFIG_TYPE);
+  if (config == null) {
+    return createCommandReport(0,HostRoleStatus.FAILED,"{}",String.format("Source type %s not found",TARGET_CONFIG_TYPE),"");
+  }
+  Pattern regex=Pattern.compile(String.format(VERIFY_REGEXP,HIVE_HOME,HIVE_CONF_DIR),Pattern.MULTILINE);
+  Map<String,String> properties=config.getProperties();
+  String oldContent=properties.get(CONTENT_PROPERTY_NAME);
+  Matcher regexMatcher=regex.matcher(oldContent);
+  boolean isHiveHomeFound=false;
+  boolean isHiveConfFound=false;
+  while (regexMatcher.find()) {
+    String propertyName=regexMatcher.group("property");
+    if (propertyName.equalsIgnoreCase(HIVE_CONF_DIR)) {
+      isHiveConfFound=true;
+    }
+ else     if (propertyName.equalsIgnoreCase(HIVE_HOME)) {
+      isHiveHomeFound=true;
+    }
+  }
+  StringBuilder stringBuilder=new StringBuilder(oldContent);
+  if (!isHiveConfFound) {
+    stringBuilder.append("\n").append(HIVE_CONF_DIR_APPEND);
+  }
+  if (!isHiveHomeFound) {
+    stringBuilder.append("\n").append(HIVE_HOME_APPEND);
+  }
+  String newContent=stringBuilder.toString();
+  if (newContent.equals(oldContent)) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("%s/%s option has been already added to hive-env",HIVE_HOME,HIVE_CONF_DIR),"");
+  }
+ else {
+    properties.put(CONTENT_PROPERTY_NAME,newContent);
+  }
+  config.setProperties(properties);
+  config.persist(false);
+  return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("Added %s, %s to content at %s",HIVE_CONF_DIR,HIVE_HOME,TARGET_CONFIG_TYPE),"");
+}
