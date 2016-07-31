@@ -1,0 +1,20 @@
+{
+  unitOfWork.begin();
+  try {
+    threadEntityManager=entityManagerProvider.get();
+    Cluster cluster=clusters.getCluster(clusterId);
+    Map<String,Map<String,String>> effectiveDesiredTags=configHelper.getEffectiveDesiredTags(cluster,hostName);
+    assertEquals("version-2",effectiveDesiredTags.get("foo-type").get("tag"));
+    threadInitialCachingSemaphore.release();
+    applyLatestConfigsSemaphore.acquire();
+    effectiveDesiredTags=configHelper.getEffectiveDesiredTags(cluster,hostName);
+    assertEquals("version-1",effectiveDesiredTags.get("foo-type").get("tag"));
+  }
+ catch (  Throwable throwable) {
+    this.throwable=throwable;
+  }
+ finally {
+    applyLatestConfigsSemaphore.release();
+    unitOfWork.end();
+  }
+}
