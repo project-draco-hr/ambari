@@ -40,6 +40,16 @@ def falcon(type, action=None, upgrade_type=None):
         pid = get_user_call_output.get_user_call_output(format('cat {server_pid_file}'), user=params.falcon_user, is_checked_call=False)[1]
         process_exists = format('ls {server_pid_file} && ps -p {pid}')
         if (action == 'start'):
+            if (not os.path.exists(params.target_jar_file)):
+                try:
+                    File(params.target_jar_file, content=DownloadSource(params.bdb_resource_name))
+                except:
+                    exc_msg = traceback.format_exc()
+                    exception_message = format('Caught Exception while downloading {bdb_resource_name}:\n{exc_msg}')
+                    Logger.error(exception_message)
+                if (not os.path.isfile(params.target_jar_file)):
+                    error_message = '\nIf you are using bdb as the Falcon graph db store, please run\nambari-server setup --jdbc-db=bdb --jdbc-driver=<path to je5.0.73.jar\non the ambari server host.  Otherwise falcon startup will fail.\nOtherwise please configure Falcon to use HBase as the backend as described\nin the Falcon documentation.\n'
+                    Logger.error(error_message)
             try:
                 Execute(format('{falcon_home}/bin/falcon-start -port {falcon_port}'), user=params.falcon_user, path=params.hadoop_bin_dir, environment=environment_dictionary, not_if=process_exists)
             except:
