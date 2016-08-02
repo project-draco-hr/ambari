@@ -7,11 +7,20 @@
     return false;
   }
   Cluster cluster=clusters.getClusterById(sch.getClusterId());
-  StackId stackId=cluster.getDesiredStackVersion();
   Map<String,Map<String,String>> desired=getEffectiveDesiredTags(cluster,sch.getHostName(),desiredConfigs);
+  Boolean stale=null;
+  int staleHash=0;
+  if (STALE_CONFIGS_CACHE_ENABLED) {
+    staleHash=Objects.hashCode(actual.hashCode(),desired.hashCode(),sch.getHostName(),sch.getServiceComponentName(),sch.getServiceName());
+    stale=staleConfigsCache.getIfPresent(staleHash);
+    if (stale != null) {
+      return stale;
+    }
+  }
+  stale=false;
+  StackId stackId=cluster.getDesiredStackVersion();
   ServiceInfo serviceInfo=ambariMetaInfo.getService(stackId.getStackName(),stackId.getStackVersion(),sch.getServiceName());
   ComponentInfo componentInfo=serviceInfo.getComponentByName(sch.getServiceComponentName());
-  boolean stale=false;
   Iterator<Entry<String,Map<String,String>>> it=desired.entrySet().iterator();
   while (it.hasNext() && !stale) {
     Entry<String,Map<String,String>> desiredEntry=it.next();
@@ -47,6 +56,9 @@
         stale=serviceInfo.hasConfigDependency(type) || componentInfo.hasConfigType(type);
       }
     }
+  }
+  if (STALE_CONFIGS_CACHE_ENABLED) {
+    staleConfigsCache.put(staleHash,stale);
   }
   return stale;
 }
