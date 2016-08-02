@@ -1,36 +1,54 @@
 {
-  HttpMethodBase methodBase=null;
-  String httpMethod;
-  httpMethod=getHttpMethod();
-  if (httpMethod.equals("GET")) {
-    methodBase=getGetMethod();
-  }
- else   if (httpMethod.equals("POST")) {
-    methodBase=getPostMethod();
-  }
- else   if (httpMethod.equals("PUT")) {
-    methodBase=getPutMethod();
-  }
- else   if (httpMethod.equals("DELETE")) {
-    methodBase=getDeleteMethod();
-  }
- else {
-    new RuntimeException(String.format("Unsupported HTTP method: %s",httpMethod));
-  }
-  WebResponse response=new WebResponse();
-  HttpClient httpClient=new HttpClient();
-  Map<String,String> headers=getHeaders();
-  for (  Map.Entry<String,String> header : headers.entrySet()) {
-    methodBase.addRequestHeader(header.getKey(),header.getValue());
-  }
-  methodBase.setQueryString(getQueryString());
+  final WebResponse response=new WebResponse();
+  CloseableHttpClient httpClient=HttpClients.createDefault();
   try {
-    int statusCode=httpClient.executeMethod(methodBase);
-    response.setStatusCode(statusCode);
-    response.setContent(methodBase.getResponseBodyAsString());
+    HttpRequestBase requestBase=null;
+    String httpMethod=getHttpMethod();
+    if (httpMethod.equals("GET")) {
+      requestBase=new HttpGet(getRequestUrl());
+    }
+ else     if (httpMethod.equals("POST")) {
+      HttpPost httpPost=new HttpPost(getRequestUrl());
+      if (StringUtils.isNotEmpty(getContent())) {
+        httpPost.setHeader("Content-Type",getContentType());
+        httpPost.setEntity(new StringEntity(getContent(),getContentEncoding()));
+      }
+      requestBase=httpPost;
+    }
+ else     if (httpMethod.equals("PUT")) {
+      HttpPut httpPut=new HttpPut(getRequestUrl());
+      if (StringUtils.isNotEmpty(getContent())) {
+        httpPut.setHeader("Content-Type",getContentType());
+        httpPut.setEntity(new StringEntity(getContent(),getContentEncoding()));
+      }
+      requestBase=httpPut;
+    }
+ else     if (httpMethod.equals("DELETE")) {
+      requestBase=new HttpDelete(getRequestUrl());
+    }
+ else {
+      new RuntimeException(String.format("Unsupported HTTP method: %s",httpMethod));
+    }
+    Map<String,String> headers=getHeaders();
+    for (    Map.Entry<String,String> header : headers.entrySet()) {
+      requestBase.addHeader(header.getKey(),header.getValue());
+    }
+    RequestLine requestLine=requestBase.getRequestLine();
+    LOG.debug(requestLine);
+    ResponseHandler<String> responseHandler=new ResponseHandler<String>(){
+      @Override public String handleResponse(      final HttpResponse httpResponse) throws ClientProtocolException, IOException {
+        int statusCode=httpResponse.getStatusLine().getStatusCode();
+        response.setStatusCode(statusCode);
+        HttpEntity entity=httpResponse.getEntity();
+        return entity != null ? EntityUtils.toString(entity) : null;
+      }
+    }
+;
+    String responseBody=httpClient.execute(requestBase,responseHandler);
+    response.setContent(responseBody);
   }
   finally {
-    methodBase.releaseConnection();
+    httpClient.close();
   }
   return response;
 }
