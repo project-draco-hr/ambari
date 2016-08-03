@@ -11,7 +11,6 @@ def setup_spark(env, type, upgrade_type=None, action=None, config_dir=None):
     File(os.path.join(config_dir, 'spark-env.sh'), owner=params.spark_user, group=params.spark_group, content=InlineTemplate(params.spark_env_sh), mode=420)
     File(os.path.join(config_dir, 'log4j.properties'), owner=params.spark_user, group=params.spark_group, content=params.spark_log4j_properties, mode=420)
     File(os.path.join(config_dir, 'metrics.properties'), owner=params.spark_user, group=params.spark_group, content=InlineTemplate(params.spark_metrics_properties), mode=420)
-    File(os.path.join(params.spark_conf, 'java-opts'), owner=params.spark_user, group=params.spark_group, content=InlineTemplate(params.spark_javaopts_properties), mode=420)
     Directory(params.spark_logs_dir, owner=params.spark_user, group=params.spark_group, mode=493)
     if params.is_hive_installed:
         XmlConfig('hive-site.xml', conf_dir=config_dir, configurations=params.spark_hive_properties, owner=params.spark_user, group=params.spark_group, mode=420)
@@ -20,5 +19,9 @@ def setup_spark(env, type, upgrade_type=None, action=None, config_dir=None):
     effective_version = (params.version if (upgrade_type is not None) else params.stack_version_formatted)
     if effective_version:
         effective_version = format_stack_version(effective_version)
+    if (effective_version and check_stack_feature(StackFeature.SPARK_JAVA_OPTS_SUPPORT, effective_version)):
+        File(os.path.join(params.spark_conf, 'java-opts'), owner=params.spark_user, group=params.spark_group, content=InlineTemplate(params.spark_javaopts_properties), mode=420)
+    else:
+        File(os.path.join(params.spark_conf, 'java-opts'), action='delete')
     if (params.spark_thrift_fairscheduler_content and effective_version and check_stack_feature(StackFeature.SPARK_16PLUS, effective_version)):
         File(os.path.join(config_dir, 'spark-thrift-fairscheduler.xml'), owner=params.spark_user, group=params.spark_group, mode=493, content=InlineTemplate(params.spark_thrift_fairscheduler_content))
