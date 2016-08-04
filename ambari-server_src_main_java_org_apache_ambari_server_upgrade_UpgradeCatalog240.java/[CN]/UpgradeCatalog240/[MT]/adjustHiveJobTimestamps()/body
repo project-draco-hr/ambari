@@ -1,0 +1,26 @@
+{
+  LOG.info("updateSequenceForView called.");
+  EntityManager entityManager=getEntityManagerProvider().get();
+  TypedQuery<ViewEntityEntity> viewEntityQuery=entityManager.createQuery("SELECT vee FROM ViewEntityEntity vee where vee.className = 'org.apache.ambari.view.hive.resources.jobs.viewJobs.JobImpl'",ViewEntityEntity.class);
+  List<ViewEntityEntity> viewEntities=viewEntityQuery.getResultList();
+  LOG.info("Received JobImpl view Entities : {}, length : {}",viewEntities,viewEntities.size());
+  String selectIdsFormat="update %s set ds_datesubmitted = ds_datesubmitted * 1000";
+  for (  ViewEntityEntity viewEntity : viewEntities) {
+    LOG.info("Working with JobImpl viewEntity : {} : {} ",viewEntity,viewEntity.getViewName() + ":" + viewEntity.getViewInstanceName()+ ":"+ viewEntity.getClassName());
+    String tableName=getEntityName(viewEntity);
+    try {
+      entityManager.getTransaction().begin();
+      String updatesQueryString=String.format(selectIdsFormat,tableName).toLowerCase();
+      LOG.info("executing update query string for jobimpl {}",updatesQueryString);
+      Query updateQuery=entityManager.createNativeQuery(updatesQueryString);
+      int rowsChanged=updateQuery.executeUpdate();
+      entityManager.getTransaction().commit();
+      LOG.info("executing update on jobimpl resulted in {} row changes.",rowsChanged);
+    }
+ catch (    Exception e) {
+      entityManager.getTransaction().rollback();
+      LOG.info("Error (can be ignored) {}",e.getMessage());
+      LOG.debug("Exception occured while updating : {}",viewEntity.getViewName() + viewEntity.getViewInstance(),e);
+    }
+  }
+}
