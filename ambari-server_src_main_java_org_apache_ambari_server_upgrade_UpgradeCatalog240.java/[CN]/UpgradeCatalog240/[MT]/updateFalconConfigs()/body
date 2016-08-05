@@ -11,5 +11,18 @@
         removeConfigurationPropertiesFromCluster(cluster,"falcon-env",Collections.singleton("falcon_store_uri"));
       }
     }
+    Config falconStartupConfig=cluster.getDesiredConfigByType("falcon-startup.properties");
+    if (falconStartupConfig != null) {
+      final String applicationServicesPropertyName="*.application.services";
+      String value=falconStartupConfig.getProperties().get(applicationServicesPropertyName);
+      if (value != null) {
+        final String atlasApplicationClassAddition="{{atlas_application_class_addition}}";
+        if (!(value.contains(atlasApplicationClassAddition) || value.contains("org.apache.falcon.atlas.service.AtlasService") || value.contains("org.apache.atlas.falcon.service.AtlasService"))) {
+          LOG.info("Appending '{}' to *.application.services from falcon-startup.properties since it doesn't contain it",atlasApplicationClassAddition);
+          String newValue=value.trim().concat(atlasApplicationClassAddition);
+          updateConfigurationPropertiesForCluster(cluster,"falcon-startup.properties",Collections.singletonMap(applicationServicesPropertyName,newValue),null,true,false);
+        }
+      }
+    }
   }
 }
