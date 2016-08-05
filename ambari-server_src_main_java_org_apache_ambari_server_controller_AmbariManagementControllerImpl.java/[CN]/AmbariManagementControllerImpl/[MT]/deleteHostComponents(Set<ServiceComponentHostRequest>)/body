@@ -1,5 +1,5 @@
 {
-  Set<ServiceComponentHostRequest> expanded=new HashSet<ServiceComponentHostRequest>();
+  Set<ServiceComponentHostRequest> expanded=new HashSet<>();
   for (  ServiceComponentHostRequest request : requests) {
     if (null == request.getComponentName()) {
       if (null == request.getClusterName() || request.getClusterName().isEmpty() || null == request.getHostname() || request.getHostname().isEmpty()) {
@@ -18,7 +18,8 @@
       expanded.add(request);
     }
   }
-  Map<ServiceComponent,Set<ServiceComponentHost>> safeToRemoveSCHs=new HashMap<ServiceComponent,Set<ServiceComponentHost>>();
+  Map<ServiceComponent,Set<ServiceComponentHost>> safeToRemoveSCHs=new HashMap<>();
+  DeleteStatusMetaData deleteStatusMetaData=new DeleteStatusMetaData();
   for (  ServiceComponentHostRequest request : expanded) {
     validateServiceComponentHostRequest(request);
     Cluster cluster=clusters.getCluster(request.getClusterName());
@@ -31,58 +32,43 @@
     Service service=cluster.getService(request.getServiceName());
     ServiceComponent component=service.getServiceComponent(request.getComponentName());
     ServiceComponentHost componentHost=component.getServiceComponentHost(request.getHostname());
-    if (!componentHost.canBeRemoved()) {
-      throw new AmbariException("Host Component cannot be removed" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", componentName="+ request.getComponentName()+ ", hostname="+ request.getHostname()+ ", request="+ request);
-    }
-    if (!component.isClientComponent() && !componentHost.getState().isRemovableState()) {
-      throw new AmbariException("To remove master or slave components they must be in " + "DISABLED/INIT/INSTALLED/INSTALL_FAILED/UNKNOWN state. Current=" + componentHost.getState() + ".");
-    }
     setRestartRequiredServices(service,request.getComponentName());
-    if (!safeToRemoveSCHs.containsKey(component)) {
-      safeToRemoveSCHs.put(component,new HashSet<ServiceComponentHost>());
+    try {
+      checkIfHostComponentsInDeleteFriendlyState(request,cluster);
+      if (!safeToRemoveSCHs.containsKey(component)) {
+        safeToRemoveSCHs.put(component,new HashSet<ServiceComponentHost>());
+      }
+      safeToRemoveSCHs.get(component).add(componentHost);
     }
-    safeToRemoveSCHs.get(component).add(componentHost);
+ catch (    Exception ex) {
+      deleteStatusMetaData.addException(request.getHostname() + "/" + request.getComponentName(),ex);
+    }
   }
   for (  Entry<ServiceComponent,Set<ServiceComponentHost>> entry : safeToRemoveSCHs.entrySet()) {
     for (    ServiceComponentHost componentHost : entry.getValue()) {
-      String included_hostname=componentHost.getHostName();
-      String serviceName=entry.getKey().getServiceName();
-      String master_component_name=null;
-      String slave_component_name=componentHost.getServiceComponentName();
-      HostComponentAdminState desiredAdminState=componentHost.getComponentAdminState();
-      State slaveState=componentHost.getState();
-      entry.getKey().deleteServiceComponentHosts(componentHost.getHostName());
-      if (AmbariCustomCommandExecutionHelper.masterToSlaveMappingForDecom.containsValue(slave_component_name) && desiredAdminState.equals(HostComponentAdminState.DECOMMISSIONED) && slaveState.equals(State.INSTALLED)) {
-        for (        Entry<String,String> entrySet : AmbariCustomCommandExecutionHelper.masterToSlaveMappingForDecom.entrySet()) {
-          if (entrySet.getValue().equals(slave_component_name)) {
-            master_component_name=entrySet.getKey();
-          }
-        }
-        if (!serviceName.equals(Service.Type.HBASE.toString())) {
-          HashMap<String,String> requestProperties=new HashMap<String,String>();
-          requestProperties.put("context","Remove host " + included_hostname + " from exclude file");
-          requestProperties.put("exclusive","true");
-          HashMap<String,String> params=new HashMap<String,String>();
-          params.put("included_hosts",included_hostname);
-          params.put("slave_type",slave_component_name);
-          params.put(AmbariCustomCommandExecutionHelper.UPDATE_EXCLUDE_FILE_ONLY,"true");
-          RequestResourceFilter resourceFilter=new RequestResourceFilter(serviceName,master_component_name,null);
-          ExecuteActionRequest actionRequest=new ExecuteActionRequest(entry.getKey().getClusterName(),AmbariCustomCommandExecutionHelper.DECOMMISSION_COMMAND_NAME,null,Collections.singletonList(resourceFilter),null,params,true);
-          createAction(actionRequest,requestProperties);
-        }
-        Cluster cluster=clusters.getCluster(entry.getKey().getClusterName());
-        Service service=cluster.getService(serviceName);
-        ServiceComponent sc=service.getServiceComponent(master_component_name);
-        if (sc != null && sc.isMasterComponent()) {
-          for (          ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
-            sch.setRestartRequired(true);
-          }
-        }
+      try {
+        deleteHostComponent(entry.getKey(),componentHost);
+        deleteStatusMetaData.addDeletedKey(componentHost.getHostName() + "/" + componentHost.getServiceComponentName());
       }
+ catch (      Exception ex) {
+        deleteStatusMetaData.addException(componentHost.getHostName() + "/" + componentHost.getServiceComponentName(),ex);
+      }
+    }
+  }
+  if (deleteStatusMetaData.getDeletedKeys().size() + deleteStatusMetaData.getExceptionForKeys().size() == 1) {
+    if (deleteStatusMetaData.getDeletedKeys().size() == 1) {
+      return null;
+    }
+    Exception ex=deleteStatusMetaData.getExceptionForKeys().values().iterator().next();
+    if (ex instanceof AmbariException) {
+      throw (AmbariException)ex;
+    }
+ else {
+      throw new AmbariException(ex.getMessage(),ex);
     }
   }
   if (!safeToRemoveSCHs.isEmpty()) {
     setMonitoringServicesRestartRequired(requests);
   }
-  return null;
+  return deleteStatusMetaData;
 }

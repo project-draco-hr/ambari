@@ -1,0 +1,36 @@
+{
+  String included_hostname=componentHost.getHostName();
+  String serviceName=serviceComponent.getServiceName();
+  String master_component_name=null;
+  String slave_component_name=componentHost.getServiceComponentName();
+  HostComponentAdminState desiredAdminState=componentHost.getComponentAdminState();
+  State slaveState=componentHost.getState();
+  serviceComponent.deleteServiceComponentHosts(componentHost.getHostName());
+  if (AmbariCustomCommandExecutionHelper.masterToSlaveMappingForDecom.containsValue(slave_component_name) && desiredAdminState.equals(HostComponentAdminState.DECOMMISSIONED) && slaveState.equals(State.INSTALLED)) {
+    for (    Entry<String,String> entrySet : AmbariCustomCommandExecutionHelper.masterToSlaveMappingForDecom.entrySet()) {
+      if (entrySet.getValue().equals(slave_component_name)) {
+        master_component_name=entrySet.getKey();
+      }
+    }
+    if (!serviceName.equals(Service.Type.HBASE.toString())) {
+      HashMap<String,String> requestProperties=new HashMap<String,String>();
+      requestProperties.put("context","Remove host " + included_hostname + " from exclude file");
+      requestProperties.put("exclusive","true");
+      HashMap<String,String> params=new HashMap<String,String>();
+      params.put("included_hosts",included_hostname);
+      params.put("slave_type",slave_component_name);
+      params.put(AmbariCustomCommandExecutionHelper.UPDATE_EXCLUDE_FILE_ONLY,"true");
+      RequestResourceFilter resourceFilter=new RequestResourceFilter(serviceName,master_component_name,null);
+      ExecuteActionRequest actionRequest=new ExecuteActionRequest(serviceComponent.getClusterName(),AmbariCustomCommandExecutionHelper.DECOMMISSION_COMMAND_NAME,null,Collections.singletonList(resourceFilter),null,params,true);
+      createAction(actionRequest,requestProperties);
+    }
+    Cluster cluster=clusters.getCluster(serviceComponent.getClusterName());
+    Service service=cluster.getService(serviceName);
+    ServiceComponent sc=service.getServiceComponent(master_component_name);
+    if (sc != null && sc.isMasterComponent()) {
+      for (      ServiceComponentHost sch : sc.getServiceComponentHosts().values()) {
+        sch.setRestartRequired(true);
+      }
+    }
+  }
+}
