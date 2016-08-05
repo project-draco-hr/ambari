@@ -6,17 +6,16 @@
   if (null == reason) {
     reason=String.format(DEFAULT_REASON_TEMPLATE,requestId);
   }
-  ActionManager actionManager=getManagementController().getActionManager();
-  List<org.apache.ambari.server.actionmanager.Request> requests=actionManager.getRequests(Collections.singletonList(Long.valueOf(requestId)));
-  org.apache.ambari.server.actionmanager.Request internalRequest=requests.get(0);
-  HostRoleStatus internalStatus=CalculatedStatus.statusFromStages(internalRequest.getStages()).getStatus();
+  Map<Long,HostRoleCommandStatusSummaryDTO> aggregateCounts=s_hostRoleCommandDAO.findAggregateCounts(requestId);
+  CalculatedStatus calculatedStatus=CalculatedStatus.statusFromStageSummary(aggregateCounts,aggregateCounts.keySet());
+  HostRoleStatus internalStatus=calculatedStatus.getStatus();
   if (HostRoleStatus.PENDING == status && !(internalStatus == HostRoleStatus.ABORTED || internalStatus == HostRoleStatus.IN_PROGRESS)) {
     throw new IllegalArgumentException(String.format("Can only set status to %s when the upgrade is %s (currently %s)",status,HostRoleStatus.ABORTED,internalStatus));
   }
-  Long clusterId=internalRequest.getClusterId();
+  ActionManager actionManager=getManagementController().getActionManager();
   if (HostRoleStatus.ABORTED == status) {
     if (!internalStatus.isCompletedState()) {
-      actionManager.cancelRequest(internalRequest.getRequestId(),reason);
+      actionManager.cancelRequest(requestId,reason);
       try {
         Cluster cluster=clusters.get().getClusterById(clusterId);
         UpgradeEntity lastUpgradeItemForCluster=s_upgradeDAO.findLastUpgradeOrDowngradeForCluster(cluster.getClusterId());
@@ -31,10 +30,9 @@
   }
  else {
     List<Long> taskIds=new ArrayList<Long>();
-    for (    HostRoleCommand hrc : internalRequest.getCommands()) {
-      if (HostRoleStatus.ABORTED == hrc.getStatus() || HostRoleStatus.TIMEDOUT == hrc.getStatus()) {
-        taskIds.add(hrc.getTaskId());
-      }
+    List<HostRoleCommandEntity> hrcEntities=s_hostRoleCommandDAO.findByRequestIdAndStatuses(requestId,Sets.newHashSet(HostRoleStatus.ABORTED,HostRoleStatus.TIMEDOUT));
+    for (    HostRoleCommandEntity hrcEntity : hrcEntities) {
+      taskIds.add(hrcEntity.getTaskId());
     }
     actionManager.resubmitTasks(taskIds);
     try {

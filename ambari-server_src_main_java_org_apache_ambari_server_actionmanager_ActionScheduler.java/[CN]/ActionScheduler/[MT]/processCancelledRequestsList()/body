@@ -1,12 +1,19 @@
 {
 synchronized (requestsToBeCancelled) {
     for (    Long requestId : requestsToBeCancelled) {
-      List<HostRoleCommand> tasksToDequeue=db.getRequestTasks(requestId);
-      String reason=requestCancelReasons.get(requestId);
-      cancelHostRoleCommands(tasksToDequeue,reason);
-      List<Stage> stages=db.getAllStages(requestId);
-      for (      Stage stage : stages) {
-        abortOperationsForStage(stage);
+      List<HostRoleCommandEntity> entitiesToDequeue=hostRoleCommandDAO.findByRequestIdAndStatuses(requestId,HostRoleStatus.NOT_COMPLETED_STATUSES);
+      if (!entitiesToDequeue.isEmpty()) {
+        List<HostRoleCommand> tasksToDequeue=new ArrayList<>(entitiesToDequeue.size());
+        for (        HostRoleCommandEntity hrcEntity : entitiesToDequeue) {
+          HostRoleCommand task=hostRoleCommandFactory.createExisting(hrcEntity);
+          tasksToDequeue.add(task);
+        }
+        String reason=requestCancelReasons.get(requestId);
+        cancelHostRoleCommands(tasksToDequeue,reason);
+      }
+      List<Stage> stagesInProgress=db.getStagesInProgress();
+      for (      Stage stageInProgress : stagesInProgress) {
+        abortOperationsForStage(stageInProgress);
       }
     }
     requestsToBeCancelled.clear();

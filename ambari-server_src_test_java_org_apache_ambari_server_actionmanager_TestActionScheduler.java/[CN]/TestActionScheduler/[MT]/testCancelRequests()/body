@@ -6,6 +6,8 @@
   ServiceComponent scomp=mock(ServiceComponent.class);
   ServiceComponentHost sch=mock(ServiceComponentHost.class);
   UnitOfWork unitOfWork=mock(UnitOfWork.class);
+  HostRoleCommandDAO hostRoleCommandDAO=mock(HostRoleCommandDAO.class);
+  HostRoleCommandFactory hostRoleCommandFactory=mock(HostRoleCommandFactory.class);
   when(fsm.getCluster(anyString())).thenReturn(oneClusterMock);
   when(oneClusterMock.getService(anyString())).thenReturn(serviceObj);
   when(serviceObj.getServiceComponent(anyString())).thenReturn(scomp);
@@ -18,10 +20,37 @@
   hosts.put(hostname,sch);
   when(scomp.getServiceComponentHosts()).thenReturn(hosts);
   long requestId=1;
-  final List<Stage> stages=new ArrayList<Stage>();
-  int namenodeCmdTaskId=1;
-  stages.add(getStageWithSingleTask(hostname,"cluster1",Role.NAMENODE,RoleCommand.START,Service.Type.HDFS,namenodeCmdTaskId,1,(int)requestId));
-  stages.add(getStageWithSingleTask(hostname,"cluster1",Role.DATANODE,RoleCommand.START,Service.Type.HDFS,2,2,(int)requestId));
+  final List<Stage> allStages=new ArrayList<Stage>();
+  final List<Stage> stagesInProgress=new ArrayList<Stage>();
+  final List<HostRoleCommand> tasksInProgress=new ArrayList<>();
+  final List<HostRoleCommandEntity> hrcEntitiesInProgress=new ArrayList<>();
+  int secondaryNamenodeCmdTaskId=1;
+  int namenodeCmdTaskId=2;
+  int datanodeCmdTaskId=3;
+  Stage stageWithTask=getStageWithSingleTask(hostname,"cluster1",Role.SECONDARY_NAMENODE,RoleCommand.START,Service.Type.HDFS,secondaryNamenodeCmdTaskId,1,(int)requestId);
+  stageWithTask.getOrderedHostRoleCommands().get(0).setStatus(HostRoleStatus.COMPLETED);
+  allStages.add(stageWithTask);
+  stageWithTask=getStageWithSingleTask(hostname,"cluster1",Role.NAMENODE,RoleCommand.START,Service.Type.HDFS,namenodeCmdTaskId,2,(int)requestId);
+  tasksInProgress.addAll(stageWithTask.getOrderedHostRoleCommands());
+  stagesInProgress.add(stageWithTask);
+  allStages.add(stageWithTask);
+  stageWithTask=getStageWithSingleTask(hostname,"cluster1",Role.DATANODE,RoleCommand.START,Service.Type.HDFS,datanodeCmdTaskId,3,(int)requestId);
+  tasksInProgress.addAll(stageWithTask.getOrderedHostRoleCommands());
+  stagesInProgress.add(stageWithTask);
+  allStages.add(stageWithTask);
+  for (  HostRoleCommand hostRoleCommand : tasksInProgress) {
+    HostRoleCommandEntity entity=mock(HostRoleCommandEntity.class);
+    when(entity.getTaskId()).thenReturn(hostRoleCommand.getTaskId());
+    when(entity.getStageId()).thenReturn(hostRoleCommand.getStageId());
+    when(entity.getRequestId()).thenReturn(hostRoleCommand.getRequestId());
+    when(entity.getHostId()).thenReturn(hostRoleCommand.getHostId());
+    when(entity.getHostName()).thenReturn(hostRoleCommand.getHostName());
+    when(entity.getRole()).thenReturn(hostRoleCommand.getRole());
+    when(entity.getStatus()).thenReturn(hostRoleCommand.getStatus());
+    when(entity.getRoleCommand()).thenReturn(hostRoleCommand.getRoleCommand());
+    hrcEntitiesInProgress.add(entity);
+    when(hostRoleCommandFactory.createExisting(entity)).thenReturn(hostRoleCommand);
+  }
   Host host=mock(Host.class);
   when(fsm.getHost(anyString())).thenReturn(host);
   when(host.getState()).thenReturn(HostState.HEALTHY);
@@ -30,14 +59,14 @@
   RequestEntity request=mock(RequestEntity.class);
   when(request.isExclusive()).thenReturn(false);
   when(db.getRequestEntity(anyLong())).thenReturn(request);
-  when(db.getCommandsInProgressCount()).thenReturn(stages.size());
-  when(db.getStagesInProgress()).thenReturn(stages);
+  when(db.getCommandsInProgressCount()).thenReturn(stagesInProgress.size());
+  when(db.getStagesInProgress()).thenReturn(stagesInProgress);
+  when(db.getAllStages(anyLong())).thenReturn(allStages);
   List<HostRoleCommand> requestTasks=new ArrayList<HostRoleCommand>();
-  for (  Stage stage : stages) {
+  for (  Stage stage : allStages) {
     requestTasks.addAll(stage.getOrderedHostRoleCommands());
   }
   when(db.getRequestTasks(anyLong())).thenReturn(requestTasks);
-  when(db.getAllStages(anyLong())).thenReturn(stages);
   doAnswer(new Answer<Void>(){
     @Override public Void answer(    InvocationOnMock invocation) throws Throwable {
       List<CommandReport> reports=(List<CommandReport>)invocation.getArguments()[0];
@@ -47,7 +76,7 @@
         Long requestId=requestStageIds[0];
         Long stageId=requestStageIds[1];
         Long id=report.getTaskId();
-        for (        Stage stage : stages) {
+        for (        Stage stage : stagesInProgress) {
           if (requestId.equals(stage.getRequestId()) && stageId.equals(stage.getStageId())) {
             for (            HostRoleCommand hostRoleCommand : stage.getOrderedHostRoleCommands()) {
               if (hostRoleCommand.getTaskId() == id) {
@@ -64,7 +93,7 @@
   when(db.getTask(anyLong())).thenAnswer(new Answer<Object>(){
     @Override public Object answer(    InvocationOnMock invocation) throws Throwable {
       Long taskId=(Long)invocation.getArguments()[0];
-      for (      Stage stage : stages) {
+      for (      Stage stage : allStages) {
         for (        HostRoleCommand command : stage.getOrderedHostRoleCommands()) {
           if (taskId.equals(command.getTaskId())) {
             return command;
@@ -78,7 +107,7 @@
   doAnswer(new Answer<Void>(){
     @Override public Void answer(    InvocationOnMock invocation) throws Throwable {
       Long requestId=(Long)invocation.getArguments()[0];
-      for (      Stage stage : stages) {
+      for (      Stage stage : stagesInProgress) {
         if (requestId.equals(stage.getRequestId())) {
           for (          HostRoleCommand command : stage.getOrderedHostRoleCommands()) {
             if (command.getStatus() == HostRoleStatus.QUEUED || command.getStatus() == HostRoleStatus.IN_PROGRESS || command.getStatus() == HostRoleStatus.PENDING) {
@@ -93,13 +122,15 @@
 ).when(db).abortOperation(anyLong());
   Properties properties=new Properties();
   Configuration conf=new Configuration(properties);
-  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),unitOfWork,null,conf,entityManagerProviderMock);
+  when(hostRoleCommandDAO.findByRequestIdAndStatuses(requestId,HostRoleStatus.NOT_COMPLETED_STATUSES)).thenReturn(hrcEntitiesInProgress);
+  ActionScheduler scheduler=new ActionScheduler(100,50,db,aq,fsm,3,new HostsMap((String)null),unitOfWork,null,conf,entityManagerProviderMock,hostRoleCommandDAO,hostRoleCommandFactory);
   scheduler.doWork();
   String reason="Some reason";
   scheduler.scheduleCancellingRequest(requestId,reason);
   scheduler.doWork();
-  Assert.assertEquals(HostRoleStatus.ABORTED,stages.get(0).getHostRoleStatus(hostname,"NAMENODE"));
-  Assert.assertEquals(HostRoleStatus.ABORTED,stages.get(1).getHostRoleStatus(hostname,"DATANODE"));
+  Assert.assertEquals(HostRoleStatus.COMPLETED,allStages.get(0).getHostRoleStatus(hostname,"SECONDARY_NAMENODE"));
+  Assert.assertEquals(HostRoleStatus.ABORTED,allStages.get(1).getHostRoleStatus(hostname,"NAMENODE"));
+  Assert.assertEquals(HostRoleStatus.ABORTED,allStages.get(2).getHostRoleStatus(hostname,"DATANODE"));
   Assert.assertEquals(aq.size(hostname),1);
   CancelCommand cancelCommand=(CancelCommand)aq.dequeue(hostname);
   Assert.assertEquals(cancelCommand.getTargetTaskId(),namenodeCmdTaskId);
