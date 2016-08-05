@@ -1,0 +1,79 @@
+{
+  final String expectedLogFilePath="/var/log/hdfs/hdfs_namenode.log";
+  final String expectedSearchEnginePath="/api/v1/clusters/clusterone/logging/searchEngine";
+  final String expectedAmbariURL="http://c6401.ambari.apache.org:8080";
+  final String expectedStackName="HDP";
+  final String expectedStackVersion="2.4";
+  final String expectedComponentName="NAMENODE";
+  final String expectedServiceName="HDFS";
+  final String expectedLogSearchComponentName="hdfs_namenode";
+  EasyMockSupport mockSupport=new EasyMockSupport();
+  Resource resourceMock=mockSupport.createMock(Resource.class);
+  expect(resourceMock.getPropertyValue(PropertyHelper.getPropertyId("HostRoles","component_name"))).andReturn(expectedComponentName).atLeastOnce();
+  expect(resourceMock.getPropertyValue(PropertyHelper.getPropertyId("HostRoles","host_name"))).andReturn("c6401.ambari.apache.org").atLeastOnce();
+  expect(resourceMock.getPropertyValue(PropertyHelper.getPropertyId("HostRoles","cluster_name"))).andReturn("clusterone").atLeastOnce();
+  Capture<HostComponentLoggingInfo> captureLogInfo=Capture.newInstance();
+  if (authorizedForLogSearch) {
+    resourceMock.setProperty(eq("logging"),capture(captureLogInfo));
+  }
+  LogLevelQueryResponse levelQueryResponse=new LogLevelQueryResponse();
+  levelQueryResponse.setTotalCount("3");
+  List<NameValuePair> testListOfLogLevels=new LinkedList<NameValuePair>();
+  testListOfLogLevels.add(new NameValuePair("ERROR","150"));
+  testListOfLogLevels.add(new NameValuePair("WARN","500"));
+  testListOfLogLevels.add(new NameValuePair("INFO","2200"));
+  levelQueryResponse.setNameValueList(testListOfLogLevels);
+  Request requestMock=mockSupport.createMock(Request.class);
+  Predicate predicateMock=mockSupport.createMock(Predicate.class);
+  AmbariManagementController controllerMock=mockSupport.createMock(AmbariManagementController.class);
+  Clusters clustersMock=mockSupport.createMock(Clusters.class);
+  Cluster clusterMock=mockSupport.createMock(Cluster.class);
+  LoggingRequestHelperFactory loggingRequestHelperFactoryMock=mockSupport.createMock(LoggingRequestHelperFactory.class);
+  LogSearchDataRetrievalService dataRetrievalServiceMock=mockSupport.createMock(LogSearchDataRetrievalService.class);
+  if (authorizedForLogSearch) {
+    LoggingRequestHelper loggingRequestHelperMock=mockSupport.createMock(LoggingRequestHelper.class);
+    AmbariMetaInfo metaInfoMock=mockSupport.createMock(AmbariMetaInfo.class);
+    StackId stackIdMock=mockSupport.createMock(StackId.class);
+    ComponentInfo componentInfoMock=mockSupport.createMock(ComponentInfo.class);
+    LogDefinition logDefinitionMock=mockSupport.createMock(LogDefinition.class);
+    expect(controllerMock.getAmbariServerURI(expectedSearchEnginePath)).andReturn(expectedAmbariURL + expectedSearchEnginePath).atLeastOnce();
+    expect(controllerMock.getAmbariMetaInfo()).andReturn(metaInfoMock).atLeastOnce();
+    expect(metaInfoMock.getComponentToService(expectedStackName,expectedStackVersion,expectedComponentName)).andReturn(expectedServiceName).atLeastOnce();
+    expect(metaInfoMock.getComponent(expectedStackName,expectedStackVersion,expectedServiceName,expectedComponentName)).andReturn(componentInfoMock).atLeastOnce();
+    expect(stackIdMock.getStackName()).andReturn(expectedStackName).atLeastOnce();
+    expect(stackIdMock.getStackVersion()).andReturn(expectedStackVersion).atLeastOnce();
+    expect(clusterMock.getCurrentStackVersion()).andReturn(stackIdMock).atLeastOnce();
+    expect(componentInfoMock.getLogs()).andReturn(Collections.singletonList(logDefinitionMock)).atLeastOnce();
+    expect(logDefinitionMock.getLogId()).andReturn(expectedLogSearchComponentName).atLeastOnce();
+    expect(dataRetrievalServiceMock.getLogFileNames(expectedLogSearchComponentName,"c6401.ambari.apache.org","clusterone")).andReturn(Collections.singleton(expectedLogFilePath)).atLeastOnce();
+    expect(dataRetrievalServiceMock.getLogFileTailURI(expectedAmbariURL + expectedSearchEnginePath,expectedLogSearchComponentName,"c6401.ambari.apache.org","clusterone")).andReturn("").atLeastOnce();
+    expect(loggingRequestHelperFactoryMock.getHelper(anyObject(AmbariManagementController.class),anyObject(String.class))).andReturn(loggingRequestHelperMock).atLeastOnce();
+  }
+  expect(controllerMock.getClusters()).andReturn(clustersMock).atLeastOnce();
+  expect(clustersMock.getCluster("clusterone")).andReturn(clusterMock).atLeastOnce();
+  expect(clusterMock.getResourceId()).andReturn(4L).atLeastOnce();
+  mockSupport.replayAll();
+  AuthorizationHelperInitializer.viewInstanceDAOReturningNull();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  LoggingSearchPropertyProvider propertyProvider=new LoggingSearchPropertyProvider();
+  propertyProvider.setAmbariManagementController(controllerMock);
+  propertyProvider.setLogSearchDataRetrievalService(dataRetrievalServiceMock);
+  propertyProvider.setLoggingRequestHelperFactory(loggingRequestHelperFactoryMock);
+  Set<Resource> returnedResources=propertyProvider.populateResources(Collections.singleton(resourceMock),requestMock,predicateMock);
+  assertEquals("Returned resource set was of an incorrect size",1,returnedResources.size());
+  if (authorizedForLogSearch) {
+    HostComponentLoggingInfo returnedLogInfo=captureLogInfo.getValue();
+    assertNotNull("Returned log info should not be null",returnedLogInfo);
+    assertEquals("Returned component was not the correct name","hdfs_namenode",returnedLogInfo.getComponentName());
+    assertEquals("Returned list of log file names for this component was incorrect",1,returnedLogInfo.getListOfLogFileDefinitions().size());
+    LogFileDefinitionInfo definitionInfo=returnedLogInfo.getListOfLogFileDefinitions().get(0);
+    assertEquals("Incorrect log file type was found",LogFileType.SERVICE,definitionInfo.getLogFileType());
+    assertEquals("Incorrect log file path found",expectedLogFilePath,definitionInfo.getLogFileName());
+    assertEquals("Incorrect URL path to searchEngine",expectedAmbariURL + expectedSearchEnginePath,definitionInfo.getSearchEngineURL());
+    assertNull(returnedLogInfo.getListOfLogLevels());
+  }
+ else {
+    assertFalse("Unauthorized user should not be able to retrieve log info",captureLogInfo.hasCaptured());
+  }
+  mockSupport.verifyAll();
+}

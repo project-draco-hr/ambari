@@ -1,0 +1,34 @@
+{
+  final String expectedClusterName="clusterone";
+  final String expectedErrorMessage="LogSearch is not currently available.  If LogSearch is deployed in this cluster, please verify that the LogSearch services are running.";
+  EasyMockSupport mockSupport=new EasyMockSupport();
+  LoggingService.ControllerFactory controllerFactoryMock=mockSupport.createMock(LoggingService.ControllerFactory.class);
+  AmbariManagementController controllerMock=mockSupport.createMock(AmbariManagementController.class);
+  Clusters clustersMock=mockSupport.createMock(Clusters.class);
+  Cluster clusterMock=mockSupport.createMock(Cluster.class);
+  LoggingRequestHelperFactory helperFactoryMock=mockSupport.createMock(LoggingRequestHelperFactory.class);
+  UriInfo uriInfoMock=mockSupport.createMock(UriInfo.class);
+  if (shouldBeAuthorized) {
+    expect(uriInfoMock.getQueryParameters()).andReturn(new MultivaluedMapImpl()).atLeastOnce();
+    expect(helperFactoryMock.getHelper(controllerMock,expectedClusterName)).andReturn(null).atLeastOnce();
+  }
+  expect(controllerFactoryMock.getController()).andReturn(controllerMock).atLeastOnce();
+  expect(controllerMock.getClusters()).andReturn(clustersMock).once();
+  expect(clustersMock.getCluster(expectedClusterName)).andReturn(clusterMock).once();
+  expect(clusterMock.getResourceId()).andReturn(4L).once();
+  mockSupport.replayAll();
+  AuthorizationHelperInitializer.viewInstanceDAOReturningNull();
+  SecurityContextHolder.getContext().setAuthentication(authentication);
+  LoggingService loggingService=new LoggingService(expectedClusterName,controllerFactoryMock,helperFactoryMock);
+  Response resource=loggingService.getSearchEngine("",null,uriInfoMock);
+  assertNotNull("The response returned by the LoggingService should not have been null",resource);
+  if (shouldBeAuthorized) {
+    assertEquals("An OK status should have been returned",HttpURLConnection.HTTP_NOT_FOUND,resource.getStatus());
+    assertNotNull("A non-null Entity should have been returned",resource.getEntity());
+    assertEquals("Expected error message was not included in the response",expectedErrorMessage,resource.getEntity());
+  }
+ else {
+    assertEquals("A FORBIDDEN status should have been returned",HttpURLConnection.HTTP_FORBIDDEN,resource.getStatus());
+  }
+  mockSupport.verifyAll();
+}
