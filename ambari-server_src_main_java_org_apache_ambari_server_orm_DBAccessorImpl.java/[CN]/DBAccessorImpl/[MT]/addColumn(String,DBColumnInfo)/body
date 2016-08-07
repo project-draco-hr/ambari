@@ -1,12 +1,36 @@
 {
-  if (!tableHasColumn(tableName,columnInfo.getName())) {
-    if (columnInfo.getDefaultValue() != null) {
-      columnInfo.setNullable(true);
+  if (tableHasColumn(tableName,columnInfo.getName())) {
+    return;
+  }
+  DatabaseType databaseType=configuration.getDatabaseType();
+switch (databaseType) {
+case ORACLE:
+{
+      boolean originalNullable=columnInfo.isNullable();
+      if (columnInfo.getDefaultValue() != null) {
+        columnInfo.setNullable(true);
+      }
+      String query=dbmsHelper.getAddColumnStatement(tableName,columnInfo);
+      executeQuery(query);
+      if (columnInfo.getDefaultValue() != null) {
+        updateTable(tableName,columnInfo.getName(),columnInfo.getDefaultValue(),"");
+        if (!originalNullable) {
+          setColumnNullable(tableName,columnInfo,originalNullable);
+        }
+        addDefaultConstraint(tableName,columnInfo);
+      }
+      break;
     }
+case DERBY:
+case MYSQL:
+case POSTGRES:
+case SQL_ANYWHERE:
+case SQL_SERVER:
+default :
+{
     String query=dbmsHelper.getAddColumnStatement(tableName,columnInfo);
     executeQuery(query);
-    if (columnInfo.getDefaultValue() != null) {
-      updateTable(tableName,columnInfo.getName(),columnInfo.getDefaultValue(),"");
-    }
+    break;
   }
+}
 }
