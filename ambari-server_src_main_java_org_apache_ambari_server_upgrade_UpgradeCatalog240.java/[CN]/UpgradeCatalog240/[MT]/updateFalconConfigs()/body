@@ -10,6 +10,16 @@
         LOG.info("Removing property falcon_store_uri from falcon-env");
         removeConfigurationPropertiesFromCluster(cluster,"falcon-env",Collections.singleton("falcon_store_uri"));
       }
+      final String envContentPropertyName="content";
+      String contentValue=falconEnvConfig.getProperties().get(envContentPropertyName);
+      if (contentValue != null) {
+        final String atlasHookCPAddition="{{atlas_hook_cp}}";
+        if (!contentValue.contains(atlasHookCPAddition)) {
+          LOG.info("Appending '{}' to FALCON_EXTRA_CLASS_PATH from falcon-env since it doesn't contain it",atlasHookCPAddition);
+          String newValue=contentValue + "\n\n{% if falcon_atlas_support %}\n" + "# Add the Atlas Falcon hook to the Falcon classpath\n"+ "export FALCON_EXTRA_CLASS_PATH={{atlas_hook_cp}}${FALCON_EXTRA_CLASS_PATH}\n"+ "{% endif %}";
+          updateConfigurationPropertiesForCluster(cluster,"falcon-env",Collections.singletonMap(envContentPropertyName,newValue),null,true,false);
+        }
+      }
     }
     Config falconStartupConfig=cluster.getDesiredConfigByType("falcon-startup.properties");
     if (falconStartupConfig != null) {
