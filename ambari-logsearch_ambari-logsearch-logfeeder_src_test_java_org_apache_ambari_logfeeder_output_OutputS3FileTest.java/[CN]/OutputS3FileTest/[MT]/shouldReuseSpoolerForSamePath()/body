@@ -1,0 +1,31 @@
+{
+  InputMarker inputMarker=mock(InputMarker.class);
+  Input input=mock(Input.class);
+  inputMarker.input=input;
+  expect(input.getFilePath()).andReturn("/var/log/hdfs-namenode.log");
+  expect(input.getStringValue(OutputS3File.INPUT_ATTRIBUTE_TYPE)).andReturn("hdfs-namenode");
+  final LogSpooler spooler=mock(LogSpooler.class);
+  spooler.add("log event block1");
+  spooler.add("log event block2");
+  final S3Uploader s3Uploader=mock(S3Uploader.class);
+  replay(input,inputMarker,spooler,s3Uploader);
+  OutputS3File outputS3File=new OutputS3File(){
+    private boolean firstCallComplete;
+    @Override protected LogSpooler createSpooler(    String filePath){
+      if (!firstCallComplete) {
+        firstCallComplete=true;
+        return spooler;
+      }
+      throw new IllegalStateException("Shouldn't call createSpooler for same path.");
+    }
+    @Override protected S3Uploader createUploader(    String logType){
+      return s3Uploader;
+    }
+  }
+;
+  outputS3File.loadConfig(configMap);
+  outputS3File.init();
+  outputS3File.write("log event block1",inputMarker);
+  outputS3File.write("log event block2",inputMarker);
+  verify(spooler);
+}
