@@ -35,6 +35,31 @@
           throw new InvalidTopologyException("Incorrect configuration: MYSQL_SERVER component is available but hive" + " using existing db!");
         }
       }
+      if (ClusterTopologyImpl.isNameNodeHAEnabled(clusterConfigurations) && component.equals("NAMENODE")) {
+        Map<String,String> hadoopEnvConfig=clusterConfigurations.get("hadoop-env");
+        if (hadoopEnvConfig != null && !hadoopEnvConfig.isEmpty() && hadoopEnvConfig.containsKey("dfs_ha_initial_namenode_active") && hadoopEnvConfig.containsKey("dfs_ha_initial_namenode_standby")) {
+          ArrayList<HostGroup> hostGroupsForComponent=new ArrayList<HostGroup>(blueprint.getHostGroupsForComponent(component));
+          Set<String> givenHostGroups=new HashSet<String>();
+          givenHostGroups.add(hadoopEnvConfig.get("dfs_ha_initial_namenode_active"));
+          givenHostGroups.add(hadoopEnvConfig.get("dfs_ha_initial_namenode_standby"));
+          if (givenHostGroups.size() != hostGroupsForComponent.size()) {
+            throw new IllegalArgumentException("NAMENODE HA host groups mapped incorrectly for properties 'dfs_ha_initial_namenode_active' and 'dfs_ha_initial_namenode_standby'. Expected Host groups are :" + hostGroupsForComponent);
+          }
+          if (HostGroup.HOSTGROUP_REGEX.matcher(hadoopEnvConfig.get("dfs_ha_initial_namenode_active")).matches() && HostGroup.HOSTGROUP_REGEX.matcher(hadoopEnvConfig.get("dfs_ha_initial_namenode_standby")).matches()) {
+            for (            HostGroup hostGroupForComponent : hostGroupsForComponent) {
+              Iterator<String> itr=givenHostGroups.iterator();
+              while (itr.hasNext()) {
+                if (itr.next().contains(hostGroupForComponent.getName())) {
+                  itr.remove();
+                }
+              }
+            }
+            if (!givenHostGroups.isEmpty()) {
+              throw new IllegalArgumentException("NAMENODE HA host groups mapped incorrectly for properties 'dfs_ha_initial_namenode_active' and 'dfs_ha_initial_namenode_standby'. Expected Host groups are :" + hostGroupsForComponent);
+            }
+          }
+        }
+      }
       if (component.equals("HIVE_METASTORE")) {
         Map<String,String> hiveEnvConfig=clusterConfigurations.get("hive-env");
         if (hiveEnvConfig != null && !hiveEnvConfig.isEmpty() && hiveEnvConfig.get("hive_database") != null && hiveEnvConfig.get("hive_database").equals("Existing SQL Anywhere Database") && VersionUtils.compareVersions(stack.getVersion(),"2.3.0.0") < 0 && stack.getName().equalsIgnoreCase("HDP")) {
