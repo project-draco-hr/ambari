@@ -2,13 +2,13 @@
   Set<String> collectors=new HashSet<>();
   RetryPolicy retryPolicy=new RetryUntilElapsed(tryTime,sleepMsBetweenRetries);
   final CuratorZookeeperClient client=new CuratorZookeeperClient(zookeeperQuorum,SESSION_TIMEOUT,CONNECTION_TIMEOUT,null,retryPolicy);
-  String liveInstances=null;
+  List<String> liveInstances=null;
   try {
-    liveInstances=RetryLoop.callWithRetry(client,new Callable<String>(){
-      @Override public String call() throws Exception {
+    client.start();
+    liveInstances=RetryLoop.callWithRetry(client,new Callable<List<String>>(){
+      @Override public List<String> call() throws Exception {
         ZooKeeper zookeeper=client.getZooKeeper();
-        byte[] data=zookeeper.getData(ZK_PATH,null,null);
-        return data != null ? new String(data) : null;
+        return zookeeper.getChildren(ZK_PATH,false);
       }
     }
 );
@@ -18,7 +18,7 @@
     LOG.debug(e);
   }
   if (liveInstances != null && !liveInstances.isEmpty()) {
-    for (    String instanceStr : liveInstances.split(",")) {
+    for (    String instanceStr : liveInstances) {
       collectors.add(instanceStr.substring(0,instanceStr.indexOf(INSTANCE_NAME_DELIMITER)));
     }
   }
