@@ -1,31 +1,98 @@
 {
-  Set<ConfigurationProperty<?>> orderedProperties=new TreeSet<>();
-  StringBuilder buffer=new StringBuilder("| Property Name | Default | Description |");
-  buffer.append(System.lineSeparator());
-  buffer.append("| --- | --- | --- |");
-  buffer.append(System.lineSeparator());
-  Field[] fields=Configuration.class.getFields();
-  for (  Field field : fields) {
+  final String OUTPUT_ARGUMENT="output";
+  Options options=new Options();
+  options.addOption(Option.builder().longOpt(OUTPUT_ARGUMENT).desc("The absolute location of the index.md file to generate").required().type(String.class).hasArg().valueSeparator(' ').build());
+  CommandLineParser parser=new DefaultParser();
+  CommandLine line=parser.parse(options,args);
+  String outputFile=(String)line.getParsedOptionValue(OUTPUT_ARGUMENT);
+  SortedMap<String,Field> sortedFields=new TreeMap<>();
+  List<Field> fields=new ArrayList<>(500);
+  for (  Field field : Configuration.class.getFields()) {
     if (field.getType() != ConfigurationProperty.class) {
       continue;
     }
+    fields.add(field);
     ConfigurationProperty<?> configurationProperty=(ConfigurationProperty<?>)field.get(null);
-    orderedProperties.add(configurationProperty);
+    sortedFields.put(configurationProperty.getKey(),field);
   }
-  for (  ConfigurationProperty<?> configurationProperty : orderedProperties) {
-    Markdown markdown=configurationProperty.getClass().getAnnotation(Markdown.class);
-    buffer.append("| ");
-    buffer.append(configurationProperty.getKey());
-    buffer.append(" | ");
-    buffer.append(configurationProperty.getDefaultValue());
-    buffer.append(" | ");
-    String description=StringUtils.EMPTY;
-    if (markdown != null && StringUtils.isNotBlank(markdown.description())) {
-      description=markdown.description();
+  StringBuilder allPropertiesBuffer=new StringBuilder("| Property Name | Description | Default |");
+  allPropertiesBuffer.append(System.lineSeparator());
+  allPropertiesBuffer.append("| --- | --- | --- |");
+  allPropertiesBuffer.append(System.lineSeparator());
+  for (  String fieldKey : sortedFields.keySet()) {
+    Field field=sortedFields.get(fieldKey);
+    Markdown markdown=field.getAnnotation(Markdown.class);
+    if (null == markdown) {
+      ConfigurationMarkdown configMarkdown=field.getAnnotation(ConfigurationMarkdown.class);
+      markdown=configMarkdown.markdown();
     }
-    buffer.append(description);
-    buffer.append(" |");
-    buffer.append(System.lineSeparator());
+    if (markdown.internal()) {
+      continue;
+    }
+    ConfigurationProperty<?> configurationProperty=(ConfigurationProperty<?>)field.get(null);
+    String key=configurationProperty.getKey();
+    Object defaultValue=configurationProperty.getDefaultValue();
+    allPropertiesBuffer.append("| ").append(key).append(" | ");
+    StringBuilder description=new StringBuilder(markdown.description());
+    if (StringUtils.isNotEmpty(markdown.relatedTo())) {
+      String relatedTo=String.format(MARKDOWN_RELATED_TO_TEMPLATE,markdown.relatedTo());
+      description.append(HTML_BREAK_TAG).append(HTML_BREAK_TAG).append(relatedTo);
+    }
+    if (markdown.examples().length > 0) {
+      description.append(HTML_BREAK_TAG).append(HTML_BREAK_TAG);
+      description.append("The following are examples of valid values:").append("<ul>");
+      for (      String example : markdown.examples()) {
+        description.append("<li>").append("`").append(example).append("`");
+      }
+      description.append("</ul>");
+    }
+    allPropertiesBuffer.append(description);
+    allPropertiesBuffer.append(" |");
+    if (null != defaultValue && StringUtils.isNotEmpty(defaultValue.toString())) {
+      allPropertiesBuffer.append("`").append(defaultValue).append("`");
+    }
+    allPropertiesBuffer.append(" | ").append(System.lineSeparator());
   }
-  System.out.println(buffer.toString());
+  StringBuilder baselineBuffer=new StringBuilder(1024);
+  for (  ConfigurationGrouping grouping : ConfigurationGrouping.values()) {
+    baselineBuffer.append("####" + grouping);
+    baselineBuffer.append(System.lineSeparator());
+    baselineBuffer.append("| Property Name | ");
+    for (    ClusterSizeType clusterSizeType : ClusterSizeType.values()) {
+      baselineBuffer.append(clusterSizeType).append(" | ");
+    }
+    baselineBuffer.append(System.lineSeparator());
+    baselineBuffer.append("| --- | --- | --- | --- | --- |");
+    baselineBuffer.append(System.lineSeparator());
+    for (    Field field : fields) {
+      ConfigurationMarkdown configMarkdown=field.getAnnotation(ConfigurationMarkdown.class);
+      if (null == configMarkdown || configMarkdown.group() != grouping) {
+        continue;
+      }
+      ConfigurationProperty<?> configurationProperty=(ConfigurationProperty<?>)field.get(null);
+      ClusterScale[] scaleValues=configMarkdown.scaleValues();
+      SortedMap<ClusterSizeType,String> miniSort=new TreeMap<>();
+      for (      ClusterScale clusterScale : scaleValues) {
+        miniSort.put(clusterScale.clusterSize(),clusterScale.value());
+      }
+      baselineBuffer.append("| ").append(configurationProperty.getKey()).append(" | ");
+      for (      ClusterSizeType clusterSizeType : miniSort.keySet()) {
+        baselineBuffer.append(miniSort.get(clusterSizeType)).append(" | ");
+      }
+      baselineBuffer.append(System.lineSeparator());
+    }
+  }
+  InputStream inputStream=null;
+  try {
+    inputStream=Configuration.class.getResourceAsStream(MARKDOWN_TEMPLATE_FILE);
+    String template=IOUtils.toString(inputStream);
+    String markdown=template.replace(MARKDOWN_CONFIGURATION_TABLE_KEY,allPropertiesBuffer.toString());
+    markdown=markdown.replace(MARKDOWN_BASELINE_VALUES_KEY,baselineBuffer.toString());
+    File file=new File(outputFile);
+    FileUtils.writeStringToFile(file,markdown);
+    System.out.print("Successfully created " + outputFile);
+  }
+  finally {
+    IOUtils.closeQuietly(inputStream);
+  }
 }
