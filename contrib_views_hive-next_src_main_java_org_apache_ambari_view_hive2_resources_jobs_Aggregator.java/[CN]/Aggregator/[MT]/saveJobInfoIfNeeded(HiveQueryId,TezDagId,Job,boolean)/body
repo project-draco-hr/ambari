@@ -1,0 +1,29 @@
+{
+  boolean updateDb=false;
+  String dagName=null;
+  String dagId=null;
+  String applicationId=null;
+  if (viewJob.getDagName() == null || viewJob.getDagName().isEmpty()) {
+    if (hiveQueryId.dagNames != null && hiveQueryId.dagNames.size() > 0) {
+      dagName=hiveQueryId.dagNames.get(0);
+      updateDb=true;
+    }
+  }
+  if (tezDagId.status != null && (tezDagId.status.compareToIgnoreCase(Job.JOB_STATE_UNKNOWN) != 0) && !viewJob.getStatus().equalsIgnoreCase(tezDagId.status)) {
+    dagId=tezDagId.entity;
+    applicationId=tezDagId.applicationId;
+    updateDb=true;
+  }
+  if (updateDb) {
+    if (useActorSystem) {
+      LOG.info("Saving DAG information via actor system for job id: {}",viewJob.getId());
+      operationController.tell(new SaveDagInformation(viewJob.getId(),dagName,dagId,applicationId),ActorRef.noSender());
+    }
+ else {
+      viewJob.setDagName(dagName);
+      viewJob.setDagId(dagId);
+      viewJob.setApplicationId(applicationId);
+      viewJobResourceManager.update(viewJob,viewJob.getId());
+    }
+  }
+}
