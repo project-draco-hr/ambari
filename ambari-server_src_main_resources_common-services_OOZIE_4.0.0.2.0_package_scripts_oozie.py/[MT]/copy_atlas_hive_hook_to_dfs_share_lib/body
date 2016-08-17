@@ -1,0 +1,45 @@
+def copy_atlas_hive_hook_to_dfs_share_lib(upgrade_type=None, upgrade_direction=None):
+    '\n   If the Atlas Hive Hook direcotry is present, Atlas is installed, and this is the first Oozie Server,\n  then copy the entire contents of that directory to the Oozie Sharelib in DFS, e.g.,\n  /usr/$stack/$version/atlas/hook/hive/ -> hdfs:///user/oozie/share/lib/lib_$timetamp/hive\n\n  :param upgrade_type: If in the middle of a stack upgrade, the type as UPGRADE_TYPE_ROLLING or UPGRADE_TYPE_NON_ROLLING\n  :param upgrade_direction: If in the middle of a stack upgrade, the direction as Direction.UPGRADE or Direction.DOWNGRADE.\n  '
+    import params
+    effective_version = (params.stack_version_formatted if (upgrade_type is None) else format_stack_version(params.version))
+    if (not check_stack_feature(StackFeature.ATLAS_HOOK_SUPPORT, effective_version)):
+        return
+    if (not ((len(params.oozie_server_hostnames) > 0) and (params.hostname == params.oozie_server_hostnames[0]))):
+        Logger.debug('Will not attempt to copy Atlas Hive hook to DFS since this is not the first Oozie Server sorted by hostname.')
+        return
+    if (not has_atlas_in_cluster()):
+        Logger.debug('Will not attempt to copy Atlas Hve hook to DFS since Atlas is not installed on the cluster.')
+        return
+    if ((upgrade_type is not None) and (upgrade_direction == Direction.DOWNGRADE)):
+        Logger.debug('Will not attempt to copy Atlas Hve hook to DFS since in the middle of Rolling/Express upgrade and performing a Downgrade.')
+        return
+    atlas_hive_hook_dir = format('{stack_root}/{version}/atlas/hook/hive/')
+    if (not os.path.exists(atlas_hive_hook_dir)):
+        Logger.error(format("ERROR. Atlas is installed in cluster but this Oozie server doesn't contain directory {atlas_hive_hook_dir}"))
+        return
+    num_files = len([name for name in os.listdir(atlas_hive_hook_dir) if os.path.exists(os.path.join(atlas_hive_hook_dir, name))])
+    Logger.info(('Found %d files/directories inside Atlas Hive hook directory %s' % (num_files, atlas_hive_hook_dir)))
+    command = format('source {conf_dir}/oozie-env.sh ; oozie admin -shareliblist hive | grep "\\[Available ShareLib\\]" -A 5')
+    try:
+        (code, out) = call(command, user=params.oozie_user, tries=10, try_sleep=5, logoutput=True)
+        if ((code == 0) and (out is not None)):
+            hive_sharelib_dir = __parse_sharelib_from_output(out)
+            if (hive_sharelib_dir is None):
+                raise Fail('Could not parse Hive sharelib from output.')
+            Logger.info(('Parsed Hive sharelib = %s and will attempt to copy/replace %d files to it from %s' % (hive_sharelib_dir, num_files, atlas_hive_hook_dir)))
+            params.HdfsResource(hive_sharelib_dir, type='directory', action='create_on_execute', source=atlas_hive_hook_dir, user=params.hdfs_user, owner=params.oozie_user, group=params.hdfs_user, mode=493, recursive_chown=True, recursive_chmod=True, replace_existing_files=True)
+            Logger.info('Copying Atlas Hive hook properties file to Oozie Sharelib in DFS.')
+            atlas_hook_filepath_source = os.path.join(params.hive_conf_dir, params.atlas_hook_filename)
+            atlas_hook_file_path_dest_in_dfs = os.path.join(hive_sharelib_dir, params.atlas_hook_filename)
+            params.HdfsResource(atlas_hook_file_path_dest_in_dfs, type='file', source=atlas_hook_filepath_source, action='create_on_execute', owner=params.oozie_user, group=params.hdfs_user, mode=493, replace_existing_files=True)
+            params.HdfsResource(None, action='execute')
+            command = format('source {conf_dir}/oozie-env.sh ; oozie admin -sharelibupdate')
+            (code, out) = call(command, user=params.oozie_user, tries=5, try_sleep=5, logoutput=True)
+            if ((code == 0) and (out is not None)):
+                Logger.info('Successfully updated the Oozie ShareLib')
+            else:
+                raise Exception(('Could not update the Oozie ShareLib after uploading the Atlas Hive hook directory to DFS. Code: %s' % str(code)))
+        else:
+            raise Exception(('Code is non-zero or output is empty. Code: %s' % str(code)))
+    except Fail as e:
+        Logger.error(('Failed to get Hive sharelib directory in DFS. %s' % str(e)))
