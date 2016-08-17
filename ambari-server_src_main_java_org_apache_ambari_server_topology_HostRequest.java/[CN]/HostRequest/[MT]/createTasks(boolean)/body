@@ -5,6 +5,7 @@
   topologyTasks.add(installTask);
   logicalTaskMap.put(installTask,new HashMap<String,Long>());
   boolean skipStartTaskCreate=topology.getProvisionAction().equals(INSTALL_ONLY);
+  boolean skipInstallTaskCreate=topology.getProvisionAction().equals(START_ONLY);
   StartHostTask startTask=null;
   if (!skipStartTaskCreate) {
     startTask=new StartHostTask(skipFailure);
@@ -15,6 +16,9 @@
     LOG.info("Skipping Start task creation since provision action = " + topology.getProvisionAction());
   }
   HostGroup hostGroup=getHostGroup();
+  Collection<String> startOnlyComponents=hostGroup.getComponentNames(START_ONLY);
+  Collection<String> installOnlyComponents=hostGroup.getComponentNames(INSTALL_ONLY);
+  Collection<String> installAndStartComponents=hostGroup.getComponentNames(INSTALL_AND_START);
   for (  String component : hostGroup.getComponentNames()) {
     if (component == null || component.equals("AMBARI_SERVER")) {
       LOG.info("Skipping component {} when creating request\n",component);
@@ -23,8 +27,8 @@
     String hostName=getHostName() != null ? getHostName() : "PENDING HOST ASSIGNMENT : HOSTGROUP=" + getHostgroupName();
     AmbariContext context=topology.getAmbariContext();
     Stack stack=hostGroup.getStack();
-    if (context.shouldSkipInstallTasks() && stack != null && !stack.getComponentInfo(component).isClient()) {
-      LOG.info("Skipping create of INSTALL task for {} on {} because host is sysprepped.",component,hostName);
+    if (startOnlyComponents.contains(component) || (skipInstallTaskCreate && !installOnlyComponents.contains(component) && !installAndStartComponents.contains(component)) && stack != null && !stack.getComponentInfo(component).isClient()) {
+      LOG.info("Skipping create of INSTALL task for {} on {}.",component,hostName);
     }
  else {
       HostRoleCommand logicalInstallTask=context.createAmbariTask(getRequestId(),id,component,hostName,AmbariContext.TaskType.INSTALL,skipFailure);
