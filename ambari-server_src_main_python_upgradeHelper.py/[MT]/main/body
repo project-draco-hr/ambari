@@ -1,0 +1,70 @@
+def main():
+    action_list = {Options.GET_MR_MAPPING_ACTION: get_mr1_mapping, Options.DELETE_MR_ACTION: delete_mr, Options.ADD_YARN_MR2_ACTION: add_services, Options.MODIFY_CONFIG_ACTION: modify_configs, Options.INSTALL_YARN_MR2_ACTION: install_services, Options.BACKUP_CONFIG_ACTION: backup_configs, Options.VERIFY_ACTION: verify_configuration, }
+    parser = optparse.OptionParser(usage=(('usage: %prog [options] action\n  Valid actions: ' + ', '.join(action_list.keys())) + '\n  update-configs accepts type, e.g. hdfs-site to update specific configs'))
+    parser.add_option('-n', '--printonly', action='store_true', dest='printonly', default=False, help='Prints all the curl commands to be executed (no post/update request will be performed)')
+    parser.add_option('-w', '--writeonly', action='store_true', dest='writeonly', default=False, help='in the combination with --printonly param will print only post/update requests')
+    parser.add_option('-o', '--log', dest='logfile', default=None, help='Log file')
+    parser.add_option('--report', dest='report', default=None, help='Report file output location')
+    parser.add_option('--upgradeCatalog', default=None, help='Upgrade Catalog file full path', dest='upgrade_json')
+    parser.add_option('--fromStack', default=None, help='stack version to upgrade from', dest='from_stack')
+    parser.add_option('--toStack', default=None, help='stack version to upgrade to', dest='to_stack')
+    parser.add_option('--hostname', default=None, help='Hostname for Ambari server', dest='hostname')
+    parser.add_option('--port', default='8080', help='Port number for Ambari server', dest='port')
+    parser.add_option('--https', default=False, action='store_true', dest='https', help='Use https protocol for connection to the server')
+    parser.add_option('--user', default=None, help='Ambari admin user', dest='user')
+    parser.add_option('--password', default=None, help='Ambari admin password', dest='password')
+    parser.add_option('--clustername', default=None, help='Cluster name', dest='clustername')
+    (options, args) = parser.parse_args()
+    Options.initialize_logger(options.logfile)
+    options.warnings = []
+    if (len(args) == 0):
+        parser.error('No action entered')
+    if (options.user is None):
+        options.warnings.append('User name must be provided (e.g. admin)')
+    if (options.hostname is None):
+        options.warnings.append('Ambari server host name must be provided')
+    if (options.clustername is None):
+        options.warnings.append('Cluster name must be provided')
+    if (options.password is None):
+        options.password = getpass.getpass('Please enter Ambari admin password: ')
+        if (options.password == ''):
+            options.warnings.append("Ambari admin user's password name must be provided (e.g. admin)")
+    if options.https:
+        Options.API_PROTOCOL = 'https'
+    if options.port:
+        Options.API_PORT = str(options.port)
+    action = args[0]
+    if ((action == Options.MODIFY_CONFIG_ACTION) or (action == Options.VERIFY_ACTION)):
+        if (options.upgrade_json is None):
+            options.warnings.append('Upgrade catalog option need to be set')
+        if (options.from_stack is None):
+            options.warnings.append('Should be provided fromStack option')
+        if (options.to_stack is None):
+            options.warnings.append('Should be provided toStack option')
+    if (action == Options.VERIFY_ACTION):
+        if (options.report is None):
+            options.warnings.append('Should be provided report option')
+    if (len(options.warnings) != 0):
+        print parser.print_help()
+        for warning in options.warnings:
+            Options.logger.warn(warning)
+        raise FatalException(1, 'Not all required options was set')
+    options.exit_message = ("Upgrade action '%s' completed successfully." % action)
+    if options.printonly:
+        Options.CURL_PRINT_ONLY = 'yes'
+        options.exit_message = ("Simulated execution of action '%s'. Verify the list edit calls." % action)
+        if options.writeonly:
+            Options.CURL_WRITE_ONLY = 'yes'
+    Options.ARGS = args
+    Options.OPTIONS = options
+    Options.HOST = options.hostname
+    Options.CLUSTER_NAME = options.clustername
+    Options.API_TOKENS = {'user': options.user, 'pass': options.password, }
+    Options.REPORT_FILE = options.report
+    if (action in action_list):
+        Options.initialize()
+        action_list[action]()
+    else:
+        parser.error('Invalid action')
+    if (options.exit_message is not None):
+        Options.logger.info(options.exit_message)

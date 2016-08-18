@@ -1,0 +1,27 @@
+def _process_single_map_transformation(self, catalog, map_item_name, map_property_item):
+    '\n    :type catalog UpgradeCatalog\n    :type map_item_name str\n    :type map_property_item dict\n    '
+    old_property_name = map_item_name
+    if ((CatConst.PROPERTY_MAP_FROM in map_property_item) and (map_property_item[CatConst.PROPERTY_MAP_FROM] is not None)):
+        old_property_name = map_property_item[CatConst.PROPERTY_MAP_FROM]
+    new_property_name = old_property_name
+    if (CatConst.PROPERTY_MAP_TO in map_property_item):
+        new_property_name = map_property_item[CatConst.PROPERTY_MAP_TO]
+    required_services = (map_property_item[CatConst.REQUIRED_SERVICES] if (CatConst.REQUIRED_SERVICES in map_property_item) else None)
+    if ((required_services is not None) and (not is_services_exists(required_services))):
+        return 0
+    self._process_default_template_map_replacement(catalog, map_property_item)
+    source_cfg_group = (map_property_item[CatConst.PROPERTY_FROM_CATALOG] if ((CatConst.PROPERTY_FROM_CATALOG in map_property_item) and (map_property_item[CatConst.PROPERTY_FROM_CATALOG] != '')) else None)
+    target_cfg_group = (map_property_item[CatConst.PROPERTY_TO_CATALOG] if ((CatConst.PROPERTY_TO_CATALOG in map_property_item) and (map_property_item[CatConst.PROPERTY_TO_CATALOG] != '')) else None)
+    default_value = (map_property_item[CatConst.PROPERTY_DEFAULT] if ((CatConst.PROPERTY_DEFAULT in map_property_item) and (map_property_item[CatConst.PROPERTY_DEFAULT] != '')) else None)
+    if ((source_cfg_group is None) and (target_cfg_group is None)):
+        self.notify_observers(CatConst.ACTION_RENAME_PROPERTY, [old_property_name, new_property_name, self._process_property_value_transformation, catalog, map_property_item])
+    elif ((source_cfg_group is not None) and (target_cfg_group is not None)):
+        if ((source_cfg_group in self._server_catalogs) and (target_cfg_group in self._server_catalogs)):
+            old_cfg_group = self.get_config(source_cfg_group).properties
+            new_cfg_group = self.get_config(target_cfg_group).properties
+            if (old_property_name in old_cfg_group):
+                new_cfg_group[new_property_name] = self._process_property_value_transformation(catalog, map_property_item, old_cfg_group[old_property_name])
+                if (new_property_name != old_property_name):
+                    del old_cfg_group[old_property_name]
+            elif ((old_property_name not in old_cfg_group) and (default_value is not None)):
+                new_cfg_group[new_property_name] = default_value

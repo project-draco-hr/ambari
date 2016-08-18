@@ -1,0 +1,24 @@
+def configuration_diff_analyze(diff_list):
+    report = {}
+    for item_key in diff_list.keys():
+        property_diff_list = diff_list[item_key]
+        item_stat = {'skipped': {'count': 0, 'items': [], }, 'ok': {'count': 0, 'items': [], }, 'fail': {'count': 0, 'items': [], }, 'total': {'count': len(property_diff_list), 'items': [], }, }
+
+        def push_status(status, _property_item):
+            item_stat[status]['count'] += 1
+            item_stat[status]['items'].append(_property_item)
+        for property_item in property_diff_list:
+            if ((property_item['actual_value'] is None) and (CatConst.PROPERTY_REMOVE_TAG in property_item['catalog_item']) and (property_item['catalog_item'][CatConst.PROPERTY_REMOVE_TAG] == CatConst.TRUE_TAG)):
+                push_status('ok', property_item)
+            elif ((property_item['actual_value'] is not None) and (property_item['catalog_value'] is not None) and (CatConst.VALUE_TEMPLATE_TAG in property_item['catalog_item']) and (property_item['catalog_item'][CatConst.VALUE_TEMPLATE_TAG] == CatConst.TRUE_TAG)):
+                push_status('skipped', property_item)
+            elif ((property_item['actual_value'] is None) and (property_item['catalog_value'] is not None)):
+                push_status('fail', property_item)
+            elif ((property_item['actual_value'] is not None) and (property_item['catalog_value'] is None)):
+                push_status('skipped', property_item)
+            elif (property_item['catalog_value'] == property_item['actual_value']):
+                push_status('ok', property_item)
+            elif (property_item['catalog_value'] != property_item['actual_value']):
+                push_status('fail', property_item)
+        report[item_key] = item_stat
+    return report

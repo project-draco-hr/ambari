@@ -1,0 +1,37 @@
+def verify_configuration():
+    diff_list = {}
+    if (len(Options.ARGS) > 1):
+        config_type = Options.ARGS[1]
+    else:
+        config_type = None
+    catalog_farm = UpgradeCatalogFactory(Options.OPTIONS.upgrade_json)
+    catalog = catalog_farm.get_catalog(Options.OPTIONS.from_stack, Options.OPTIONS.to_stack)
+    server_configs = ServerConfigFactory()
+    if (catalog is None):
+        raise FatalException(1, ('Upgrade catalog for version %s-%s not found' % (Options.OPTIONS.from_stack, Options.OPTIONS.to_stack)))
+    if ((config_type is not None) and (config_type not in catalog.items.keys()) and (config_type not in server_configs.items())):
+        raise FatalException(('Config type %s not exists' % config_type))
+    if (config_type is not None):
+        diff_list[config_type] = configuration_item_diff(config_type, catalog.items[config_type], server_configs.get_config(config_type).properties)
+    else:
+        for collection_name in catalog.items.keys():
+            diff_list[collection_name] = configuration_item_diff(collection_name, catalog.items[collection_name], server_configs.get_config(collection_name).properties)
+    analyzed_list = configuration_diff_analyze(diff_list)
+    report_file = None
+    if (Options.REPORT_FILE is not None):
+        try:
+            report_file = open(Options.REPORT_FILE, 'w')
+        except IOError as e:
+            Options.logger.error(('Report file open error: %s' % e.message))
+    for config_item in analyzed_list:
+        if (analyzed_list[config_item]['fail']['count'] != 0):
+            Options.logger.info(('%s: %s missing configuration(s) - please look in the output file for the missing params' % (config_item, analyzed_list[config_item]['fail']['count'])))
+            if (report_file is not None):
+                report_formatter(report_file, config_item, analyzed_list[config_item])
+        else:
+            Options.logger.info(('%s: verified' % config_item))
+    if (report_file is not None):
+        try:
+            report_file.close()
+        except IOError as e:
+            Options.logger.error(('Report file close error: %s' % e.message))

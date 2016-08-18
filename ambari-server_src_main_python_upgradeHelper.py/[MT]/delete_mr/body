@@ -1,0 +1,14 @@
+def delete_mr():
+    saved_mr_mapping = get_YN_input('Have you saved MR host mapping using action save-mr-mapping [y/n] (n)? ', False)
+    if (not saved_mr_mapping):
+        raise FatalException(1, 'Ensure MAPREDUCE host component mapping is saved before deleting it. Use action save-mr-mapping.')
+    SERVICE_URL_FORMAT = (Options.CLUSTER_URL + '/services/MAPREDUCE')
+    COMPONENT_URL_FORMAT = (Options.CLUSTER_URL + '/hosts/%s/host_components/%s')
+    NON_CLIENTS = ['JOBTRACKER', 'TASKTRACKER', 'HISTORYSERVER']
+    PUT_IN_DISABLED = {'HostRoles': {'state': 'DISABLED', }, }
+    hostmapping = read_mapping()
+    for (key, value) in hostmapping.items():
+        if ((key in NON_CLIENTS) and (len(value) > 0)):
+            for host in value:
+                curl((COMPONENT_URL_FORMAT % (host, key)), request_type='PUT', data=PUT_IN_DISABLED, validate=True)
+    curl(SERVICE_URL_FORMAT, request_type='DELETE', validate=True)

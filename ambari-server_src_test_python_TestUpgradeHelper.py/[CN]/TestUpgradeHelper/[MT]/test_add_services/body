@@ -1,0 +1,23 @@
+@patch.object(upgradeHelper, 'get_cluster_stackname')
+@patch.object(upgradeHelper, 'has_component_in_stack_def')
+@patch.object(upgradeHelper, 'read_mapping')
+@patch.object(upgradeHelper, 'curl')
+def test_add_services(self, curl_mock, read_mapping_mock, has_component_mock, get_stack_name_mock):
+    host_mapping = {'MAPREDUCE_CLIENT': ['test.host.vm'], 'JOBTRACKER': ['test1.host.vm'], 'TASKTRACKER': ['test2.host.vm'], 'HISTORYSERVER': ['test3.host.vm'], }
+    SERVICE_URL_FORMAT = (upgradeHelper.Options.CLUSTER_URL + '/services/{0}')
+    COMPONENT_URL_FORMAT = (SERVICE_URL_FORMAT + '/components/{1}')
+    HOST_COMPONENT_URL_FORMAT = (upgradeHelper.Options.CLUSTER_URL + '/hosts/{0}/host_components/{1}')
+    service_comp = {'YARN': ['NODEMANAGER', 'RESOURCEMANAGER', 'YARN_CLIENT'], 'MAPREDUCE2': ['HISTORYSERVER', 'MAPREDUCE2_CLIENT'], }
+    new_old_host_map = {'NODEMANAGER': 'TASKTRACKER', 'HISTORYSERVER': 'HISTORYSERVER', 'RESOURCEMANAGER': 'JOBTRACKER', 'YARN_CLIENT': 'MAPREDUCE_CLIENT', 'MAPREDUCE2_CLIENT': 'MAPREDUCE_CLIENT', }
+    get_stack_name_mock.return_value = ''
+    has_component_mock.return_value = False
+    read_mapping_mock.return_value = host_mapping
+    expected_curl_args = []
+    for service in service_comp.keys():
+        expected_curl_args.append([(SERVICE_URL_FORMAT.format(service),), {'validate': True, 'request_type': 'POST', }])
+        for component in service_comp[service]:
+            expected_curl_args.append([(COMPONENT_URL_FORMAT.format(service, component),), {'validate': True, 'request_type': 'POST', }])
+            for host in host_mapping[new_old_host_map[component]]:
+                expected_curl_args.append([(HOST_COMPONENT_URL_FORMAT.format(host, component),), {'validate': True, 'request_type': 'POST', }])
+    upgradeHelper.add_services()
+    self.assertEqual(expected_curl_args, curl_mock.call_args_list)
