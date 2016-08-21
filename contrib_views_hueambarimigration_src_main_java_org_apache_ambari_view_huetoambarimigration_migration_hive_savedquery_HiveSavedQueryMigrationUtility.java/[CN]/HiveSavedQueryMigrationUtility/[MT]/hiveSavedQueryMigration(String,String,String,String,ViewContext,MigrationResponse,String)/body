@@ -35,7 +35,7 @@
  else   if (view.getProperties().get("ambaridrivername").contains("oracle")) {
     ambaridatabase=new OracleQuerySetAmbariDB();
   }
-  int maxcountForHivehistroryAmbaridb, maxCountforSavequeryAmbaridb;
+  int maxcountForHivehistroryAmbaridb, maxCountforSavequeryAmbaridb=0;
   String time=null;
   Long epochtime=null;
   String dirNameforHiveSavedquery;
@@ -58,6 +58,8 @@
  else {
       connectionAmbaridb=DataSourceAmbariDatabase.getInstance(view.getProperties().get("ambaridrivername"),view.getProperties().get("ambarijdbcurl"),view.getProperties().get("ambaridbusername"),view.getProperties().get("ambaridbpassword")).getConnection();
       connectionAmbaridb.setAutoCommit(false);
+      int tableIdSavedQuery=hivesavedqueryimpl.fetchInstancetablenameForSavedqueryHive(connectionAmbaridb,instance,ambaridatabase);
+      int sequence=hivesavedqueryimpl.fetchSequenceno(connectionAmbaridb,tableIdSavedQuery,ambaridatabase);
       for (i=0; i < dbpojoHiveSavedQuery.size(); i++) {
         logger.info("_____________________");
         logger.info("Loop No." + (i + 1));
@@ -70,34 +72,30 @@
         migrationresult.setTotalNoQuery(dbpojoHiveSavedQuery.size());
         getResourceManager(view).update(migrationresult,jobid);
         logger.info("query fetched from hue:-  " + dbpojoHiveSavedQuery.get(i).getQuery());
-        int tableIdSavedQuery=hivesavedqueryimpl.fetchInstancetablenameForSavedqueryHive(connectionAmbaridb,instance,ambaridatabase);
-        int tableIdHistoryHive=hivesavedqueryimpl.fetchInstanceTablenameHiveHistory(connectionAmbaridb,instance,ambaridatabase);
         logger.info("Table name are fetched from instance name.");
         hivesavedqueryimpl.writetoFilequeryHql(dbpojoHiveSavedQuery.get(i).getQuery(),ConfigurationCheckImplementation.getHomeDir());
         hivesavedqueryimpl.writetoFileLogs(ConfigurationCheckImplementation.getHomeDir());
         logger.info(".hql and logs file are saved in temporary directory");
-        maxcountForHivehistroryAmbaridb=(hivesavedqueryimpl.fetchMaxdsidFromHiveHistory(connectionAmbaridb,tableIdHistoryHive,ambaridatabase) + 1);
-        maxCountforSavequeryAmbaridb=(hivesavedqueryimpl.fetchMaxidforSavedQueryHive(connectionAmbaridb,tableIdSavedQuery,ambaridatabase) + 1);
+        maxCountforSavequeryAmbaridb=i + sequence + 1;
         time=hivesavedqueryimpl.getTime();
-        epochtime=hivesavedqueryimpl.getEpochTime();
-        dirNameforHiveSavedquery="/user/admin/migration/jobs/migration-job-" + maxcountForHivehistroryAmbaridb + "-"+ time+ "/";
+        dirNameforHiveSavedquery="/user/" + username + "/hive/scripts/hive-query-"+ maxCountforSavequeryAmbaridb+ "-"+ time+ "/";
         logger.info("Directory will be creted in HDFS" + dirNameforHiveSavedquery);
-        hivesavedqueryimpl.insertRowHiveHistory(dirNameforHiveSavedquery,maxcountForHivehistroryAmbaridb,epochtime,connectionAmbaridb,tableIdHistoryHive,instance,i,ambaridatabase);
         logger.info("Row inserted in hive History table.");
         if (view.getProperties().get("KerberoseEnabled").equals("y")) {
           logger.info("Kerberose Enabled");
-          hivesavedqueryimpl.createDirHiveSecured(dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
-          hivesavedqueryimpl.putFileinHdfsSecured(ConfigurationCheckImplementation.getHomeDir() + "query.hql",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
-          hivesavedqueryimpl.putFileinHdfsSecured(ConfigurationCheckImplementation.getHomeDir() + "logs",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
+          hivesavedqueryimpl.createDirHiveSecured(dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"),username,view.getProperties().get("PrincipalUserName"));
+          hivesavedqueryimpl.putFileinHdfsSecured(ConfigurationCheckImplementation.getHomeDir() + "query.hql",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"),username,view.getProperties().get("PrincipalUserName"));
+          hivesavedqueryimpl.putFileinHdfsSecured(ConfigurationCheckImplementation.getHomeDir() + "logs",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"),username,view.getProperties().get("PrincipalUserName"));
         }
  else {
           logger.info("Kerberose Not Enabled");
-          hivesavedqueryimpl.createDirHive(dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
-          hivesavedqueryimpl.putFileinHdfs(ConfigurationCheckImplementation.getHomeDir() + "query.hql",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
-          hivesavedqueryimpl.putFileinHdfs(ConfigurationCheckImplementation.getHomeDir() + "logs",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"));
+          hivesavedqueryimpl.createDirHive(dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"),username);
+          hivesavedqueryimpl.putFileinHdfs(ConfigurationCheckImplementation.getHomeDir() + "query.hql",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"),username);
+          hivesavedqueryimpl.putFileinHdfs(ConfigurationCheckImplementation.getHomeDir() + "logs",dirNameforHiveSavedquery,view.getProperties().get("namenode_URI_Ambari"),username);
         }
-        hivesavedqueryimpl.insertRowinSavedQuery(maxCountforSavequeryAmbaridb,dbpojoHiveSavedQuery.get(i).getDatabase(),dirNameforHiveSavedquery,dbpojoHiveSavedQuery.get(i).getQuery(),dbpojoHiveSavedQuery.get(i).getOwner(),connectionAmbaridb,tableIdSavedQuery,instance,i,ambaridatabase);
+        hivesavedqueryimpl.insertRowinSavedQuery(maxCountforSavequeryAmbaridb,dbpojoHiveSavedQuery.get(i).getDatabase(),dirNameforHiveSavedquery,dbpojoHiveSavedQuery.get(i).getQuery(),dbpojoHiveSavedQuery.get(i).getOwner(),connectionAmbaridb,tableIdSavedQuery,instance,i,ambaridatabase,username);
       }
+      hivesavedqueryimpl.updateSequenceno(connectionAmbaridb,maxCountforSavequeryAmbaridb,tableIdSavedQuery,ambaridatabase);
       connectionAmbaridb.commit();
     }
   }

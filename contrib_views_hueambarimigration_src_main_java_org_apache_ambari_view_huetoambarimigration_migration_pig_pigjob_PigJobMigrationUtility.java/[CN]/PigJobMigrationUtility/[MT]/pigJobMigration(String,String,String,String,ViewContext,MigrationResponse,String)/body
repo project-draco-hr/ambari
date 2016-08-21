@@ -56,6 +56,8 @@
  else {
       connectionAmbaridb=DataSourceAmbariDatabase.getInstance(view.getProperties().get("ambaridrivername"),view.getProperties().get("ambarijdbcurl"),view.getProperties().get("ambaridbusername"),view.getProperties().get("ambaridbpassword")).getConnection();
       connectionAmbaridb.setAutoCommit(false);
+      int fetchPigTablenameInstance=pigjobimpl.fetchInstanceTablename(connectionAmbaridb,instance,ambaridatabase);
+      int sequence=pigjobimpl.fetchSequenceno(connectionAmbaridb,fetchPigTablenameInstance,ambaridatabase);
       for (i=0; i < pigJobDbPojo.size(); i++) {
         float calc=((float)(i + 1)) / pigJobDbPojo.size() * 100;
         int progressPercentage=Math.round(calc);
@@ -67,27 +69,27 @@
         logger.info("Loop No." + (i + 1));
         logger.info("________________");
         logger.info("the title of script " + pigJobDbPojo.get(i).getTitle());
-        int fetchPigTablenameInstance=pigjobimpl.fetchInstanceTablename(connectionAmbaridb,instance,ambaridatabase);
-        maxCountforPigScript=(pigjobimpl.fetchMaxIdforPigJob(connectionAmbaridb,fetchPigTablenameInstance,ambaridatabase) + 1);
+        maxCountforPigScript=i + sequence + 1;
         time=pigjobimpl.getTime();
         timeIndorder=pigjobimpl.getTimeInorder();
         epochtime=pigjobimpl.getEpochTime();
-        pigJobDirName="/user/admin/pig/jobs/" + pigJobDbPojo.get(i).getTitle() + "_"+ time+ "/";
-        pigjobimpl.insertRowPigJob(pigJobDirName,maxCountforPigScript,time,timeIndorder,epochtime,pigJobDbPojo.get(i).getTitle(),connectionAmbaridb,fetchPigTablenameInstance,pigJobDbPojo.get(i).getStatus(),instance,i,ambaridatabase);
+        pigJobDirName="/user/" + username + "/pig/jobs/"+ pigJobDbPojo.get(i).getTitle()+ "_"+ time+ "/";
+        pigjobimpl.insertRowPigJob(pigJobDirName,maxCountforPigScript,time,timeIndorder,epochtime,pigJobDbPojo.get(i).getTitle(),connectionAmbaridb,fetchPigTablenameInstance,pigJobDbPojo.get(i).getStatus(),instance,i,ambaridatabase,username);
         if (view.getProperties().get("KerberoseEnabled").equals("y")) {
-          pigjobimpl.createDirPigJobSecured(pigJobDirName,view.getProperties().get("namenode_URI_Ambari"));
-          pigjobimpl.copyFileBetweenHdfsSecured(pigJobDbPojo.get(i).getDir() + "/script.pig",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"));
-          pigjobimpl.copyFileBetweenHdfsSecured(pigJobDbPojo.get(i).getDir() + "/stderr",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"));
-          pigjobimpl.copyFileBetweenHdfsSecured(pigJobDbPojo.get(i).getDir() + "/stdout",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"));
+          pigjobimpl.createDirPigJobSecured(pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),username,view.getProperties().get("PrincipalUserName"));
+          pigjobimpl.copyFileBetweenHdfsSecured(pigJobDbPojo.get(i).getDir() + "/script.pig",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"),username,view.getProperties().get("PrincipalUserName"));
+          pigjobimpl.copyFileBetweenHdfsSecured(pigJobDbPojo.get(i).getDir() + "/stderr",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"),username,view.getProperties().get("PrincipalUserName"));
+          pigjobimpl.copyFileBetweenHdfsSecured(pigJobDbPojo.get(i).getDir() + "/stdout",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"),username,view.getProperties().get("PrincipalUserName"));
         }
  else {
-          pigjobimpl.createDirPigJob(pigJobDirName,view.getProperties().get("namenode_URI_Ambari"));
-          pigjobimpl.copyFileBetweenHdfs(pigJobDbPojo.get(i).getDir() + "/script.pig",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"));
-          pigjobimpl.copyFileBetweenHdfs(pigJobDbPojo.get(i).getDir() + "/stderr",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"));
-          pigjobimpl.copyFileBetweenHdfs(pigJobDbPojo.get(i).getDir() + "/stdout",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"));
+          pigjobimpl.createDirPigJob(pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),username);
+          pigjobimpl.copyFileBetweenHdfs(pigJobDbPojo.get(i).getDir() + "/script.pig",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"),username);
+          pigjobimpl.copyFileBetweenHdfs(pigJobDbPojo.get(i).getDir() + "/stderr",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"),username);
+          pigjobimpl.copyFileBetweenHdfs(pigJobDbPojo.get(i).getDir() + "/stdout",pigJobDirName,view.getProperties().get("namenode_URI_Ambari"),view.getProperties().get("namenode_URI_Hue"),username);
         }
         logger.info(pigJobDbPojo.get(i).getTitle() + "has been migrated to Ambari");
       }
+      pigjobimpl.updateSequenceno(connectionAmbaridb,maxCountforPigScript,fetchPigTablenameInstance,ambaridatabase);
       connectionAmbaridb.commit();
     }
   }

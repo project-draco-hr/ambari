@@ -1,0 +1,45 @@
+{
+  try {
+    UserGroupInformation ugi=UserGroupInformation.createRemoteUser("hdfs");
+    ugi.doAs(new PrivilegedExceptionAction<Void>(){
+      public Void run() throws Exception {
+        Configuration confAmbari=new Configuration();
+        confAmbari.set("fs.defaultFS",nameNodeuriAmbari);
+        confAmbari.set("hadoop.job.ugi","hdfs");
+        FileSystem fileSystemAmbari=FileSystem.get(confAmbari);
+        Configuration confHue=new Configuration();
+        confHue.set("fs.defaultFS",nameNodeuriAmbari);
+        confHue.set("hadoop.job.ugi","hdfs");
+        FileSystem fileSystemHue=FileSystem.get(confHue);
+        String filename=source.substring(source.lastIndexOf('/') + 1,source.length());
+        String dest1;
+        if (dest.charAt(dest.length() - 1) != '/') {
+          dest1=dest + "/" + filename;
+        }
+ else {
+          dest1=dest + filename;
+        }
+        Path path1=new Path(source);
+        FSDataInputStream in1=fileSystemHue.open(path1);
+        Path path=new Path(dest1);
+        if (fileSystemAmbari.exists(path)) {
+        }
+        FSDataOutputStream out=fileSystemAmbari.create(path);
+        byte[] b=new byte[1024];
+        int numBytes=0;
+        while ((numBytes=in1.read(b)) > 0) {
+          out.write(b,0,numBytes);
+        }
+        in1.close();
+        out.close();
+        fileSystemAmbari.setOwner(path,username,"hadoop");
+        fileSystemAmbari.close();
+        return null;
+      }
+    }
+);
+  }
+ catch (  Exception e) {
+    logger.error("Webhdfs exception: ",e);
+  }
+}
