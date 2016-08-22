@@ -1,0 +1,77 @@
+{
+  String queryString=(String)searchCriteria.getParamValue(paramName);
+  String columnQuery=(String)searchCriteria.getParamValue(LogSearchConstants.COLUMN_QUERY);
+  if (StringUtils.isBlank(queryString)) {
+    queryString=null;
+  }
+  if (!StringUtils.isBlank(columnQuery) && StringUtils.isBlank(queryString) && !paramName.equals(LogSearchConstants.EXCLUDE_QUERY)) {
+    queryString=columnQuery;
+  }
+  List<String> conditionQuries=new ArrayList<String>();
+  List<String> referalConditionQuries=new ArrayList<String>();
+  List<String> elments=new ArrayList<String>();
+  List<HashMap<String,Object>> queryList=jsonUtil.jsonToMapObjectList(queryString);
+  if (queryList != null && queryList.size() > 0) {
+    if (!StringUtils.isBlank(columnQuery) && !columnQuery.equals(queryString) && !paramName.equals(LogSearchConstants.EXCLUDE_QUERY)) {
+      List<HashMap<String,Object>> columnQueryList=jsonUtil.jsonToMapObjectList(columnQuery);
+      if (columnQueryList != null && columnQueryList.size() > 0) {
+        queryList.addAll(columnQueryList);
+      }
+    }
+    for (    HashMap<String,Object> columnListMap : queryList) {
+      String orQuery="";
+      StringBuilder field=new StringBuilder();
+      if (columnListMap != null) {
+        for (        String key : columnListMap.keySet()) {
+          if (!StringUtils.isBlank(key)) {
+            String originalKey=getOriginalKey(key,logType);
+            String value=getOriginalValue(originalKey,"" + columnListMap.get(key));
+            orQuery=putWildCardByType(value,originalKey,logType);
+            if (StringUtils.isBlank(orQuery)) {
+              logger.debug("Removing invalid filter for key :" + originalKey + " and value :"+ value);
+              continue;
+            }
+            boolean isSame=false;
+            if (elments.contains(key)) {
+              isSame=true;
+            }
+            if (isSame && !operation.equals(LogSearchConstants.EXCLUDE_QUERY)) {
+              for (              String tempCondition : conditionQuries) {
+                if (tempCondition.contains(originalKey)) {
+                  String newCondtion=tempCondition + " " + Condition.OR.name()+ " "+ orQuery;
+                  referalConditionQuries.remove(tempCondition);
+                  referalConditionQuries.add(newCondtion);
+                }
+              }
+              conditionQuries.removeAll(conditionQuries);
+              conditionQuries.addAll(referalConditionQuries);
+            }
+ else {
+              conditionQuries.add(orQuery.toString());
+              referalConditionQuries.add(orQuery.toString());
+            }
+            field.append(key);
+            elments.add(field.toString());
+          }
+        }
+      }
+    }
+  }
+  if (!referalConditionQuries.isEmpty() && !StringUtils.isBlank(operation)) {
+    if (operation.equals(LogSearchConstants.INCLUDE_QUERY) || operation.equals(LogSearchConstants.COLUMN_QUERY)) {
+      for (      String filter : referalConditionQuries) {
+        if (!StringUtils.isBlank(filter)) {
+          solrQuery.addFilterQuery(filter);
+        }
+      }
+    }
+ else     if (operation.equals(LogSearchConstants.EXCLUDE_QUERY)) {
+      for (      String filter : referalConditionQuries) {
+        if (!StringUtils.isBlank(filter)) {
+          filter=LogSearchConstants.MINUS_OPERATOR + filter;
+          solrQuery.addFilterQuery(filter);
+        }
+      }
+    }
+  }
+}
