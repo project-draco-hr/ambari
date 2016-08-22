@@ -1,31 +1,41 @@
 {
-  String type;
+  String fieldType;
+  SolrDaoBase solrDaoBase=null;
 switch (logType) {
 case AUDIT:
-    String auditSuffix=PropertiesUtil.getProperty("logsearch.solr.collection.audit.logs",LogSearchConstants.DEFAULT_AUDIT_COLUMN_SUFFIX);
-  type=ConfigUtil.schemaFieldsName.get(key + auditSuffix);
+    fieldType=auditSolrDao.schemaFieldsNameMap.get(key);
+  solrDaoBase=auditSolrDao;
 break;
 case SERVICE:
-String serviceLogs=PropertiesUtil.getProperty("logsearch.solr.collection.service.logs",LogSearchConstants.DEFAULT_SERVICE_COLUMN_SUFFIX);
-type=ConfigUtil.schemaFieldsName.get(key + serviceLogs);
+fieldType=serviceLogsSolrDao.schemaFieldsNameMap.get(key);
+solrDaoBase=serviceLogsSolrDao;
 if (key.equalsIgnoreCase(LogSearchConstants.SOLR_LOG_MESSAGE)) {
 return solrUtil.escapeForLogMessage(key,str);
 }
 break;
 default :
-type=null;
+logger.error("Invalid logtype :" + logType);
+fieldType=null;
 }
-if (type == null) {
-return key + ":" + "*"+ str+ "*";
+if (!stringUtil.isEmpty(fieldType)) {
+if (solrUtil.isSolrFieldNumber(fieldType,solrDaoBase)) {
+String value=putEscapeCharacterForNumber(str,fieldType,solrDaoBase);
+if (!stringUtil.isEmpty(value)) {
+return key + ":" + value;
 }
- else if ("text_std_token_lower_case".equalsIgnoreCase(type)) {
+ else {
+return null;
+}
+}
+ else if (checkTokenizer(fieldType,StandardTokenizerFactory.class,solrDaoBase)) {
 return key + ":" + solrUtil.escapeForStandardTokenizer(str);
 }
- else if ("key_lower_case".equalsIgnoreCase(type) || "string".equalsIgnoreCase(type)) {
+ else if (checkTokenizer(fieldType,KeywordTokenizerFactory.class,solrDaoBase) || "string".equalsIgnoreCase(fieldType)) {
 return key + ":" + solrUtil.makeSolrSearchStringWithoutAsterisk(str);
 }
- else if ("ip_address".equalsIgnoreCase(type)) {
+ else if (checkTokenizer(fieldType,PathHierarchyTokenizerFactory.class,solrDaoBase)) {
 return key + ":" + str;
 }
-return key + ":" + putEscapeCharacterForNumber(str);
+}
+return key + ":" + "*"+ str+ "*";
 }
