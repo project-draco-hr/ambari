@@ -1,0 +1,22 @@
+{
+  AmbariManagementController ambariManagementController=injector.getInstance(AmbariManagementController.class);
+  Clusters clusters=ambariManagementController.getClusters();
+  if (clusters != null) {
+    Map<String,Cluster> clusterMap=getCheckedClusterMap(clusters);
+    if (clusterMap != null && !clusterMap.isEmpty()) {
+      for (      final Cluster cluster : clusterMap.values()) {
+        Set<String> installedServices=cluster.getServices().keySet();
+        if (installedServices.contains("KAFKA") && cluster.getSecurityType() == SecurityType.KERBEROS) {
+          Config kafkaBroker=cluster.getDesiredConfigByType(KAFKA_BROKER_CONFIG);
+          if (kafkaBroker != null) {
+            String listenersPropertyValue=kafkaBroker.getProperties().get("listeners");
+            if (StringUtils.isNotEmpty(listenersPropertyValue)) {
+              String newListenersPropertyValue=listenersPropertyValue.replaceAll("\\bPLAINTEXT\\b","PLAINTEXTSASL");
+              updateConfigurationProperties(KAFKA_BROKER_CONFIG,Collections.singletonMap("listeners",newListenersPropertyValue),true,false);
+            }
+          }
+        }
+      }
+    }
+  }
+}
