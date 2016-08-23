@@ -1,0 +1,38 @@
+{
+  Unmarshaller u=jaxbContexts.get(clz).createUnmarshaller();
+  XMLInputFactory xmlFactory=XMLInputFactory.newInstance();
+  FileReader reader=new FileReader(file);
+  XMLStreamReader xmlReader=xmlFactory.createXMLStreamReader(reader);
+  xmlReader.nextTag();
+  String xsdName=xmlReader.getAttributeValue(XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI,"noNamespaceSchemaLocation");
+  InputStream xsdStream=null;
+  if (null != xsdName) {
+    if (logXsd) {
+      LOG.info("Processing " + file.getAbsolutePath() + " with "+ xsdName);
+    }
+    if (jaxbSchemas.containsKey(xsdName)) {
+      u.setSchema(jaxbSchemas.get(xsdName));
+    }
+ else {
+      xsdStream=clz.getClassLoader().getResourceAsStream(xsdName);
+      if (null != xsdStream) {
+        SchemaFactory factory=SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+        Schema schema=factory.newSchema(new StreamSource(xsdStream));
+        u.setSchema(schema);
+        jaxbSchemas.put(xsdName,schema);
+      }
+ else       if (logXsd) {
+        LOG.info("Schema '" + xsdName + "' for "+ file.getAbsolutePath()+ " was not found, ignoring");
+      }
+    }
+  }
+ else   if (logXsd) {
+    LOG.info("NOT processing " + file.getAbsolutePath() + "; there is no XSD");
+  }
+  try {
+    return clz.cast(u.unmarshal(file));
+  }
+  finally {
+    IOUtils.closeQuietly(xsdStream);
+  }
+}
