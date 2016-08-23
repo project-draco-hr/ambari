@@ -1,5 +1,6 @@
-@patch('utils.get_namenode_states')
-def test_upgrade_restart(self, get_namenode_states_mock):
+@patch.object(time, 'sleep')
+@patch('resource_management.libraries.functions.namenode_ha_utils.get_namenode_states')
+def test_upgrade_restart(self, get_namenode_states_mock, sleep_mock):
     active_namenodes = [('nn1', 'c6401.ambari.apache.org:50070')]
     standby_namenodes = [('nn2', 'c6402.ambari.apache.org:50070')]
     unknown_namenodes = []
@@ -8,7 +9,11 @@ def test_upgrade_restart(self, get_namenode_states_mock):
     unknown_namenodes = active_namenodes
     active_namenodes = []
     get_namenode_states_mock.return_value = (active_namenodes, standby_namenodes, unknown_namenodes)
-    self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/namenode.py'), classname='NameNode', command='restart', config_file='nn_ru_lzo.json', stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES)
+    try:
+        self.executeScript((self.COMMON_SERVICES_PACKAGE_DIR + '/scripts/namenode.py'), classname='NameNode', command='restart', config_file='nn_ru_lzo.json', stack_version=self.STACK_VERSION, target=RMFTestCase.TARGET_COMMON_SERVICES)
+        raise Fail('Expected a failure due to the inability to determine Active/Standby NameNode and Safemode detection')
+    except:
+        pass
     self.assertFalse((0 == len(Script.structuredOut)))
     self.assertTrue(Script.structuredOut.has_key('upgrade_type'))
     self.assertTrue(Script.structuredOut.has_key('direction'))

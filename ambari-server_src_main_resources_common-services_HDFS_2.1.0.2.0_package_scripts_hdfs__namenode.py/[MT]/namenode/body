@@ -47,24 +47,23 @@ def namenode(action=None, hdfs_binary=None, do_format=True, upgrade_type=None, u
         is_active_namenode = True
         if params.dfs_ha_enabled:
             Logger.info('Waiting for the NameNode to broadcast whether it is Active or Standby...')
-            if check_is_active_namenode(hdfs_binary):
-                Logger.info('Waiting for the NameNode to leave Safemode since High Availability is enabled and it is Active...')
-            else:
-                ensure_safemode_off = False
+            if (is_this_namenode_active() is False):
                 is_active_namenode = False
-                Logger.info('This is the Standby NameNode; proceeding without waiting for it to leave Safemode')
-        else:
-            Logger.info('Waiting for the NameNode to leave Safemode...')
+                if (upgrade_type is None):
+                    ensure_safemode_off = False
         if (upgrade_type == 'nonrolling'):
-            Logger.info('An express upgrade has been detected and this NameNode will not leave Safemode until DataNodes are started. Safemode does not need to end before proceeding.')
             ensure_safemode_off = False
+        if ensure_safemode_off:
+            Logger.info('Waiting for this NameNode to leave Safemode due to the following conditions: HA: {0}, isActive: {1}, upgradeType: {2}'.format(params.dfs_ha_enabled, is_active_namenode, upgrade_type))
+        else:
+            Logger.info('Skipping Safemode check due to the following conditions: HA: {0}, isActive: {1}, upgradeType: {2}'.format(params.dfs_ha_enabled, is_active_namenode, upgrade_type))
         if ensure_safemode_off:
             wait_for_safemode_off(hdfs_binary)
         if (is_active_namenode and ensure_safemode_off):
             create_hdfs_directories()
             create_ranger_audit_hdfs_directories()
         else:
-            Logger.info('Skipping creation of HDFS directories since this is not the Active NameNode.')
+            Logger.info('Skipping creation of HDFS directories since this is either not the Active NameNode or we did not wait for Safemode to finish.')
     elif (action == 'stop'):
         import params
         service(action='stop', name='namenode', user=params.hdfs_user)
