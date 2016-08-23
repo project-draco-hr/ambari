@@ -1,0 +1,26 @@
+{
+  Pattern regex=Pattern.compile("^.*\\s*(HBASE_MASTER_OPTS)\\s*=.*(XX:MaxDirectMemorySize).*$",Pattern.MULTILINE);
+  Map<String,String> commandParams=new HashMap<String,String>();
+  commandParams.put("clusterName","c1");
+  ExecutionCommand executionCommand=new ExecutionCommand();
+  executionCommand.setCommandParams(commandParams);
+  executionCommand.setClusterName("c1");
+  HostRoleCommand hrc=EasyMock.createMock(HostRoleCommand.class);
+  expect(hrc.getRequestId()).andReturn(1L).anyTimes();
+  expect(hrc.getStageId()).andReturn(2L).anyTimes();
+  expect(hrc.getExecutionCommandWrapper()).andReturn(new ExecutionCommandWrapper(executionCommand)).anyTimes();
+  replay(hrc);
+  HBaseEnvMaxDirectMemorySizeAction action=new HBaseEnvMaxDirectMemorySizeAction();
+  m_clusterField.set(action,clusters);
+  action.setExecutionCommand(executionCommand);
+  action.setHostRoleCommand(hrc);
+  CommandReport report=action.execute(null);
+  assertNotNull(report);
+  Cluster c=clusters.getCluster("c1");
+  Config config=c.getDesiredConfigByType("hbase-env");
+  Map<String,String> map=config.getProperties();
+  Assert.assertTrue(map.containsKey("content"));
+  String content=map.get("content");
+  Matcher m=regex.matcher(content);
+  assertEquals(true,m.find());
+}

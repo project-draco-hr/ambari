@@ -1,0 +1,22 @@
+{
+  String clusterName=getExecutionCommand().getClusterName();
+  Cluster cluster=clusters.getCluster(clusterName);
+  Config config=cluster.getDesiredConfigByType(SOURCE_CONFIG_TYPE);
+  if (config == null) {
+    return createCommandReport(0,HostRoleStatus.FAILED,"{}",String.format("Source type %s not found",SOURCE_CONFIG_TYPE),"");
+  }
+  Map<String,String> properties=config.getProperties();
+  String content=properties.get(CONTENT_NAME);
+  if (content == null) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("The %s/%s property was not found. The -XX:MaxDirectMemorySize will not be added",SOURCE_CONFIG_TYPE,CONTENT_NAME),"");
+  }
+  Matcher m=REGEX.matcher(content);
+  if (m.find()) {
+    return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("The %s/%s property already contains an entry for %s and will not be modified",SOURCE_CONFIG_TYPE,CONTENT_NAME,APPEND_CONTENT_LINE),"");
+  }
+  String appendedContent=content + "\n" + APPEND_CONTENT_LINE;
+  properties.put(CONTENT_NAME,appendedContent);
+  config.setProperties(properties);
+  config.persist(false);
+  return createCommandReport(0,HostRoleStatus.COMPLETED,"{}",String.format("The %s/%s property was appended with %s",SOURCE_CONFIG_TYPE,CONTENT_NAME,APPEND_CONTENT_LINE),"");
+}
