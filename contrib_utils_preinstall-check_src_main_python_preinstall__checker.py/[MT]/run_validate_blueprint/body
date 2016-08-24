@@ -1,0 +1,43 @@
+def run_validate_blueprint(options, server_url):
+    results_to_print = []
+    blueprint_file = options.blueprint
+    label_check = 'Blueprint validation'
+    step(label_check)
+    logger.debug('Blueprint file to check {0}'.format(blueprint_file))
+    if os.path.isfile(blueprint_file):
+        'Validate blueprint file is a valid json file'
+        valid_json_file = False
+        try:
+            with open(blueprint_file) as data_file:
+                data = json.load(data_file)
+                valid_json_file = True
+        except ValueError as value_error:
+            results_to_print.append({'key': label_check, 'status': STATUS_FAILED, 'error': [str(value_error)], })
+        if valid_json_file:
+            'Either a timestamp based name or the name defined in the blueprint'
+            blueprint_metadata = data.get('Blueprints', {})
+            blueprint_name = blueprint_metadata.get('blueprint_name', None)
+            if (not blueprint_name):
+                blueprint_name = 'blueprint_validation_{0}'.format(str(uuid.uuid4()))
+            logger.debug('Blueprint name used for server side validation: {0}'.format(blueprint_name))
+            url = '{0}/api/v1/blueprints/{1}'.format(server_url, blueprint_name)
+            (out, err, ec) = execute_curl_command(url, request_type=HTTP_REQUEST_POST, request_body='@{0}'.format(blueprint_file), user=options.user, password=options.password)
+            logger.debug(out)
+            logger.debug(err)
+            if (CODE_ERROR == ec):
+                results_to_print.append({'key': label_check, 'status': STATUS_FAILED, 'error': [err], })
+            else:
+                http_response_code = get_http_response_code(err)
+                logger.debug('HTTP response from the Ambari server: {0}'.format(http_response_code))
+                if ((http_response_code == HTTP_CREATED) and (not out)):
+                    results_to_print.append({'key': label_check, 'status': STATUS_PASSED, })
+                else:
+                    (is_erroneous_response, http_ec, http_err) = is_erroneous_response_by_server(out)
+                    if is_erroneous_response:
+                        results_to_print.append({'key': label_check, 'status': STATUS_FAILED, 'error': [http_err], })
+                    else:
+                        results_to_print.append({'key': label_check, 'status': STATUS_FAILED, 'error': [err], })
+    else:
+        results_to_print.append({'key': label_check, 'status': STATUS_FAILED, 'error': ['{0} does not exist'.format(blueprint_file)], })
+    print_check_results(results_to_print)
+    deregister_temporary_blueprint(options, server_url, blueprint_name)
