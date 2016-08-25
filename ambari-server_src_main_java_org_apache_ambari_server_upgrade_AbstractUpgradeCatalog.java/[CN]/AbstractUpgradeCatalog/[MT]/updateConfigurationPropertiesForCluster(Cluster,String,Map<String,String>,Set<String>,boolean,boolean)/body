@@ -17,9 +17,19 @@
  else {
         oldConfigProperties=oldConfig.getProperties();
       }
-      Map<String,String> mergedProperties=mergeProperties(oldConfigProperties,properties,updateIfExists);
+      Multimap<ConfigUpdateType,Entry<String,String>> propertiesToLog=ArrayListMultimap.create();
+      String serviceName=cluster.getServiceByConfigType(configType);
+      Map<String,String> mergedProperties=mergeProperties(oldConfigProperties,properties,updateIfExists,propertiesToLog);
       if (removePropertiesList != null) {
-        mergedProperties=removeProperties(mergedProperties,removePropertiesList);
+        mergedProperties=removeProperties(mergedProperties,removePropertiesList,propertiesToLog);
+      }
+      if (propertiesToLog.size() > 0) {
+        try {
+          configuration.wrtiteToAmbariUpgradeConfigUpdatesFile(propertiesToLog,configType,serviceName,ambariUpgradeConfigUpdatesFileName);
+        }
+ catch (        Exception e) {
+          LOG.error("Write to config updates file failed:",e);
+        }
       }
       if (!Maps.difference(oldConfigProperties,mergedProperties).areEqual()) {
         LOG.info("Applying configuration with tag '{}' to " + "cluster '{}'",newTag,cluster.getClusterName());

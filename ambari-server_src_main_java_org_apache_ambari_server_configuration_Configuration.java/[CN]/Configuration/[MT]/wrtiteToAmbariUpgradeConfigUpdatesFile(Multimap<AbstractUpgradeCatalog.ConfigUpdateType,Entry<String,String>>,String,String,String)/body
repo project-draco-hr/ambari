@@ -1,0 +1,54 @@
+{
+  try {
+    if (ambariUpgradeConfigUpdatesFilePath == null) {
+      Properties log4jProperties=getLog4jProperties();
+      if (log4jProperties != null) {
+        String logPath=log4jProperties.getProperty("ambari.log.dir");
+        String rootPath=log4jProperties.getProperty("ambari.root.dir");
+        logPath=StringUtils.replace(logPath,"${ambari.root.dir}",rootPath);
+        logPath=StringUtils.replace(logPath,"//","/");
+        if (StringUtils.isNotEmpty(logPath)) {
+          ambariUpgradeConfigUpdatesFilePath=logPath + File.separator + wrtiteToAmbariUpgradeConfigUpdatesFile;
+        }
+      }
+ else {
+        LOG.warn("Log4j properties are not available");
+      }
+    }
+  }
+ catch (  Exception e) {
+    LOG.warn("Failed to create log file name or get path for it:",e);
+  }
+  if (StringUtils.isNotEmpty(ambariUpgradeConfigUpdatesFilePath)) {
+    Gson gson=new GsonBuilder().setPrettyPrinting().create();
+    Writer fileWriter=null;
+    try {
+      JsonObject rootJson=readFileToJSON(ambariUpgradeConfigUpdatesFilePath);
+      buildServiceJson(propertiesToLog,configType,serviceName,rootJson);
+      fileWriter=new FileWriter(ambariUpgradeConfigUpdatesFilePath);
+      gson.toJson(rootJson,fileWriter);
+    }
+ catch (    IllegalArgumentException e) {
+      JsonObject rootJson=new JsonObject();
+      buildServiceJson(propertiesToLog,configType,serviceName,rootJson);
+      try {
+        fileWriter=new FileWriter(ambariUpgradeConfigUpdatesFilePath);
+        gson.toJson(rootJson,fileWriter);
+      }
+ catch (      IOException e1) {
+        LOG.error("Unable to write data into " + ambariUpgradeConfigUpdatesFilePath,e);
+      }
+    }
+catch (    IOException e) {
+      LOG.error("Unable to write data into " + ambariUpgradeConfigUpdatesFilePath,e);
+    }
+ finally {
+      try {
+        fileWriter.close();
+      }
+ catch (      IOException e) {
+        LOG.error("Unable to close file " + ambariUpgradeConfigUpdatesFilePath,e);
+      }
+    }
+  }
+}
