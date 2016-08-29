@@ -3,7 +3,6 @@
     LOG.debug(event.toString());
   }
   List<Alert> alerts=event.getAlerts();
-  List<AlertCurrentEntity> toCreate=new ArrayList<>();
   List<AlertCurrentEntity> toMerge=new ArrayList<>();
   List<AlertCurrentEntity> toCreateHistoryAndMerge=new ArrayList<>();
   List<AlertEvent> alertEvents=new ArrayList<>(20);
@@ -27,32 +26,39 @@
     }
     AlertCurrentEntity current;
     AlertState alertState=alert.getState();
-    if (StringUtils.isBlank(alert.getHostName()) || definition.isHostIgnored()) {
-      current=m_alertsDao.findCurrentByNameNoHost(clusterId,alert.getName());
-    }
- else {
-      current=m_alertsDao.findCurrentByHostAndName(clusterId,alert.getHostName(),alert.getName());
-    }
+    current=getCurrentEntity(clusterId,alert,definition);
     if (null == current) {
       if (alertState == AlertState.SKIPPED) {
         continue;
       }
-      AlertHistoryEntity history=createHistory(clusterId,definition,alert);
-      MaintenanceState maintenanceState=MaintenanceState.OFF;
+      int key=Objects.hash(clusterId,alert.getName(),alert.getHostName());
+      Lock lock=creationLocks.get(key);
+      lock.lock();
       try {
-        maintenanceState=m_maintenanceStateHelper.get().getEffectiveState(clusterId,alert);
+        current=getCurrentEntity(clusterId,alert,definition);
+        if (null != current) {
+          continue;
+        }
+        AlertHistoryEntity history=createHistory(clusterId,definition,alert);
+        MaintenanceState maintenanceState=MaintenanceState.OFF;
+        try {
+          maintenanceState=m_maintenanceStateHelper.get().getEffectiveState(clusterId,alert);
+        }
+ catch (        Exception exception) {
+          LOG.error("Unable to determine the maintenance mode state for {}, defaulting to OFF",alert,exception);
+        }
+        current=new AlertCurrentEntity();
+        current.setMaintenanceState(maintenanceState);
+        current.setAlertHistory(history);
+        current.setLatestTimestamp(alert.getTimestamp());
+        current.setOriginalTimestamp(alert.getTimestamp());
+        current.setFirmness(AlertFirmness.HARD);
+        m_alertsDao.create(current);
+        alertEvents.add(new InitialAlertEvent(clusterId,alert,current));
       }
- catch (      Exception exception) {
-        LOG.error("Unable to determine the maintenance mode state for {}, defaulting to OFF",alert,exception);
+  finally {
+        lock.unlock();
       }
-      current=new AlertCurrentEntity();
-      current.setMaintenanceState(maintenanceState);
-      current.setAlertHistory(history);
-      current.setLatestTimestamp(alert.getTimestamp());
-      current.setOriginalTimestamp(alert.getTimestamp());
-      current.setFirmness(AlertFirmness.HARD);
-      toCreate.add(current);
-      alertEvents.add(new InitialAlertEvent(clusterId,alert,current));
     }
  else     if (alertState == current.getAlertHistory().getAlertState() || alertState == AlertState.SKIPPED) {
       current.setLatestTimestamp(alert.getTimestamp());
@@ -112,7 +118,7 @@ toCreateHistoryAndMerge.add(current);
 alertEvents.add(new AlertStateChangeEvent(clusterId,alert,current,oldState,oldFirmness));
 }
 }
-saveEntities(toCreate,toMerge,toCreateHistoryAndMerge);
+saveEntities(toMerge,toCreateHistoryAndMerge);
 for (AlertEvent eventToFire : alertEvents) {
 m_alertEventPublisher.publish(eventToFire);
 }
