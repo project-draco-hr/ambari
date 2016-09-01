@@ -1,0 +1,18 @@
+def killpg_gracefully(proc, timeout=GRACEFUL_PG_KILL_TIMEOUT_SECONDS):
+    '\n  Tries to kill pgroup (process group) of process with SIGTERM.\n  If the process is still alive after waiting for timeout, SIGKILL is sent to the pgroup.\n  '
+    from resource_management.core import sudo
+    from resource_management.core.logger import Logger
+    if (proc.poll() == None):
+        try:
+            pgid = os.getpgid(proc.pid)
+            sudo.kill((- pgid), signal.SIGTERM)
+            for i in xrange((10 * timeout)):
+                if (proc.poll() is not None):
+                    break
+                time.sleep(0.1)
+            else:
+                Logger.info('Cannot gracefully kill process group {0}. Resorting to SIGKILL.'.format(pgid))
+                sudo.kill((- pgid), signal.SIGKILL)
+                proc.wait()
+        except OSError:
+            pass
