@@ -1,0 +1,35 @@
+import os
+import subprocess
+import sys
+import phoenix_utils
+import atexit
+import fnmatch
+global childProc
+childProc = None
+atexit.register(kill_child)
+if (len(sys.argv) < 2):
+    print 'Zookeeper not specified. \nUsage: sqlline.py <zookeeper> <optional_sql_file> \nExample: \n 1. sqlline.py localhost:2181:/hbase \n 2. sqlline.py localhost:2181:/hbase ../examples/stock_symbol.sql'
+    sys.exit()
+sqlfile = ''
+if (len(sys.argv) > 2):
+    sqlfile = ('--run=' + phoenix_utils.shell_quote([sys.argv[2]]))
+colorSetting = 'true'
+if (os.name == 'nt'):
+    colorSetting = 'false'
+hbase_conf_dir = os.environ.get('HBASE_CONF_DIR', '/etc/ams-hbase/conf')
+hadoop_conf = os.environ.get('HADOOP_CONF_DIR', '/etc/ams-hbase/conf')
+hadoop_classpath = os.environ.get('HADOOP_CLASSPATH', '/usr/lib/ams-hbase/lib')
+PATH_PREFIX = '/usr/lib/ambari-metrics-collector/'
+if (not os.path.exists(PATH_PREFIX)):
+    print (('Fatal Error: ' + PATH_PREFIX) + ' not a valid path.')
+    sys.exit(1)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+phoenix_client_path = (PATH_PREFIX + '*')
+java_cmd = ((((((((((((find_java() + ' -cp "') + phoenix_client_path) + os.pathsep) + hadoop_conf) + '" -Dlog4j.configuration=file:') + os.path.join(current_dir, 'log4j.properties')) + ' sqlline.SqlLine -d org.apache.phoenix.jdbc.PhoenixDriver -u jdbc:phoenix:') + phoenix_utils.shell_quote([sys.argv[1]])) + ' -n none -p none --color=') + colorSetting) + ' --fastConnect=false --verbose=true --isolation=TRANSACTION_READ_COMMITTED ') + sqlfile)
+print ('java command: %s' % str(java_cmd))
+childProc = subprocess.Popen(java_cmd, shell=True)
+(output, error) = childProc.communicate()
+returncode = childProc.returncode
+childProc = None
+if (returncode is not None):
+    sys.exit(returncode)
