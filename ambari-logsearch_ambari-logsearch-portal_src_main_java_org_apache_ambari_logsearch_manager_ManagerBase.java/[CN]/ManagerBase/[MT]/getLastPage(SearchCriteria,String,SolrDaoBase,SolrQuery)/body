@@ -1,0 +1,45 @@
+{
+  Integer maxRows=searchCriteria.getMaxRows();
+  String givenSortType=searchCriteria.getSortType();
+  searchCriteria=new SearchCriteria();
+  searchCriteria.setSortBy(logTimeField);
+  if (givenSortType == null || givenSortType.equals(LogSearchConstants.DESCENDING_ORDER)) {
+    lastPageQuery.removeSort(LogSearchConstants.LOGTIME);
+    searchCriteria.setSortType(LogSearchConstants.ASCENDING_ORDER);
+  }
+ else {
+    searchCriteria.setSortType(LogSearchConstants.DESCENDING_ORDER);
+  }
+  queryGenerator.setSingleSortOrder(lastPageQuery,searchCriteria);
+  Long totalLogs=0l;
+  int startIndex=0;
+  int numberOfLogsOnLastPage=0;
+  SEARCH_RESPONSE logResponse=null;
+  try {
+    SolrUtil.setStart(lastPageQuery,0);
+    SolrUtil.setRowCount(lastPageQuery,maxRows);
+    logResponse=getLogAsPaginationProvided(lastPageQuery,solrDoaBase);
+    totalLogs=countQuery(lastPageQuery,solrDoaBase);
+    startIndex=Integer.parseInt("" + ((totalLogs / maxRows) * maxRows));
+    numberOfLogsOnLastPage=Integer.parseInt("" + (totalLogs - startIndex));
+    logResponse.setStartIndex(startIndex);
+    logResponse.setTotalCount(totalLogs);
+    logResponse.setPageSize(maxRows);
+    List<LOG_DATA_TYPE> docList=logResponse.getLogList();
+    List<LOG_DATA_TYPE> lastPageDocList=new ArrayList<>();
+    logResponse.setLogList(lastPageDocList);
+    int cnt=0;
+    for (    LOG_DATA_TYPE doc : docList) {
+      if (cnt < numberOfLogsOnLastPage) {
+        lastPageDocList.add(doc);
+      }
+      cnt++;
+    }
+    Collections.reverse(lastPageDocList);
+  }
+ catch (  SolrException|SolrServerException|IOException|NumberFormatException e) {
+    logger.error("Count Query was not executed successfully",e);
+    throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+  return logResponse;
+}

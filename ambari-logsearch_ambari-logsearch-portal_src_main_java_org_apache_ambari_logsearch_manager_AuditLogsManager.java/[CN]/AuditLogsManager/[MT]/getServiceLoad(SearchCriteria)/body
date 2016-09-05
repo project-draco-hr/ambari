@@ -1,0 +1,37 @@
+{
+  BarGraphDataListResponse dataList=new BarGraphDataListResponse();
+  Collection<BarGraphData> vaDatas=new ArrayList<BarGraphData>();
+  dataList.setGraphData(vaDatas);
+  SolrQuery serivceLoadQuery=queryGenerator.commonAuditFilterQuery(searchCriteria);
+  try {
+    SolrUtil.setFacetField(serivceLoadQuery,LogSearchConstants.AUDIT_COMPONENT);
+    QueryResponse serviceLoadResponse=auditSolrDao.process(serivceLoadQuery);
+    if (serviceLoadResponse == null) {
+      return dataList;
+    }
+    FacetField serviceFacetField=serviceLoadResponse.getFacetField(LogSearchConstants.AUDIT_COMPONENT);
+    if (serviceFacetField == null) {
+      return dataList;
+    }
+    List<Count> serviceLoadFacets=serviceFacetField.getValues();
+    if (serviceLoadFacets == null) {
+      return dataList;
+    }
+    for (    Count cnt : serviceLoadFacets) {
+      List<NameValueData> valueList=new ArrayList<NameValueData>();
+      BarGraphData vBarGraphData=new BarGraphData();
+      vaDatas.add(vBarGraphData);
+      NameValueData vNameValue=new NameValueData();
+      vNameValue.setName(cnt.getName());
+      vBarGraphData.setName(cnt.getName().toUpperCase());
+      vNameValue.setValue("" + cnt.getCount());
+      valueList.add(vNameValue);
+      vBarGraphData.setDataCount(valueList);
+    }
+    return dataList;
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error("Error during solrQuery=" + e);
+    throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

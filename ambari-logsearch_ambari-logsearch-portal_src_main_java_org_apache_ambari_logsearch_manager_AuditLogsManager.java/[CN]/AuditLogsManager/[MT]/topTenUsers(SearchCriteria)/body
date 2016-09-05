@@ -1,0 +1,30 @@
+{
+  String jsonUserQuery="{Users:{type:terms, field:reqUser, facet:{ Repo:{ type:terms, field:repo, facet:{eventCount:\"sum(event_count)\"}}}}}";
+  SolrQuery solrQuery=queryGenerator.commonAuditFilterQuery(searchCriteria);
+  SolrUtil.setJSONFacet(solrQuery,jsonUserQuery);
+  SolrUtil.setRowCount(solrQuery,0);
+  try {
+    BarGraphDataListResponse barGraphDataListResponse=new BarGraphDataListResponse();
+    QueryResponse queryResponse=auditSolrDao.process(solrQuery);
+    if (queryResponse == null) {
+      return barGraphDataListResponse;
+    }
+    NamedList<Object> namedList=queryResponse.getResponse();
+    if (namedList == null) {
+      return barGraphDataListResponse;
+    }
+    @SuppressWarnings("unchecked") SimpleOrderedMap<Object> jsonFacetResponse=(SimpleOrderedMap<Object>)namedList.get("facets");
+    if (jsonFacetResponse == null) {
+      return barGraphDataListResponse;
+    }
+    if (jsonFacetResponse.toString().equals("{count=0}")) {
+      return barGraphDataListResponse;
+    }
+    barGraphDataListResponse=BizUtil.buildSummaryForTopCounts(jsonFacetResponse,"Repo","Users");
+    return barGraphDataListResponse;
+  }
+ catch (  SolrServerException|SolrException|IOException e) {
+    logger.error("Error during solrQuery=" + e);
+    throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

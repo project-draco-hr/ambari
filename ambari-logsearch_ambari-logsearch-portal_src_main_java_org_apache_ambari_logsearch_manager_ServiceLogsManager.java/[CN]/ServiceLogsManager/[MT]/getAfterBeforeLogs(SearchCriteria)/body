@@ -1,0 +1,77 @@
+{
+  ServiceLogResponse logResponse=new ServiceLogResponse();
+  List<SolrServiceLogData> docList=null;
+  String id=(String)searchCriteria.getParamValue(LogSearchConstants.ID);
+  if (StringUtils.isBlank(id)) {
+    return logResponse;
+  }
+  String maxRows="";
+  maxRows=(String)searchCriteria.getParamValue("numberRows");
+  if (StringUtils.isBlank(maxRows)) {
+    maxRows="" + maxRows;
+  }
+  String scrollType=(String)searchCriteria.getParamValue("scrollType");
+  if (StringUtils.isBlank(scrollType)) {
+    scrollType="";
+  }
+  String logTime=null;
+  String sequenceId=null;
+  try {
+    SolrQuery solrQuery=new SolrQuery();
+    SolrUtil.setMainQuery(solrQuery,queryGenerator.buildFilterQuery(LogSearchConstants.ID,id));
+    SolrUtil.setRowCount(solrQuery,1);
+    QueryResponse response=serviceLogsSolrDao.process(solrQuery);
+    if (response == null) {
+      return logResponse;
+    }
+    docList=convertToSolrBeans(response);
+    if (docList != null && !docList.isEmpty()) {
+      Date date=docList.get(0).getLogTime();
+      logTime=DateUtil.convertDateWithMillisecondsToSolrDate(date);
+      sequenceId="" + docList.get(0).getSeqNum();
+    }
+    if (StringUtils.isBlank(logTime)) {
+      return logResponse;
+    }
+  }
+ catch (  SolrServerException|SolrException|IOException e) {
+    throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+  if (LogSearchConstants.SCROLL_TYPE_BEFORE.equals(scrollType)) {
+    logResponse=whenScrollUp(searchCriteria,logTime,sequenceId,maxRows);
+    List<ServiceLogData> solrDocList=new ArrayList<>();
+    for (    ServiceLogData solrDoc : logResponse.getLogList()) {
+      solrDocList.add(solrDoc);
+    }
+    logResponse.setLogList(solrDocList);
+    return logResponse;
+  }
+ else   if (LogSearchConstants.SCROLL_TYPE_AFTER.equals(scrollType)) {
+    List<ServiceLogData> solrDocList=new ArrayList<>();
+    logResponse=new ServiceLogResponse();
+    for (    ServiceLogData solrDoc : whenScrollDown(searchCriteria,logTime,sequenceId,maxRows).getLogList()) {
+      solrDocList.add(solrDoc);
+    }
+    logResponse.setLogList(solrDocList);
+    return logResponse;
+  }
+ else {
+    logResponse=new ServiceLogResponse();
+    List<ServiceLogData> initial=new ArrayList<>();
+    List<ServiceLogData> before=whenScrollUp(searchCriteria,logTime,sequenceId,maxRows).getLogList();
+    List<ServiceLogData> after=whenScrollDown(searchCriteria,logTime,sequenceId,maxRows).getLogList();
+    if (before != null && !before.isEmpty()) {
+      for (      ServiceLogData solrDoc : Lists.reverse(before)) {
+        initial.add(solrDoc);
+      }
+    }
+    initial.add(docList.get(0));
+    if (after != null && !after.isEmpty()) {
+      for (      ServiceLogData solrDoc : after) {
+        initial.add(solrDoc);
+      }
+    }
+    logResponse.setLogList(initial);
+    return logResponse;
+  }
+}
