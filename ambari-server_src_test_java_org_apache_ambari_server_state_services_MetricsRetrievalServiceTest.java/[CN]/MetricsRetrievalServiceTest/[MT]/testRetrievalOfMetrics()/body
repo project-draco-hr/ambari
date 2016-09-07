@@ -1,0 +1,21 @@
+{
+  InputStream jmxInputStream=IOUtils.toInputStream("{ \"beans\": [] }");
+  InputStream restInputStream=IOUtils.toInputStream("{}");
+  StreamProvider streamProvider=createNiceMock(StreamProvider.class);
+  EasyMock.expect(streamProvider.readFrom(JMX_URL)).andReturn(jmxInputStream).once();
+  EasyMock.expect(streamProvider.readFrom(REST_URL)).andReturn(restInputStream).once();
+  replayAll();
+  m_service.doStart();
+  m_service.setThreadPoolExecutor(new SynchronousThreadPoolExecutor());
+  JMXMetricHolder jmxMetricHolder=m_service.getCachedJMXMetric(JMX_URL);
+  Assert.assertNull(jmxMetricHolder);
+  Map<String,String> restMetrics=m_service.getCachedRESTMetric(REST_URL);
+  Assert.assertNull(restMetrics);
+  m_service.submitRequest(MetricSourceType.JMX,streamProvider,JMX_URL);
+  jmxMetricHolder=m_service.getCachedJMXMetric(JMX_URL);
+  Assert.assertNotNull(jmxMetricHolder);
+  m_service.submitRequest(MetricSourceType.REST,streamProvider,REST_URL);
+  restMetrics=m_service.getCachedRESTMetric(REST_URL);
+  Assert.assertNotNull(restMetrics);
+  verifyAll();
+}

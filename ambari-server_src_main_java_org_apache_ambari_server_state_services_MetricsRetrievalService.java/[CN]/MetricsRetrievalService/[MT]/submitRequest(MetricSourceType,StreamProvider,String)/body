@@ -1,0 +1,29 @@
+{
+  if (m_queuedUrls.contains(url)) {
+    return;
+  }
+  if (null != m_ttlUrlCache && null != m_ttlUrlCache.getIfPresent(url)) {
+    return;
+  }
+  BlockingQueue<Runnable> queue=m_threadPoolExecutor.getQueue();
+  int queueSize=queue.size();
+  if (queueSize > Math.floor(0.9f * m_queueMaximumSize)) {
+    LOG.warn("The worker queue contains {} work items and is at {}% of capacity",queueSize,((float)queueSize / m_queueMaximumSize) * 100);
+  }
+  m_queuedUrls.add(url);
+  Runnable runnable=null;
+switch (type) {
+case JMX:
+    runnable=new JMXRunnable(m_jmxCache,m_queuedUrls,m_ttlUrlCache,m_jmxObjectReader,streamProvider,url);
+  break;
+case REST:
+runnable=new RESTRunnable(m_restCache,m_queuedUrls,m_ttlUrlCache,m_gson,streamProvider,url);
+break;
+default :
+LOG.warn("Unable to retrieve metrics for the unknown type {}",type);
+break;
+}
+if (null != runnable) {
+m_threadPoolExecutor.execute(runnable);
+}
+}
