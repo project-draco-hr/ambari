@@ -1,34 +1,27 @@
 {
-  boolean allow=toBoolean((String)valueConfigs.get("is_enabled"),true);
-  @SuppressWarnings("unchecked") Map<String,Object> conditions=(Map<String,Object>)conditionConfigs.get("conditions");
-  if (conditions != null && conditions.size() > 0) {
-    allow=false;
-    for (    String conditionType : conditions.keySet()) {
-      if (conditionType.equalsIgnoreCase("fields")) {
-        @SuppressWarnings("unchecked") Map<String,Object> fields=(Map<String,Object>)conditions.get("fields");
-        for (        String fieldName : fields.keySet()) {
-          Object values=fields.get(fieldName);
-          if (values instanceof String) {
-            allow=isFieldConditionMatch(valueConfigs,fieldName,(String)values);
-          }
+  Map<String,Object> conditions=(Map<String,Object>)conditionConfigs.get("conditions");
+  if (MapUtils.isEmpty(conditions)) {
+    return toBoolean((String)valueConfigs.get("is_enabled"),true);
+  }
+  for (  String conditionType : conditions.keySet()) {
+    if (!conditionType.equalsIgnoreCase("fields")) {
+      continue;
+    }
+    Map<String,Object> fields=(Map<String,Object>)conditions.get("fields");
+    for (    Map.Entry<String,Object> field : fields.entrySet()) {
+      if (field.getValue() instanceof String) {
+        if (isFieldConditionMatch(valueConfigs,field.getKey(),(String)field.getValue())) {
+          return true;
+        }
+      }
  else {
-            @SuppressWarnings("unchecked") List<String> listValues=(List<String>)values;
-            for (            String stringValue : listValues) {
-              allow=isFieldConditionMatch(valueConfigs,fieldName,stringValue);
-              if (allow) {
-                break;
-              }
-            }
-          }
-          if (allow) {
-            break;
+        for (        String stringValue : (List<String>)field.getValue()) {
+          if (isFieldConditionMatch(valueConfigs,field.getKey(),stringValue)) {
+            return true;
           }
         }
       }
-      if (allow) {
-        break;
-      }
     }
   }
-  return allow;
+  return false;
 }

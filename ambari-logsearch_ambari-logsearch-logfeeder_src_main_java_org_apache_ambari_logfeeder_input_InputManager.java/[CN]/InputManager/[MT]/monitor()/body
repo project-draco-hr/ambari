@@ -1,0 +1,49 @@
+{
+  for (  Input input : inputList) {
+    if (input.isReady()) {
+      input.monitor();
+    }
+ else {
+      if (input.isTail()) {
+        LOG.info("Adding input to not ready list. Note, it is possible this component is not run on this host. " + "So it might not be an issue. " + input.getShortDescription());
+        notReadyList.add(input);
+      }
+ else {
+        LOG.info("Input is not ready, so going to ignore it " + input.getShortDescription());
+      }
+    }
+  }
+  if (isAnyInputTail) {
+    inputIsReadyMonitor=new Thread("InputIsReadyMonitor"){
+      @Override public void run(){
+        LOG.info("Going to monitor for these missing files: " + notReadyList.toString());
+        while (true) {
+          if (isDrain) {
+            LOG.info("Exiting missing file monitor.");
+            break;
+          }
+          try {
+            Iterator<Input> iter=notReadyList.iterator();
+            while (iter.hasNext()) {
+              Input input=iter.next();
+              try {
+                if (input.isReady()) {
+                  input.monitor();
+                  iter.remove();
+                }
+              }
+ catch (              Throwable t) {
+                LOG.error("Error while enabling monitoring for input. " + input.getShortDescription());
+              }
+            }
+            Thread.sleep(30 * 1000);
+          }
+ catch (          Throwable t) {
+          }
+        }
+      }
+    }
+;
+    inputIsReadyMonitor.start();
+  }
+}

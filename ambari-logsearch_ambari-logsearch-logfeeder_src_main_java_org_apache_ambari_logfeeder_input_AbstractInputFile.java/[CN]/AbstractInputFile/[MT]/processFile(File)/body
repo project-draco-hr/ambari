@@ -1,0 +1,103 @@
+{
+  LOG.info("Monitoring logPath=" + logPath + ", logPathFile="+ logPathFile);
+  BufferedReader br=null;
+  checkPointFile=null;
+  checkPointWriter=null;
+  jsonCheckPoint=null;
+  int lineCount=0;
+  try {
+    setFilePath(logPathFile.getAbsolutePath());
+    br=openLogFile(logPathFile);
+    boolean resume=isStartFromBegining;
+    int resumeFromLineNumber=getResumeFromLineNumber();
+    if (resumeFromLineNumber > 0) {
+      resume=false;
+    }
+    setClosed(false);
+    int sleepStep=2;
+    int sleepIteration=0;
+    while (true) {
+      try {
+        if (isDrain()) {
+          break;
+        }
+        String line=br.readLine();
+        if (line == null) {
+          if (!resume) {
+            resume=true;
+          }
+          sleepIteration++;
+          if (sleepIteration == 2) {
+            flush();
+            if (!tail) {
+              LOG.info("End of file. Done with filePath=" + logPathFile.getAbsolutePath() + ", lineCount="+ lineCount);
+              break;
+            }
+          }
+ else           if (sleepIteration > 4) {
+            Object newFileKey=getFileKey(logPathFile);
+            if (newFileKey != null && (fileKey == null || !newFileKey.equals(fileKey))) {
+              LOG.info("File key is different. Marking this input file for rollover. oldKey=" + fileKey + ", newKey="+ newFileKey+ ". "+ getShortDescription());
+              try {
+                LOG.info("File is rolled over. Closing current open file." + getShortDescription() + ", lineCount="+ lineCount);
+                br.close();
+              }
+ catch (              Exception ex) {
+                LOG.error("Error closing file" + getShortDescription(),ex);
+                break;
+              }
+              try {
+                LOG.info("Opening new rolled over file." + getShortDescription());
+                br=openLogFile(logPathFile);
+                lineCount=0;
+              }
+ catch (              Exception ex) {
+                LOG.error("Error opening rolled over file. " + getShortDescription(),ex);
+                LOG.info("Added input to not ready list." + getShortDescription());
+                isReady=false;
+                inputManager.addToNotReady(this);
+                break;
+              }
+              LOG.info("File is successfully rolled over. " + getShortDescription());
+              continue;
+            }
+          }
+          try {
+            Thread.sleep(sleepStep * 1000);
+            sleepStep=Math.min(sleepStep * 2,10);
+          }
+ catch (          InterruptedException e) {
+            LOG.info("Thread interrupted." + getShortDescription());
+          }
+        }
+ else {
+          lineCount++;
+          sleepStep=1;
+          sleepIteration=0;
+          if (!resume && lineCount > resumeFromLineNumber) {
+            LOG.info("Resuming to read from last line. lineCount=" + lineCount + ", input="+ getShortDescription());
+            resume=true;
+          }
+          if (resume) {
+            InputMarker marker=new InputMarker(this,base64FileKey,lineCount);
+            outputLine(line,marker);
+          }
+        }
+      }
+ catch (      Throwable t) {
+        String logMessageKey=this.getClass().getSimpleName() + "_READ_LOOP_EXCEPTION";
+        LogFeederUtil.logErrorMessageByInterval(logMessageKey,"Caught exception in read loop. lineNumber=" + lineCount + ", input="+ getShortDescription(),t,LOG,Level.ERROR);
+      }
+    }
+  }
+  finally {
+    if (br != null) {
+      LOG.info("Closing reader." + getShortDescription() + ", lineCount="+ lineCount);
+      try {
+        br.close();
+      }
+ catch (      Throwable t) {
+      }
+    }
+  }
+}

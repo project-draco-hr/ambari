@@ -1,0 +1,38 @@
+{
+  int resumeFromLineNumber=0;
+  if (tail) {
+    try {
+      LOG.info("Checking existing checkpoint file. " + getShortDescription());
+      String checkPointFileName=base64FileKey + checkPointExtension;
+      File checkPointFolder=inputManager.getCheckPointFolderFile();
+      checkPointFile=new File(checkPointFolder,checkPointFileName);
+      checkPointWriter=new RandomAccessFile(checkPointFile,"rw");
+      try {
+        int contentSize=checkPointWriter.readInt();
+        byte b[]=new byte[contentSize];
+        int readSize=checkPointWriter.read(b,0,contentSize);
+        if (readSize != contentSize) {
+          LOG.error("Couldn't read expected number of bytes from checkpoint file. expected=" + contentSize + ", read="+ readSize+ ", checkPointFile="+ checkPointFile+ ", input="+ getShortDescription());
+        }
+ else {
+          String jsonCheckPointStr=new String(b,0,readSize);
+          jsonCheckPoint=LogFeederUtil.toJSONObject(jsonCheckPointStr);
+          resumeFromLineNumber=LogFeederUtil.objectToInt(jsonCheckPoint.get("line_number"),0,"line_number");
+          LOG.info("CheckPoint. checkPointFile=" + checkPointFile + ", json="+ jsonCheckPointStr+ ", resumeFromLineNumber="+ resumeFromLineNumber);
+        }
+      }
+ catch (      EOFException eofEx) {
+        LOG.info("EOFException. Will reset checkpoint file " + checkPointFile.getAbsolutePath() + " for "+ getShortDescription());
+      }
+      if (jsonCheckPoint == null) {
+        jsonCheckPoint=new HashMap<String,Object>();
+        jsonCheckPoint.put("file_path",filePath);
+        jsonCheckPoint.put("file_key",base64FileKey);
+      }
+    }
+ catch (    Throwable t) {
+      LOG.error("Error while configuring checkpoint file. Will reset file. checkPointFile=" + checkPointFile,t);
+    }
+  }
+  return resumeFromLineNumber;
+}

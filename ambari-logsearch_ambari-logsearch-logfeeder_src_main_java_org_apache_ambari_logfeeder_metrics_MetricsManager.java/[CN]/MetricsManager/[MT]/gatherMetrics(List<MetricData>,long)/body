@@ -1,0 +1,41 @@
+{
+  Long currMSLong=new Long(currMS);
+  for (  MetricData metric : metricsList) {
+    if (metric.metricsName == null) {
+      LOG.debug("metric.metricsName is null");
+      continue;
+    }
+    long currCount=metric.value;
+    if (!metric.isPointInTime && metric.publishCount > 0 && currCount <= metric.prevPublishValue) {
+      LOG.debug("Nothing changed. " + metric.metricsName + ", currCount="+ currCount+ ", prevPublishCount="+ metric.prevPublishValue);
+      continue;
+    }
+    metric.publishCount++;
+    LOG.debug("Ensuring metrics=" + metric.metricsName);
+    TimelineMetric timelineMetric=metricsMap.get(metric.metricsName);
+    if (timelineMetric == null) {
+      LOG.debug("Creating new metric obbject for " + metric.metricsName);
+      timelineMetric=new TimelineMetric();
+      timelineMetric.setMetricName(metric.metricsName);
+      timelineMetric.setHostName(nodeHostName);
+      timelineMetric.setAppId(appId);
+      timelineMetric.setStartTime(currMS);
+      timelineMetric.setType("Long");
+      timelineMetric.setMetricValues(new TreeMap<Long,Double>());
+      metricsMap.put(metric.metricsName,timelineMetric);
+    }
+    LOG.debug("Adding metrics=" + metric.metricsName);
+    if (metric.isPointInTime) {
+      timelineMetric.getMetricValues().put(currMSLong,new Double(currCount));
+    }
+ else {
+      Double value=timelineMetric.getMetricValues().get(currMSLong);
+      if (value == null) {
+        value=new Double(0);
+      }
+      value+=(currCount - metric.prevPublishValue);
+      timelineMetric.getMetricValues().put(currMSLong,value);
+      metric.prevPublishValue=currCount;
+    }
+  }
+}
