@@ -1,16 +1,16 @@
 {
   String buildDir=tmpFolder.getRoot().getAbsolutePath();
   TestAmbariMetaInfo ambariMetaInfo=setupTempAmbariMetaInfo(buildDir);
-  String newBaseUrl="http://myprivate-repo-1.hortonworks.com/HDP/centos6/2.x/updates/2.0.6.0";
-  ambariMetaInfo.updateRepo(STACK_NAME_HDP,"2.1.1","redhat6",HDP_REPO_ID,newBaseUrl,null);
+  String newMirrorsList="http://someMirrorslist";
+  ambariMetaInfo.updateRepo(STACK_NAME_HDP,"2.1.1","redhat6",HDP_REPO_ID,null,newMirrorsList);
   RepositoryInfo repoInfo=ambariMetaInfo.getRepository(STACK_NAME_HDP,"2.1.1","redhat6",HDP_REPO_ID);
-  assertEquals(newBaseUrl,repoInfo.getBaseUrl());
-  String prevBaseUrl=repoInfo.getDefaultBaseUrl();
+  assertEquals(newMirrorsList,repoInfo.getMirrorsList());
+  String testMirrorslist="http://someTestMirrorslist";
   MetainfoDAO metainfoDAO=ambariMetaInfo.metaInfoDAO;
   reset(metainfoDAO);
   MetainfoEntity entity=createNiceMock(MetainfoEntity.class);
-  expect(metainfoDAO.findByKey("repo:/HDP/2.1.1/redhat6/HDP-2.1.1:baseurl")).andReturn(entity).atLeastOnce();
-  expect(entity.getMetainfoValue()).andReturn(newBaseUrl).atLeastOnce();
+  expect(metainfoDAO.findByKey("repo:/HDP/2.1.1/redhat6/HDP-2.1.1:mirrorslist")).andReturn(entity).atLeastOnce();
+  expect(entity.getMetainfoValue()).andReturn(newMirrorsList).atLeastOnce();
   replay(metainfoDAO,entity);
   ambariMetaInfo.init();
   waitForAllReposToBeResolved(ambariMetaInfo);
@@ -18,18 +18,18 @@
   assertNotNull(redhat6Repo);
   for (  RepositoryInfo ri : redhat6Repo) {
     if (HDP_REPO_NAME.equals(ri.getRepoName())) {
-      assertEquals(newBaseUrl,ri.getBaseUrl());
-      assertFalse(ri.getBaseUrl().equals(ri.getDefaultBaseUrl()));
+      assertEquals(newMirrorsList,ri.getMirrorsList());
+      assertFalse(ri.getMirrorsList().equals(testMirrorslist));
     }
   }
   Capture<MetainfoEntity> c=new Capture<MetainfoEntity>();
   metainfoDAO=ambariMetaInfo.metaInfoDAO;
   reset(metainfoDAO);
   reset(entity);
-  expect(metainfoDAO.findByKey("repo:/HDP/2.1.1/redhat6/HDP-2.1.1:baseurl")).andReturn(entity).atLeastOnce();
+  expect(metainfoDAO.findByKey("repo:/HDP/2.1.1/redhat6/HDP-2.1.1:mirrorslist")).andReturn(entity).atLeastOnce();
   expect(metainfoDAO.merge(EasyMock.capture(c))).andReturn(entity).atLeastOnce();
   replay(metainfoDAO,entity);
-  ambariMetaInfo.updateRepo(STACK_NAME_HDP,"2.1.1","redhat6",HDP_REPO_ID,prevBaseUrl,null);
-  assertEquals(prevBaseUrl,c.getValue().getMetainfoValue());
+  ambariMetaInfo.updateRepo(STACK_NAME_HDP,"2.1.1","redhat6",HDP_REPO_ID,null,testMirrorslist);
+  assertEquals(testMirrorslist,c.getValue().getMetainfoValue());
   assertTrue(repoInfo.isRepoSaved());
 }
