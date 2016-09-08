@@ -5,8 +5,12 @@ def __init__(self, config, application_metric_map, stop_handler):
     self.send_interval = config.get_send_interval()
     self._stop_handler = stop_handler
     self.application_metric_map = application_metric_map
-    timeout = int((self.send_interval - 10))
-    if config.is_server_https_enabled():
-        self.connection = CachedHTTPSConnection(config.get_server_host(), config.get_server_port(), timeout=timeout, ca_certs=config.get_ca_certs())
+    self.collector_port = config.get_server_port()
+    self.all_metrics_collector_hosts = config.get_metrics_collector_hosts()
+    self.is_server_https_enabled = config.is_server_https_enabled()
+    if self.is_server_https_enabled:
+        self.ca_certs = config.get_ca_certs()
+    if (config.get_failover_strategy() == ROUND_ROBIN_FAILOVER_STRATEGY):
+        self.active_collector_hosts = BlacklistedSet(self.all_metrics_collector_hosts, float(config.get_failover_strategy_blacklisted_interval_seconds()))
     else:
-        self.connection = CachedHTTPConnection(config.get_server_host(), config.get_server_port(), timeout=timeout)
+        raise Exception((-1), 'Uknown failover strategy {0}'.format(config.get_failover_strategy()))
