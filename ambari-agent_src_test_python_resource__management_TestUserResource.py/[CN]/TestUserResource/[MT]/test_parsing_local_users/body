@@ -1,0 +1,26 @@
+@patch('__builtin__.open')
+@patch('pwd.getpwnam')
+def test_parsing_local_users(self, pwd_mock, open_mock):
+    '\n    Tests that parsing users out of /etc/groups can tolerate some bad lines\n    '
+
+
+    class MagicFile(object):
+
+        def read(self):
+            return '\n          group1:x:1:\n          group2:x:2:user1,user2\n          group3:x:3\n          invalid\n        '
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            pass
+
+        def __enter__(self):
+            return self
+    pwd_mock.return_value = 'user1'
+    open_mock.return_value = MagicFile()
+    from resource_management.core.providers.accounts import UserProvider
+    user = MagicMock()
+    provider = UserProvider(user)
+    provider.resource.username = 'user1'
+    provider.resource.fetch_nonlocal_groups = False
+    groups = provider.user_groups
+    self.assertEquals(1, len(groups))
+    self.assertTrue(('group2' in groups))
