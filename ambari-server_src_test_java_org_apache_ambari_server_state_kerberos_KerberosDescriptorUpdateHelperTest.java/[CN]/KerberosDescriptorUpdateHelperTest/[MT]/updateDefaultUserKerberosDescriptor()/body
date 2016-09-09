@@ -1,0 +1,41 @@
+{
+  Injector injector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      Properties properties=new Properties();
+      properties.put("metadata.path","src/main/resources/stacks");
+      properties.put("common.services.path","src/main/resources/common-services");
+      properties.put("server.version.file","target/version");
+      properties.put("custom.action.definitions","/tmp/nofile");
+      Configuration configuration=new Configuration(properties);
+      install(new FactoryModuleBuilder().build(StackManagerFactory.class));
+      bind(Clusters.class).toInstance(createNiceMock(Clusters.class));
+      bind(DBAccessor.class).toInstance(createNiceMock(DBAccessor.class));
+      bind(EntityManager.class).toInstance(createNiceMock(EntityManager.class));
+      bind(OsFamily.class).toInstance(createNiceMock(OsFamily.class));
+      bind(Configuration.class).toInstance(configuration);
+      bind(ExtensionLinkDAO.class).toInstance(createNiceMock(ExtensionLinkDAO.class));
+    }
+  }
+);
+  OsFamily osFamily=injector.getInstance(OsFamily.class);
+  expect(osFamily.os_list()).andReturn(Collections.singleton("centos6")).anyTimes();
+  ExtensionLinkDAO linkDao=injector.getInstance(ExtensionLinkDAO.class);
+  expect(linkDao.findByStack(anyString(),anyString())).andReturn(Collections.<ExtensionLinkEntity>emptyList()).anyTimes();
+  TypedQuery<StackEntity> query=createNiceMock(TypedQuery.class);
+  expect(query.setMaxResults(1)).andReturn(query).anyTimes();
+  expect(query.getSingleResult()).andReturn(null).anyTimes();
+  EntityManager entityManager=injector.getInstance(EntityManager.class);
+  expect(entityManager.createNamedQuery("StackEntity.findByNameAndVersion",StackEntity.class)).andReturn(query).anyTimes();
+  expect(entityManager.find(EasyMock.eq(MetainfoEntity.class),anyString())).andReturn(createNiceMock(MetainfoEntity.class)).anyTimes();
+  AmbariMetaInfo metaInfo=new AmbariMetaInfo(injector.getInstance(Configuration.class));
+  replayAll();
+  injector.injectMembers(metaInfo);
+  metaInfo.init();
+  KerberosDescriptor hdp24=metaInfo.getKerberosDescriptor("HDP","2.4");
+  KerberosDescriptor hdp25=metaInfo.getKerberosDescriptor("HDP","2.5");
+  KerberosDescriptor user=new KerberosDescriptor(hdp24.toMap());
+  KerberosDescriptor updated=KerberosDescriptorUpdateHelper.updateUserKerberosDescriptor(hdp24,hdp25,user);
+  KerberosDescriptor composite=new KerberosDescriptor(hdp25.toMap());
+  composite.update(updated);
+  Assert.assertEquals(GSON.toJson(hdp25.toMap()),GSON.toJson(composite.toMap()));
+}
