@@ -1,0 +1,34 @@
+{
+  boolean setupStatus=createCollectionsIfNeeded(solrClient,solrPropsConfig);
+  LOG.info("Setup status for " + solrPropsConfig.getCollection() + " is "+ setupStatus);
+  if (!setupStatus) {
+    Thread setupThread=new Thread("setup_collection_" + solrPropsConfig.getCollection()){
+      @Override public void run(){
+        LOG.info("Started monitoring thread to check availability of Solr server. collection=" + solrPropsConfig.getCollection());
+        int retryCount=0;
+        while (true) {
+          try {
+            Thread.sleep(SETUP_RETRY_SECOND * 1000);
+            retryCount++;
+            boolean setupStatus=createCollectionsIfNeeded(solrClient,solrPropsConfig);
+            if (setupStatus) {
+              LOG.info("Setup for collection " + solrPropsConfig.getCollection() + " is successful. Exiting setup retry thread");
+              break;
+            }
+          }
+ catch (          InterruptedException sleepInterrupted) {
+            LOG.info("Sleep interrupted while setting up collection " + solrPropsConfig.getCollection());
+            break;
+          }
+catch (          Exception e) {
+            LOG.error("Error setting up collection=" + solrPropsConfig.getCollection(),e);
+          }
+          LOG.error("Error setting collection. collection=" + solrPropsConfig.getCollection() + ", retryCount="+ retryCount);
+        }
+      }
+    }
+;
+    setupThread.setDaemon(true);
+    setupThread.start();
+  }
+}
