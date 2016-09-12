@@ -1,0 +1,55 @@
+{
+  ServiceLogResponse logResponse=new ServiceLogResponse();
+  List<SolrServiceLogData> docList=null;
+  String scrollType=request.getScrollType() != null ? request.getScrollType() : "";
+  String logTime=null;
+  String sequenceId=null;
+  SolrQuery solrQuery=new SolrQuery();
+  solrQuery.setQuery("*:*");
+  solrQuery.setRows(1);
+  solrQuery.addFilterQuery(String.format("%s:%s",ID,request.getId()));
+  QueryResponse response=serviceLogsSolrDao.process(solrQuery);
+  if (response == null) {
+    return logResponse;
+  }
+  docList=convertToSolrBeans(response);
+  if (docList != null && !docList.isEmpty()) {
+    Date date=docList.get(0).getLogTime();
+    logTime=DateUtil.convertDateWithMillisecondsToSolrDate(date);
+    sequenceId=docList.get(0).getSeqNum().toString();
+  }
+  if (StringUtils.isBlank(logTime)) {
+    return logResponse;
+  }
+  if (LogSearchConstants.SCROLL_TYPE_BEFORE.equals(scrollType) || LogSearchConstants.SCROLL_TYPE_AFTER.equals(scrollType)) {
+    List<ServiceLogData> solrDocList=new ArrayList<>();
+    ServiceLogResponse beforeAfterResponse=whenScroll(request,logTime,sequenceId,scrollType);
+    if (beforeAfterResponse.getLogList() == null) {
+      return logResponse;
+    }
+    for (    ServiceLogData solrDoc : beforeAfterResponse.getLogList()) {
+      solrDocList.add(solrDoc);
+    }
+    logResponse.setLogList(solrDocList);
+    return logResponse;
+  }
+ else {
+    logResponse=new ServiceLogResponse();
+    List<ServiceLogData> initial=new ArrayList<>();
+    List<ServiceLogData> before=whenScroll(request,logTime,sequenceId,LogSearchConstants.SCROLL_TYPE_BEFORE).getLogList();
+    List<ServiceLogData> after=whenScroll(request,logTime,sequenceId,LogSearchConstants.SCROLL_TYPE_AFTER).getLogList();
+    if (before != null && !before.isEmpty()) {
+      for (      ServiceLogData solrDoc : Lists.reverse(before)) {
+        initial.add(solrDoc);
+      }
+    }
+    initial.add(docList.get(0));
+    if (after != null && !after.isEmpty()) {
+      for (      ServiceLogData solrDoc : after) {
+        initial.add(solrDoc);
+      }
+    }
+    logResponse.setLogList(initial);
+    return logResponse;
+  }
+}

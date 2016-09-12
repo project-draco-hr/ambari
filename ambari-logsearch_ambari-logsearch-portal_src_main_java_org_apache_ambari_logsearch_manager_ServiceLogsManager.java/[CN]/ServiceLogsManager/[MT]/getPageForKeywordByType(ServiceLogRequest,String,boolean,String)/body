@@ -1,0 +1,23 @@
+{
+  String fromDate=request.getFrom();
+  String toDate=request.getTo();
+  boolean timeAscending=LogSearchConstants.ASCENDING_ORDER.equals(request.getSortType());
+  int currentPageNumber=Integer.parseInt(request.getPage());
+  int maxRows=Integer.parseInt(request.getPageSize());
+  Date logDate=getDocDateFromNextOrLastPage(request,keyword,isNext,currentPageNumber,maxRows);
+  if (logDate == null) {
+    throw RESTErrorUtil.createRESTException("The keyword " + "\"" + keyword + "\""+ " was not found",MessageEnums.ERROR_SYSTEM);
+  }
+  String nextOrPreviousPageDate=DateUtil.convertDateWithMillisecondsToSolrDate(logDate);
+  SolrServiceLogData firstKeywordLog=getNextHitForKeyword(request,keyword,isNext,event,timeAscending,nextOrPreviousPageDate);
+  long keywordSeqNum=firstKeywordLog.getSeqNum();
+  String keywordLogtime=DateUtil.convertDateWithMillisecondsToSolrDate(firstKeywordLog.getLogTime());
+  long numberOfDateDuplicates=countNumberOfDuplicates(request,isNext,keywordSeqNum,keywordLogtime);
+  long numberOfLogsUntilFound=getNumberOfLogsUntilFound(request,fromDate,toDate,timeAscending,keywordLogtime,numberOfDateDuplicates);
+  int start=(int)((numberOfLogsUntilFound / maxRows));
+  request.setFrom(fromDate);
+  request.setTo(toDate);
+  request.setPage(String.valueOf(start));
+  SolrQuery keywordNextPageQuery=new DefaultQueryParser().doConstructSolrQuery(conversionService.convert(request,SimpleQuery.class));
+  return getLogAsPaginationProvided(keywordNextPageQuery,serviceLogsSolrDao,event);
+}

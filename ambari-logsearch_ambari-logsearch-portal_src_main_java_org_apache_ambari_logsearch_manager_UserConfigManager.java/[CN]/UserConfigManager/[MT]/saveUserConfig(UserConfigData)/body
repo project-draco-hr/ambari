@@ -1,0 +1,46 @@
+{
+  SolrInputDocument solrInputDoc=new SolrInputDocument();
+  if (!isValid(userConfig)) {
+    throw RESTErrorUtil.createRESTException("No FilterName Specified",MessageEnums.INVALID_INPUT_DATA);
+  }
+  if (isNotUnique(userConfig) && !userConfig.isOverwrite()) {
+    throw RESTErrorUtil.createRESTException("Name '" + userConfig.getFiltername() + "' already exists",MessageEnums.INVALID_INPUT_DATA);
+  }
+  String loggedInUserName=userConfig.getUserName();
+  String filterName=userConfig.getFiltername();
+  solrInputDoc.addField(ID,userConfig.getId());
+  solrInputDoc.addField(USER_NAME,loggedInUserName);
+  solrInputDoc.addField(VALUES,userConfig.getValues());
+  solrInputDoc.addField(FILTER_NAME,filterName);
+  solrInputDoc.addField(ROW_TYPE,userConfig.getRowType());
+  List<String> shareNameList=userConfig.getShareNameList();
+  if (shareNameList != null && !shareNameList.isEmpty()) {
+    solrInputDoc.addField(SHARE_NAME_LIST,shareNameList);
+  }
+  SolrQuery solrQuery=new SolrQuery();
+  solrQuery.setQuery("*:*");
+  solrQuery.addFilterQuery(String.format("%s:%s",FILTER_NAME,SolrUtil.makeSearcableString(filterName)));
+  solrQuery.addFilterQuery(String.format("%s:%s",USER_NAME,loggedInUserName));
+  try {
+    QueryResponse queryResponse=userConfigSolrDao.process(solrQuery);
+    if (queryResponse != null) {
+      SolrDocumentList documentList=queryResponse.getResults();
+      if (documentList != null && !documentList.isEmpty() && !userConfig.isOverwrite()) {
+        logger.error("Filtername is already present");
+        throw RESTErrorUtil.createRESTException("Filtername is already present",MessageEnums.INVALID_INPUT_DATA);
+      }
+    }
+  }
+ catch (  SolrException e) {
+    logger.error("Error in checking same filtername config",e);
+    throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+  try {
+    userConfigSolrDao.addDocs(solrInputDoc);
+    return convertObjToString(solrInputDoc);
+  }
+ catch (  SolrException|SolrServerException|IOException e) {
+    logger.error("Error saving user config. solrDoc=" + solrInputDoc,e);
+    throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

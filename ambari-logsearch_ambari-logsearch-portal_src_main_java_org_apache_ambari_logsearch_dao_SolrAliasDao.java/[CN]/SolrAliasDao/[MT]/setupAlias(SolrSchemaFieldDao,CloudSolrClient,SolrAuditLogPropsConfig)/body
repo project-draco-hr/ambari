@@ -1,0 +1,44 @@
+{
+  final Collection<String> collectionListIn=Arrays.asList(solrPropsConfig.getCollection(),solrPropsConfig.getRangerCollection().trim());
+  if (solrPropsConfig.getAliasNameIn() == null || collectionListIn.size() == 0 || solrClient == null) {
+    LOG.info("Will not create alias " + solrPropsConfig.getAliasNameIn() + " for "+ collectionListIn.toString()+ ", solrCloudClient="+ solrClient);
+    return;
+  }
+  LOG.info("setupAlias " + solrPropsConfig.getAliasNameIn() + " for "+ collectionListIn.toString());
+  Thread setupThread=new Thread("setup_alias_" + solrPropsConfig.getAliasNameIn()){
+    @Override public void run(){
+      LOG.info("Started monitoring thread to check availability of Solr server. alias=" + solrPropsConfig.getAliasNameIn() + ", collections="+ collectionListIn.toString());
+      int retryCount=0;
+      while (true) {
+        try {
+          int count=createAlias(solrClient,solrPropsConfig.getAliasNameIn(),collectionListIn);
+          if (count > 0) {
+            solrClient.setDefaultCollection(solrPropsConfig.getAliasNameIn());
+            if (count == collectionListIn.size()) {
+              LOG.info("Setup for alias " + solrPropsConfig.getAliasNameIn() + " is successful. Exiting setup retry thread. "+ "Collections="+ collectionListIn);
+              solrSchemaFieldDao.populateSchemaFields(solrClient,solrPropsConfig);
+              break;
+            }
+          }
+ else {
+            LOG.warn("Not able to create alias=" + solrPropsConfig.getAliasNameIn() + ", retryCount="+ retryCount);
+          }
+        }
+ catch (        Exception e) {
+          LOG.error("Error setting up alias=" + solrPropsConfig.getAliasNameIn(),e);
+        }
+        try {
+          Thread.sleep(ALIAS_SETUP_RETRY_SECOND * 1000);
+        }
+ catch (        InterruptedException sleepInterrupted) {
+          LOG.info("Sleep interrupted while setting up alias " + solrPropsConfig.getAliasNameIn());
+          break;
+        }
+        retryCount++;
+      }
+    }
+  }
+;
+  setupThread.setDaemon(true);
+  setupThread.start();
+}

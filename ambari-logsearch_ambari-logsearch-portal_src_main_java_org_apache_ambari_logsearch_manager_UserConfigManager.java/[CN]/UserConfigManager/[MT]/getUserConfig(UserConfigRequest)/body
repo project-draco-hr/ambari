@@ -1,0 +1,35 @@
+{
+  UserConfigDataListResponse response=new UserConfigDataListResponse();
+  String rowType=request.getRowType();
+  if (StringUtils.isBlank(rowType)) {
+    throw RESTErrorUtil.createRESTException("row type was not specified",MessageEnums.INVALID_INPUT_DATA);
+  }
+  String userName=request.getUserId();
+  if (StringUtils.isBlank(userName)) {
+    throw RESTErrorUtil.createRESTException("user name was not specified",MessageEnums.INVALID_INPUT_DATA);
+  }
+  SolrQuery userConfigQuery=conversionService.convert(request,SolrQuery.class);
+  SolrDocumentList solrList=userConfigSolrDao.process(userConfigQuery).getResults();
+  Collection<UserConfigData> configList=new ArrayList<>();
+  for (  SolrDocument solrDoc : solrList) {
+    UserConfigData userConfig=new UserConfigData();
+    userConfig.setFiltername("" + solrDoc.get(FILTER_NAME));
+    userConfig.setId("" + solrDoc.get(ID));
+    userConfig.setValues("" + solrDoc.get(VALUES));
+    userConfig.setRowType("" + solrDoc.get(ROW_TYPE));
+    try {
+      List<String> shareNameList=(List<String>)solrDoc.get(SHARE_NAME_LIST);
+      userConfig.setShareNameList(shareNameList);
+    }
+ catch (    Exception e) {
+    }
+    userConfig.setUserName("" + solrDoc.get(USER_NAME));
+    configList.add(userConfig);
+  }
+  response.setName("historyList");
+  response.setUserConfigList(configList);
+  response.setStartIndex(Integer.parseInt(request.getStartIndex()));
+  response.setPageSize(Integer.parseInt(request.getPageSize()));
+  response.setTotalCount((long)solrList.getNumFound());
+  return response;
+}
