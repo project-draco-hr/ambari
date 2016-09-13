@@ -14,20 +14,30 @@
     Set<String> hostNamesBatches=splitHostNamesInBatches(getHostnames(resources.get(componentName)),HOST_NAMES_BATCH_REQUEST_SIZE);
     Map<String,Set<TimelineMetric>> metricsMap=new HashMap<>();
     for (    String hostNamesBatch : hostNamesBatches) {
-      if (!hostComponentHostMetrics.isEmpty()) {
-        String hostComponentHostMetricParams=getSetString(processRegexps(hostComponentHostMetrics),-1);
-        setQueryParams(hostComponentHostMetricParams,hostNamesBatch,true,componentName);
-        TimelineMetrics metricsResponse=getTimelineMetricsFromCache(getTimelineAppMetricCacheKey(hostComponentHostMetrics,componentName,hostNamesBatch,uriBuilder.toString()),componentName);
-        if (metricsResponse != null) {
-          timelineMetrics.getMetrics().addAll(metricsResponse.getMetrics());
+      try {
+        if (!hostComponentHostMetrics.isEmpty()) {
+          String hostComponentHostMetricParams=getSetString(processRegexps(hostComponentHostMetrics),-1);
+          setQueryParams(hostComponentHostMetricParams,hostNamesBatch,true,componentName);
+          TimelineMetrics metricsResponse=getTimelineMetricsFromCache(getTimelineAppMetricCacheKey(hostComponentHostMetrics,componentName,hostNamesBatch,uriBuilder.toString()),componentName);
+          if (metricsResponse != null) {
+            timelineMetrics.getMetrics().addAll(metricsResponse.getMetrics());
+          }
+        }
+        if (!nonHostComponentMetrics.isEmpty()) {
+          String nonHostComponentHostMetricParams=getSetString(processRegexps(nonHostComponentMetrics),-1);
+          setQueryParams(nonHostComponentHostMetricParams,hostNamesBatch,false,componentName);
+          TimelineMetrics metricsResponse=getTimelineMetricsFromCache(getTimelineAppMetricCacheKey(nonHostComponentMetrics,componentName,hostNamesBatch,uriBuilder.toString()),componentName);
+          if (metricsResponse != null) {
+            timelineMetrics.getMetrics().addAll(metricsResponse.getMetrics());
+          }
         }
       }
-      if (!nonHostComponentMetrics.isEmpty()) {
-        String nonHostComponentHostMetricParams=getSetString(processRegexps(nonHostComponentMetrics),-1);
-        setQueryParams(nonHostComponentHostMetricParams,hostNamesBatch,false,componentName);
-        TimelineMetrics metricsResponse=getTimelineMetricsFromCache(getTimelineAppMetricCacheKey(nonHostComponentMetrics,componentName,hostNamesBatch,uriBuilder.toString()),componentName);
-        if (metricsResponse != null) {
-          timelineMetrics.getMetrics().addAll(metricsResponse.getMetrics());
+ catch (      IOException io) {
+        if (io instanceof SocketTimeoutException || io instanceof ConnectException) {
+          if (ambariEventPublisher != null) {
+            ambariEventPublisher.publish(new MetricsCollectorHostDownEvent(clusterName,uriBuilder.getHost()));
+          }
+          throw io;
         }
       }
       Set<String> patterns=createPatterns(metrics.keySet());
