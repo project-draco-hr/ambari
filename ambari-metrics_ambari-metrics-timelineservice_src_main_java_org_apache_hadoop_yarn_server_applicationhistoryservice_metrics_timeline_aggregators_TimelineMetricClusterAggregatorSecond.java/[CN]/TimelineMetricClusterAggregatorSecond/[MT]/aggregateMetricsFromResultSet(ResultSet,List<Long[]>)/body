@@ -1,5 +1,6 @@
 {
   Map<TimelineClusterMetric,MetricClusterAggregate> aggregateClusterMetrics=new HashMap<TimelineClusterMetric,MetricClusterAggregate>();
+  int numLiveHosts=0;
   TimelineMetric metric=null;
   if (rs.next()) {
     metric=timelineMetricReadHelper.getTimelineMetricFromResultSet(rs);
@@ -9,14 +10,18 @@
         metric.addMetricValues(nextMetric.getMetricValues());
       }
  else {
-        processAggregateClusterMetrics(aggregateClusterMetrics,metric,timeSlices);
+        int numHosts=processAggregateClusterMetrics(aggregateClusterMetrics,metric,timeSlices);
+        numLiveHosts=Math.max(numHosts,numLiveHosts);
         metric=nextMetric;
       }
     }
   }
   if (metric != null) {
-    processAggregateClusterMetrics(aggregateClusterMetrics,metric,timeSlices);
+    int numHosts=processAggregateClusterMetrics(aggregateClusterMetrics,metric,timeSlices);
+    numLiveHosts=Math.max(numHosts,numLiveHosts);
   }
   aggregateClusterMetrics.putAll(appAggregator.getAggregateClusterMetrics());
+  long timestamp=timeSlices.get(timeSlices.size() - 1)[1];
+  processLiveHostsMetric(aggregateClusterMetrics,numLiveHosts,timestamp);
   return aggregateClusterMetrics;
 }
