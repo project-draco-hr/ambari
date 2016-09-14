@@ -3,6 +3,7 @@
     String recordName=record.name();
     String contextName=record.context();
     StringBuilder sb=new StringBuilder();
+    boolean skipAggregation=false;
     if (contextName.startsWith("ipc.")) {
       String portNumber=contextName.replaceFirst("ipc.","");
       if (rpcPortSuffixes.containsKey(portNumber)) {
@@ -11,13 +12,14 @@
     }
     sb.append(contextName);
     sb.append('.');
-    if (contextName.equals("jvm")) {
-      if (record.tags() != null) {
-        for (        MetricsTag tag : record.tags()) {
-          if (tag.info().name().equalsIgnoreCase("processName") && (tag.value().equals("RegionServer") || tag.value().equals("Master"))) {
-            sb.append(tag.value());
-            sb.append('.');
-          }
+    if (record.tags() != null) {
+      for (      MetricsTag tag : record.tags()) {
+        if (StringUtils.isNotEmpty(tag.name()) && tag.name().equals("skipAggregation")) {
+          skipAggregation=String.valueOf(true).equals(tag.value());
+        }
+        if (contextName.equals("jvm") && tag.info().name().equalsIgnoreCase("processName") && (tag.value().equals("RegionServer") || tag.value().equals("Master"))) {
+          sb.append(tag.value());
+          sb.append('.');
         }
       }
     }
@@ -41,6 +43,10 @@
     int sbBaseLen=sb.length();
     Collection<AbstractMetric> metrics=(Collection<AbstractMetric>)record.metrics();
     List<TimelineMetric> metricList=new ArrayList<TimelineMetric>();
+    Map<String,String> metadata=null;
+    if (skipAggregation) {
+      metadata=Collections.singletonMap("skipAggregation","true");
+    }
     long startTime=record.timestamp();
     for (    AbstractMetric metric : metrics) {
       sb.append(metric.name());
@@ -53,6 +59,9 @@
       timelineMetric.setStartTime(startTime);
       timelineMetric.setType(metric.type() != null ? metric.type().name() : null);
       timelineMetric.getMetricValues().put(startTime,value.doubleValue());
+      if (metadata != null) {
+        timelineMetric.setMetadata(metadata);
+      }
       boolean isCounter=MetricType.COUNTER == metric.type();
       metricsCache.putTimelineMetric(timelineMetric,isCounter);
       TimelineMetric cachedMetric=metricsCache.getTimelineMetric(name);
