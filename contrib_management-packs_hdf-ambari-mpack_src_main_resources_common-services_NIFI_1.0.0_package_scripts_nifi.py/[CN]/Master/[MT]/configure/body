@@ -1,0 +1,40 @@
+def configure(self, env, isInstall=False, is_starting=False):
+    import params
+    import status_params
+    env.set_params(params)
+    env.set_params(status_params)
+    Directory([status_params.nifi_pid_dir, params.nifi_node_log_dir, params.nifi_internal_dir, params.nifi_database_dir, params.nifi_flowfile_repo_dir, params.nifi_content_repo_dir_default, params.nifi_provenance_repo_dir_default, params.nifi_config_dir, params.nifi_flow_config_dir, params.nifi_state_dir, params.lib_dir], owner=params.nifi_user, group=params.nifi_group, create_parents=True, recursive_ownership=True)
+    Directory(params.limits_conf_dir, create_parents=True, owner='root', group='root')
+    File(os.path.join(params.limits_conf_dir, 'nifi.conf'), owner='root', group='root', mode=420, content=Template('nifi.conf.j2'))
+    ca_client_script = nifi_ca_util.get_toolkit_script('tls-toolkit.sh')
+    File(ca_client_script, mode=493)
+    if (params.nifi_ca_host and params.nifi_ssl_enabled):
+        ca_client_json = os.path.realpath(os.path.join(params.nifi_config_dir, 'nifi-certificate-authority-client.json'))
+        File(ca_client_json, owner=params.nifi_user, group=params.nifi_group, mode=384)
+        ca_client_dict = nifi_ca_util.load(ca_client_json)
+        if is_starting:
+            if params.nifi_toolkit_tls_regenerate:
+                nifi_ca_util.move_keystore_truststore(ca_client_dict)
+                ca_client_dict = {}
+            else:
+                nifi_ca_util.move_keystore_truststore_if_necessary(ca_client_dict, params.nifi_ca_client_config)
+        nifi_ca_util.overlay(ca_client_dict, params.nifi_ca_client_config)
+        nifi_ca_util.dump(ca_client_json, ca_client_dict)
+        if is_starting:
+            Execute(((((('JAVA_HOME=' + params.jdk64_home) + ' ') + ca_client_script) + ' client -F -f ') + ca_client_json), user=params.nifi_user)
+        nifi_ca_util.update_nifi_properties(nifi_ca_util.load(ca_client_json), params.nifi_properties)
+    PropertiesFile((params.nifi_config_dir + '/nifi.properties'), properties=params.nifi_properties, mode=256, owner=params.nifi_user, group=params.nifi_group)
+    bootstrap_content = InlineTemplate(params.nifi_boostrap_content)
+    File(format('{params.nifi_config_dir}/bootstrap.conf'), content=bootstrap_content, owner=params.nifi_user, group=params.nifi_group, mode=256)
+    logback_content = InlineTemplate(params.nifi_node_logback_content)
+    File(format('{params.nifi_config_dir}/logback.xml'), content=logback_content, owner=params.nifi_user, group=params.nifi_group, mode=256)
+    statemgmt_content = InlineTemplate(params.nifi_state_management_content)
+    File(format('{params.nifi_config_dir}/state-management.xml'), content=statemgmt_content, owner=params.nifi_user, group=params.nifi_group, mode=256)
+    authorizers_content = InlineTemplate(params.nifi_authorizers_content)
+    File(format('{params.nifi_config_dir}/authorizers.xml'), content=authorizers_content, owner=params.nifi_user, group=params.nifi_group, mode=256)
+    login_identity_providers_content = InlineTemplate(params.nifi_login_identity_providers_content)
+    File(format('{params.nifi_config_dir}/login-identity-providers.xml'), content=login_identity_providers_content, owner=params.nifi_user, group=params.nifi_group, mode=256)
+    env_content = InlineTemplate(params.nifi_env_content)
+    File(format('{params.bin_dir}/nifi-env.sh'), content=env_content, owner=params.nifi_user, group=params.nifi_group, mode=493)
+    boostrap_notification_content = InlineTemplate(params.nifi_boostrap_notification_content)
+    File(format('{params.nifi_config_dir}/bootstrap-notification-services.xml'), content=boostrap_notification_content, owner=params.nifi_user, group=params.nifi_group, mode=256)

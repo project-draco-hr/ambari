@@ -1,0 +1,40 @@
+def getComponentLayoutValidations(self, services, hosts):
+    'Returns array of Validation objects about issues with hostnames components assigned to'
+    items = super(HDF20StackAdvisor, self).getComponentLayoutValidations(services, hosts)
+    hostsSet = set(super(HDF20StackAdvisor, self).getActiveHosts([host['Hosts'] for host in hosts['items']]))
+    hostsCount = len(hostsSet)
+    componentsListList = [service['components'] for service in services['services']]
+    componentsList = [item for sublist in componentsListList for item in sublist]
+    for component in componentsList:
+        if (component['StackServiceComponents']['cardinality'] is not None):
+            componentName = component['StackServiceComponents']['component_name']
+            componentDisplayName = component['StackServiceComponents']['display_name']
+            componentHosts = []
+            if (component['StackServiceComponents']['hostnames'] is not None):
+                componentHosts = [componentHost for componentHost in component['StackServiceComponents']['hostnames'] if (componentHost in hostsSet)]
+            componentHostsCount = len(componentHosts)
+            cardinality = str(component['StackServiceComponents']['cardinality'])
+            message = None
+            if ('+' in cardinality):
+                hostsMin = int(cardinality[:(-1)])
+                if (componentHostsCount < hostsMin):
+                    message = 'At least {0} {1} components should be installed in cluster.'.format(hostsMin, componentDisplayName)
+            elif ('-' in cardinality):
+                nums = cardinality.split('-')
+                hostsMin = int(nums[0])
+                hostsMax = int(nums[1])
+                if ((componentHostsCount > hostsMax) or (componentHostsCount < hostsMin)):
+                    message = 'Between {0} and {1} {2} components should be installed in cluster.'.format(hostsMin, hostsMax, componentDisplayName)
+            elif ('ALL' == cardinality):
+                if (componentHostsCount != hostsCount):
+                    message = '{0} component should be installed on all hosts in cluster.'.format(componentDisplayName)
+            elif (componentHostsCount != int(cardinality)):
+                message = 'Exactly {0} {1} components should be installed in cluster.'.format(int(cardinality), componentDisplayName)
+            if (message is not None):
+                items.append({'type': 'host-component', 'level': 'ERROR', 'message': message, 'component-name': componentName, })
+    usedHostsListList = [component['StackServiceComponents']['hostnames'] for component in componentsList if (not self.isComponentNotValuable(component))]
+    usedHostsList = [item for sublist in usedHostsListList for item in sublist]
+    nonUsedHostsList = [item for item in hostsSet if (item not in usedHostsList)]
+    for host in nonUsedHostsList:
+        items.append({'type': 'host-component', 'level': 'ERROR', 'message': 'Host is not used', 'host': str(host), })
+    return items

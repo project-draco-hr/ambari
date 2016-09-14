@@ -1,0 +1,160 @@
+def recommendAmsConfigurations(self, configurations, clusterData, services, hosts):
+    putAmsEnvProperty = self.putProperty(configurations, 'ams-env', services)
+    putAmsHbaseSiteProperty = self.putProperty(configurations, 'ams-hbase-site', services)
+    putAmsSiteProperty = self.putProperty(configurations, 'ams-site', services)
+    putHbaseEnvProperty = self.putProperty(configurations, 'ams-hbase-env', services)
+    putGrafanaProperty = self.putProperty(configurations, 'ams-grafana-env', services)
+    putGrafanaPropertyAttribute = self.putPropertyAttribute(configurations, 'ams-grafana-env')
+    amsCollectorHosts = self.getComponentHostNames(services, 'AMBARI_METRICS', 'METRICS_COLLECTOR')
+    if (('cluster-env' in services['configurations']) and ('metrics_collector_vip_host' in services['configurations']['cluster-env']['properties'])):
+        metric_collector_host = services['configurations']['cluster-env']['properties']['metrics_collector_vip_host']
+    else:
+        metric_collector_host = ('localhost' if (len(amsCollectorHosts) == 0) else amsCollectorHosts[0])
+    putAmsSiteProperty('timeline.metrics.service.webapp.address', (str(metric_collector_host) + ':6188'))
+    log_dir = '/var/log/ambari-metrics-collector'
+    if ('ams-env' in services['configurations']):
+        if ('metrics_collector_log_dir' in services['configurations']['ams-env']['properties']):
+            log_dir = services['configurations']['ams-env']['properties']['metrics_collector_log_dir']
+        putHbaseEnvProperty('hbase_log_dir', log_dir)
+    defaultFs = 'file:///'
+    if (('core-site' in services['configurations']) and ('fs.defaultFS' in services['configurations']['core-site']['properties'])):
+        defaultFs = services['configurations']['core-site']['properties']['fs.defaultFS']
+    operatingMode = 'embedded'
+    if ('ams-site' in services['configurations']):
+        if ('timeline.metrics.service.operation.mode' in services['configurations']['ams-site']['properties']):
+            operatingMode = services['configurations']['ams-site']['properties']['timeline.metrics.service.operation.mode']
+    if (operatingMode == 'distributed'):
+        putAmsSiteProperty('timeline.metrics.service.watcher.disabled', 'true')
+        putAmsSiteProperty('timeline.metrics.host.aggregator.ttl', 259200)
+        putAmsHbaseSiteProperty('hbase.cluster.distributed', 'true')
+    else:
+        putAmsSiteProperty('timeline.metrics.service.watcher.disabled', 'false')
+        putAmsSiteProperty('timeline.metrics.host.aggregator.ttl', 86400)
+        putAmsHbaseSiteProperty('hbase.cluster.distributed', 'false')
+    rootDir = 'file:///var/lib/ambari-metrics-collector/hbase'
+    tmpDir = '/var/lib/ambari-metrics-collector/hbase-tmp'
+    zk_port_default = []
+    if ('ams-hbase-site' in services['configurations']):
+        if ('hbase.rootdir' in services['configurations']['ams-hbase-site']['properties']):
+            rootDir = services['configurations']['ams-hbase-site']['properties']['hbase.rootdir']
+        if ('hbase.tmp.dir' in services['configurations']['ams-hbase-site']['properties']):
+            tmpDir = services['configurations']['ams-hbase-site']['properties']['hbase.tmp.dir']
+        if ('hbase.zookeeper.property.clientPort' in services['configurations']['ams-hbase-site']['properties']):
+            zk_port_default = services['configurations']['ams-hbase-site']['properties']['hbase.zookeeper.property.clientPort']
+    if ((operatingMode == 'distributed') and (not ('{{zookeeper_clientPort}}' in zk_port_default))):
+        zkPort = self.getZKPort(services)
+        putAmsHbaseSiteProperty('hbase.zookeeper.property.clientPort', zkPort)
+    elif ((operatingMode == 'embedded') and (not ('{{zookeeper_clientPort}}' in zk_port_default))):
+        putAmsHbaseSiteProperty('hbase.zookeeper.property.clientPort', '61181')
+    mountpoints = ['/']
+    for collectorHostName in amsCollectorHosts:
+        for host in hosts['items']:
+            if (host['Hosts']['host_name'] == collectorHostName):
+                mountpoints = self.getPreferredMountPoints(host['Hosts'])
+                break
+    isLocalRootDir = (rootDir.startswith('file://') or (defaultFs.startswith('file://') and rootDir.startswith('/')))
+    if isLocalRootDir:
+        rootDir = re.sub('^file:///|/', '', rootDir, count=1)
+        rootDir = ('file://' + os.path.join(mountpoints[0], rootDir))
+    tmpDir = re.sub('^file:///|/', '', tmpDir, count=1)
+    if ((len(mountpoints) > 1) and isLocalRootDir):
+        tmpDir = os.path.join(mountpoints[1], tmpDir)
+    else:
+        tmpDir = os.path.join(mountpoints[0], tmpDir)
+    putAmsHbaseSiteProperty('hbase.tmp.dir', tmpDir)
+    if (operatingMode == 'distributed'):
+        putAmsHbaseSiteProperty('hbase.rootdir', (defaultFs + '/user/ams/hbase'))
+    if (operatingMode == 'embedded'):
+        if isLocalRootDir:
+            putAmsHbaseSiteProperty('hbase.rootdir', rootDir)
+        else:
+            putAmsHbaseSiteProperty('hbase.rootdir', 'file:///var/lib/ambari-metrics-collector/hbase')
+    (collector_heapsize, hbase_heapsize, total_sinks_count) = self.getAmsMemoryRecommendation(services, hosts)
+    putAmsEnvProperty('metrics_collector_heapsize', collector_heapsize)
+    putAmsHbaseSiteProperty('hfile.block.cache.size', 0.3)
+    putAmsHbaseSiteProperty('hbase.hregion.memstore.flush.size', 134217728)
+    putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.upperLimit', 0.35)
+    putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.lowerLimit', 0.3)
+    if (len(amsCollectorHosts) > 1):
+        pass
+    else:
+        if (total_sinks_count >= 2000):
+            putAmsHbaseSiteProperty('hbase.regionserver.handler.count', 60)
+            putAmsHbaseSiteProperty('hbase.regionserver.hlog.blocksize', 134217728)
+            putAmsHbaseSiteProperty('hbase.regionserver.maxlogs', 64)
+            putAmsHbaseSiteProperty('hbase.hregion.memstore.flush.size', 268435456)
+            putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.upperLimit', 0.3)
+            putAmsHbaseSiteProperty('hbase.regionserver.global.memstore.lowerLimit', 0.25)
+            putAmsHbaseSiteProperty('phoenix.query.maxGlobalMemoryPercentage', 20)
+            putAmsHbaseSiteProperty('phoenix.coprocessor.maxMetaDataCacheSize', 81920000)
+            putAmsSiteProperty('phoenix.query.maxGlobalMemoryPercentage', 30)
+            putAmsSiteProperty('timeline.metrics.service.resultset.fetchSize', 10000)
+        elif (total_sinks_count >= 500):
+            putAmsHbaseSiteProperty('hbase.regionserver.handler.count', 60)
+            putAmsHbaseSiteProperty('hbase.regionserver.hlog.blocksize', 134217728)
+            putAmsHbaseSiteProperty('hbase.regionserver.maxlogs', 64)
+            putAmsHbaseSiteProperty('hbase.hregion.memstore.flush.size', 268435456)
+            putAmsHbaseSiteProperty('phoenix.coprocessor.maxMetaDataCacheSize', 40960000)
+            putAmsSiteProperty('timeline.metrics.service.resultset.fetchSize', 5000)
+        else:
+            putAmsHbaseSiteProperty('phoenix.coprocessor.maxMetaDataCacheSize', 20480000)
+        pass
+    metrics_api_handlers = min(50, max(20, int((total_sinks_count / 100))))
+    putAmsSiteProperty('timeline.metrics.service.handler.thread.count', metrics_api_handlers)
+    if (operatingMode == 'distributed'):
+        hbase_heapsize = max(hbase_heapsize, 768)
+        putHbaseEnvProperty('hbase_master_heapsize', '512')
+        putHbaseEnvProperty('hbase_master_xmn_size', '102')
+        putHbaseEnvProperty('hbase_regionserver_heapsize', hbase_heapsize)
+        putHbaseEnvProperty('regionserver_xmn_size', round_to_n((0.15 * hbase_heapsize), 64))
+    else:
+        hbase_rs_heapsize = 768
+        putHbaseEnvProperty('hbase_regionserver_heapsize', hbase_rs_heapsize)
+        putHbaseEnvProperty('hbase_master_heapsize', hbase_heapsize)
+        putHbaseEnvProperty('hbase_master_xmn_size', round_to_n((0.15 * (hbase_heapsize + hbase_rs_heapsize)), 64))
+    if (operatingMode == 'distributed'):
+        dn_hosts = self.getComponentHostNames(services, 'HDFS', 'DATANODE')
+        if (dn_hosts and (len(dn_hosts) > 0)):
+            if set(amsCollectorHosts).intersection(dn_hosts):
+                collector_cohosted_with_dn = 'true'
+            else:
+                collector_cohosted_with_dn = 'false'
+            putAmsHbaseSiteProperty('dfs.client.read.shortcircuit', collector_cohosted_with_dn)
+    scriptDir = os.path.dirname(os.path.abspath(__file__))
+    metricsDir = os.path.join(scriptDir, '../../../../common-services/AMBARI_METRICS/0.1.0/package')
+    serviceMetricsDir = os.path.join(metricsDir, 'files', 'service-metrics')
+    sys.path.append(os.path.join(metricsDir, 'scripts'))
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    from split_points import FindSplitPointsForAMSRegions
+    ams_hbase_site = None
+    ams_hbase_env = None
+    if ('ams-hbase-site' in services['configurations']):
+        ams_hbase_site = services['configurations']['ams-hbase-site']['properties']
+    if ('ams-hbase-env' in services['configurations']):
+        ams_hbase_env = services['configurations']['ams-hbase-env']['properties']
+    if (not ams_hbase_site):
+        ams_hbase_site = configurations['ams-hbase-site']['properties']
+    if (not ams_hbase_env):
+        ams_hbase_env = configurations['ams-hbase-env']['properties']
+    split_point_finder = FindSplitPointsForAMSRegions(ams_hbase_site, ams_hbase_env, serviceMetricsDir, operatingMode, servicesList)
+    result = split_point_finder.get_split_points()
+    precision_splits = ' '
+    aggregate_splits = ' '
+    if result.precision:
+        precision_splits = result.precision
+    if result.aggregate:
+        aggregate_splits = result.aggregate
+    putAmsSiteProperty('timeline.metrics.host.aggregate.splitpoints', ','.join(precision_splits))
+    putAmsSiteProperty('timeline.metrics.cluster.aggregate.splitpoints', ','.join(aggregate_splits))
+    component_grafana_exists = False
+    for service in services['services']:
+        if ('components' in service):
+            for component in service['components']:
+                if ('StackServiceComponents' in component):
+                    if (('METRICS_GRAFANA' in component['StackServiceComponents']['component_name']) and (len(component['StackServiceComponents']['hostnames']) != 0)):
+                        component_grafana_exists = True
+                        break
+    pass
+    if (not component_grafana_exists):
+        putGrafanaPropertyAttribute('metrics_grafana_password', 'visible', 'false')
+    pass

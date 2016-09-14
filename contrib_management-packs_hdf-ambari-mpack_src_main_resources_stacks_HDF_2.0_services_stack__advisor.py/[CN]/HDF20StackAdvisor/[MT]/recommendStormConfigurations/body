@@ -1,0 +1,59 @@
+def recommendStormConfigurations(self, configurations, clusterData, services, hosts):
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    putStormSiteProperty = self.putProperty(configurations, 'storm-site', services)
+    putStormStartupProperty = self.putProperty(configurations, 'storm-site', services)
+    putStormSiteAttributes = self.putPropertyAttribute(configurations, 'storm-site')
+    if ('AMBARI_METRICS' in servicesList):
+        putStormSiteProperty('metrics.reporter.register', 'org.apache.hadoop.metrics2.sink.storm.StormTimelineMetricsReporter')
+    storm_site = getServicesSiteProperties(services, 'storm-site')
+    security_enabled = ((storm_site is not None) and ('storm.zookeeper.superACL' in storm_site))
+    if (('ranger-env' in services['configurations']) and ('ranger-storm-plugin-properties' in services['configurations']) and ('ranger-storm-plugin-enabled' in services['configurations']['ranger-env']['properties'])):
+        putStormRangerPluginProperty = self.putProperty(configurations, 'ranger-storm-plugin-properties', services)
+        rangerEnvStormPluginProperty = services['configurations']['ranger-env']['properties']['ranger-storm-plugin-enabled']
+        putStormRangerPluginProperty('ranger-storm-plugin-enabled', rangerEnvStormPluginProperty)
+    rangerPluginEnabled = ''
+    if (('ranger-storm-plugin-properties' in configurations) and ('ranger-storm-plugin-enabled' in configurations['ranger-storm-plugin-properties']['properties'])):
+        rangerPluginEnabled = configurations['ranger-storm-plugin-properties']['properties']['ranger-storm-plugin-enabled']
+    elif (('ranger-storm-plugin-properties' in services['configurations']) and ('ranger-storm-plugin-enabled' in services['configurations']['ranger-storm-plugin-properties']['properties'])):
+        rangerPluginEnabled = services['configurations']['ranger-storm-plugin-properties']['properties']['ranger-storm-plugin-enabled']
+    nonRangerClass = 'backtype.storm.security.auth.authorizer.SimpleACLAuthorizer'
+    rangerServiceVersion = ''
+    if ('RANGER' in servicesList):
+        rangerServiceVersion = [service['StackServices']['service_version'] for service in services['services'] if (service['StackServices']['service_name'] == 'RANGER')][0]
+    if (rangerServiceVersion and (rangerServiceVersion == '0.4.0')):
+        rangerClass = 'com.xasecure.authorization.storm.authorizer.XaSecureStormAuthorizer'
+    else:
+        rangerClass = 'org.apache.ranger.authorization.storm.authorizer.RangerStormAuthorizer'
+    if security_enabled:
+        if (rangerPluginEnabled and (rangerPluginEnabled.lower() == 'Yes'.lower())):
+            putStormSiteProperty('nimbus.authorizer', rangerClass)
+        elif (services['configurations']['storm-site']['properties']['nimbus.authorizer'] == rangerClass):
+            putStormSiteProperty('nimbus.authorizer', nonRangerClass)
+    else:
+        putStormSiteAttributes('nimbus.authorizer', 'delete', 'true')
+    if ('storm-site' in services['configurations']):
+        notifier_plugin_property = 'storm.topology.submission.notifier.plugin.class'
+        if (notifier_plugin_property in services['configurations']['storm-site']['properties']):
+            notifier_plugin_value = services['configurations']['storm-site']['properties'][notifier_plugin_property]
+            if (notifier_plugin_value is None):
+                notifier_plugin_value = ' '
+        else:
+            notifier_plugin_value = ' '
+        include_atlas = ('ATLAS' in servicesList)
+        atlas_hook_class = 'org.apache.atlas.storm.hook.StormAtlasHook'
+        if (include_atlas and (atlas_hook_class not in notifier_plugin_value)):
+            if (notifier_plugin_value == ' '):
+                notifier_plugin_value = atlas_hook_class
+            else:
+                notifier_plugin_value = ((notifier_plugin_value + ',') + atlas_hook_class)
+        if ((not include_atlas) and (atlas_hook_class in notifier_plugin_value)):
+            application_classes = []
+            for application_class in notifier_plugin_value.split(','):
+                if ((application_class != atlas_hook_class) and (application_class != ' ')):
+                    application_classes.append(application_class)
+            if application_classes:
+                notifier_plugin_value = ','.join(application_classes)
+            else:
+                notifier_plugin_value = ' '
+        if (notifier_plugin_value != ' '):
+            putStormStartupProperty(notifier_plugin_property, notifier_plugin_value)

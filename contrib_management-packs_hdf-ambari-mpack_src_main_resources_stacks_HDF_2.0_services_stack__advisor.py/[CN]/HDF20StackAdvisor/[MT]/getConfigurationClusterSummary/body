@@ -1,0 +1,38 @@
+def getConfigurationClusterSummary(self, servicesList, hosts, components, services):
+    hBaseInstalled = False
+    cluster = {'cpu': 0, 'disk': 0, 'ram': 0, 'hBaseInstalled': hBaseInstalled, 'components': components, }
+    if (len(hosts['items']) > 0):
+        nodeManagerHosts = self.getHostsWithComponent('YARN', 'NODEMANAGER', services, hosts)
+        if ((nodeManagerHosts is not None) and (len(nodeManagerHosts) > 0)):
+            nodeManagerHost = nodeManagerHosts[0]
+            for nmHost in nodeManagerHosts:
+                if (nmHost['Hosts']['total_mem'] < nodeManagerHost['Hosts']['total_mem']):
+                    nodeManagerHost = nmHost
+            host = nodeManagerHost['Hosts']
+            cluster['referenceNodeManagerHost'] = host
+        else:
+            host = hosts['items'][0]['Hosts']
+        cluster['referenceHost'] = host
+        cluster['cpu'] = host['cpu_count']
+        cluster['disk'] = len(host['disk_info'])
+        cluster['ram'] = int((host['total_mem'] / (1024 * 1024)))
+    ramRecommendations = [{'os': 1, 'hbase': 1, }, {'os': 2, 'hbase': 1, }, {'os': 2, 'hbase': 2, }, {'os': 4, 'hbase': 4, }, {'os': 6, 'hbase': 8, }, {'os': 8, 'hbase': 8, }, {'os': 8, 'hbase': 8, }, {'os': 12, 'hbase': 16, }, {'os': 24, 'hbase': 24, }, {'os': 32, 'hbase': 32, }, {'os': 64, 'hbase': 32, }]
+    index = {(cluster['ram'] <= 4): 0, (4 < cluster['ram'] <= 8): 1, (8 < cluster['ram'] <= 16): 2, (16 < cluster['ram'] <= 24): 3, (24 < cluster['ram'] <= 48): 4, (48 < cluster['ram'] <= 64): 5, (64 < cluster['ram'] <= 72): 6, (72 < cluster['ram'] <= 96): 7, (96 < cluster['ram'] <= 128): 8, (128 < cluster['ram'] <= 256): 9, (256 < cluster['ram']): 10, }[1]
+    cluster['reservedRam'] = ramRecommendations[index]['os']
+    cluster['hbaseRam'] = ramRecommendations[index]['hbase']
+    cluster['minContainerSize'] = {(cluster['ram'] <= 4): 256, (4 < cluster['ram'] <= 8): 512, (8 < cluster['ram'] <= 24): 1024, (24 < cluster['ram']): 2048, }[1]
+    totalAvailableRam = (cluster['ram'] - cluster['reservedRam'])
+    if cluster['hBaseInstalled']:
+        totalAvailableRam -= cluster['hbaseRam']
+    cluster['totalAvailableRam'] = max(512, (totalAvailableRam * 1024))
+    'containers = max(3, min (2*cores,min (1.8*DISKS,(Total available RAM) / MIN_CONTAINER_SIZE))))'
+    cluster['containers'] = round(max(3, min((2 * cluster['cpu']), min(ceil((1.8 * cluster['disk'])), (cluster['totalAvailableRam'] / cluster['minContainerSize'])))))
+    'ramPerContainers = max(2GB, RAM - reservedRam - hBaseRam) / containers'
+    cluster['ramPerContainer'] = abs((cluster['totalAvailableRam'] / cluster['containers']))
+    'If greater than 1GB, value will be in multiples of 512.'
+    if (cluster['ramPerContainer'] > 1024):
+        cluster['ramPerContainer'] = (int((cluster['ramPerContainer'] / 512)) * 512)
+    cluster['mapMemory'] = int(cluster['ramPerContainer'])
+    cluster['reduceMemory'] = cluster['ramPerContainer']
+    cluster['amMemory'] = max(cluster['mapMemory'], cluster['reduceMemory'])
+    return cluster
