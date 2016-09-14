@@ -1,0 +1,32 @@
+{
+  List<RepositoryInfo> serviceRepos=getAllServiceRepos();
+  ImmutableListMultimap<String,RepositoryInfo> serviceReposByOsType=Multimaps.index(serviceRepos,RepositoryInfo.GET_OSTYPE_FUNCTION);
+  ImmutableListMultimap<String,RepositoryInfo> stackReposByOsType=Multimaps.index(stackRepos,RepositoryInfo.GET_OSTYPE_FUNCTION);
+  Set<RepositoryInfo> uniqueServiceRepos=new HashSet<>();
+  for (  String osType : serviceReposByOsType.keySet()) {
+    List<RepositoryInfo> stackReposForOsType=stackReposByOsType.containsKey(osType) ? stackReposByOsType.get(osType) : Collections.<RepositoryInfo>emptyList();
+    List<RepositoryInfo> serviceReposForOsType=serviceReposByOsType.get(osType);
+    Set<String> stackRepoNames=ImmutableSet.copyOf(Lists.transform(stackReposForOsType,RepositoryInfo.GET_REPO_NAME_FUNCTION));
+    Set<String> stackRepoUrls=ImmutableSet.copyOf(Lists.transform(stackReposForOsType,RepositoryInfo.SAFE_GET_BASE_URL_FUNCTION));
+    Set<String> duplicateServiceRepoNames=findDuplicates(serviceReposForOsType,RepositoryInfo.GET_REPO_NAME_FUNCTION);
+    Set<String> duplicateServiceRepoUrls=findDuplicates(serviceReposForOsType,RepositoryInfo.SAFE_GET_BASE_URL_FUNCTION);
+    for (    RepositoryInfo repo : serviceReposForOsType) {
+      if (stackRepoUrls.contains(repo.getBaseUrl())) {
+        LOG.warn("Service repo has a base url that is identical to that of a stack repo: {}",repo);
+      }
+ else       if (duplicateServiceRepoUrls.contains(repo.getBaseUrl())) {
+        LOG.warn("Service repo has a base url that is identical to that of another service repo: {}",repo);
+      }
+      if (stackRepoNames.contains(repo.getRepoName())) {
+        LOG.warn("Discarding service repository with the same name as one of the stack repos: {}",repo);
+      }
+ else       if (duplicateServiceRepoNames.contains(repo.getRepoName())) {
+        LOG.warn("Discarding service repository with duplicate name and different content: {}",repo);
+      }
+ else {
+        uniqueServiceRepos.add(repo);
+      }
+    }
+  }
+  return uniqueServiceRepos;
+}

@@ -1,0 +1,43 @@
+{
+  ClusterDAO clusterDao=mock(ClusterDAO.class);
+  ClusterVersionDAO clusterVersionDAO=mock(ClusterVersionDAO.class);
+  repositoryVersionDao=mock(RepositoryVersionDAO.class);
+  final RepositoryVersionHelper repositoryVersionHelper=new RepositoryVersionHelper();
+  AmbariMetaInfo metaInfo=mock(AmbariMetaInfo.class);
+  StackManager stackManager=mock(StackManager.class);
+  when(metaInfo.getStackManager()).thenReturn(stackManager);
+  ClusterEntity cluster=new ClusterEntity();
+  cluster.setClusterName(CLUSTER_NAME);
+  when(clusterDao.findAll()).thenReturn(ImmutableList.of(cluster));
+  StackEntity stackEntity=new StackEntity();
+  stackEntity.setStackName("HDP");
+  stackEntity.setStackVersion("2.3");
+  cluster.setDesiredStack(stackEntity);
+  StackInfo stackInfo=new StackInfo();
+  stackInfo.setName("HDP");
+  stackInfo.setVersion("2.3");
+  RepositoryInfo repositoryInfo=new RepositoryInfo();
+  repositoryInfo.setBaseUrl("http://msft.r");
+  repositoryInfo.setRepoId(ADD_ON_REPO_ID);
+  repositoryInfo.setRepoName("MSFT_R");
+  repositoryInfo.setOsType("redhat6");
+  stackInfo.getRepositories().add(repositoryInfo);
+  when(stackManager.getStack("HDP","2.3")).thenReturn(stackInfo);
+  Provider<RepositoryVersionHelper> repositoryVersionHelperProvider=mock(Provider.class);
+  when(repositoryVersionHelperProvider.get()).thenReturn(repositoryVersionHelper);
+  InMemoryDefaultTestModule testModule=new InMemoryDefaultTestModule(){
+    @Override protected void configure(){
+      bind(RepositoryVersionHelper.class).toInstance(repositoryVersionHelper);
+      requestStaticInjection(RepositoryVersionEntity.class);
+    }
+  }
+;
+  Injector injector=Guice.createInjector(testModule);
+  repoVersion=new RepositoryVersionEntity();
+  repoVersion.setStack(stackEntity);
+  repoVersion.setOperatingSystems(resourceAsString("org/apache/ambari/server/stack/UpdateActiveRepoVersionOnStartupTest_initialRepos.json"));
+  ClusterVersionEntity clusterVersion=new ClusterVersionEntity();
+  clusterVersion.setRepositoryVersion(repoVersion);
+  when(clusterVersionDAO.findByClusterAndStateCurrent(CLUSTER_NAME)).thenReturn(clusterVersion);
+  activeRepoUpdater=new UpdateActiveRepoVersionOnStartup(clusterDao,clusterVersionDAO,repositoryVersionDao,repositoryVersionHelper,metaInfo);
+}
