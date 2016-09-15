@@ -60,11 +60,14 @@ def convert_conf_directories_to_symlinks(package, version, dirs, skip_existing_l
                 Directory(new_symlink, action='delete')
             else:
                 Link(new_symlink, action='delete')
+            old_conf = dir_def['conf_dir']
+            backup_dir = _get_backup_conf_directory(old_conf)
             if (link_to == DIRECTORY_TYPE_BACKUP):
-                old_conf = dir_def['conf_dir']
-                backup_dir = _get_backup_conf_directory(old_conf)
                 Link(new_symlink, to=backup_dir)
             else:
                 Link(new_symlink, to=dir_def['current_dir'])
+                if (package in ['atlas']):
+                    Logger.info('Seeding the new conf symlink {0} from the old backup directory {1} in case any unmanaged artifacts are needed.'.format(new_symlink, backup_dir))
+                    Execute(as_sudo(['cp', '-R', '--no-clobber', os.path.join(backup_dir, '*'), new_symlink], auto_escape=False), only_if=format('test -e {new_symlink}'))
     except Exception as e:
         Logger.warning('Could not change symlink for package {0} to point to {1} directory. Error: {2}'.format(package, link_to, e))

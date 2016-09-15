@@ -20,6 +20,13 @@ def select(stack_name, package, version, try_create=True, ignore_errors=False):
                         Execute(('cp', '-R', '-p', conf_dir, conf_backup_dir), not_if=format('test -e {conf_backup_dir}'), sudo=True)
                         Directory(conf_dir, action='delete')
                         Link(conf_dir, to=conf_backup_dir)
+                    elif (package in ['atlas']):
+                        '\n              In the case of Atlas, the Hive RPM installs /usr/$stack/$version/atlas with some partial packages that\n              contain Hive hooks, while the Atlas RPM is responsible for installing the full content.\n\n              If the user does not have Atlas currently installed on their stack, then /usr/$stack/current/atlas-client\n              will be a broken symlink, and we should not create the\n              symlink /etc/atlas/conf -> /usr/$stack/current/atlas-client/conf .\n              If we mistakenly create this symlink, then when the user performs an EU/RU and then adds Atlas service\n              then the Atlas RPM will not be able to copy its artifacts into /etc/atlas/conf directory and therefore\n              prevent Ambari from by copying those unmanaged contents into /etc/atlas/$version/0\n              '
+                        parent_dir = os.path.dirname(current_dir)
+                        if os.path.exists(parent_dir):
+                            Link(conf_dir, to=current_dir)
+                        else:
+                            Logger.info("Will not create symlink from {0} to {1} because the destination's parent dir does not exist.".format(conf_dir, current_dir))
                     else:
                         Link(conf_dir, to=current_dir)
     except Exception as exception:
