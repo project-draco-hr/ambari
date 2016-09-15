@@ -5,48 +5,54 @@
   }
   HttpServletRequest httpServletRequest=(HttpServletRequest)servletRequest;
   HttpServletResponse httpServletResponse=(HttpServletResponse)servletResponse;
-  String serializedJWT=getJWTFromCookie(httpServletRequest);
-  if (serializedJWT != null && isAuthenticationRequired(serializedJWT)) {
-    SignedJWT jwtToken;
-    try {
-      jwtToken=SignedJWT.parse(serializedJWT);
-      boolean valid=validateToken(jwtToken);
-      if (valid) {
-        String userName=jwtToken.getJWTClaimsSet().getSubject();
-        User user=users.getUser(userName,UserType.JWT);
-        if (user == null) {
-          user=users.getUser(userName,UserType.LDAP);
-        }
-        if (user == null) {
-          User existingUser=users.getUser(userName,UserType.LOCAL);
-          if (existingUser != null) {
-            LOG.error("Access for JWT user [{}] restricted. Detected conflict with local user ",userName);
+  try {
+    String serializedJWT=getJWTFromCookie(httpServletRequest);
+    if (serializedJWT != null && isAuthenticationRequired(serializedJWT)) {
+      try {
+        SignedJWT jwtToken=SignedJWT.parse(serializedJWT);
+        boolean valid=validateToken(jwtToken);
+        if (valid) {
+          String userName=jwtToken.getJWTClaimsSet().getSubject();
+          User user=users.getUser(userName,UserType.JWT);
+          if (user == null) {
+            user=users.getUser(userName,UserType.LDAP);
           }
-          httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR,"Cannot find user from JWT. Please, ensure LDAP is configured and users are synced.");
-          return;
+          if (user == null) {
+            User existingUser=users.getUser(userName,UserType.LOCAL);
+            if (existingUser != null) {
+              LOG.error("Access for JWT user [{}] restricted. Detected conflict with local user ",userName);
+            }
+            throw new AuthenticationJwtUserNotFoundException(userName,"Cannot find user from JWT. Please, ensure LDAP is configured and users are synced.");
+          }
+          Collection<AmbariGrantedAuthority> userAuthorities=users.getUserAuthorities(user.getUserName(),user.getUserType());
+          JwtAuthentication authentication=new JwtAuthentication(serializedJWT,user,userAuthorities);
+          authentication.setAuthenticated(true);
+          SecurityContextHolder.getContext().setAuthentication(authentication);
+          onSuccessfulAuthentication(httpServletRequest,httpServletResponse,authentication);
         }
-        Collection<AmbariGrantedAuthority> userAuthorities=users.getUserAuthorities(user.getUserName(),user.getUserType());
-        JwtAuthentication authentication=new JwtAuthentication(serializedJWT,user,userAuthorities);
-        authentication.setAuthenticated(true);
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+ else {
+          throw new BadCredentialsException("Invalid JWT token");
+        }
       }
- else {
-        SecurityContextHolder.clearContext();
-        LOG.warn("JWT authentication failed");
-        if (ignoreFailure) {
-          filterChain.doFilter(servletRequest,servletResponse);
-        }
- else {
-          entryPoint.commence(httpServletRequest,httpServletResponse,new BadCredentialsException("Invalid JWT " + "token"));
-        }
+ catch (      ParseException e) {
+        LOG.warn("Unable to parse the JWT token",e);
+        throw new BadCredentialsException("Unable to parse the JWT token - " + e.getLocalizedMessage());
       }
     }
- catch (    ParseException e) {
-      LOG.warn("Unable to parse the JWT token",e);
+ else {
+      LOG.trace("No JWT cookie found, do nothing");
+    }
+    filterChain.doFilter(servletRequest,servletResponse);
+  }
+ catch (  AuthenticationException e) {
+    LOG.warn("JWT authentication failed - {}",e.getLocalizedMessage());
+    SecurityContextHolder.clearContext();
+    onUnsuccessfulAuthentication(httpServletRequest,httpServletResponse,e);
+    if (ignoreFailure) {
+      filterChain.doFilter(servletRequest,servletResponse);
+    }
+ else {
+      entryPoint.commence(httpServletRequest,httpServletResponse,e);
     }
   }
- else {
-    LOG.trace("No JWT cookie found, do nothing");
-  }
-  filterChain.doFilter(servletRequest,servletResponse);
 }

@@ -1,15 +1,18 @@
 {
   final SecurityContext securityContext=createNiceMock(SecurityContext.class);
   final FilterConfig filterConfig=createNiceMock(FilterConfig.class);
-  final AmbariAuthorizationFilter filter=createMockBuilder(AmbariAuthorizationFilter.class).addMockedMethod("getSecurityContext").addMockedMethod("getViewRegistry").withConstructor().createMock();
-  injectMembers(filter);
+  final Configuration configuration=EasyMock.createMock(Configuration.class);
+  expect(configuration.getDefaultApiAuthenticatedUser()).andReturn(null).anyTimes();
+  final AuditLogger auditLogger=EasyMock.createNiceMock(AuditLogger.class);
+  expect(auditLogger.isEnabled()).andReturn(false).anyTimes();
+  final AmbariAuthorizationFilter filter=createMockBuilder(AmbariAuthorizationFilter.class).addMockedMethod("getSecurityContext").addMockedMethod("getViewRegistry").withConstructor(createNiceMock(AmbariEntryPoint.class),configuration,createNiceMock(Users.class),auditLogger,createNiceMock(PermissionHelper.class)).createMock();
   final ViewRegistry viewRegistry=createNiceMock(ViewRegistry.class);
   expect(filterConfig.getInitParameter("realm")).andReturn("AuthFilter").anyTimes();
   expect(filter.getSecurityContext()).andReturn(securityContext).anyTimes();
   expect(filter.getViewRegistry()).andReturn(viewRegistry).anyTimes();
   expect(securityContext.getAuthentication()).andReturn(authentication).anyTimes();
   expect(viewRegistry.checkPermission(EasyMock.eq("DeniedView"),EasyMock.<String>anyObject(),EasyMock.<String>anyObject(),EasyMock.anyBoolean())).andReturn(false).anyTimes();
-  replay(filterConfig,filter,securityContext,viewRegistry);
+  replay(filterConfig,filter,securityContext,viewRegistry,configuration,auditLogger);
   for (  final Cell<String,String,Boolean> urlTest : urlTests.cellSet()) {
     final FilterChain chain=EasyMock.createStrictMock(FilterChain.class);
     final HttpServletRequest request=createNiceMock(HttpServletRequest.class);
