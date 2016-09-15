@@ -190,20 +190,26 @@ with Environment() as env:
         params.HdfsResource(format('{oozie_hdfs_user_dir}/share/'), action='delete_on_execute', type='directory')
         spark_client_dir = format('/usr/hdp/{stack_version}/spark')
         if os.path.exists(spark_client_dir):
-            Execute(('mv', format('{oozie_shared_lib}/lib/spark'), format('{oozie_shared_lib}/lib/spark-orig')), sudo=True)
-            Directory(format('{oozie_shared_lib}/lib/spark'), owner=oozie_user, create_parents=True)
-            Execute(format('cp -f {oozie_shared_lib}/lib/spark-orig/oozie-sharelib-spark*.jar {oozie_shared_lib}/lib/spark'), user=oozie_user)
-            Execute(format('cp -P {spark_client_dir}/lib/*.jar {oozie_shared_lib}/lib/spark'), user=oozie_user)
-            Execute(format('find {oozie_shared_lib}/lib/spark/ -type l -delete'), user=oozie_user)
             try:
-                Execute(format('rm -f {oozie_shared_lib}/lib/spark/spark-examples*.jar'), user=oozie_user)
-            except:
-                print 'No spark-examples jar files found in Spark client lib.'
-            Execute(format('cp -f {spark_client_dir}/python/lib/*.zip {oozie_shared_lib}/lib/spark'), user=oozie_user)
-            try:
-                Execute(format('cp -f {spark_client_dir}/python/lib/*.jar {oozie_shared_lib}/lib/spark'), user=oozie_user)
-            except:
-                print 'No jar files found in Spark client python lib.'
+                if (not os.path.exists(format('{oozie_shared_lib}/lib/spark-orig'))):
+                    Execute(('mv', format('{oozie_shared_lib}/lib/spark'), format('{oozie_shared_lib}/lib/spark-orig')), sudo=True)
+                if (not os.path.exists(format('{oozie_shared_lib}/lib/spark'))):
+                    Execute(('mkdir', format('{oozie_shared_lib}/lib/spark')), sudo=True)
+                Execute(format('cp -f {oozie_shared_lib}/lib/spark-orig/oozie-sharelib-spark*.jar {oozie_shared_lib}/lib/spark'))
+                Execute(format('cp -P {spark_client_dir}/lib/*.jar {oozie_shared_lib}/lib/spark'))
+                Execute(format('find {oozie_shared_lib}/lib/spark/ -type l -delete'))
+                try:
+                    Execute(format('rm -f {oozie_shared_lib}/lib/spark/spark-examples*.jar'))
+                except:
+                    print 'No spark-examples jar files found in Spark client lib.'
+                Execute(format('cp -f {spark_client_dir}/python/lib/*.zip {oozie_shared_lib}/lib/spark'))
+                try:
+                    Execute(format('cp -f {spark_client_dir}/python/lib/*.jar {oozie_shared_lib}/lib/spark'))
+                except:
+                    print 'No jar files found in Spark client python lib.'
+                Execute(('chmod', '-R', '0755', format('{oozie_shared_lib}/lib/spark')), sudo=True)
+            except Exception as e:
+                print ('Exception occurred while preparing oozie share lib: ' + repr(e))
         params.HdfsResource(format('{oozie_hdfs_user_dir}/share'), action='create_on_execute', type='directory', mode=493, recursive_chmod=True, owner=oozie_user, source=oozie_shared_lib)
     print 'Copying tarballs...'
     copy_tarballs_to_hdfs(format('/usr/hdp/{stack_version}/hadoop/mapreduce.tar.gz'), (hdfs_path_prefix + '/hdp/apps/{{ stack_version_formatted }}/mapreduce/'), 'hadoop-mapreduce-historyserver', params.mapred_user, params.hdfs_user, params.user_group)
