@@ -1,0 +1,23 @@
+def _change_tables_owner(self):
+    '\n    Changes owner for local postgres database tables.\n    :return: True, if owner was changed or already correct\n    '
+    tables = []
+    get_tables_queries = ["SELECT tablename FROM pg_tables WHERE schemaname = 'ambari';", "SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = 'ambari';", "SELECT table_name FROM information_schema.views WHERE table_schema = 'ambari';"]
+    for query in get_tables_queries:
+        (retcode, stdout, stderr) = self._execute_psql_query(query, self.database_name)
+        if ((retcode != 0) or self._check_for_psql_error(stdout, stderr)):
+            print_error_msg('Failed to get list of ambari tables. Message from psql:\n stdout:{0}\n stderr:{1}\n'.format(stdout, stderr))
+            return False
+        for tbl in stdout.splitlines():
+            tables.append(tbl)
+    if (not tables):
+        print_error_msg('Failed to get list of ambari tables')
+        return False
+    for tbl in tables:
+        (retcode, stdout, stderr) = self._execute_psql_query((("select u.usename from information_schema.tables t join pg_catalog.pg_class c on (t.table_name = c.relname) join pg_catalog.pg_user u on (c.relowner = u.usesysid) where t.table_schema='ambari' and t.table_name='" + tbl) + "';"), self.database_name)
+        owner = stdout.strip()
+        if (owner != self.database_username):
+            (retcode, stdout, stderr) = self._execute_psql_query((((('ALTER TABLE "ambari"."' + tbl) + '" OWNER TO "') + self.database_username) + '"'), self.database_name, False)
+            if ((retcode != 0) or ('ALTER TABLE' not in stdout)):
+                print_error_msg('Failed to change owner of table:{0} to user:{1}'.format(tbl, owner))
+                return False
+    return True

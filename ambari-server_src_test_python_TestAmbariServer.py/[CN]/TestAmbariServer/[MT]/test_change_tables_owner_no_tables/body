@@ -1,7 +1,7 @@
-@not_for_platform(PLATFORM_WINDOWS)
 @patch('ambari_server.dbConfiguration.decrypt_password_for_alias')
 @patch('ambari_server.dbConfiguration_linux.run_os_command')
-def test_setup_db(self, run_os_command_mock, decrypt_password_for_alias_mock):
+@patch('ambari_server.dbConfiguration_linux.print_error_msg')
+def test_change_tables_owner_no_tables(self, print_error_msg_mock, run_os_command_mock, decrypt_password_for_alias_mock):
     args = MagicMock()
     del args.database_index
     del args.dbms
@@ -15,11 +15,8 @@ def test_setup_db(self, run_os_command_mock, decrypt_password_for_alias_mock):
     properties = Properties()
     properties.process_pair(JDBC_PASSWORD_PROPERTY, get_alias_string('mypwdalias'))
     decrypt_password_for_alias_mock.return_value = 'password'
+    run_os_command_mock.return_value = (0, '', '')
     dbms = PGConfig(args, properties, 'local')
-    self.assertTrue(decrypt_password_for_alias_mock.called)
-    run_os_command_mock.return_value = (0, None, None)
-    result = dbms._setup_db()
-    self.assertTrue(run_os_command_mock.called)
-    self.assertEqual(run_os_command_mock.call_count, 2)
-    self.assertEqual((0, None, None), result)
-    pass
+    result = dbms._change_tables_owner()
+    self.assertFalse(result)
+    self.assertEquals(print_error_msg_mock.call_args_list[0][0][0], 'Failed to get list of ambari tables')

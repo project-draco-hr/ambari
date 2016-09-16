@@ -1,18 +1,10 @@
 def _change_db_files_owner(self):
-    database_name = self.database_name
-    new_owner = self.database_username
-    if ('"' not in new_owner):
-        new_owner = '\'"{0}"\''.format(new_owner)
-        pass
-    command = PGConfig.CHANGE_OWNER_COMMAND[:]
-    command[(-1)] = command[(-1)].format(database_name, 'ambari', new_owner)
-    (retcode, stdout, stderr) = run_os_command(command)
-    if (not (retcode == 0)):
-        if get_verbose():
-            if stderr:
-                print_error_msg(('stderr:\n' + stderr.strip()))
-            if stdout:
-                print_error_msg(('stdout:\n' + stdout.strip()))
+    retcode = 0
+    if (not self._change_tables_owner()):
+        print_error_msg('Ambari is unable to change ownership of the database tables in {database} to {user}.\nThis may be because the administrator user ({admin_user}) does not have permission to make the changes.\nMake sure that all tables returned by following SQL are owned by {user}:\n  "SELECT tablename FROM pg_tables WHERE schemaname = \'ambari\';",\n  "SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = \'ambari\';",\n  "SELECT table_name FROM information_schema.views WHERE table_schema = \'ambari\';\n'.format(database=self.database_name, admin_user=self.local_admin_user, user=self.database_username))
+        continue_ = get_YN_input('Is it safe to continue [yes/no](no)? ', 'no')
+        if (continue_ and (continue_ != 'no')):
+            retcode = 0
     else:
         print_info_msg('Fixed database objects owner')
     return retcode
