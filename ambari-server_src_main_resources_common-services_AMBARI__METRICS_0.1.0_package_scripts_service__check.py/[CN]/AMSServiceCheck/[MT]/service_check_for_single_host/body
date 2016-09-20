@@ -1,0 +1,46 @@
+def service_check_for_single_host(self, metric_collector_host, params):
+    random_value1 = random.random()
+    headers = {'Content-type': 'application/json', }
+    ca_certs = os.path.join(params.ams_collector_conf_dir, params.metric_truststore_ca_certs)
+    current_time = (int(time.time()) * 1000)
+    metric_json = Template('smoketest_metrics.json.j2', hostname=params.hostname, random1=random_value1, current_time=current_time).get_content()
+    try:
+        post_metrics_to_collector(self.AMS_METRICS_POST_URL, metric_collector_host, params.metric_collector_port, params.metric_collector_https_enabled, metric_json, headers, ca_certs, self.AMS_CONNECT_TRIES, self.AMS_CONNECT_TIMEOUT)
+        get_metrics_parameters = {'metricNames': 'AMBARI_METRICS.SmokeTest.FakeMetric', 'appId': 'amssmoketestfake', 'hostname': params.hostname, 'startTime': (current_time - 60000), 'endTime': (current_time + 61000), 'precision': 'seconds', 'grouped': 'false', }
+        encoded_get_metrics_parameters = urllib.urlencode(get_metrics_parameters)
+        Logger.info(('Connecting (GET) to %s:%s%s' % (metric_collector_host, params.metric_collector_port, (self.AMS_METRICS_GET_URL % encoded_get_metrics_parameters))))
+        for i in xrange(0, self.AMS_READ_TRIES):
+            conn = network.get_http_connection(metric_collector_host, int(params.metric_collector_port), params.metric_collector_https_enabled, ca_certs)
+            conn.request('GET', (self.AMS_METRICS_GET_URL % encoded_get_metrics_parameters))
+            response = conn.getresponse()
+            Logger.info(('Http response for host %s : %s %s' % (metric_collector_host, response.status, response.reason)))
+            data = response.read()
+            Logger.info(('Http data: %s' % data))
+            conn.close()
+            if (response.status == 200):
+                Logger.info(('Metrics were retrieved from host %s' % metric_collector_host))
+            else:
+                raise Fail(('Metrics were not retrieved from host %s. GET request status: %s %s \n%s' % (metric_collector_host, response.status, response.reason, data)))
+            data_json = json.loads(data)
+
+            def floats_eq(f1, f2, delta):
+                return (abs((f1 - f2)) < delta)
+            values_are_present = False
+            for metrics_data in data_json['metrics']:
+                if ((str(current_time) in metrics_data['metrics']) and (str((current_time + 1000)) in metrics_data['metrics']) and floats_eq(metrics_data['metrics'][str(current_time)], random_value1, 1e-07) and floats_eq(metrics_data['metrics'][str((current_time + 1000))], current_time, 1)):
+                    Logger.info(('Values %s and %s were found in the response from host %s.' % (metric_collector_host, random_value1, current_time)))
+                    values_are_present = True
+                    break
+                    pass
+            if (not values_are_present):
+                if (i < (self.AMS_READ_TRIES - 1)):
+                    Logger.info(("Values weren't stored yet. Retrying in %s seconds." % self.AMS_READ_TIMEOUT))
+                    time.sleep(self.AMS_READ_TIMEOUT)
+                else:
+                    raise Fail(('Values %s and %s were not found in the response.' % (random_value1, current_time)))
+            else:
+                break
+                pass
+    except Fail as ex:
+        Logger.warning(('Ambari Metrics service check failed on collector host %s. Reason : %s' % (metric_collector_host, str(ex))))
+        raise Fail(('Ambari Metrics service check failed on collector host %s. Reason : %s' % (metric_collector_host, str(ex))))

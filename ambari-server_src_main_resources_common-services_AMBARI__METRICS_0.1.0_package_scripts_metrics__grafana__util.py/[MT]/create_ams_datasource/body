@@ -2,7 +2,22 @@ def create_ams_datasource():
     import params
     server = Server(protocol=params.ams_grafana_protocol.strip(), host=params.ams_grafana_host.strip(), port=params.ams_grafana_port, user=params.ams_grafana_admin_user, password=params.ams_grafana_admin_pwd)
     '\n  Create AMS datasource in Grafana, if exsists make sure the collector url is accurate\n  '
-    ams_datasource_json = Template('metrics_grafana_datasource.json.j2', ams_datasource_name=METRICS_GRAFANA_DATASOURCE_NAME).get_content()
+    Logger.info('Trying to find working metric collector')
+    results = execute_in_parallel(do_ams_collector_post, params.ams_collector_hosts, params)
+    new_datasource_host = ''
+    for host in params.ams_collector_hosts:
+        if (host in results):
+            if (results[host].status == SUCCESS):
+                new_datasource_host = host
+                Logger.info(('Found working collector on host %s' % new_datasource_host))
+                break
+            else:
+                Logger.warning(results[host].result)
+    if (new_datasource_host == ''):
+        Logger.warning('All metric collectors are unavailable. Will use random collector as datasource host.')
+        new_datasource_host = params.random_metric_collector_host
+    Logger.info(('New datasource host will be %s' % new_datasource_host))
+    ams_datasource_json = Template('metrics_grafana_datasource.json.j2', ams_datasource_name=METRICS_GRAFANA_DATASOURCE_NAME, ams_datasource_host=new_datasource_host).get_content()
     Logger.info('Checking if AMS Grafana datasource already exists')
     response = perform_grafana_get_call(GRAFANA_DATASOURCE_URL, server)
     create_datasource = True
@@ -15,7 +30,7 @@ def create_ams_datasource():
                 create_datasource = False
                 Logger.info('Ambari Metrics Grafana datasource already present. Checking Metrics Collector URL')
                 datasource_url = datasources_json[i]['url']
-                if is_unchanged_datasource_url(datasource_url):
+                if is_unchanged_datasource_url(datasource_url, new_datasource_host):
                     Logger.info('Metrics Collector URL validation succeeded.')
                     return
                 else:
