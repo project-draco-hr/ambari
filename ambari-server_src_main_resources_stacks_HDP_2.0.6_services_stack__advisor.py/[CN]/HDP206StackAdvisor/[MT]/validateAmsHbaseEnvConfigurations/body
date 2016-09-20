@@ -13,7 +13,6 @@ def validateAmsHbaseEnvConfigurations(self, properties, recommendedDefaults, con
     logDirItem = self.validatorEqualsPropertyItem(properties, 'hbase_log_dir', ams_env, 'metrics_collector_log_dir')
     if logDirItem:
         validationItems.extend([{'config-name': 'hbase_log_dir', 'item': logDirItem, }])
-    collector_heapsize = to_number(ams_env.get('metrics_collector_heapsize'))
     hbase_master_heapsize = to_number(properties['hbase_master_heapsize'])
     hbase_master_xmn_size = to_number(properties['hbase_master_xmn_size'])
     hbase_regionserver_heapsize = to_number(properties['hbase_regionserver_heapsize'])
@@ -72,17 +71,18 @@ def validateAmsHbaseEnvConfigurations(self, properties, recommendedDefaults, con
                                     hostComponents.append(component['StackServiceComponents']['component_name'])
                     requiredMemory = getMemorySizeRequired(hostComponents, configurations)
                     unusedMemory = ((host['Hosts']['total_mem'] * 1024) - requiredMemory)
-                    if (unusedMemory > (4 * gb)):
-                        heapPropertyToIncrease = ('hbase_regionserver_heapsize' if is_hbase_distributed else 'hbase_master_heapsize')
-                        xmnPropertyToIncrease = ('regionserver_xmn_size' if is_hbase_distributed else 'hbase_master_xmn_size')
-                        recommended_collector_heapsize = (int(((unusedMemory - (4 * gb)) / 5)) + (collector_heapsize * mb))
+                    heapPropertyToIncrease = ('hbase_regionserver_heapsize' if is_hbase_distributed else 'hbase_master_heapsize')
+                    xmnPropertyToIncrease = ('regionserver_xmn_size' if is_hbase_distributed else 'hbase_master_xmn_size')
+                    hbase_needs_increase = ((to_number(properties[heapPropertyToIncrease]) * mb) < (32 * gb))
+                    if ((unusedMemory > (4 * gb)) and hbase_needs_increase):
                         recommended_hbase_heapsize = (int((((unusedMemory - (4 * gb)) * 4) / 5)) + (to_number(properties.get(heapPropertyToIncrease)) * mb))
                         recommended_hbase_heapsize = min((32 * gb), recommended_hbase_heapsize)
-                        recommended_xmn_size = round_to_n(((0.12 * recommended_hbase_heapsize) / mb), 128)
-                        if ((collector_heapsize < recommended_collector_heapsize) or (to_number(properties[heapPropertyToIncrease]) < recommended_hbase_heapsize)):
-                            collectorHeapsizeItem = self.getWarnItem('{0} MB RAM is unused on the host {1} based on components assigned. Consider allocating  {2} MB to metrics_collector_heapsize in ams-env, {3} MB to {4} in ams-hbase-env'.format((unusedMemory / mb), collectorHostName, (recommended_collector_heapsize / mb), (recommended_hbase_heapsize / mb), heapPropertyToIncrease))
-                            validationItems.extend([{'config-name': heapPropertyToIncrease, 'item': collectorHeapsizeItem, }])
-                        if (to_number(properties[xmnPropertyToIncrease]) < recommended_hbase_heapsize):
+                        recommended_hbase_heapsize = round_to_n((recommended_hbase_heapsize / mb), 128)
+                        if (to_number(properties[heapPropertyToIncrease]) < recommended_hbase_heapsize):
+                            hbaseHeapsizeItem = self.getWarnItem('Consider allocating {0} MB to {1} in ams-hbase-env to use up some unused memory on host'.format(recommended_hbase_heapsize, heapPropertyToIncrease))
+                            validationItems.extend([{'config-name': heapPropertyToIncrease, 'item': hbaseHeapsizeItem, }])
+                        recommended_xmn_size = round_to_n((0.15 * recommended_hbase_heapsize), 128)
+                        if (to_number(properties[xmnPropertyToIncrease]) < recommended_xmn_size):
                             xmnPropertyToIncreaseItem = self.getWarnItem('Consider allocating {0} MB to use up some unused memory on host'.format(recommended_xmn_size))
                             validationItems.extend([{'config-name': xmnPropertyToIncrease, 'item': xmnPropertyToIncreaseItem, }])
         pass
