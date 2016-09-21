@@ -1,0 +1,27 @@
+{
+  CommandReport commandReport=null;
+  if (identityRecord != null) {
+    String message;
+    String dataDirectory=getDataDirectoryPath();
+    if (dataDirectory == null) {
+      message="The data directory has not been set. Generated keytab files can not be stored.";
+      LOG.error(message);
+      commandReport=createCommandReport(1,HostRoleStatus.FAILED,"{}",actionLog.getStdOut(),actionLog.getStdErr());
+    }
+ else {
+      String hostName=identityRecord.get(KerberosIdentityDataFileReader.HOSTNAME);
+      if (hostName != null && hostName.equalsIgnoreCase(KerberosHelper.AMBARI_SERVER_HOST_NAME)) {
+        String destKeytabFilePath=identityRecord.get(KerberosIdentityDataFileReader.KEYTAB_FILE_PATH);
+        File hostDirectory=new File(dataDirectory,hostName);
+        File srcKeytabFile=new File(hostDirectory,DigestUtils.sha1Hex(destKeytabFilePath));
+        if (srcKeytabFile.exists()) {
+          installAmbariServerIdentity(evaluatedPrincipal,srcKeytabFile.getAbsolutePath(),destKeytabFilePath,actionLog);
+          if ("AMBARI_SERVER".equals(identityRecord.get(KerberosIdentityDataFileReader.COMPONENT))) {
+            configureJAAS(evaluatedPrincipal,destKeytabFilePath,actionLog);
+          }
+        }
+      }
+    }
+  }
+  return commandReport;
+}
