@@ -11,7 +11,14 @@
   expect(metaInfo.getActionDefinition(actionName)).andReturn(actionDefinition).anyTimes();
   expect(actionDefinition.getPermissions()).andReturn(permissions).anyTimes();
   expect(response.getMessage()).andReturn("Message").anyTimes();
-  replay(managementController,metaInfo,actionDefinition,response);
+  Cluster cluster=createMock(Cluster.class);
+  Clusters clusters=createMock(Clusters.class);
+  if (clusterName != null) {
+    expect(cluster.getResourceId()).andReturn(4L).anyTimes();
+    expect(clusters.getCluster(clusterName)).andReturn(cluster).anyTimes();
+    expect(managementController.getClusters()).andReturn(clusters).anyTimes();
+  }
+  replay(managementController,metaInfo,actionDefinition,response,cluster,clusters);
   Set<Map<String,Object>> propertySet=new LinkedHashSet<Map<String,Object>>();
   Map<String,Object> properties=new LinkedHashMap<String,Object>();
   Set<Map<String,Object>> filterSet=new HashSet<Map<String,Object>>();
@@ -19,18 +26,29 @@
   filterMap.put(RequestResourceProvider.HOSTS_ID,"h1,h2");
   filterSet.add(filterMap);
   properties.put(RequestResourceProvider.REQUEST_RESOURCE_FILTER_ID,filterSet);
+  properties.put(RequestResourceProvider.REQUEST_CLUSTER_NAME_PROPERTY_ID,clusterName);
   propertySet.add(properties);
   Map<String,String> requestInfoProperties=new HashMap<String,String>();
-  requestInfoProperties.put(RequestResourceProvider.ACTION_ID,actionName);
+  if (commandName != null) {
+    requestInfoProperties.put(RequestResourceProvider.COMMAND_ID,commandName);
+  }
+  if (actionName != null) {
+    requestInfoProperties.put(RequestResourceProvider.ACTION_ID,actionName);
+  }
   SecurityContextHolder.getContext().setAuthentication(authentication);
   Request request=PropertyHelper.getCreateRequest(propertySet,requestInfoProperties);
   ResourceProvider provider=AbstractControllerResourceProvider.getResourceProvider(type,PropertyHelper.getPropertyIds(type),PropertyHelper.getKeyPropertyIds(type),managementController);
   provider.createResources(request);
   ExecuteActionRequest capturedRequest=actionRequest.getValue();
   Assert.assertTrue(actionRequest.hasCaptured());
-  Assert.assertFalse("expected an action",capturedRequest.isCommand());
-  Assert.assertEquals(actionName,capturedRequest.getActionName());
-  Assert.assertEquals(null,capturedRequest.getCommandName());
+  if (actionName != null) {
+    Assert.assertFalse("expected an action",capturedRequest.isCommand());
+    Assert.assertEquals(actionName,capturedRequest.getActionName());
+  }
+  if (commandName != null) {
+    Assert.assertTrue("expected a command",capturedRequest.isCommand());
+    Assert.assertEquals(commandName,capturedRequest.getCommandName());
+  }
   Assert.assertNotNull(capturedRequest.getResourceFilters());
   Assert.assertEquals(1,capturedRequest.getResourceFilters().size());
   RequestResourceFilter capturedResourceFilter=capturedRequest.getResourceFilters().get(0);

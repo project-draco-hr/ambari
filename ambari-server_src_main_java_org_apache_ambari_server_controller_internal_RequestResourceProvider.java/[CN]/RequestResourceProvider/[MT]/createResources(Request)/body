@@ -7,39 +7,52 @@
   return getRequestStatus(createResources(new Command<RequestStatusResponse>(){
     @Override public RequestStatusResponse invoke() throws AmbariException, AuthorizationException {
       String clusterName=actionRequest.getClusterName();
-      if (clusterName == null) {
+      ResourceType resourceType;
+      Long resourceId;
+      if (StringUtils.isEmpty(clusterName)) {
+        resourceType=ResourceType.AMBARI;
+        resourceId=null;
+      }
+ else {
+        resourceType=ResourceType.CLUSTER;
+        resourceId=getClusterResourceId(clusterName);
+      }
+      if (actionRequest.isCommand()) {
+        String commandName=actionRequest.getCommandName();
+        if (StringUtils.isEmpty(commandName)) {
+          commandName="_unknown_command_";
+        }
+        if (commandName.endsWith("_SERVICE_CHECK")) {
+          if (!AuthorizationHelper.isAuthorized(resourceType,resourceId,RoleAuthorization.SERVICE_RUN_SERVICE_CHECK)) {
+            throw new AuthorizationException("The authenticated user is not authorized to execute service checks.");
+          }
+        }
+ else         if (commandName.equals("DECOMMISSION")) {
+          if (!AuthorizationHelper.isAuthorized(resourceType,resourceId,RoleAuthorization.SERVICE_DECOMMISSION_RECOMMISSION)) {
+            throw new AuthorizationException("The authenticated user is not authorized to decommission services.");
+          }
+        }
+ else {
+          if (!AuthorizationHelper.isAuthorized(resourceType,resourceId,RoleAuthorization.SERVICE_RUN_CUSTOM_COMMAND)) {
+            throw new AuthorizationException(String.format("The authenticated user is not authorized to execute the command, %s.",commandName));
+          }
+        }
+      }
+ else {
         String actionName=actionRequest.getActionName();
         if (StringUtils.isEmpty(actionName)) {
           actionName="_unknown_action_";
         }
-        ActionDefinition actionDefinition=getManagementController().getAmbariMetaInfo().getActionDefinition(actionName);
-        Set<RoleAuthorization> permissions=(actionDefinition == null) ? null : actionDefinition.getPermissions();
-        if (permissions == null) {
-          if (!AuthorizationHelper.isAuthorized(ResourceType.AMBARI,null,RoleAuthorization.SERVICE_RUN_CUSTOM_COMMAND)) {
-            throw new AuthorizationException(String.format("The authenticated user is not authorized to execute the '%s'command.",actionName));
-          }
-        }
- else {
-          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,null,permissions)) {
-            throw new AuthorizationException(String.format("The authenticated user is not authorized to execute the '%s'command.",actionName));
-          }
-        }
-      }
- else       if (actionRequest.isCommand()) {
-        if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,getClusterResourceId(clusterName),RoleAuthorization.SERVICE_RUN_CUSTOM_COMMAND)) {
-          throw new AuthorizationException("The authenticated user is not authorized to execute custom service commands.");
-        }
-      }
- else {
-        String actionName=actionRequest.getActionName();
         if (actionName.contains("SERVICE_CHECK")) {
-          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,getClusterResourceId(clusterName),RoleAuthorization.SERVICE_RUN_SERVICE_CHECK)) {
+          if (!AuthorizationHelper.isAuthorized(resourceType,resourceId,RoleAuthorization.SERVICE_RUN_SERVICE_CHECK)) {
             throw new AuthorizationException("The authenticated user is not authorized to execute service checks.");
           }
         }
- else         if (actionName.equals("DECOMMISSION")) {
-          if (!AuthorizationHelper.isAuthorized(ResourceType.CLUSTER,getClusterResourceId(clusterName),RoleAuthorization.SERVICE_DECOMMISSION_RECOMMISSION)) {
-            throw new AuthorizationException("The authenticated user is not authorized to decommission services.");
+ else {
+          ActionDefinition actionDefinition=(actionName == null) ? null : getManagementController().getAmbariMetaInfo().getActionDefinition(actionName);
+          Set<RoleAuthorization> permissions=(actionDefinition == null) ? null : actionDefinition.getPermissions();
+          if (!AuthorizationHelper.isAuthorized(resourceType,resourceId,permissions)) {
+            throw new AuthorizationException(String.format("The authenticated user is not authorized to execute the action %s.",actionName));
           }
         }
       }
