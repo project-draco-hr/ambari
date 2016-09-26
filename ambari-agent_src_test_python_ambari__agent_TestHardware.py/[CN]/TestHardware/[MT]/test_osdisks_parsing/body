@@ -1,0 +1,24 @@
+@patch.object(Hardware, '_chk_writable_mount')
+@patch('ambari_agent.Hardware.path_isfile')
+def test_osdisks_parsing(self, isfile_mock, chk_writable_mount_mock):
+    df_output = 'Filesystem                                                                                        Type  1024-blocks     Used Available Capacity Mounted on\n                /dev/mapper/docker-253:0-4980899-d45c264d37ab18c8ed14f890f4d59ac2b81e1c52919eb36a79419787209515f3 xfs      31447040  1282384  30164656       5% /\n                tmpfs                                                                                             tmpfs    32938336        4  32938332       1% /dev\n                tmpfs                                                                                             tmpfs    32938336        0  32938336       0% /sys/fs/cgroup\n                /dev/mapper/fedora-root                                                                           ext4    224161316 12849696 199901804       7% /etc/resolv.conf\n                /dev/mapper/fedora-root                                                                           ext4    224161316 12849696 199901804       7% /etc/hostname\n                /dev/mapper/fedora-root                                                                           ext4    224161316 12849696 199901804       7% /etc/hosts\n                shm                                                                                               tmpfs       65536        0     65536       0% /dev/shm\n                /dev/mapper/fedora-root                                                                           ext4    224161316 12849696 199901804       7% /run/secrets\n                '
+
+    def isfile_side_effect(path):
+        assume_files = ['/etc/resolv.conf', '/etc/hostname', '/etc/hosts']
+        return (path in assume_files)
+
+    def chk_writable_mount_side_effect(path):
+        assume_read_only = ['/run/secrets']
+        return (path not in assume_read_only)
+    isfile_mock.side_effect = isfile_side_effect
+    chk_writable_mount_mock.side_effect = chk_writable_mount_side_effect
+    with patch('subprocess.Popen') as open_mock:
+        proc_mock = Mock()
+        attr = {'communicate.return_value': [df_output], }
+        proc_mock.configure_mock(**attr)
+        open_mock.return_value = proc_mock
+        result = Hardware.osdisks()
+    self.assertEquals(1, len(result))
+    expected_mounts_left = ['/']
+    mounts_left = [item['mountpoint'] for item in result]
+    self.assertEquals(expected_mounts_left, mounts_left)

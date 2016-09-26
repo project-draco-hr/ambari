@@ -1,25 +1,19 @@
-@staticmethod
+@classmethod
 @OsFamilyFuncImpl(OsFamilyImpl.DEFAULT)
-def osdisks(config=None):
+def osdisks(cls, config=None):
     ' Run df to find out the disks on the host. Only works on linux\n    platforms. Note that this parser ignores any filesystems with spaces\n    and any mounts with spaces. '
-    mounts = []
-    command = []
-    timeout = Hardware.CHECK_REMOTE_MOUNTS_TIMEOUT_DEFAULT
-    if (config and config.has_option(AmbariConfig.AMBARI_PROPERTIES_CATEGORY, Hardware.CHECK_REMOTE_MOUNTS_TIMEOUT_KEY) and (config.get(AmbariConfig.AMBARI_PROPERTIES_CATEGORY, Hardware.CHECK_REMOTE_MOUNTS_TIMEOUT_KEY) != '0')):
-        timeout = config.get(AmbariConfig.AMBARI_PROPERTIES_CATEGORY, Hardware.CHECK_REMOTE_MOUNTS_TIMEOUT_KEY)
-    command.append('timeout')
-    command.append(timeout)
-    command.append('df')
-    command.append('-kPT')
-    if (config and config.has_option(AmbariConfig.AMBARI_PROPERTIES_CATEGORY, Hardware.CHECK_REMOTE_MOUNTS_KEY) and (config.get(AmbariConfig.AMBARI_PROPERTIES_CATEGORY, Hardware.CHECK_REMOTE_MOUNTS_KEY).lower() == 'false')):
+    timeout = cls._get_mount_check_timeout(config)
+    command = ['timeout', timeout, 'df', '-kPT']
+    if (not cls._check_remote_mounts(config)):
         command.append('-l')
     df = subprocess.Popen(command, stdout=subprocess.PIPE)
     dfdata = df.communicate()[0]
-    lines = dfdata.splitlines()
-    for l in lines:
-        mountinfo = Hardware.extractMountInfo(l)
-        if ((mountinfo != None) and Hardware._chk_mount(mountinfo['mountpoint'])):
-            mounts.append(mountinfo)
-        pass
-    pass
-    return mounts
+    mounts = [cls._parse_df_line(line) for line in dfdata.splitlines() if line]
+    result_mounts = []
+    for mount in mounts:
+        if (not mount):
+            continue
+        '\n      We need to filter mounts by several parameters:\n       - mounted device is not in the ignored list\n       - is accessible to user under which current process running\n       - it is not file-mount (docker environment)\n      '
+        if ((mount['device'] not in cls.IGNORE_DEVICES) and (mount['mountpoint'].split('/')[0] not in cls.IGNORE_ROOT_MOUNTS) and cls._chk_writable_mount(mount['mountpoint']) and (not path_isfile(mount['mountpoint']))):
+            result_mounts.append(mount)
+    return result_mounts
