@@ -1,47 +1,41 @@
 {
-  clusterGlobalLock.readLock().lock();
+  readLock.lock();
   try {
-    readLock.lock();
+    HostComponentStateEntity hostComponentStateEntity=getStateEntity();
+    if (null == hostComponentStateEntity) {
+      LOG.warn("Could not convert ServiceComponentHostResponse to a response. It's possible that Host {} was deleted.",getHostName());
+      return null;
+    }
+    String clusterName=serviceComponent.getClusterName();
+    String serviceName=serviceComponent.getServiceName();
+    String serviceComponentName=serviceComponent.getName();
+    String hostName=getHostName();
+    String state=getState().toString();
+    String stackId=getStackVersion().getStackId();
+    String desiredState=getDesiredState().toString();
+    String desiredStackId=getDesiredStackVersion().getStackId();
+    HostComponentAdminState componentAdminState=getComponentAdminState();
+    UpgradeState upgradeState=hostComponentStateEntity.getUpgradeState();
+    String displayName=null;
     try {
-      HostComponentStateEntity hostComponentStateEntity=getStateEntity();
-      if (null == hostComponentStateEntity) {
-        LOG.warn("Could not convert ServiceComponentHostResponse to a response. It's possible that Host " + getHostName() + " was deleted.");
-        return null;
-      }
-      String clusterName=serviceComponent.getClusterName();
-      String serviceName=serviceComponent.getServiceName();
-      String serviceComponentName=serviceComponent.getName();
-      String hostName=getHostName();
-      String state=getState().toString();
-      String stackId=getStackVersion().getStackId();
-      String desiredState=getDesiredState().toString();
-      String desiredStackId=getDesiredStackVersion().getStackId();
-      HostComponentAdminState componentAdminState=getComponentAdminState();
-      UpgradeState upgradeState=hostComponentStateEntity.getUpgradeState();
-      String displayName=null;
-      try {
-        ComponentInfo compInfo=ambariMetaInfo.getComponent(getStackVersion().getStackName(),getStackVersion().getStackVersion(),serviceName,serviceComponentName);
-        displayName=compInfo.getDisplayName();
-      }
- catch (      AmbariException e) {
-        displayName=serviceComponentName;
-      }
-      ServiceComponentHostResponse r=new ServiceComponentHostResponse(clusterName,serviceName,serviceComponentName,displayName,hostName,state,stackId,desiredState,desiredStackId,componentAdminState);
-      r.setActualConfigs(actualConfigs);
-      r.setUpgradeState(upgradeState);
-      try {
-        r.setStaleConfig(helper.isStaleConfigs(this,desiredConfigs));
-      }
- catch (      Exception e) {
-        LOG.error("Could not determine stale config",e);
-      }
-      return r;
+      ComponentInfo compInfo=ambariMetaInfo.getComponent(getStackVersion().getStackName(),getStackVersion().getStackVersion(),serviceName,serviceComponentName);
+      displayName=compInfo.getDisplayName();
     }
-  finally {
-      readLock.unlock();
+ catch (    AmbariException e) {
+      displayName=serviceComponentName;
     }
+    ServiceComponentHostResponse r=new ServiceComponentHostResponse(clusterName,serviceName,serviceComponentName,displayName,hostName,state,stackId,desiredState,desiredStackId,componentAdminState);
+    r.setActualConfigs(actualConfigs);
+    r.setUpgradeState(upgradeState);
+    try {
+      r.setStaleConfig(helper.isStaleConfigs(this,desiredConfigs));
+    }
+ catch (    Exception e) {
+      LOG.error("Could not determine stale config",e);
+    }
+    return r;
   }
   finally {
-    clusterGlobalLock.readLock().unlock();
+    readLock.unlock();
   }
 }

@@ -1,34 +1,20 @@
 {
-  boolean clusterWriteLockAcquired=false;
-  if (!persisted) {
-    clusterGlobalLock.writeLock().lock();
-    clusterWriteLockAcquired=true;
-  }
+  writeLock.lock();
   try {
-    writeLock.lock();
-    try {
-      if (!persisted) {
-        persistEntities();
-        persisted=true;
-        clusterGlobalLock.writeLock().unlock();
-        clusterWriteLockAcquired=false;
-        refresh();
-        StackId stackId=getDesiredStackVersion();
-        ServiceComponentInstalledEvent event=new ServiceComponentInstalledEvent(getClusterId(),stackId.getStackName(),stackId.getStackVersion(),getServiceName(),getServiceComponentName(),getHostName(),isRecoveryEnabled());
-        eventPublisher.publish(event);
-      }
- else {
-        saveComponentStateEntityIfPersisted();
-        saveComponentDesiredStateEntityIfPersisted();
-      }
+    if (!persisted) {
+      persistEntities();
+      persisted=true;
+      refresh();
+      StackId stackId=getDesiredStackVersion();
+      ServiceComponentInstalledEvent event=new ServiceComponentInstalledEvent(getClusterId(),stackId.getStackName(),stackId.getStackVersion(),getServiceName(),getServiceComponentName(),getHostName(),isRecoveryEnabled());
+      eventPublisher.publish(event);
     }
-  finally {
-      writeLock.unlock();
+ else {
+      saveComponentStateEntityIfPersisted();
+      saveComponentDesiredStateEntityIfPersisted();
     }
   }
   finally {
-    if (clusterWriteLockAcquired) {
-      clusterGlobalLock.writeLock().unlock();
-    }
+    writeLock.unlock();
   }
 }
