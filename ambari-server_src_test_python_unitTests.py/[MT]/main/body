@@ -1,10 +1,12 @@
 def main():
     if (not os.path.exists(newtmpdirpath)):
         os.makedirs(newtmpdirpath)
-    custom_tests = False
-    if (len(sys.argv) > 1):
-        if (sys.argv[1] == 'true'):
-            custom_tests = True
+    if ((len(sys.argv) > 1) and (sys.argv[1] == 'true')):
+        test_mask = CUSTOM_TEST_MASK
+    elif (len(sys.argv) > 2):
+        test_mask = sys.argv[2]
+    else:
+        test_mask = TEST_MASK
     pwd = os.path.abspath(os.path.dirname(__file__))
     ambari_server_folder = get_parent_path(pwd, 'ambari-server')
     ambari_agent_folder = os.path.normpath(os.path.join(ambari_server_folder, '../ambari-agent'))
@@ -43,7 +45,7 @@ def main():
     for variant in test_variants:
         executor_result = multiprocessing.Queue()
         sys.stderr.write('Running tests for stack:{0} service:{1}\n'.format(variant['stack'], variant['service']))
-        process = multiprocessing.Process(target=stack_test_executor, args=(variant['directory'], variant['service'], variant['stack'], custom_tests, executor_result))
+        process = multiprocessing.Process(target=stack_test_executor, args=(variant['directory'], variant['service'], variant['stack'], test_mask, executor_result))
         process.start()
         while process.is_alive():
             process.join(10)
@@ -60,10 +62,6 @@ def main():
         if (variant_result['exit_code'] != 0):
             has_failures = True
     sys.stderr.write('Running tests for ambari-server\n')
-    if custom_tests:
-        test_mask = CUSTOM_TEST_MASK
-    else:
-        test_mask = TEST_MASK
     test_dirs = [(os.path.join(pwd, 'custom_actions'), '\nRunning tests for custom actions\n'), (os.path.join(pwd, 'host_scripts'), '\nRunning tests for host scripts\n'), (pwd, '\nRunning tests for ambari-server\n')]
     for (test_dir, msg) in test_dirs:
         sys.stderr.write(msg)
