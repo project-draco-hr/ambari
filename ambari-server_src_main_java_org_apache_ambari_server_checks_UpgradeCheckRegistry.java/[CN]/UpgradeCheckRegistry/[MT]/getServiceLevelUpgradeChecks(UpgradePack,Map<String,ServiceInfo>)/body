@@ -1,0 +1,53 @@
+{
+  List<String> prerequisiteChecks=upgradePack.getPrerequisiteChecks();
+  List<String> missingChecks=new ArrayList<String>();
+  for (  String prerequisiteCheck : prerequisiteChecks) {
+    if (!isRegistered(prerequisiteCheck)) {
+      missingChecks.add(prerequisiteCheck);
+    }
+  }
+  List<AbstractCheckDescriptor> checks=new ArrayList<>(missingChecks.size());
+  if (missingChecks.isEmpty()) {
+    return checks;
+  }
+  List<URL> urls=new ArrayList<URL>();
+  for (  ServiceInfo service : services.values()) {
+    File dir=service.getChecksFolder();
+    File[] jars=dir.listFiles(new FilenameFilter(){
+      @Override public boolean accept(      File dir,      String name){
+        return name.endsWith(".jar");
+      }
+    }
+);
+    for (    File jar : jars) {
+      try {
+        URL url=jar.toURI().toURL();
+        urls.add(url);
+        LOG.debug("Adding service check jar to classpath: {}",url.toString());
+      }
+ catch (      Exception e) {
+        LOG.error("Failed to add service check jar to classpath: {}",jar.getAbsolutePath(),e);
+      }
+    }
+  }
+  ClassLoader classLoader=new URLClassLoader(urls.toArray(new URL[urls.size()]),ClassUtils.getDefaultClassLoader());
+  for (  String prerequisiteCheck : missingChecks) {
+    Class<?> clazz=null;
+    try {
+      clazz=ClassUtils.resolveClassName(prerequisiteCheck,classLoader);
+    }
+ catch (    IllegalArgumentException illegalArgumentException) {
+      LOG.error("Unable to find upgrade check {}",prerequisiteCheck,illegalArgumentException);
+    }
+    try {
+      if (clazz != null) {
+        AbstractCheckDescriptor upgradeCheck=(AbstractCheckDescriptor)clazz.newInstance();
+        checks.add(upgradeCheck);
+      }
+    }
+ catch (    Exception exception) {
+      LOG.error("Unable to create upgrade check {}",prerequisiteCheck,exception);
+    }
+  }
+  return checks;
+}
