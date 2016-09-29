@@ -1,6 +1,31 @@
 {
   for (  HostRequest hostRequest : requests) {
     String hostname=hostRequest.getHostname();
+    Set<ServiceComponentHostRequest> schrs=new HashSet<>();
+    for (    Cluster cluster : clusters.getClustersForHost(hostname)) {
+      List<ServiceComponentHost> list=cluster.getServiceComponentHosts(hostname);
+      for (      ServiceComponentHost sch : list) {
+        ServiceComponentHostRequest schr=new ServiceComponentHostRequest(cluster.getClusterName(),sch.getServiceName(),sch.getServiceComponentName(),sch.getHostName(),null);
+        schrs.add(schr);
+      }
+    }
+    DeleteStatusMetaData componentDeleteStatus=null;
+    if (schrs.size() > 0) {
+      try {
+        componentDeleteStatus=getManagementController().deleteHostComponents(schrs);
+      }
+ catch (      Exception ex) {
+        deleteStatusMetaData.addException(hostname,ex);
+      }
+    }
+    if (componentDeleteStatus != null) {
+      for (      String key : componentDeleteStatus.getDeletedKeys()) {
+        deleteStatusMetaData.addDeletedKey(key);
+      }
+      for (      String key : componentDeleteStatus.getExceptionForKeys().keySet()) {
+        deleteStatusMetaData.addException(key,componentDeleteStatus.getExceptionForKeys().get(key));
+      }
+    }
     try {
       clusters.deleteHost(hostname);
       deleteStatusMetaData.addDeletedKey(hostname);
