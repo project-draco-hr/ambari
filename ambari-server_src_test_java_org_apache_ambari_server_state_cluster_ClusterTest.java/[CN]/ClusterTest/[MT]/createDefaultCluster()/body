@@ -3,24 +3,10 @@
   StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
   org.junit.Assert.assertNotNull(stackEntity);
   String clusterName="c1";
-  ResourceTypeEntity resourceTypeEntity=resourceTypeDAO.findById(ResourceType.CLUSTER.getId());
-  if (resourceTypeEntity == null) {
-    resourceTypeEntity=new ResourceTypeEntity();
-    resourceTypeEntity.setId(ResourceType.CLUSTER.getId());
-    resourceTypeEntity.setName(ResourceType.CLUSTER.name());
-    resourceTypeEntity=resourceTypeDAO.merge(resourceTypeEntity);
-  }
-  ResourceEntity resourceEntity=new ResourceEntity();
-  resourceEntity.setResourceType(resourceTypeEntity);
-  ClusterEntity clusterEntity=new ClusterEntity();
-  clusterEntity.setClusterName(clusterName);
-  clusterEntity.setResource(resourceEntity);
-  clusterEntity.setDesiredStack(stackEntity);
-  clusterDAO.create(clusterEntity);
+  clusters.addCluster(clusterName,stackId);
   Map<String,String> hostAttributes=new HashMap<String,String>();
   hostAttributes.put("os_family","redhat");
   hostAttributes.put("os_release_version","5.9");
-  List<HostEntity> hostEntities=new ArrayList<HostEntity>();
   Set<String> hostNames=new HashSet<String>(){
 {
       add("h1");
@@ -29,17 +15,16 @@
   }
 ;
   for (  String hostName : hostNames) {
-    HostEntity hostEntity=new HostEntity();
-    hostEntity.setHostName(hostName);
+    clusters.addHost(hostName);
+    Host host=clusters.getHost(hostName);
+    host.persist();
+    HostEntity hostEntity=hostDAO.findByName(hostName);
     hostEntity.setIpv4("ipv4");
     hostEntity.setIpv6("ipv6");
     hostEntity.setHostAttributes(gson.toJson(hostAttributes));
-    hostEntity.setClusterEntities(Arrays.asList(clusterEntity));
-    hostEntities.add(hostEntity);
-    hostDAO.create(hostEntity);
+    hostDAO.merge(hostEntity);
   }
-  clusterEntity.setHostEntities(hostEntities);
-  clusterDAO.merge(clusterEntity);
+  clusters.mapHostsToCluster(hostNames,clusterName);
   c1=clusters.getCluster(clusterName);
   helper.getOrCreateRepositoryVersion(stackId,stackId.getStackVersion());
   c1.createClusterVersion(stackId,stackId.getStackVersion(),"admin",RepositoryVersionState.INSTALLING);

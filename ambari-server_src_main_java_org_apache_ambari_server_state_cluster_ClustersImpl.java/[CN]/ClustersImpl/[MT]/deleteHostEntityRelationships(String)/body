@@ -1,57 +1,48 @@
 {
-  checkLoaded();
   if (!hosts.containsKey(hostname)) {
     throw new HostNotFoundException("Could not find host " + hostname);
   }
-  w.lock();
-  try {
-    HostEntity entity=hostDAO.findByName(hostname);
-    if (entity == null) {
-      return;
+  HostEntity entity=hostDAO.findByName(hostname);
+  if (entity == null) {
+    return;
+  }
+  Set<Cluster> clusters=hostClusterMap.get(hostname);
+  Set<Long> clusterIds=Sets.newHashSet();
+  for (  Cluster cluster : clusters) {
+    clusterIds.add(cluster.getClusterId());
+  }
+  Host host=hosts.get(hostname);
+  unmapHostFromClusters(host,clusters);
+  hostDAO.refresh(entity);
+  hostVersionDAO.removeByHostName(hostname);
+  if (entity.getHostRoleCommandEntities() != null) {
+    for (    HostRoleCommandEntity hrcEntity : entity.getHostRoleCommandEntities()) {
+      TopologyLogicalTaskEntity topologyLogicalTaskEnity=hrcEntity.getTopologyLogicalTaskEntity();
+      if (topologyLogicalTaskEnity != null) {
+        topologyLogicalTaskDAO.remove(topologyLogicalTaskEnity);
+        hrcEntity.setTopologyLogicalTaskEntity(null);
+      }
     }
-    Set<Cluster> clusters=hostClusterMap.get(hostname);
-    Set<Long> clusterIds=Sets.newHashSet();
-    for (    Cluster cluster : clusters) {
-      clusterIds.add(cluster.getClusterId());
-    }
-    unmapHostFromClusters(hostname,clusters);
-    hostDAO.refresh(entity);
-    hostVersionDAO.removeByHostName(hostname);
-    if (entity.getHostRoleCommandEntities() != null) {
-      for (      HostRoleCommandEntity hrcEntity : entity.getHostRoleCommandEntities()) {
-        TopologyLogicalTaskEntity topologyLogicalTaskEnity=hrcEntity.getTopologyLogicalTaskEntity();
-        if (topologyLogicalTaskEnity != null) {
-          topologyLogicalTaskDAO.remove(topologyLogicalTaskEnity);
-          hrcEntity.setTopologyLogicalTaskEntity(null);
+  }
+  for (  Long clusterId : clusterIds) {
+    for (    TopologyRequestEntity topologyRequestEntity : topologyRequestDAO.findByClusterId(clusterId)) {
+      TopologyLogicalRequestEntity topologyLogicalRequestEntity=topologyRequestEntity.getTopologyLogicalRequestEntity();
+      for (      TopologyHostRequestEntity topologyHostRequestEntity : topologyLogicalRequestEntity.getTopologyHostRequestEntities()) {
+        if (hostname.equals(topologyHostRequestEntity.getHostName())) {
+          topologyHostRequestDAO.remove(topologyHostRequestEntity);
         }
       }
     }
-    for (    Long clusterId : clusterIds) {
-      for (      TopologyRequestEntity topologyRequestEntity : topologyRequestDAO.findByClusterId(clusterId)) {
-        TopologyLogicalRequestEntity topologyLogicalRequestEntity=topologyRequestEntity.getTopologyLogicalRequestEntity();
-        for (        TopologyHostRequestEntity topologyHostRequestEntity : topologyLogicalRequestEntity.getTopologyHostRequestEntities()) {
-          if (hostname.equals(topologyHostRequestEntity.getHostName())) {
-            topologyHostRequestDAO.remove(topologyHostRequestEntity);
-          }
-        }
-      }
-    }
-    entity.setHostRoleCommandEntities(null);
-    hostRoleCommandDAO.removeByHostId(entity.getHostId());
-    entity.setHostStateEntity(null);
-    hostStateDAO.removeByHostId(entity.getHostId());
-    hostConfigMappingDAO.removeByHostId(entity.getHostId());
-    serviceConfigDAO.removeHostFromServiceConfigs(entity.getHostId());
-    requestOperationLevelDAO.removeByHostId(entity.getHostId());
-    topologyHostInfoDAO.removeByHost(entity);
-    hosts.remove(hostname);
-    hostsById.remove(entity.getHostId());
-    hostDAO.remove(entity);
   }
- catch (  Exception e) {
-    throw new AmbariException("Could not remove host",e);
-  }
- finally {
-    w.unlock();
-  }
+  entity.setHostRoleCommandEntities(null);
+  hostRoleCommandDAO.removeByHostId(entity.getHostId());
+  entity.setHostStateEntity(null);
+  hostStateDAO.removeByHostId(entity.getHostId());
+  hostConfigMappingDAO.removeByHostId(entity.getHostId());
+  serviceConfigDAO.removeHostFromServiceConfigs(entity.getHostId());
+  requestOperationLevelDAO.removeByHostId(entity.getHostId());
+  topologyHostInfoDAO.removeByHost(entity);
+  hosts.remove(hostname);
+  hostsById.remove(entity.getHostId());
+  hostDAO.remove(entity);
 }
