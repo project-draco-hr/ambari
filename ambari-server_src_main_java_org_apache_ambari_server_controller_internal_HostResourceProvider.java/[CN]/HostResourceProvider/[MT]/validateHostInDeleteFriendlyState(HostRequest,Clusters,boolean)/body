@@ -1,0 +1,43 @@
+{
+  Set<String> clusterNamesForHost=new HashSet<>();
+  String hostName=hostRequest.getHostname();
+  if (null != hostRequest.getClusterName()) {
+    clusterNamesForHost.add(hostRequest.getClusterName());
+  }
+ else {
+    Set<Cluster> clustersForHost=clusters.getClustersForHost(hostRequest.getHostname());
+    if (null != clustersForHost) {
+      for (      Cluster c : clustersForHost) {
+        clusterNamesForHost.add(c.getClusterName());
+      }
+    }
+  }
+  for (  String clusterName : clusterNamesForHost) {
+    Cluster cluster=clusters.getCluster(clusterName);
+    List<ServiceComponentHost> list=cluster.getServiceComponentHosts(hostName);
+    if (!list.isEmpty()) {
+      List<String> componentsToRemove=new ArrayList<>();
+      List<String> componentsStarted=new ArrayList<>();
+      for (      ServiceComponentHost sch : list) {
+        componentsToRemove.add(sch.getServiceComponentName());
+        if (sch.getState() == State.STARTED) {
+          componentsStarted.add(sch.getServiceComponentName());
+        }
+      }
+      if (forceDelete) {
+        if (!componentsStarted.isEmpty()) {
+          StringBuilder reason=new StringBuilder("Cannot remove host ").append(hostName).append(" from ").append(hostRequest.getClusterName()).append(".  The following roles exist, and these components must be stopped: ");
+          reason.append(StringUtils.join(componentsToRemove,", "));
+          throw new AmbariException(reason.toString());
+        }
+      }
+ else {
+        if (!componentsToRemove.isEmpty()) {
+          StringBuilder reason=new StringBuilder("Cannot remove host ").append(hostName).append(" from ").append(hostRequest.getClusterName()).append(".  The following roles exist, and these components must be stopped if running, and then deleted: ");
+          reason.append(StringUtils.join(componentsToRemove,", "));
+          throw new AmbariException(reason.toString());
+        }
+      }
+    }
+  }
+}

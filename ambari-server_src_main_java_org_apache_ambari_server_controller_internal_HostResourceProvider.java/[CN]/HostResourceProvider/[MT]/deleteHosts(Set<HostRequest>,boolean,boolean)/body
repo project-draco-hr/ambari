@@ -1,0 +1,44 @@
+{
+  AmbariManagementController controller=getManagementController();
+  Clusters clusters=controller.getClusters();
+  DeleteStatusMetaData deleteStatusMetaData=new DeleteStatusMetaData();
+  List<HostRequest> okToRemove=new ArrayList<>();
+  for (  HostRequest hostRequest : requests) {
+    String hostName=hostRequest.getHostname();
+    if (null == hostName) {
+      continue;
+    }
+    try {
+      validateHostInDeleteFriendlyState(hostRequest,clusters,forceDelete);
+      okToRemove.add(hostRequest);
+    }
+ catch (    Exception ex) {
+      deleteStatusMetaData.addException(hostName,ex);
+    }
+  }
+  if (dryRun) {
+    for (    HostRequest request : okToRemove) {
+      deleteStatusMetaData.addDeletedKey(request.getHostname());
+    }
+  }
+ else {
+    processDeleteHostRequests(okToRemove,clusters,deleteStatusMetaData);
+  }
+  if (!dryRun) {
+    if (deleteStatusMetaData.getDeletedKeys().size() + deleteStatusMetaData.getExceptionForKeys().size() == 1) {
+      if (deleteStatusMetaData.getDeletedKeys().size() == 1) {
+        return null;
+      }
+      for (      Map.Entry<String,Exception> entry : deleteStatusMetaData.getExceptionForKeys().entrySet()) {
+        Exception ex=entry.getValue();
+        if (ex instanceof AmbariException) {
+          throw (AmbariException)ex;
+        }
+ else {
+          throw new AmbariException(ex.getMessage(),ex);
+        }
+      }
+    }
+  }
+  return deleteStatusMetaData;
+}
