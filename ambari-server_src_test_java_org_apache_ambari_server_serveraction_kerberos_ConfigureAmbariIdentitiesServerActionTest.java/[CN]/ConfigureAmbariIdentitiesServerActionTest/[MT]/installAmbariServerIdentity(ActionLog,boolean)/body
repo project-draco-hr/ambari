@@ -1,0 +1,31 @@
+{
+  String principal="ambari-server@EXAMPLE.COM";
+  File srcKeytabFile=testFolder.newFile();
+  File destKeytabFile=new File(testFolder.getRoot().getAbsolutePath(),"ambari-server.keytab");
+  Injector injector=createInjector();
+  HostEntity hostEntity;
+  if (ambariServerHasAgent) {
+    KerberosPrincipalHostDAO kerberosPrincipalHostDAO=injector.getInstance(KerberosPrincipalHostDAO.class);
+    expect(kerberosPrincipalHostDAO.exists(principal,1L)).andReturn(false).once();
+    kerberosPrincipalHostDAO.create(principal,1L);
+    expectLastCall().once();
+    hostEntity=createMock(HostEntity.class);
+    expect(hostEntity.getHostId()).andReturn(1L).once();
+  }
+ else {
+    hostEntity=null;
+  }
+  HostDAO hostDAO=injector.getInstance(HostDAO.class);
+  expect(hostDAO.findByName(StageUtils.getHostName())).andReturn(hostEntity).once();
+  Method methodCopyFile=ConfigureAmbariIdentitiesServerAction.class.getDeclaredMethod("copyFile",String.class,String.class);
+  Method methodSetFileACL=ConfigureAmbariIdentitiesServerAction.class.getDeclaredMethod("setFileACL",String.class,String.class,boolean.class,boolean.class,String.class,boolean.class,boolean.class);
+  ConfigureAmbariIdentitiesServerAction action=createMockBuilder(ConfigureAmbariIdentitiesServerAction.class).addMockedMethod(methodCopyFile).addMockedMethod(methodSetFileACL).createMock();
+  action.copyFile(srcKeytabFile.getAbsolutePath(),destKeytabFile.getAbsolutePath());
+  expectLastCall().once();
+  action.setFileACL(destKeytabFile.getAbsolutePath(),"user1",true,true,"groupA",true,false);
+  expectLastCall().once();
+  replayAll();
+  injector.injectMembers(action);
+  action.installAmbariServerIdentity(principal,srcKeytabFile.getAbsolutePath(),destKeytabFile.getAbsolutePath(),"user1",true,true,"groupA",true,false,actionLog);
+  verifyAll();
+}
