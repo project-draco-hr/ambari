@@ -1,0 +1,31 @@
+{
+  Keytab keytab=null;
+  if (identityDescriptor != null) {
+    KerberosPrincipalDescriptor principalDescriptor=identityDescriptor.getPrincipalDescriptor();
+    if (principalDescriptor != null) {
+      if (expectedType == principalDescriptor.getType()) {
+        String principal=variableReplacementHelper.replaceVariables(principalDescriptor.getValue(),configurations);
+        if (!StringUtils.isEmpty(hostname)) {
+          principal=principal.replace("_HOST",hostname);
+        }
+        if (!kerberosPrincipalDAO.exists(principal)) {
+          CreatePrincipalsServerAction.CreatePrincipalResult result;
+          result=injector.getInstance(CreatePrincipalsServerAction.class).createPrincipal(principal,KerberosPrincipalType.SERVICE.equals(expectedType),kerberosEnvProperties,kerberosOperationHandler,false,null);
+          if (result == null) {
+            throw new AmbariException("Failed to create the account for " + principal);
+          }
+ else {
+            KerberosKeytabDescriptor keytabDescriptor=identityDescriptor.getKeytabDescriptor();
+            if (keytabDescriptor != null) {
+              keytab=injector.getInstance(CreateKeytabFilesServerAction.class).createKeytab(principal,result.getPassword(),result.getKeyNumber(),kerberosOperationHandler,true,true,null);
+              if (keytab == null) {
+                throw new AmbariException("Failed to create the keytab for " + principal);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return keytab;
+}

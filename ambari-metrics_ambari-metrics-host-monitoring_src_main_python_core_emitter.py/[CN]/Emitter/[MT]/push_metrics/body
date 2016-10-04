@@ -1,21 +1,13 @@
 def push_metrics(self, data):
-    headers = {'Content-Type': 'application/json', 'Accept': '*/*', }
-    for collector_host in self.active_collector_hosts:
-        connection = self.get_connection(collector_host)
-        logger.info(('server: %s' % collector_host))
-        logger.debug(('message to sent: %s' % data))
-        retry_count = 0
-        while (retry_count < self.MAX_RETRY_COUNT):
-            response = self.get_response_from_submission(connection, data, headers)
-            if (response and (response.status == 200)):
-                return
-            else:
-                logger.warn('Retrying after {0} ...'.format(self.RETRY_SLEEP_INTERVAL))
-                retry_count += 1
-                if (0 == self._stop_handler.wait(self.RETRY_SLEEP_INTERVAL)):
-                    return
-            pass
-        if (retry_count >= self.MAX_RETRY_COUNT):
-            self.active_collector_hosts.blacklist(collector_host)
-            logger.warn('Metric collector host {0} was blacklisted.'.format(collector_host))
+    success = False
+    while (self.active_collector_hosts.get_actual_size() > 0):
+        collector_host = self.get_collector_host_shard()
+        success = self.try_with_collector_host(collector_host, data)
+        if success:
+            break
     pass
+    if (not success):
+        logger.info('No valid collectors found...')
+        for collector_host in self.active_collector_hosts:
+            success = self.try_with_collector_host(collector_host, data)
+        pass

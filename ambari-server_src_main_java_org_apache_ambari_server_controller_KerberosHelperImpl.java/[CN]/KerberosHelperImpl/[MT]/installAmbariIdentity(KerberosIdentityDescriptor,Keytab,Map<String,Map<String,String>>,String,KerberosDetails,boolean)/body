@@ -1,0 +1,50 @@
+{
+  KerberosPrincipalDescriptor principalDescriptor=ambariServerIdentity.getPrincipalDescriptor();
+  if (principalDescriptor != null) {
+    String principal=variableReplacementHelper.replaceVariables(principalDescriptor.getValue(),configurations);
+    if (!StringUtils.isEmpty(hostname)) {
+      principal=principal.replace("_HOST",hostname);
+    }
+    KerberosKeytabDescriptor keytabDescriptor=ambariServerIdentity.getKeytabDescriptor();
+    if (keytabDescriptor != null) {
+      String destKeytabFilePath=variableReplacementHelper.replaceVariables(keytabDescriptor.getFile(),configurations);
+      File destKeytabFile=new File(destKeytabFilePath);
+      ConfigureAmbariIdentitiesServerAction configureAmbariIdentitiesServerAction=injector.getInstance(ConfigureAmbariIdentitiesServerAction.class);
+      if (keytab != null) {
+        try {
+          KerberosOperationHandler operationHandler=kerberosOperationHandlerFactory.getKerberosOperationHandler(kerberosDetails.getKdcType());
+          File tmpKeytabFile=createTemporaryFile();
+          try {
+            if ((operationHandler != null) && operationHandler.createKeytabFile(keytab,tmpKeytabFile)) {
+              String ownerName=variableReplacementHelper.replaceVariables(keytabDescriptor.getOwnerName(),configurations);
+              String ownerAccess=keytabDescriptor.getOwnerAccess();
+              boolean ownerWritable="w".equalsIgnoreCase(ownerAccess) || "rw".equalsIgnoreCase(ownerAccess);
+              boolean ownerReadable="r".equalsIgnoreCase(ownerAccess) || "rw".equalsIgnoreCase(ownerAccess);
+              String groupName=variableReplacementHelper.replaceVariables(keytabDescriptor.getGroupName(),configurations);
+              String groupAccess=keytabDescriptor.getGroupAccess();
+              boolean groupWritable="w".equalsIgnoreCase(groupAccess) || "rw".equalsIgnoreCase(groupAccess);
+              boolean groupReadable="r".equalsIgnoreCase(groupAccess) || "rw".equalsIgnoreCase(groupAccess);
+              configureAmbariIdentitiesServerAction.installAmbariServerIdentity(principal,tmpKeytabFile.getAbsolutePath(),destKeytabFilePath,ownerName,ownerReadable,ownerWritable,groupName,groupReadable,groupWritable,null);
+              LOG.debug("Successfully created keytab file for {} at {}",principal,destKeytabFile.getAbsolutePath());
+            }
+ else {
+              LOG.error("Failed to create keytab file for {} at {}",principal,destKeytabFile.getAbsolutePath());
+            }
+          }
+  finally {
+            tmpKeytabFile.delete();
+          }
+        }
+ catch (        KerberosOperationException e) {
+          throw new AmbariException(String.format("Failed to create keytab file for %s at %s: %s:",principal,destKeytabFile.getAbsolutePath(),e.getLocalizedMessage()),e);
+        }
+      }
+ else {
+        LOG.error("No keytab data is available to create the keytab file for {} at {}",principal,destKeytabFile.getAbsolutePath());
+      }
+      if (updateJAASFile) {
+        configureAmbariIdentitiesServerAction.configureJAAS(principal,destKeytabFile.getAbsolutePath(),null);
+      }
+    }
+  }
+}

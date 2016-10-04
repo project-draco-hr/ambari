@@ -1,0 +1,18 @@
+{
+  String principal="ambari-server@EXAMPLE.COM";
+  String keytabFilePath="/etc/security/keytabs/ambari.server.keytab";
+  File jaasConfFile=testFolder.newFile();
+  File jaasConfFileBak=new File(jaasConfFile.getAbsolutePath() + ".bak");
+  String originalJAASFileContent="com.sun.security.jgss.krb5.initiate {\n" + "    com.sun.security.auth.module.Krb5LoginModule required\n" + "    renewTGT=false\n"+ "    doNotPrompt=true\n"+ "    useKeyTab=true\n"+ "    keyTab=\"/etc/security/keytabs/ambari.keytab\"\n"+ "    principal=\"ambari@EXAMPLE.COM\"\n"+ "    storeKey=true\n"+ "    useTicketCache=false;\n"+ "};\n";
+  FileUtils.writeStringToFile(jaasConfFile,originalJAASFileContent);
+  Injector injector=createInjector();
+  Method methodGetJAASConfFilePath=ConfigureAmbariIdentitiesServerAction.class.getDeclaredMethod("getJAASConfFilePath");
+  ConfigureAmbariIdentitiesServerAction action=createMockBuilder(ConfigureAmbariIdentitiesServerAction.class).addMockedMethod(methodGetJAASConfFilePath).createMock();
+  expect(action.getJAASConfFilePath()).andReturn(jaasConfFile.getAbsolutePath());
+  replayAll();
+  injector.injectMembers(action);
+  action.configureJAAS(principal,keytabFilePath,actionLog);
+  verifyAll();
+  Assert.assertEquals("com.sun.security.jgss.krb5.initiate {\n" + "    com.sun.security.auth.module.Krb5LoginModule required\n" + "    renewTGT=false\n"+ "    doNotPrompt=true\n"+ "    useKeyTab=true\n"+ "    keyTab=\"/etc/security/keytabs/ambari.server.keytab\"\n"+ "    principal=\"ambari-server@EXAMPLE.COM\"\n"+ "    storeKey=true\n"+ "    useTicketCache=false;\n"+ "};\n",FileUtils.readFileToString(jaasConfFile));
+  Assert.assertEquals(originalJAASFileContent,FileUtils.readFileToString(jaasConfFileBak));
+}
