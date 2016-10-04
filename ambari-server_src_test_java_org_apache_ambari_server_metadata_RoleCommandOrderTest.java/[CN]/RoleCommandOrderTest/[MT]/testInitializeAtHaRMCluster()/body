@@ -1,9 +1,9 @@
 {
-  RoleCommandOrder rco=injector.getInstance(RoleCommandOrder.class);
   ClusterImpl cluster=createMock(ClusterImpl.class);
   ServiceComponentHost sch1=createMock(ServiceComponentHostImpl.class);
   ServiceComponentHost sch2=createMock(ServiceComponentHostImpl.class);
   expect(cluster.getService("GLUSTERFS")).andReturn(null);
+  expect(cluster.getClusterId()).andReturn(1L);
   Map<String,ServiceComponentHost> hostComponents=new HashMap<String,ServiceComponentHost>();
   hostComponents.put("1",sch1);
   hostComponents.put("2",sch2);
@@ -15,9 +15,8 @@
   expect(resourcemanagerSC.getServiceComponentHosts()).andReturn(hostComponents).anyTimes();
   expect(cluster.getCurrentStackVersion()).andReturn(new StackId("HDP","2.0.6"));
   replay(cluster,yarnService,sch1,sch2,resourcemanagerSC);
+  RoleCommandOrder rco=roleCommandOrderProvider.getRoleCommandOrder(cluster);
   Map<RoleCommandPair,Set<RoleCommandPair>> deps=rco.getDependencies();
-  assertTrue("Dependencies are empty before initialization",deps.size() == 0);
-  rco.initialize(cluster);
   assertTrue("Dependencies are loaded after initialization",deps.size() > 0);
   verify(cluster,yarnService);
   assertFalse(dependenciesContainBlockedRole(deps,Role.PEERSTATUS));
@@ -32,7 +31,7 @@
   assertNotNull(rmRoleCommandPairs);
   boolean isZookeeperStartPresent=false;
   for (  RoleCommandPair pair : rmRoleCommandPairs) {
-    if (pair.cmd == RoleCommand.START && pair.getRole() == Role.ZOOKEEPER_SERVER) {
+    if (pair.getCmd() == RoleCommand.START && pair.getRole() == Role.ZOOKEEPER_SERVER) {
       isZookeeperStartPresent=true;
     }
   }

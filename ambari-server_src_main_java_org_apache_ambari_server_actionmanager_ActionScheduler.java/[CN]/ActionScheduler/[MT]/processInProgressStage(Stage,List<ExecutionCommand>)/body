@@ -2,6 +2,7 @@
   LOG.debug("==> Collecting commands to schedule...");
   Map<String,RoleStats> roleStats=initRoleStats(s);
   long now=System.currentTimeMillis();
+  Set<RoleCommandPair> rolesCommandsInProgress=s.getHostRolesInProgress();
   Cluster cluster=null;
   if (null != s.getClusterName()) {
     cluster=clusters.getCluster(s.getClusterName());
@@ -99,8 +100,10 @@
         }
       }
  else       if (status.equals(HostRoleStatus.PENDING)) {
-        commandsToSchedule.add(c);
-        LOG.trace("===>commandsToSchedule(first_time)=" + commandsToSchedule.size());
+        if (CommandExecutionType.STAGE == s.getCommandExecutionType() || (CommandExecutionType.DEPENDENCY_ORDERED == s.getCommandExecutionType() && CommandExecutionType.DEPENDENCY_ORDERED == configuration.getStageExecutionType() && areCommandDependenciesFinished(c,s,rolesCommandsInProgress))) {
+          commandsToSchedule.add(c);
+          LOG.trace("===>commandsToSchedule(first_time)=" + commandsToSchedule.size());
+        }
       }
       updateRoleStats(status,roleStats.get(roleStr));
     }
