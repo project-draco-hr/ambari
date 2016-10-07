@@ -1,0 +1,23 @@
+@patch('socket.getfqdn', new=(lambda : 'test-mock-ambari-server-hostname1'))
+def test_validateHDFSConfigurationsCoreSite(self):
+    configurations = {'hadoop-env': {'properties': {'hdfs_user': 'hdfs-user', }, }, 'yarn-env': {'properties': {'yarn_user': 'yarn-user', }, }, }
+    recommendedDefaults = {'hadoop.proxyuser.ambari-user.hosts': '*', 'hadoop.proxyuser.ambari-user.groups': '*', 'hadoop.proxyuser.hdfs-user.hosts': '*', 'hadoop.proxyuser.hdfs-user.groups': '*', 'hadoop.proxyuser.yarn-user.hosts': 'host1,host2', 'hadoop.proxyuser.yarn-user.groups': '*', }
+    properties = {'hadoop.proxyuser.ambari-user.hosts': '*', 'hadoop.proxyuser.ambari-user.groups': '*', 'hadoop.proxyuser.hdfs-user.hosts': '*', 'hadoop.proxyuser.hdfs-user.groups': '*', 'hadoop.proxyuser.yarn-user.hosts': 'host1,host2', 'hadoop.proxyuser.yarn-user.groups': '*', }
+    services = {'services': [{'StackServices': {'service_name': 'HDFS', }, }, {'StackServices': {'service_name': 'YARN', }, 'components': [{'StackServiceComponents': {'component_name': 'RESOURCEMANAGER', 'hostnames': ['host1', 'host2'], }, }], }], 'ambari-server-properties': {'ambari-server.user': 'ambari-user', }, 'configurations': configurations, }
+    hosts = {'items': [{'Hosts': {'host_name': 'host1', }, }, {'Hosts': {'host_name': 'host2', }, }], }
+    res_expected = []
+    res = self.stackAdvisor.validateHDFSConfigurationsCoreSite(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEquals(res, res_expected)
+    del properties['hadoop.proxyuser.yarn-user.hosts']
+    res_expected = [{'config-name': 'hadoop.proxyuser.yarn-user.hosts', 'config-type': 'core-site', 'level': 'ERROR', 'message': 'Value should be set for hadoop.proxyuser.yarn-user.hosts', 'type': 'configuration', }]
+    res = self.stackAdvisor.validateHDFSConfigurationsCoreSite(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEquals(res, res_expected)
+    services['services'][1]['components'][0]['StackServiceComponents']['hostnames'] = ['host1']
+    res_expected = []
+    res = self.stackAdvisor.validateHDFSConfigurationsCoreSite(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEquals(res, res_expected)
+    del properties['hadoop.proxyuser.ambari-user.hosts']
+    properties['hadoop.proxyuser.hdfs-user.groups'] = ''
+    res_expected = [{'config-name': 'hadoop.proxyuser.hdfs-user.groups', 'config-type': 'core-site', 'level': 'WARN', 'message': 'Empty value for hadoop.proxyuser.hdfs-user.groups', 'type': 'configuration', }, {'config-type': 'core-site', 'message': 'Value should be set for hadoop.proxyuser.ambari-user.hosts', 'type': 'configuration', 'config-name': 'hadoop.proxyuser.ambari-user.hosts', 'level': 'ERROR', }]
+    res = self.stackAdvisor.validateHDFSConfigurationsCoreSite(properties, recommendedDefaults, configurations, services, hosts)
+    self.assertEquals(res, res_expected)

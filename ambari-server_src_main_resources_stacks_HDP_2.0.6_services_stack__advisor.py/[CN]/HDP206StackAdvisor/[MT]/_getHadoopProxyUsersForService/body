@@ -1,0 +1,33 @@
+def _getHadoopProxyUsersForService(self, serviceName, serviceUserComponents, services, hosts):
+    Logger.info('Calculating Hadoop Proxy User recommendations for {0} service.'.format(serviceName))
+    servicesList = self.get_services_list(services)
+    resultUsers = {}
+    if (serviceName in servicesList):
+        usersComponents = {}
+        for values in serviceUserComponents:
+            filterFunction = values[3:]
+            if (filterFunction and (not filterFunction[0](services, hosts))):
+                continue
+            (userNameConfig, userNameProperty, hostSelectorMap) = values[:3]
+            user = get_from_dict(services, ('configurations', userNameConfig, 'properties', userNameProperty), None)
+            if user:
+                usersComponents[user] = (userNameConfig, userNameProperty, hostSelectorMap)
+        for (user, (userNameConfig, userNameProperty, hostSelectorMap)) in usersComponents.iteritems():
+            proxyUsers = {'config': userNameConfig, 'propertyName': userNameProperty, }
+            for (proxyPropertyName, hostSelector) in hostSelectorMap.iteritems():
+                componentHostNamesString = (hostSelector if isinstance(hostSelector, basestring) else '*')
+                if isinstance(hostSelector, (list, tuple)):
+                    componentHostNames = set()
+                    for component in hostSelector:
+                        componentHosts = self.getHostsWithComponent(serviceName, component, services, hosts)
+                        if (componentHosts is not None):
+                            for componentHost in componentHosts:
+                                componentHostName = componentHost['Hosts']['host_name']
+                                componentHostNames.add(componentHostName)
+                    componentHostNamesString = ','.join(sorted(componentHostNames))
+                    Logger.info("Host List for [service='{0}'; user='{1}'; components='{2}']: {3}".format(serviceName, user, ','.join(hostSelector), componentHostNamesString))
+                if (not (proxyPropertyName in proxyUsers)):
+                    proxyUsers[proxyPropertyName] = componentHostNamesString
+            if (not (user in resultUsers)):
+                resultUsers[user] = proxyUsers
+    return resultUsers
