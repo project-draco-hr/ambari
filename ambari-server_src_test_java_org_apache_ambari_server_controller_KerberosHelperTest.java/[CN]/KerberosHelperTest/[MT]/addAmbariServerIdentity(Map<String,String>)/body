@@ -1,18 +1,28 @@
 {
-  boolean createAmbariPrincipal=(kerberosEnvProperties == null) || !"false".equalsIgnoreCase(kerberosEnvProperties.get("create_ambari_principal"));
   KerberosHelperImpl kerberosHelper=injector.getInstance(KerberosHelperImpl.class);
-  KerberosIdentityDescriptor ambariKerberosIdentity=createMock(KerberosIdentityDescriptor.class);
+  boolean createAmbariIdentities=kerberosHelper.createAmbariIdentities(kerberosEnvProperties);
+  KerberosIdentityDescriptor ambariKerberosIdentity=null;
   KerberosDescriptor kerberosDescriptor=createMock(KerberosDescriptor.class);
-  if (createAmbariPrincipal) {
-    expect(kerberosDescriptor.getIdentity(KerberosHelper.AMBARI_IDENTITY_NAME)).andReturn(ambariKerberosIdentity).once();
-    expect(kerberosDescriptor.getIdentity(KerberosHelper.SPNEGO_IDENTITY_NAME)).andReturn(ambariKerberosIdentity).once();
+  if (createAmbariIdentities) {
+    String ambariServerPrincipalName="ambari-server-${cluster_name}@${realm}";
+    KerberosPrincipalType ambariServerPrincipalType=KerberosPrincipalType.USER;
+    String ambariServerKeytabFilePath=new File("ambari.server.keytab").getAbsolutePath();
+    ambariKerberosIdentity=createMockIdentityDescriptor(KerberosHelper.AMBARI_SERVER_KERBEROS_IDENTITY_NAME,createMockPrincipalDescriptor(ambariServerPrincipalName,ambariServerPrincipalType,"ambari",null),createMockKeytabDescriptor(ambariServerKeytabFilePath,null));
+    ArrayList<KerberosIdentityDescriptor> ambarServerComponent1Identities=new ArrayList<KerberosIdentityDescriptor>();
+    ambarServerComponent1Identities.add(ambariKerberosIdentity);
+    ambarServerComponent1Identities.add(createMockIdentityDescriptor("ambari-server_spnego",createMockPrincipalDescriptor("HTTP/_HOST@${realm}",KerberosPrincipalType.SERVICE,null,null),createMockKeytabDescriptor("spnego.service.keytab",null)));
+    HashMap<String,KerberosComponentDescriptor> ambariServerComponentDescriptorMap=new HashMap<String,KerberosComponentDescriptor>();
+    KerberosComponentDescriptor componentDescrptor=createMockComponentDescriptor("AMBARI_SERVER",ambarServerComponent1Identities,null);
+    ambariServerComponentDescriptorMap.put("AMBARI_SERVER",componentDescrptor);
+    KerberosServiceDescriptor ambariServiceKerberosDescriptor=createMockServiceDescriptor("AMBARI",ambariServerComponentDescriptorMap,null);
+    expect(ambariServiceKerberosDescriptor.getComponent("AMBARI_SERVER")).andReturn(componentDescrptor).once();
+    expect(kerberosDescriptor.getService("AMBARI")).andReturn(ambariServiceKerberosDescriptor).once();
   }
-  List<KerberosIdentityDescriptor> identities=new ArrayList<KerberosIdentityDescriptor>();
   replayAll();
   injector.getInstance(AmbariMetaInfo.class).init();
-  kerberosHelper.addAmbariServerIdentities(kerberosEnvProperties,kerberosDescriptor,identities);
+  List<KerberosIdentityDescriptor> identities=(createAmbariIdentities) ? kerberosHelper.getAmbariServerIdentities(kerberosDescriptor) : new ArrayList<KerberosIdentityDescriptor>();
   verifyAll();
-  if (createAmbariPrincipal) {
+  if (createAmbariIdentities) {
     Assert.assertEquals(2,identities.size());
     Assert.assertSame(ambariKerberosIdentity,identities.get(0));
   }

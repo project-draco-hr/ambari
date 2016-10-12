@@ -26,7 +26,7 @@
   propertiesKerberosEnv.put("password_min_digits","1");
   propertiesKerberosEnv.put("password_min_punctuation","0");
   propertiesKerberosEnv.put("password_min_whitespace","0");
-  propertiesKerberosEnv.put("create_ambari_principal",(createAmbariPrincipal) ? "true" : "false");
+  propertiesKerberosEnv.put("create_ambari_principal",(createAmbariIdentities) ? "true" : "false");
   Config configKrb5Conf=createMock(Config.class);
   expect(configKrb5Conf.getProperties()).andReturn(propertiesKrb5Conf).times(1);
   Config configKerberosEnv=createMock(Config.class);
@@ -72,12 +72,17 @@
   expect(kerberosDescriptor.getProperties()).andReturn(kerberosDescriptorProperties);
   expect(kerberosDescriptor.getService("SERVICE1")).andReturn(service1KerberosDescriptor).times(1);
   expect(kerberosDescriptor.getService("SERVICE2")).andReturn(service2KerberosDescriptor).times(1);
-  if (createAmbariPrincipal) {
+  if (createAmbariIdentities) {
     String spnegoPrincipalNameExpected=String.format("HTTP/%s@%s",ambariServerHostname,realm);
-    KerberosIdentityDescriptor ambariIdentity=createMockIdentityDescriptor(KerberosHelper.AMBARI_IDENTITY_NAME,createMockPrincipalDescriptor(ambariServerPrincipalName,ambariServerPrincipalType,"ambari",null),createMockKeytabDescriptor(ambariServerKeytabFilePath,null));
-    KerberosIdentityDescriptor spnegoIdentity=createMockIdentityDescriptor(KerberosHelper.SPNEGO_IDENTITY_NAME,createMockPrincipalDescriptor("HTTP/_HOST@${realm}",KerberosPrincipalType.SERVICE,null,null),createMockKeytabDescriptor("spnego.service.keytab",null));
-    expect(kerberosDescriptor.getIdentity(KerberosHelper.AMBARI_IDENTITY_NAME)).andReturn(ambariIdentity).once();
-    expect(kerberosDescriptor.getIdentity(KerberosHelper.SPNEGO_IDENTITY_NAME)).andReturn(spnegoIdentity).once();
+    ArrayList<KerberosIdentityDescriptor> ambarServerComponent1Identities=new ArrayList<KerberosIdentityDescriptor>();
+    ambarServerComponent1Identities.add(createMockIdentityDescriptor(KerberosHelper.AMBARI_SERVER_KERBEROS_IDENTITY_NAME,createMockPrincipalDescriptor(ambariServerPrincipalName,ambariServerPrincipalType,"ambari",null),createMockKeytabDescriptor(ambariServerKeytabFilePath,null)));
+    ambarServerComponent1Identities.add(createMockIdentityDescriptor("spnego",createMockPrincipalDescriptor("HTTP/_HOST@${realm}",KerberosPrincipalType.SERVICE,null,null),createMockKeytabDescriptor("spnego.service.keytab",null)));
+    KerberosComponentDescriptor ambariServerComponentKerberosDescriptor=createMockComponentDescriptor("AMBARI_SERVER",ambarServerComponent1Identities,null);
+    HashMap<String,KerberosComponentDescriptor> ambariServerComponentDescriptorMap=new HashMap<String,KerberosComponentDescriptor>();
+    ambariServerComponentDescriptorMap.put("AMBARI_SERVER",ambariServerComponentKerberosDescriptor);
+    KerberosServiceDescriptor ambariServiceKerberosDescriptor=createMockServiceDescriptor("AMBARI",ambariServerComponentDescriptorMap,null);
+    expect(ambariServiceKerberosDescriptor.getComponent("AMBARI_SERVER")).andReturn(ambariServerComponentKerberosDescriptor).once();
+    expect(kerberosDescriptor.getService("AMBARI")).andReturn(ambariServiceKerberosDescriptor).once();
     ConfigureAmbariIdentitiesServerAction configureAmbariIdentitiesServerAction=injector.getInstance(ConfigureAmbariIdentitiesServerAction.class);
     expect(configureAmbariIdentitiesServerAction.installAmbariServerIdentity(eq(ambariServerPrincipalNameExpected),anyString(),eq(ambariServerKeytabFilePath),eq("user1"),eq(true),eq(true),eq("groupA"),eq(true),eq(false),(ActionLog)eq(null))).andReturn(true).once();
     expect(configureAmbariIdentitiesServerAction.installAmbariServerIdentity(eq(spnegoPrincipalNameExpected),anyString(),eq("spnego.service.keytab"),eq("user1"),eq(true),eq(true),eq("groupA"),eq(true),eq(false),(ActionLog)eq(null))).andReturn(true).once();
@@ -98,7 +103,7 @@
   Capture<? extends String> capturePrincipalForKeytab=newCapture(CaptureType.ALL);
   CreatePrincipalsServerAction createPrincipalsServerAction=injector.getInstance(CreatePrincipalsServerAction.class);
   expect(createPrincipalsServerAction.createPrincipal(capture(capturePrincipal),eq(false),anyObject(Map.class),anyObject(KerberosOperationHandler.class),eq(false),isNull(ActionLog.class))).andReturn(new CreatePrincipalsServerAction.CreatePrincipalResult("anything","password",1)).times(3);
-  if (createAmbariPrincipal) {
+  if (createAmbariIdentities) {
     if (ambariServerPrincipalAsService) {
       expect(createPrincipalsServerAction.createPrincipal(capture(capturePrincipal),eq(true),anyObject(Map.class),anyObject(KerberosOperationHandler.class),eq(false),isNull(ActionLog.class))).andReturn(new CreatePrincipalsServerAction.CreatePrincipalResult("anything","password",1)).times(2);
     }
@@ -108,7 +113,7 @@
     }
   }
   CreateKeytabFilesServerAction createKeytabFilesServerAction=injector.getInstance(CreateKeytabFilesServerAction.class);
-  expect(createKeytabFilesServerAction.createKeytab(capture(capturePrincipalForKeytab),eq("password"),eq(1),anyObject(KerberosOperationHandler.class),eq(true),eq(true),isNull(ActionLog.class))).andReturn(new Keytab()).times(createAmbariPrincipal ? 5 : 3);
+  expect(createKeytabFilesServerAction.createKeytab(capture(capturePrincipalForKeytab),eq("password"),eq(1),anyObject(KerberosOperationHandler.class),eq(true),eq(true),isNull(ActionLog.class))).andReturn(new Keytab()).times(createAmbariIdentities ? 5 : 3);
   replayAll();
   AmbariMetaInfo ambariMetaInfo=injector.getInstance(AmbariMetaInfo.class);
   ambariMetaInfo.init();
@@ -118,16 +123,16 @@
   kerberosHelper.ensureHeadlessIdentities(cluster,existingConfigurations,services);
   verifyAll();
   List<? extends String> capturedPrincipals=capturePrincipal.getValues();
-  assertEquals(createAmbariPrincipal ? 5 : 3,capturedPrincipals.size());
+  assertEquals(createAmbariIdentities ? 5 : 3,capturedPrincipals.size());
   assertTrue(capturedPrincipals.contains("s1_1@EXAMPLE.COM"));
   assertTrue(capturedPrincipals.contains("s1c1_1@EXAMPLE.COM"));
   assertTrue(capturedPrincipals.contains("s2_1@EXAMPLE.COM"));
   List<? extends String> capturedPrincipalsForKeytab=capturePrincipalForKeytab.getValues();
-  assertEquals(createAmbariPrincipal ? 5 : 3,capturedPrincipalsForKeytab.size());
+  assertEquals(createAmbariIdentities ? 5 : 3,capturedPrincipalsForKeytab.size());
   assertTrue(capturedPrincipalsForKeytab.contains("s1_1@EXAMPLE.COM"));
   assertTrue(capturedPrincipalsForKeytab.contains("s1c1_1@EXAMPLE.COM"));
   assertTrue(capturedPrincipalsForKeytab.contains("s2_1@EXAMPLE.COM"));
-  if (createAmbariPrincipal) {
+  if (createAmbariIdentities) {
     String spnegoPrincipalName=String.format("HTTP/%s@EXAMPLE.COM",ambariServerHostname);
     assertTrue(capturedPrincipals.contains(ambariServerPrincipalNameExpected));
     assertTrue(capturedPrincipals.contains(spnegoPrincipalName));
