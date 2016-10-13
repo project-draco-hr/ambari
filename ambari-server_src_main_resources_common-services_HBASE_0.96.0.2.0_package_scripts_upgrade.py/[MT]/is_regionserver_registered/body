@@ -1,0 +1,21 @@
+@retry(times=30, sleep_time=30, err_class=Fail)
+def is_regionserver_registered(cmd, user, hostname, regex_search_flags):
+    '\n  Queries HBase through the HBase shell to see which servers have successfully registered. This is\n  useful in cases, such as upgrades, where we must ensure that a RegionServer has not only started,\n  but also completed it\'s registration handshake before moving into upgrading the next RegionServer.\n\n  The hbase shell is used along with the "show \'simple\'" command in order to determine if the\n  specified host has registered.\n  :param cmd:\n  :param user:\n  :param hostname:\n  :param regex_search_flags:\n  :return:\n  '
+    if (not is_region_server_process_running()):
+        Logger.info('RegionServer process is not running')
+        raise Fail('RegionServer process is not running')
+    (code, out) = shell.call(cmd, user=user)
+    if (not out):
+        raise Fail('Unable to retrieve status information from the HBase shell')
+    bound_hostname_to_match = (hostname + ':')
+    match = re.search(bound_hostname_to_match, out, regex_search_flags)
+    if (not match):
+        try:
+            ip_address = socket.gethostbyname(hostname)
+            bound_ip_address_to_match = (ip_address + ':')
+            match = re.search(bound_ip_address_to_match, out, regex_search_flags)
+        except socket.error:
+            Logger.warning('Unable to lookup the IP address of {0}, reverse DNS lookup may not be working.'.format(hostname))
+            pass
+    if (not match):
+        raise Fail('The RegionServer named {0} has not yet registered with the HBase Master'.format(hostname))
