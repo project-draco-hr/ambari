@@ -1,0 +1,13 @@
+def _handle_retries(self, cmd, code, out, is_first_time, is_last_time):
+    if (is_first_time and code and (not self.is_locked_output(out))):
+        self._update_repo_metadata_after_bad_try(cmd, code, out)
+        return False
+    handled_error_log_message = None
+    if (self.resource.retry_on_locked and self.is_locked_output(out)):
+        handled_error_log_message = PACKAGE_MANAGER_LOCK_ACQUIRED_MSG.format(self.resource.retry_sleep, out)
+    elif (self.resource.retry_on_repo_unavailability and self.is_repo_error_output(out)):
+        handled_error_log_message = PACKAGE_MANAGER_REPO_ERROR_MSG.format(self.resource.retry_sleep, out)
+    is_handled_error = (handled_error_log_message is not None)
+    if (is_handled_error and (not is_last_time)):
+        Logger.info(handled_error_log_message)
+    return (is_last_time or (not code) or (not is_handled_error))
