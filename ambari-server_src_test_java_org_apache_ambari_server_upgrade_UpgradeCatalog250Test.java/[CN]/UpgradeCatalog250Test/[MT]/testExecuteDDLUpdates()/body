@@ -1,8 +1,20 @@
 {
   final DBAccessor dbAccessor=createNiceMock(DBAccessor.class);
+  Configuration configuration=createNiceMock(Configuration.class);
+  Connection connection=createNiceMock(Connection.class);
+  Statement statement=createNiceMock(Statement.class);
+  ResultSet resultSet=createNiceMock(ResultSet.class);
   dbAccessor.addUniqueConstraint("host_version","UQ_host_repo","repo_version_id","host_id");
   expectLastCall().once();
-  replay(dbAccessor);
+  Capture<List<DBAccessor.DBColumnInfo>> capturedComponentVersionColumns=newCapture();
+  dbAccessor.createTable(eq(UpgradeCatalog250.COMPONENT_VERSION_TABLE),capture(capturedComponentVersionColumns),eq((String[])null));
+  dbAccessor.addPKConstraint(eq(UpgradeCatalog250.COMPONENT_VERSION_TABLE),eq(UpgradeCatalog250.COMPONENT_VERSION_PK),eq("id"));
+  dbAccessor.addFKConstraint(eq(UpgradeCatalog250.COMPONENT_VERSION_TABLE),eq(UpgradeCatalog250.COMPONENT_VERSION_FK_COMPONENT),eq("component_id"),eq(UpgradeCatalog250.COMPONENT_TABLE),eq("id"),eq(false));
+  dbAccessor.addFKConstraint(eq(UpgradeCatalog250.COMPONENT_VERSION_TABLE),eq(UpgradeCatalog250.COMPONENT_VERSION_FK_REPO_VERSION),eq("repo_version_id"),eq("repo_version"),eq("repo_version_id"),eq(false));
+  expect(dbAccessor.getConnection()).andReturn(connection);
+  expect(connection.createStatement()).andReturn(statement);
+  expect(statement.executeQuery(anyObject(String.class))).andReturn(resultSet);
+  replay(dbAccessor,configuration,connection,statement,resultSet);
   Module module=new Module(){
     @Override public void configure(    Binder binder){
       binder.bind(DBAccessor.class).toInstance(dbAccessor);
@@ -15,4 +27,22 @@
   UpgradeCatalog250 upgradeCatalog250=injector.getInstance(UpgradeCatalog250.class);
   upgradeCatalog250.executeDDLUpdates();
   verify(dbAccessor);
+  Map<String,DBAccessor.DBColumnInfo> expected=new HashMap<>();
+  expected.put("id",new DBAccessor.DBColumnInfo("id",Long.class,null,null,false));
+  expected.put("component_id",new DBAccessor.DBColumnInfo("component_id",Long.class,null,null,false));
+  expected.put("repo_version_id",new DBAccessor.DBColumnInfo("repo_version_id",Long.class,null,null,false));
+  expected.put("state",new DBAccessor.DBColumnInfo("state",String.class,32,null,false));
+  expected.put("user_name",new DBAccessor.DBColumnInfo("user_name",String.class,255,null,false));
+  List<DBAccessor.DBColumnInfo> captured=capturedComponentVersionColumns.getValue();
+  Assert.assertEquals(5,captured.size());
+  for (  DBAccessor.DBColumnInfo column : captured) {
+    DBAccessor.DBColumnInfo expectedColumn=expected.remove(column.getName());
+    Assert.assertNotNull(expectedColumn);
+    Assert.assertEquals(expectedColumn.getDefaultValue(),column.getDefaultValue());
+    Assert.assertEquals(expectedColumn.getName(),column.getName());
+    Assert.assertEquals(expectedColumn.getLength(),column.getLength());
+    Assert.assertEquals(expectedColumn.getType(),column.getType());
+    Assert.assertEquals(expectedColumn.getClass(),column.getClass());
+  }
+  Assert.assertEquals(0,expected.size());
 }

@@ -1,0 +1,30 @@
+{
+  ServiceComponentDesiredStateDAO serviceComponentDesiredStateDAO=injector.getInstance(ServiceComponentDesiredStateDAO.class);
+  String componentName="NAMENODE";
+  ServiceComponent component=serviceComponentFactory.createNew(service,componentName);
+  service.addServiceComponent(component);
+  component.persist();
+  ServiceComponent sc=service.getServiceComponent(componentName);
+  Assert.assertNotNull(sc);
+  sc.setDesiredState(State.INSTALLED);
+  Assert.assertEquals(State.INSTALLED,sc.getDesiredState());
+  sc.setDesiredStackVersion(new StackId("HDP-2.2.0"));
+  StackId stackId=sc.getDesiredStackVersion();
+  Assert.assertEquals(new StackId("HDP","2.2.0"),stackId);
+  Assert.assertEquals("HDP-2.2.0",sc.getDesiredStackVersion().getStackId());
+  ServiceComponentDesiredStateEntity serviceComponentDesiredStateEntity=serviceComponentDesiredStateDAO.findByName(cluster.getClusterId(),serviceName,componentName);
+  Assert.assertNotNull(serviceComponentDesiredStateEntity);
+  RepositoryVersionEntity rve=new RepositoryVersionEntity(serviceComponentDesiredStateEntity.getDesiredStack(),"HDP-2.2.0","2.2.0.1-1111","[]");
+  RepositoryVersionDAO repositoryDAO=injector.getInstance(RepositoryVersionDAO.class);
+  repositoryDAO.create(rve);
+  ServiceComponentVersionEntity version=new ServiceComponentVersionEntity();
+  version.setState(RepositoryVersionState.CURRENT);
+  version.setRepositoryVersion(rve);
+  version.setUserName("user");
+  serviceComponentDesiredStateEntity.addVersion(version);
+  serviceComponentDesiredStateEntity=serviceComponentDesiredStateDAO.merge(serviceComponentDesiredStateEntity);
+  serviceComponentDesiredStateEntity=serviceComponentDesiredStateDAO.findByName(cluster.getClusterId(),serviceName,componentName);
+  assertEquals(1,serviceComponentDesiredStateEntity.getVersions().size());
+  ServiceComponentVersionEntity persistedVersion=serviceComponentDesiredStateEntity.getVersions().iterator().next();
+  assertEquals(RepositoryVersionState.CURRENT,persistedVersion.getState());
+}
