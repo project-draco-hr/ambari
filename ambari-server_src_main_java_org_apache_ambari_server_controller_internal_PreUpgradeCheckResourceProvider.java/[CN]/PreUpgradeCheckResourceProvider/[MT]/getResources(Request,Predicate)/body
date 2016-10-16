@@ -44,12 +44,18 @@
     List<AbstractCheckDescriptor> upgradeChecksToRun=upgradeCheckRegistry.getFilteredUpgradeChecks(upgradePack);
     upgradeCheckRequest.setPrerequisiteCheckConfig(upgradePack.getPrerequisiteCheckConfig());
     try {
-      Map<String,ServiceInfo> services=getManagementController().getAmbariMetaInfo().getServices(stackName,upgradePack.getTarget());
+      Map<String,ServiceInfo> services=getManagementController().getAmbariMetaInfo().getServices(stackName,sourceStackVersion);
       List<AbstractCheckDescriptor> serviceLevelUpgradeChecksToRun=upgradeCheckRegistry.getServiceLevelUpgradeChecks(upgradePack,services);
       upgradeChecksToRun.addAll(serviceLevelUpgradeChecksToRun);
     }
- catch (    AmbariException ambariException) {
+ catch (    ParentObjectNotFoundException parentNotFoundException) {
+      LOG.error("Invalid stack version: " + stackName + "-"+ sourceStackVersion,parentNotFoundException);
+    }
+catch (    AmbariException ambariException) {
       LOG.error("Unable to register all the custom prechecks from the services",ambariException);
+    }
+catch (    Exception e) {
+      LOG.error("Failed to register custom prechecks for the services",e);
     }
     for (    PrerequisiteCheck prerequisiteCheck : checkHelper.performChecks(upgradeCheckRequest,upgradeChecksToRun)) {
       final Resource resource=new ResourceImpl(Resource.Type.PreUpgradeCheck);
