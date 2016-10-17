@@ -7,18 +7,20 @@
   if (null == smokeTestRole) {
     smokeTestRole=actionExecutionContext.getActionName();
   }
-  long nowTimestamp=System.currentTimeMillis();
-  Map<String,String> actionParameters=actionExecutionContext.getParameters();
-  final Set<String> candidateHosts;
+  Set<String> candidateHosts;
   final Map<String,ServiceComponentHost> serviceHostComponents;
   if (componentName != null) {
     serviceHostComponents=cluster.getService(serviceName).getServiceComponent(componentName).getServiceComponentHosts();
     if (serviceHostComponents.isEmpty()) {
-      throw new AmbariException("Hosts not found, component=" + componentName + ", service = "+ serviceName+ ", cluster = "+ clusterName);
+      throw new AmbariException(MessageFormat.format("No hosts found for service: {0}, component: {1} in cluster: {2}",serviceName,componentName,clusterName));
     }
     List<String> candidateHostsList=resourceFilter.getHostNames();
     if (candidateHostsList != null && !candidateHostsList.isEmpty()) {
       candidateHosts=new HashSet<String>(candidateHostsList);
+      candidateHosts.retainAll(serviceHostComponents.keySet());
+      if (candidateHosts.isEmpty()) {
+        throw new AmbariException(MessageFormat.format("The resource filter for hosts does not contain components for " + "service: {0}, component: {1} in cluster: {2}",serviceName,componentName,clusterName));
+      }
     }
  else {
       candidateHosts=serviceHostComponents.keySet();
@@ -34,7 +36,7 @@
       }
     }
     if (serviceComponents.isEmpty()) {
-      throw new AmbariException("Components not found, service = " + serviceName + ", cluster = "+ clusterName);
+      throw new AmbariException(MessageFormat.format("Did not find any hosts with components for service: {0} in cluster: {1}",serviceName,clusterName));
     }
     ServiceComponent serviceComponent=serviceComponents.values().iterator().next();
     serviceHostComponents=serviceComponent.getServiceComponentHosts();
@@ -53,10 +55,13 @@
       }
     }
   }
-  String hostName=managementController.getHealthyHost(candidateHosts);
-  if (hostName == null) {
+  List<String> healthyHostNames=managementController.selectHealthyHosts(candidateHosts);
+  if (healthyHostNames.isEmpty()) {
     String message=MessageFormat.format("While building a service check command for {0}, there were no healthy eligible hosts: unhealthy[{1}], maintenance[{2}]",serviceName,StringUtils.join(candidateHosts,','),StringUtils.join(hostsInMaintenanceMode,','));
     throw new AmbariException(message);
   }
-  addServiceCheckAction(stage,hostName,smokeTestRole,nowTimestamp,serviceName,componentName,actionParameters,actionExecutionContext.isRetryAllowed(),actionExecutionContext.isFailureAutoSkipped());
+  String preferredHostName=selectRandomHostNameWithPreferenceOnAvailability(healthyHostNames);
+  long nowTimestamp=System.currentTimeMillis();
+  Map<String,String> actionParameters=actionExecutionContext.getParameters();
+  addServiceCheckAction(stage,preferredHostName,smokeTestRole,nowTimestamp,serviceName,componentName,actionParameters,actionExecutionContext.isRetryAllowed(),actionExecutionContext.isFailureAutoSkipped());
 }
