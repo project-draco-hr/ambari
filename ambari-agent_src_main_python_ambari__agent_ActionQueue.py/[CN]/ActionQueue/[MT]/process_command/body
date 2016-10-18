@@ -12,19 +12,14 @@ def process_command(self, command):
                     self.controller.recovery_manager.stop_execution_command()
         elif (commandType == self.STATUS_COMMAND):
             component_name = command['componentName']
-            if ((component_name in self.hangingStatusCommands) and (not self.hangingStatusCommands[component_name].isAlive())):
-                del self.hangingStatusCommands[component_name]
-            if (not (component_name in self.hangingStatusCommands)):
-                thread = threading.Thread(target=self.execute_status_command, args=(command,))
-                thread.daemon = True
-                thread.start()
-                thread.join(timeout=self.status_command_timeout)
-                if thread.isAlive():
-                    PythonReflectiveExecutor.last_context.revert()
-                    logger.warn('Command {0} for {1} is running for more than {2} seconds. Skipping it for current pack of status commands.'.format(commandType, component_name, self.status_command_timeout))
-                    self.hangingStatusCommands[component_name] = thread
-            else:
-                logger.info('Not running {0} for {1}, because previous one is still running.'.format(commandType, component_name))
+            thread = threading.Thread(target=self.execute_status_command, args=(command,))
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout=self.status_command_timeout)
+            if thread.isAlive():
+                terminate_thread(thread)
+                PythonReflectiveExecutor.last_context.revert()
+                logger.warn('Command {0} for {1} was running for more than {2} seconds. Terminated due to timeout.'.format(commandType, component_name, self.status_command_timeout))
         else:
             logger.error(('Unrecognized command ' + pprint.pformat(command)))
     except Exception:
