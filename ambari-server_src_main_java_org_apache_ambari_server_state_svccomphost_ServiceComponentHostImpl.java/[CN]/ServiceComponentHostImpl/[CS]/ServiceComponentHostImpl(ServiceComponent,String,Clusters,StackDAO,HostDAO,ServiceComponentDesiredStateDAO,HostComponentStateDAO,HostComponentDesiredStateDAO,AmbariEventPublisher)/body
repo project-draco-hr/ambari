@@ -1,12 +1,19 @@
 {
-  injector.injectMembers(this);
+  this.serviceComponent=serviceComponent;
+  this.hostName=hostName;
+  this.clusters=clusters;
+  this.stackDAO=stackDAO;
+  this.hostDAO=hostDAO;
+  this.serviceComponentDesiredStateDAO=serviceComponentDesiredStateDAO;
+  this.hostComponentStateDAO=hostComponentStateDAO;
+  this.hostComponentDesiredStateDAO=hostComponentDesiredStateDAO;
+  this.eventPublisher=eventPublisher;
   if (serviceComponent.isClientComponent()) {
     stateMachine=clientStateMachineFactory.make(this);
   }
  else {
     stateMachine=daemonStateMachineFactory.make(this);
   }
-  this.serviceComponent=serviceComponent;
   HostEntity hostEntity=null;
   try {
     host=clusters.getHost(hostName);
@@ -21,7 +28,7 @@
   }
   StackId stackId=serviceComponent.getDesiredStackVersion();
   StackEntity stackEntity=stackDAO.find(stackId.getStackName(),stackId.getStackVersion());
-  stateEntity=new HostComponentStateEntity();
+  HostComponentStateEntity stateEntity=new HostComponentStateEntity();
   stateEntity.setClusterId(serviceComponent.getClusterId());
   stateEntity.setComponentName(serviceComponent.getName());
   stateEntity.setServiceName(serviceComponent.getServiceName());
@@ -30,7 +37,7 @@
   stateEntity.setCurrentState(stateMachine.getCurrentState());
   stateEntity.setUpgradeState(UpgradeState.NONE);
   stateEntity.setCurrentStack(stackEntity);
-  desiredStateEntity=new HostComponentDesiredStateEntity();
+  HostComponentDesiredStateEntity desiredStateEntity=new HostComponentDesiredStateEntity();
   desiredStateEntity.setClusterId(serviceComponent.getClusterId());
   desiredStateEntity.setComponentName(serviceComponent.getName());
   desiredStateEntity.setServiceName(serviceComponent.getServiceName());
@@ -44,5 +51,9 @@
     desiredStateEntity.setAdminState(null);
   }
   desiredStateEntityPK=getHostComponentDesiredStateEntityPK(desiredStateEntity);
+  persistEntities(hostEntity,stateEntity,desiredStateEntity);
+  ServiceComponentInstalledEvent event=new ServiceComponentInstalledEvent(getClusterId(),stackId.getStackName(),stackId.getStackVersion(),getServiceName(),getServiceComponentName(),getHostName(),isRecoveryEnabled());
+  eventPublisher.publish(event);
+  hostComponentStateId=stateEntity.getId();
   resetLastOpInfo();
 }
