@@ -1,19 +1,23 @@
 {
-  SolrRequest<SchemaResponse> request=new SchemaRequest();
-  request.setMethod(SolrRequest.METHOD.GET);
-  request.setPath("/schema");
   String historyCollection=solrUserPropsConfig.getCollection();
   if (solrClient != null && !solrPropsConfig.getCollection().equals(historyCollection)) {
-    NamedList<Object> namedList=null;
+    LukeResponse lukeResponse=null;
+    SchemaResponse schemaResponse=null;
     try {
-      namedList=solrClient.request(request);
-      LOG.debug("populateSchemaFields() collection=" + solrPropsConfig.getCollection() + ", fields="+ namedList);
+      LukeRequest lukeRequest=new LukeRequest();
+      lukeRequest.setNumTerms(0);
+      lukeResponse=lukeRequest.process(solrClient);
+      SolrRequest<SchemaResponse> schemaRequest=new SchemaRequest();
+      schemaRequest.setMethod(SolrRequest.METHOD.GET);
+      schemaRequest.setPath("/schema");
+      schemaResponse=schemaRequest.process(solrClient);
+      LOG.debug("populateSchemaFields() collection=" + solrPropsConfig.getCollection() + ", luke="+ lukeResponse+ ", schema= "+ schemaResponse);
     }
  catch (    SolrException|SolrServerException|IOException e) {
       LOG.error("Error occured while popuplating field. collection=" + solrPropsConfig.getCollection(),e);
     }
-    if (namedList != null) {
-      extractSchemaFieldsName(namedList.toString(),schemaFieldNameMap,schemaFieldTypeMap);
+    if (lukeResponse != null && schemaResponse != null) {
+      extractSchemaFieldsName(lukeResponse,schemaResponse);
       return true;
     }
   }
