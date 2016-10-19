@@ -9,30 +9,25 @@
     LOG.warn("Unable to find cluster, " + clusterName);
     return;
   }
-  writeLock.lock();
-  try {
-    LOG.debug("Updating actual config tags: " + configTags);
-    actualConfigs=new HashMap<String,HostConfig>();
-    for (    Entry<String,Map<String,String>> entry : configTags.entrySet()) {
-      String type=entry.getKey();
-      Map<String,String> values=new HashMap<String,String>(entry.getValue());
-      String tag=values.get(ConfigHelper.CLUSTER_DEFAULT_TAG);
-      values.remove(ConfigHelper.CLUSTER_DEFAULT_TAG);
-      HostConfig hc=new HostConfig();
-      hc.setDefaultVersionTag(tag);
-      actualConfigs.put(type,hc);
-      if (!values.isEmpty()) {
-        for (        Entry<String,String> overrideEntry : values.entrySet()) {
-          Long groupId=Long.parseLong(overrideEntry.getKey());
-          hc.getConfigGroupOverrides().put(groupId,overrideEntry.getValue());
-          if (!configGroupMap.containsKey(groupId)) {
-            LOG.debug("Config group does not exist, id = " + groupId);
-          }
+  LOG.debug("Updating configuration tags for {}: {}",hostName,configTags);
+  final ConcurrentMap<String,HostConfig> newActualConfigs=new ConcurrentHashMap<>();
+  for (  Entry<String,Map<String,String>> entry : configTags.entrySet()) {
+    String type=entry.getKey();
+    Map<String,String> values=new HashMap<String,String>(entry.getValue());
+    String tag=values.get(ConfigHelper.CLUSTER_DEFAULT_TAG);
+    values.remove(ConfigHelper.CLUSTER_DEFAULT_TAG);
+    HostConfig hc=new HostConfig();
+    hc.setDefaultVersionTag(tag);
+    newActualConfigs.put(type,hc);
+    if (!values.isEmpty()) {
+      for (      Entry<String,String> overrideEntry : values.entrySet()) {
+        Long groupId=Long.parseLong(overrideEntry.getKey());
+        hc.getConfigGroupOverrides().put(groupId,overrideEntry.getValue());
+        if (!configGroupMap.containsKey(groupId)) {
+          LOG.debug("Config group does not exist, id = " + groupId);
         }
       }
     }
   }
-  finally {
-    writeLock.unlock();
-  }
+  actualConfigs=newActualConfigs;
 }

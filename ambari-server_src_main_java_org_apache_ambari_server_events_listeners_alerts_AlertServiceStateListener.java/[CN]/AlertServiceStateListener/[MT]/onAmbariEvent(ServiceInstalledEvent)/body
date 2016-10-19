@@ -4,23 +4,30 @@
   String stackName=event.getStackName();
   String stackVersion=event.getStackVersion();
   String serviceName=event.getServiceName();
-  if (null == m_alertDispatchDao.findDefaultServiceGroup(clusterId,serviceName)) {
-    try {
-      m_alertDispatchDao.createDefaultGroup(clusterId,serviceName);
-    }
- catch (    AmbariException ambariException) {
-      LOG.error("Unable to create a default alert group for {}",event.getServiceName(),ambariException);
-    }
-  }
+  Lock lock=m_locksByService.get(serviceName);
+  lock.lock();
   try {
-    Set<AlertDefinition> alertDefinitions=m_metaInfoProvider.get().getAlertDefinitions(stackName,stackVersion,serviceName);
-    for (    AlertDefinition definition : alertDefinitions) {
-      AlertDefinitionEntity entity=m_alertDefinitionFactory.coerce(clusterId,definition);
-      m_definitionDao.create(entity);
+    if (null == m_alertDispatchDao.findDefaultServiceGroup(clusterId,serviceName)) {
+      try {
+        m_alertDispatchDao.createDefaultGroup(clusterId,serviceName);
+      }
+ catch (      AmbariException ambariException) {
+        LOG.error("Unable to create a default alert group for {}",event.getServiceName(),ambariException);
+      }
+    }
+    try {
+      Set<AlertDefinition> alertDefinitions=m_metaInfoProvider.get().getAlertDefinitions(stackName,stackVersion,serviceName);
+      for (      AlertDefinition definition : alertDefinitions) {
+        AlertDefinitionEntity entity=m_alertDefinitionFactory.coerce(clusterId,definition);
+        m_definitionDao.create(entity);
+      }
+    }
+ catch (    AmbariException ae) {
+      String message=MessageFormat.format("Unable to populate alert definitions from the database during installation of {0}",serviceName);
+      LOG.error(message,ae);
     }
   }
- catch (  AmbariException ae) {
-    String message=MessageFormat.format("Unable to populate alert definitions from the database during installation of {0}",serviceName);
-    LOG.error(message,ae);
+  finally {
+    lock.unlock();
   }
 }

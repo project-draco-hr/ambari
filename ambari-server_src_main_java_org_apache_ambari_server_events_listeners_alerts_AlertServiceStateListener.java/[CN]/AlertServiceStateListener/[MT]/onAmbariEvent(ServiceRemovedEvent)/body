@@ -1,36 +1,36 @@
 {
   LOG.debug("Received event {}",event);
-  Cluster cluster=null;
   try {
-    cluster=clusters.get().getClusterById(event.getClusterId());
+    m_clusters.get().getClusterById(event.getClusterId());
   }
  catch (  AmbariException e) {
-    LOG.warn("Unable to retrieve cluster info for id: " + event.getClusterId());
+    LOG.warn("Unable to retrieve cluster with id {}",event.getClusterId());
+    return;
   }
-  if (cluster != null) {
-    cluster.getClusterGlobalLock().writeLock().lock();
-    try {
-      List<AlertDefinitionEntity> definitions=m_definitionDao.findByService(event.getClusterId(),event.getServiceName());
-      for (      AlertDefinitionEntity definition : definitions) {
-        try {
-          m_definitionDao.remove(definition);
-        }
- catch (        Exception exception) {
-          LOG.error("Unable to remove alert definition {}",definition.getDefinitionName(),exception);
-        }
+  String serviceName=event.getServiceName();
+  Lock lock=m_locksByService.get(serviceName);
+  lock.lock();
+  try {
+    List<AlertDefinitionEntity> definitions=m_definitionDao.findByService(event.getClusterId(),event.getServiceName());
+    for (    AlertDefinitionEntity definition : definitions) {
+      try {
+        m_definitionDao.remove(definition);
       }
-      AlertGroupEntity group=m_alertDispatchDao.findGroupByName(event.getClusterId(),event.getServiceName());
-      if (null != group && group.isDefault()) {
-        try {
-          m_alertDispatchDao.remove(group);
-        }
- catch (        Exception exception) {
-          LOG.error("Unable to remove default alert group {}",group.getGroupName(),exception);
-        }
+ catch (      Exception exception) {
+        LOG.error("Unable to remove alert definition {}",definition.getDefinitionName(),exception);
       }
     }
+    AlertGroupEntity group=m_alertDispatchDao.findGroupByName(event.getClusterId(),event.getServiceName());
+    if (null != group && group.isDefault()) {
+      try {
+        m_alertDispatchDao.remove(group);
+      }
+ catch (      Exception exception) {
+        LOG.error("Unable to remove default alert group {}",group.getGroupName(),exception);
+      }
+    }
+  }
   finally {
-      cluster.getClusterGlobalLock().writeLock().unlock();
-    }
+    lock.unlock();
   }
 }

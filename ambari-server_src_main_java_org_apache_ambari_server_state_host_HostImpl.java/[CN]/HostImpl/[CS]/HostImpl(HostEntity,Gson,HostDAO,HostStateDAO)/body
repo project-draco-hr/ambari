@@ -1,0 +1,33 @@
+{
+  this.gson=gson;
+  this.hostDAO=hostDAO;
+  this.hostStateDAO=hostStateDAO;
+  stateMachine=stateMachineFactory.make(this);
+  rwLock=new ReentrantReadWriteLock();
+  writeLock=rwLock.writeLock();
+  HostStateEntity hostStateEntity=hostEntity.getHostStateEntity();
+  if (hostStateEntity == null) {
+    hostStateEntity=new HostStateEntity();
+    hostStateEntity.setHostEntity(hostEntity);
+    hostEntity.setHostStateEntity(hostStateEntity);
+    hostStateEntity.setHealthStatus(gson.toJson(new HostHealthStatus(HealthStatus.UNKNOWN,"")));
+  }
+ else {
+    stateMachine.setCurrentState(hostStateEntity.getCurrentState());
+  }
+  if (null == hostEntity.getHostId()) {
+    persistEntities(hostEntity);
+    for (    ClusterEntity clusterEntity : hostEntity.getClusterEntities()) {
+      try {
+        clusters.getClusterById(clusterEntity.getClusterId()).refresh();
+      }
+ catch (      AmbariException e) {
+        LOG.error("Error while looking up the cluster",e);
+        throw new RuntimeException("Cluster '" + clusterEntity.getClusterId() + "' was removed",e);
+      }
+    }
+  }
+  hostId=hostEntity.getHostId();
+  hostName=hostEntity.getHostName();
+  maintMap=ensureMaintMap(hostEntity.getHostStateEntity());
+}
