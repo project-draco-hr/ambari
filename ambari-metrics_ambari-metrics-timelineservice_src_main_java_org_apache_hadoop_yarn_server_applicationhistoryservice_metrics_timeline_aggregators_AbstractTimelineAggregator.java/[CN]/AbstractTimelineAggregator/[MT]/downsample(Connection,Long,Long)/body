@@ -1,0 +1,28 @@
+{
+  LOG.info("Checking for downsampling requests.");
+  if (CollectionUtils.isEmpty(configuredDownSamplers)) {
+    LOG.info("No downsamplers configured");
+    return;
+  }
+  String queryPrefix=PhoenixTransactSQL.DOWNSAMPLE_CLUSTER_METRIC_SQL_UPSERT_PREFIX;
+  if (outputTableName.contains("RECORD")) {
+    queryPrefix=PhoenixTransactSQL.DOWNSAMPLE_HOST_METRIC_SQL_UPSERT_PREFIX;
+  }
+  queryPrefix=String.format(queryPrefix,getQueryHint(startTime),outputTableName);
+  for (Iterator<CustomDownSampler> iterator=configuredDownSamplers.iterator(); iterator.hasNext(); ) {
+    CustomDownSampler downSampler=iterator.next();
+    if (downSampler.validateConfigs()) {
+      EmptyCondition downSamplingCondition=new EmptyCondition();
+      downSamplingCondition.setDoUpdate(true);
+      List<String> stmts=downSampler.prepareDownSamplingStatement(startTime,endTime,tableName);
+      for (      String stmt : stmts) {
+        downSamplingCondition.setStatement(queryPrefix + stmt);
+        runDownSamplerQuery(conn,downSamplingCondition);
+      }
+    }
+ else {
+      LOG.warn("The following downsampler failed config validation : " + downSampler.getClass().getName() + "."+ "Removing it from downsamplers list.");
+      iterator.remove();
+    }
+  }
+}

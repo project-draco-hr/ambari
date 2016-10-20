@@ -1,0 +1,20 @@
+{
+  Configuration configuration=new Configuration();
+  configuration.setIfUnset("timeline.metrics.downsampler.topn.metric.patterns","pattern1,pattern2");
+  configuration.setIfUnset("timeline.metrics.downsampler.topn.value","3");
+  Map<String,String> conf=configuration.getValByRegex(DownSamplerUtils.downSamplerConfigPrefix);
+  TopNDownSampler topNDownSampler=TopNDownSampler.fromConfig(conf);
+  List<String> stmts=topNDownSampler.prepareDownSamplingStatement(14000000l,14100000l,"METRIC_RECORD");
+  Assert.assertEquals(stmts.size(),2);
+  Assert.assertTrue(stmts.contains("SELECT METRIC_NAME, HOSTNAME, APP_ID, INSTANCE_ID, 14100000 AS SERVER_TIME, UNITS, " + "MAX(METRIC_MAX), 1, MAX(METRIC_MAX), MAX(METRIC_MAX) FROM METRIC_RECORD WHERE " + "METRIC_NAME LIKE 'pattern1' AND SERVER_TIME > 14000000 AND SERVER_TIME <= 14100000 "+ "GROUP BY METRIC_NAME, HOSTNAME, APP_ID, INSTANCE_ID, UNITS ORDER BY MAX(METRIC_MAX) DESC LIMIT 3"));
+  Assert.assertTrue(stmts.contains("SELECT METRIC_NAME, HOSTNAME, APP_ID, INSTANCE_ID, 14100000 AS SERVER_TIME, UNITS, " + "MAX(METRIC_MAX), 1, MAX(METRIC_MAX), MAX(METRIC_MAX) FROM METRIC_RECORD WHERE " + "METRIC_NAME LIKE 'pattern2' AND SERVER_TIME > 14000000 AND SERVER_TIME <= 14100000 "+ "GROUP BY METRIC_NAME, HOSTNAME, APP_ID, INSTANCE_ID, UNITS ORDER BY MAX(METRIC_MAX) DESC LIMIT 3"));
+  configuration.clear();
+  configuration.setIfUnset("timeline.metrics.downsampler.topn.metric.patterns","pattern1");
+  configuration.setIfUnset("timeline.metrics.downsampler.topn.value","4");
+  configuration.setIfUnset("timeline.metrics.downsampler.topn.function","sum");
+  conf=configuration.getValByRegex(DownSamplerUtils.downSamplerConfigPrefix);
+  topNDownSampler=TopNDownSampler.fromConfig(conf);
+  stmts=topNDownSampler.prepareDownSamplingStatement(14000000l,14100000l,"METRIC_AGGREGATE_MINUTE");
+  Assert.assertEquals(stmts.size(),1);
+  Assert.assertTrue(stmts.contains("SELECT METRIC_NAME, APP_ID, INSTANCE_ID, 14100000 AS SERVER_TIME, UNITS, " + "SUM(METRIC_SUM), 1, SUM(METRIC_SUM), SUM(METRIC_SUM) FROM METRIC_AGGREGATE_MINUTE WHERE " + "METRIC_NAME LIKE 'pattern1' AND SERVER_TIME > 14000000 AND SERVER_TIME <= 14100000 "+ "GROUP BY METRIC_NAME, APP_ID, INSTANCE_ID, UNITS ORDER BY SUM(METRIC_SUM) DESC LIMIT 4"));
+}
