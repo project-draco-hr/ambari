@@ -3,10 +3,27 @@
   if (userEntity == null) {
     return Collections.emptyList();
   }
-  Collection<PrivilegeEntity> privilegeEntities=getUserPrivileges(userEntity);
+  List<PrincipalEntity> principalEntities=new LinkedList<PrincipalEntity>();
+  principalEntities.add(userEntity.getPrincipal());
+  List<MemberEntity> memberEntities=memberDAO.findAllMembersByUser(userEntity);
+  for (  MemberEntity memberEntity : memberEntities) {
+    principalEntities.add(memberEntity.getGroup().getPrincipal());
+  }
+  List<PrivilegeEntity> privilegeEntities=privilegeDAO.findAllByPrincipal(principalEntities);
+  List<PrincipalEntity> rolePrincipals=new ArrayList<PrincipalEntity>();
   Set<AmbariGrantedAuthority> authorities=new HashSet<>(privilegeEntities.size());
   for (  PrivilegeEntity privilegeEntity : privilegeEntities) {
+    PrincipalEntity rolePrincipal=privilegeEntity.getPermission().getPrincipal();
+    if (rolePrincipal != null) {
+      rolePrincipals.add(rolePrincipal);
+    }
     authorities.add(new AmbariGrantedAuthority(privilegeEntity));
+  }
+  if (!rolePrincipals.isEmpty()) {
+    List<PrivilegeEntity> rolePrivilegeEntities=privilegeDAO.findAllByPrincipal(rolePrincipals);
+    for (    PrivilegeEntity privilegeEntity : rolePrivilegeEntities) {
+      authorities.add(new AmbariGrantedAuthority(privilegeEntity));
+    }
   }
   return authorities;
 }

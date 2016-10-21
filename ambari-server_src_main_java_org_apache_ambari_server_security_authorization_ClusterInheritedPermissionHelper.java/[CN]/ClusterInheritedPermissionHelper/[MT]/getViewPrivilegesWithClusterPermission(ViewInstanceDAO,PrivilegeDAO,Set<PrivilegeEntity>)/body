@@ -1,0 +1,16 @@
+{
+  final Set<String> clusterPrivileges=FluentIterable.from(userDirectPrivileges).filter(ClusterInheritedPermissionHelper.clusterPrivilegesPredicate).transform(ClusterInheritedPermissionHelper.permissionNameFromPrivilegeMapper).toSet();
+  Set<Long> resourceIds=FluentIterable.from(viewInstanceDAO.findAll()).filter(ClusterInheritedPermissionHelper.clusterAssociatedViewInstancePredicate).transform(ClusterInheritedPermissionHelper.resourceFromViewInstanceMapper).transform(new Function<ResourceEntity,Long>(){
+    @Nullable @Override public Long apply(    @Nullable ResourceEntity input){
+      return input.getId();
+    }
+  }
+).toSet();
+  Set<PrivilegeEntity> allPrivileges=FluentIterable.from(resourceIds).transformAndConcat(new Function<Long,Iterable<PrivilegeEntity>>(){
+    @Nullable @Override public Iterable<PrivilegeEntity> apply(    @Nullable Long input){
+      return privilegeDAO.findByResourceId(input);
+    }
+  }
+).toSet();
+  return FluentIterable.from(allPrivileges).filter(ClusterInheritedPermissionHelper.privilegeWithClusterInheritedPermissionTypePredicate).filter(ClusterInheritedPermissionHelper.principalTypeInSetFrom(clusterPrivileges)).filter(ClusterInheritedPermissionHelper.removeIfExistingPrivilegePredicate(userDirectPrivileges)).toSet();
+}
