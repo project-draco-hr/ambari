@@ -1,0 +1,34 @@
+{
+  final String[] parts=new String[]{"hive.metastore.local=false","hive.metastore.uris=" + getThriftURI("localhost"),"hive.metastore.sasl.enabled=false"};
+  final String[] hostNames=new String[]{"c6401.ambari.apache.org","example.com","c6402.ambari.apache.org"};
+  final Set<String> expectedUris=new HashSet<>();
+  for (  String hostName : hostNames) {
+    expectedUris.add(getThriftURI(hostName));
+  }
+  final String initialPropertyValue=StringUtils.join(parts,separator);
+  Map<String,Map<String,String>> configProperties=new HashMap<>();
+  Map<String,String> webHCatSiteProperties=new HashMap<>();
+  configProperties.put("webhcat-site",webHCatSiteProperties);
+  String propertyKey="templeton.hive.properties";
+  webHCatSiteProperties.put(propertyKey,initialPropertyValue);
+  Map<String,Map<String,Map<String,String>>> attributes=Collections.emptyMap();
+  Configuration clusterConfig=new Configuration(configProperties,attributes);
+  Collection<TestHostGroup> hostGroups=new HashSet<>();
+  for (int i=0; i < hostNames.length; ++i) {
+    Collection<String> components=new HashSet<>(Collections.singleton("HIVE_METASTORE"));
+    hostGroups.add(new TestHostGroup("host_group_" + i,components,Collections.singleton(hostNames[i])));
+  }
+  ClusterTopology topology=createClusterTopology(bp,clusterConfig,hostGroups);
+  BlueprintConfigurationProcessor updater=new BlueprintConfigurationProcessor(topology);
+  updater.doUpdateForClusterCreate();
+  String updatedValue=webHCatSiteProperties.get(propertyKey);
+  String prefix=parts[0] + ",";
+  assertTrue(updatedValue,updatedValue.startsWith(prefix));
+  String suffix="," + parts[2];
+  assertTrue(updatedValue,updatedValue.endsWith(suffix));
+  String part1=updatedValue.replace(prefix,"").replace(suffix,"");
+  String key="hive.metastore.uris=";
+  assertTrue(part1,part1.startsWith(key));
+  Set<String> updatedUris=new HashSet<>(Arrays.asList(part1.replace(key,"").split("\\\\,")));
+  assertEquals(expectedUris,updatedUris);
+}
