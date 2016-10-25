@@ -1,0 +1,57 @@
+{
+  ResultSet rs=null;
+  Statement statement=null;
+  Map<String,Map<String,String>> clusterStackInfo=new HashMap<>();
+  String GET_STACK_NAME_VERSION_QUERY="select c.cluster_name, s.stack_name, s.stack_version from clusters c " + "join stack s on c.desired_stack_id = s.stack_id";
+  Connection conn=getConnection();
+  try {
+    statement=conn.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,ResultSet.CONCUR_UPDATABLE);
+    rs=statement.executeQuery(GET_STACK_NAME_VERSION_QUERY);
+    if (rs != null) {
+      while (rs.next()) {
+        Map<String,String> stackInfoMap=new HashMap<>();
+        stackInfoMap.put(rs.getString("stack_name"),rs.getString("stack_version"));
+        clusterStackInfo.put(rs.getString("cluster_name"),stackInfoMap);
+      }
+    }
+    for (    Map.Entry<String,Map<String,String>> clusterStackInfoEntry : clusterStackInfo.entrySet()) {
+      String clusterName=clusterStackInfoEntry.getKey();
+      Map<String,String> stackInfo=clusterStackInfoEntry.getValue();
+      String stackName=stackInfo.keySet().iterator().next();
+      String stackVersion=stackInfo.get(stackName);
+      if (!stacksInMpack.contains(stackName)) {
+        String errorMsg=String.format("This Ambari instance is already managing the cluster %s that has the " + "%s-%s stack installed on it. The management pack you are attempting to install only contains stack " + "definitions for %s. Since this management pack does not contain a stack that has already being "+ "deployed by Ambari, the --purge option would cause your existing Ambari installation to be unusable. "+ "Due to that we cannot install this management pack.",clusterName,stackName,stackVersion,stacksInMpack.toString());
+        LOG.error(errorMsg);
+        System.err.println(errorMsg);
+        errorsFound=true;
+      }
+    }
+  }
+ catch (  SQLException e) {
+    System.err.println("SQL Exception occured during check for validating installed clusters. Reason: " + e.getMessage());
+    LOG.error("SQL Exception occured during check for validating installed clusters. Reason: ",e);
+    errorsFound=true;
+  }
+ finally {
+    if (rs != null) {
+      try {
+        rs.close();
+      }
+ catch (      SQLException e) {
+        System.err.println("SQL Exception occurred during result set closing procedure. Reason: " + e.getMessage());
+        LOG.error("SQL Exception occurred during result set closing procedure. Reason: ",e);
+        errorsFound=true;
+      }
+    }
+    if (statement != null) {
+      try {
+        statement.close();
+      }
+ catch (      SQLException e) {
+        System.err.println("SQL Exception occurred during statement closing procedure. Reason: " + e.getMessage());
+        LOG.error("SQL Exception occurred during statement closing procedure. Reason: ",e);
+        errorsFound=true;
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+def run_mpack_install_checker(options, mpack_stacks):
+    '\n  Run MpackInstallChecker to validate that there is no cluster deployed with a stack that is not included in the management pack\n  :param options: Options passed\n  :param mpack_stacks: List of stacks included in the management pack\n  :return: Output of MpackInstallChecker\n  '
+    properties = get_ambari_properties()
+    database_type = properties[JDBC_DATABASE_PROPERTY]
+    jdk_path = get_java_exe_path()
+    if ((not jdk_path) or (not database_type)):
+        return (0, '', '')
+    parse_properties_file(options)
+    options.database_index = LINUX_DBMS_KEYS_LIST.index(properties[JDBC_DATABASE_PROPERTY])
+    ensure_jdbc_driver_is_installed(options, properties)
+    serverClassPath = ServerClassPath(properties, options)
+    class_path = serverClassPath.get_full_ambari_classpath_escaped_for_shell()
+    command = MPACK_INSTALL_CHECKER_CMD.format(jdk_path, class_path, ','.join(mpack_stacks))
+    ambari_user = read_ambari_user()
+    current_user = ensure_can_start_under_current_user(ambari_user)
+    environ = generate_env(options, ambari_user, current_user)
+    return run_os_command(command, env=environ)

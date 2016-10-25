@@ -4,15 +4,20 @@ import shutil
 import json
 import ast
 import logging
+from ambari_server.serverClassPath import ServerClassPath
 from ambari_commons.exceptions import FatalException
 from ambari_commons.inet_utils import download_file
-from ambari_commons.logging_utils import print_info_msg, print_error_msg
+from ambari_commons.logging_utils import print_info_msg, print_error_msg, print_warning_msg
 from ambari_commons.os_utils import copy_file, run_os_command
-from ambari_server.serverConfiguration import get_ambari_properties, get_ambari_version, get_stack_location, get_common_services_location, get_mpacks_staging_location, get_server_temp_location, get_extension_location
+from ambari_server.serverConfiguration import get_ambari_properties, get_ambari_version, get_stack_location, get_common_services_location, get_mpacks_staging_location, get_server_temp_location, get_extension_location, get_java_exe_path, read_ambari_user, parse_properties_file, JDBC_DATABASE_PROPERTY
+from ambari_server.setupSecurity import ensure_can_start_under_current_user, generate_env
+from ambari_server.setupActions import INSTALL_MPACK_ACTION, UPGRADE_MPACK_ACTION
+from ambari_server.userInput import get_YN_input
+from ambari_server.dbConfiguration import ensure_jdbc_driver_is_installed, LINUX_DBMS_KEYS_LIST
 from resource_management.core import sudo
 from resource_management.libraries.functions.tar_archive import extract_archive, get_archive_root_dir
 from resource_management.libraries.functions.version import compare_versions
-from ambari_server.setupActions import INSTALL_MPACK_ACTION, UPGRADE_MPACK_ACTION
+MPACK_INSTALL_CHECKER_CMD = ('{0} -cp {1} ' + 'org.apache.ambari.server.checks.MpackInstallChecker --mpack-stacks {2}')
 logger = logging.getLogger(__name__)
 MPACKS_REPLAY_LOG_FILENAME = 'mpacks_replay.log'
 MPACKS_CACHE_DIRNAME = 'cache'
@@ -29,3 +34,4 @@ STACK_DEFINITIONS_ARTIFACT_NAME = 'stack-definitions'
 SERVICE_DEFINITIONS_ARTIFACT_NAME = 'service-definitions'
 EXTENSION_DEFINITIONS_ARTIFACT_NAME = 'extension-definitions'
 STACK_ADDON_SERVICE_DEFINITIONS_ARTIFACT_NAME = 'stack-addon-service-definitions'
+RESOURCE_FRIENDLY_NAMES = {STACK_DEFINITIONS_RESOURCE_NAME: 'stack definitions', SERVICE_DEFINITIONS_RESOURCE_NAME: 'service definitions', MPACKS_RESOURCE_NAME: 'management packs', }

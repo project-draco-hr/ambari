@@ -1,0 +1,30 @@
+def validate_purge(options, purge_list, mpack_dir, mpack_metadata, replay_mode=False):
+    '\n  Validate purge options\n  :param purge_list: List of resources to purge\n  :param mpack_metadata: Management pack metadata\n  :param replay_mode: Flag to indicate if purging in replay mode\n  '
+    (stack_location, extension_location, service_definitions_location, mpacks_staging_location) = get_mpack_properties()
+    if (not purge_list):
+        return
+    if (STACK_DEFINITIONS_RESOURCE_NAME in purge_list):
+        mpack_stacks = []
+        for artifact in mpack_metadata.artifacts:
+            if (artifact.type == STACK_DEFINITIONS_ARTIFACT_NAME):
+                artifact_source_dir = os.path.join(mpack_dir, artifact.source_dir)
+                for file in sorted(os.listdir(artifact_source_dir)):
+                    if os.path.isdir(os.path.join(artifact_source_dir, file)):
+                        stack_name = file
+                        mpack_stacks.append(stack_name)
+        if (not mpack_stacks):
+            err = 'The management pack you are attempting to install does not contain {0}. Since this management pack does not contain a stack, the --purge option with --purge-list={1} would cause your existing Ambari installation to be unusable. Due to that we cannot install this management pack.'.format(RESOURCE_FRIENDLY_NAMES[STACK_DEFINITIONS_ARTIFACT_NAME], purge_list)
+            print_error_msg(err)
+            raise FatalException(1, err)
+        else:
+            (retcode, stdout, stderr) = run_mpack_install_checker(options, mpack_stacks)
+            if (retcode > 0):
+                print_error_msg(stderr)
+                raise FatalException(1, stderr)
+    if (not replay_mode):
+        purge_resources = set((v for (k, v) in RESOURCE_FRIENDLY_NAMES.iteritems() if (k in purge_list)))
+        warn_msg = 'CAUTION: You have specified the --purge option with --purge-list={0}. This will replace all existing {1} currently installed.\nAre you absolutely sure you want to perform the purge [yes/no]? (no)'.format(purge_list, ', '.join(purge_resources))
+        okToPurge = get_YN_input(warn_msg, False)
+        if (not okToPurge):
+            err = 'Management pack installation cancelled by user'
+            raise FatalException(1, err)

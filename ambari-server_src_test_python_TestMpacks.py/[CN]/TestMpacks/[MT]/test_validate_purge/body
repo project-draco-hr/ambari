@@ -1,0 +1,42 @@
+@patch('ambari_server.setupMpacks.get_YN_input')
+@patch('ambari_server.setupMpacks.run_mpack_install_checker')
+def test_validate_purge(self, run_mpack_install_checker_mock, get_YN_input_mock):
+    options = self._create_empty_options_mock()
+    options.purge = True
+    purge_list = options.purge_list.split(',')
+    mpack_staging_dir = configs[serverConfiguration.MPACKS_STAGING_PATH_PROPERTY]
+    mpack_dir = os.path.join(mpack_staging_dir, 'mystack-ambari-mpack-1.0.0.0')
+    mpack_metadata = read_mpack_metadata(mpack_dir)
+    replay_mode = False
+    run_mpack_install_checker_mock.return_value = (0, 'No errors found', '')
+    get_YN_input_mock.return_value = True
+    fail = False
+    try:
+        validate_purge(options, purge_list, mpack_dir, mpack_metadata, replay_mode)
+    except FatalException as e:
+        fail = True
+    self.assertFalse(fail)
+    get_YN_input_mock.return_value = False
+    fail = False
+    try:
+        validate_purge(options, purge_list, mpack_dir, mpack_metadata, replay_mode)
+    except FatalException as e:
+        fail = True
+    self.assertTrue(fail)
+    get_YN_input_mock.return_value = True
+    fail = False
+    run_mpack_install_checker_mock.return_value = (1, '', 'Mpack installation checker failed!')
+    try:
+        validate_purge(options, purge_list, mpack_dir, mpack_metadata, replay_mode)
+    except FatalException as e:
+        fail = True
+    self.assertTrue(fail)
+    fail = False
+    mpack_dir = os.path.join(mpack_staging_dir, 'myservice-ambari-mpack-1.0.0.0')
+    mpack_metadata = read_mpack_metadata(mpack_dir)
+    run_mpack_install_checker_mock.return_value = (0, 'No errors found', '')
+    try:
+        validate_purge(options, purge_list, mpack_dir, mpack_metadata, replay_mode)
+    except FatalException as e:
+        fail = True
+    self.assertTrue(fail)

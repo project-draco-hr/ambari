@@ -1,0 +1,29 @@
+{
+  EasyMockSupport easyMockSupport=new EasyMockSupport();
+  final Connection mockConnection=easyMockSupport.createNiceMock(Connection.class);
+  final Statement mockStatement=easyMockSupport.createNiceMock(Statement.class);
+  final ResultSet stackResultSet=easyMockSupport.createNiceMock(ResultSet.class);
+  final DBAccessor mockDBDbAccessor=easyMockSupport.createNiceMock(DBAccessor.class);
+  final PersistService mockPersistService=easyMockSupport.createNiceMock(PersistService.class);
+  final Injector mockInjector=Guice.createInjector(new AbstractModule(){
+    @Override protected void configure(){
+      bind(DBAccessor.class).toInstance(mockDBDbAccessor);
+      bind(PersistService.class).toInstance(mockPersistService);
+    }
+  }
+);
+  MpackInstallChecker mpackInstallChecker=mockInjector.getInstance(MpackInstallChecker.class);
+  HashSet<String> stacksInMpack=new HashSet<>();
+  stacksInMpack.add("HDF");
+  expect(mpackInstallChecker.getConnection()).andReturn(mockConnection);
+  expect(mockConnection.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,ResultSet.CONCUR_UPDATABLE)).andReturn(mockStatement);
+  expect(mockStatement.executeQuery("select c.cluster_name, s.stack_name, s.stack_version from clusters c " + "join stack s on c.desired_stack_id = s.stack_id")).andReturn(stackResultSet);
+  expect(stackResultSet.next()).andReturn(true);
+  expect(stackResultSet.getString("stack_name")).andReturn("HDP");
+  expect(stackResultSet.getString("stack_version")).andReturn("2.5");
+  expect(stackResultSet.getString("cluster_name")).andReturn("cl1");
+  easyMockSupport.replayAll();
+  mpackInstallChecker.checkClusters(stacksInMpack);
+  easyMockSupport.verifyAll();
+  Assert.assertTrue("Installing HDF mpack on HDP cluster with purge option should have triggered an error.",mpackInstallChecker.isErrorsFound());
+}
