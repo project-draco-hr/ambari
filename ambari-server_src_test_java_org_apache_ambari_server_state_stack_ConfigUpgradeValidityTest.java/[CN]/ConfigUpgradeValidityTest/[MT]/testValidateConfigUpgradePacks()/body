@@ -1,0 +1,34 @@
+{
+  IOFileFilter filter=new IOFileFilter(){
+    @Override public boolean accept(    File dir,    String name){
+      return false;
+    }
+    @Override public boolean accept(    File file){
+      if (file.getAbsolutePath().contains("upgrades") && file.getAbsolutePath().endsWith("config-upgrade.xml")) {
+        return true;
+      }
+      return false;
+    }
+  }
+;
+  List<File> files=new ArrayList<>();
+  files.addAll(FileUtils.listFiles(new File("src/main/resources/stacks"),filter,FileFilterUtils.directoryFileFilter()));
+  files.addAll(FileUtils.listFiles(new File("src/test/resources/stacks"),filter,FileFilterUtils.directoryFileFilter()));
+  files.addAll(FileUtils.listFiles(new File("src/test/resources/stacks_with_upgrade_cycle"),filter,FileFilterUtils.directoryFileFilter()));
+  ModuleFileUnmarshaller unmarshaller=new ModuleFileUnmarshaller();
+  int filesTestedCount=0;
+  for (  File file : files) {
+    String fileContent=FileUtils.readFileToString(file,"UTF-8");
+    if (fileContent.contains("<upgrade-config-changes") && fileContent.contains("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"")) {
+      if (!fileContent.contains("xsi:noNamespaceSchemaLocation=\"upgrade-config.xsd\"")) {
+        String msg=String.format("File %s appears to be a config upgrade pack, but does not define 'upgrade-config.xsd' as its schema",file.getAbsolutePath());
+        Assert.fail(msg);
+      }
+ else {
+        filesTestedCount++;
+        unmarshaller.unmarshal(ConfigUpgradePack.class,file,true);
+      }
+    }
+  }
+  Assert.assertTrue("This test didn't appear to do any work which could indicate that it failed to find files to validate",filesTestedCount > 5);
+}
