@@ -8,12 +8,17 @@
       throw new AuthorizationException();
     }
     if (userName != null) {
-      UserEntity userEntity=userDAO.findLocalUserByName(userName);
+      UserEntity userEntity=usersCache.get().getIfPresent(userName);
       if (userEntity == null) {
-        userEntity=userDAO.findLdapUserByName(userName);
-      }
-      if (userEntity == null) {
-        userEntity=userDAO.findUserByNameAndType(userName,UserType.JWT);
+        Map<String,UserEntity> userNames=new TreeMap<>();
+        for (        UserEntity entity : userDAO.findAll()) {
+          UserEntity existing=userNames.get(entity.getUserName());
+          if (existing == null || entity.getUserType() == UserType.LOCAL || existing.getUserType() == UserType.JWT) {
+            userNames.put(entity.getUserName(),entity);
+          }
+        }
+        usersCache.get().putAll(userNames);
+        userEntity=usersCache.get().getUnchecked(userName);
       }
       if (userEntity == null) {
         throw new SystemException("User " + userName + " was not found");
