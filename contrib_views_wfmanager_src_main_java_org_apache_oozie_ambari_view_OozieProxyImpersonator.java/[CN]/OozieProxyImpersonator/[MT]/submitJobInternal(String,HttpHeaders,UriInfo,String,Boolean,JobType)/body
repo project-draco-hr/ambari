@@ -1,0 +1,31 @@
+{
+  if (StringUtils.isEmpty(appPath)) {
+    throw new RuntimeException("app path can't be empty.");
+  }
+  appPath=appPath.trim();
+  if (!overwrite) {
+    boolean fileExists=hdfsFileUtils.fileExists(appPath);
+    if (fileExists) {
+      return getFileExistsResponse();
+    }
+  }
+  postBody=utils.formatXml(postBody);
+  try {
+    String filePath=hdfsFileUtils.createWorkflowFile(getWorkflowFileName(appPath),postBody,overwrite);
+    LOGGER.info(String.format("submit workflow job done. filePath=[%s]",filePath));
+  }
+ catch (  Exception ex) {
+    LOGGER.error(ex.getMessage(),ex);
+    return getRespCodeForException(ex);
+  }
+  String response=submitWorkflowJobToOozie(headers,appPath,ui.getQueryParameters(),jobType);
+  if (response != null && response.trim().startsWith("{")) {
+    return Response.status(Response.Status.OK).entity(response).build();
+  }
+ else {
+    HashMap<String,String> resp=new HashMap<String,String>();
+    resp.put("status",ErrorCodes.OOZIE_SUBMIT_ERROR.getErrorCode());
+    resp.put("message",response);
+    return Response.status(Response.Status.BAD_REQUEST).entity(resp).build();
+  }
+}
