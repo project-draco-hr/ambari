@@ -1,0 +1,26 @@
+{
+  Map<String,UpgradePack> upgrades=ambariMetaInfo.getUpgradePacks("HDP","2.2.0");
+  assertTrue(upgrades.containsKey("upgrade_test_conditions"));
+  UpgradePack upgrade=upgrades.get("upgrade_test_conditions");
+  assertNotNull(upgrade);
+  Cluster cluster=makeCluster();
+  UpgradeContext context=new UpgradeContext(m_masterHostResolver,HDP_22,HDP_22,UPGRADE_VERSION,Direction.UPGRADE,UpgradeType.ROLLING);
+  List<UpgradeGroupHolder> groups=m_upgradeHelper.createSequence(upgrade,context);
+  assertEquals(0,groups.size());
+  Map<String,String> fooConfigs=new HashMap<String,String>();
+  fooConfigs.put("foo-property","foo-value");
+  ConfigurationRequest configurationRequest=new ConfigurationRequest();
+  configurationRequest.setClusterName(cluster.getClusterName());
+  configurationRequest.setType("foo-site");
+  configurationRequest.setVersionTag("version1");
+  configurationRequest.setProperties(fooConfigs);
+  final ClusterRequest clusterRequest=new ClusterRequest(cluster.getClusterId(),cluster.getClusterName(),cluster.getDesiredStackVersion().getStackVersion(),null);
+  clusterRequest.setDesiredConfig(Collections.singletonList(configurationRequest));
+  m_managementController.updateClusters(Sets.newHashSet(clusterRequest),null);
+  groups=m_upgradeHelper.createSequence(upgrade,context);
+  assertEquals(1,groups.size());
+  assertEquals("ZOOKEEPER_CONFIG_CONDITION_TEST",groups.get(0).name);
+  cluster.setSecurityType(SecurityType.KERBEROS);
+  groups=m_upgradeHelper.createSequence(upgrade,context);
+  assertEquals(3,groups.size());
+}
