@@ -11,6 +11,7 @@
   Set<String> clusterNames=new HashSet<String>();
   Map<String,Set<String>> serviceNames=new HashMap<String,Set<String>>();
   Set<State> seenNewStates=new HashSet<State>();
+  Map<Service,Boolean> serviceCredentialStoreEnabledMap=new HashMap<>();
   Resource.Type reqOpLvl;
   if (requestProperties.containsKey(RequestOperationLevel.OPERATION_LEVEL_ID)) {
     RequestOperationLevel operationLevel=new RequestOperationLevel(requestProperties);
@@ -64,6 +65,14 @@
         }
       }
     }
+    if (StringUtils.isNotEmpty(request.getCredentialStoreEnabled())) {
+      boolean credentialStoreEnabled=Boolean.parseBoolean(request.getCredentialStoreEnabled());
+      if (!s.isCredentialStoreSupported() && credentialStoreEnabled) {
+        throw new IllegalArgumentException("Invalid arguments, cannot enable credential store " + "as it is not supported by the service. Service=" + s.getName());
+      }
+      serviceCredentialStoreEnabledMap.put(s,credentialStoreEnabled);
+      LOG.info("Service: {}, credential_store_enabled from request: {}",request.getServiceName(),credentialStoreEnabled);
+    }
     if (newState == null) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Nothing to do for new updateService request" + ", clusterName=" + request.getClusterName() + ", serviceName="+ request.getServiceName()+ ", newDesiredState=null");
@@ -107,6 +116,11 @@
   }
   if (seenNewStates.size() > 1) {
     throw new IllegalArgumentException("Cannot handle different desired state" + " changes for a set of services at the same time");
+  }
+  for (  Map.Entry<Service,Boolean> serviceCredential : serviceCredentialStoreEnabledMap.entrySet()) {
+    Service service=serviceCredential.getKey();
+    Boolean credentialStoreEnabled=serviceCredential.getValue();
+    service.setCredentialStoreEnabled(credentialStoreEnabled);
   }
   Cluster cluster=clusters.getCluster(clusterNames.iterator().next());
   return controller.addStages(requestStages,cluster,requestProperties,null,changedServices,changedComps,changedScHosts,ignoredScHosts,runSmokeTest,reconfigureClients);
