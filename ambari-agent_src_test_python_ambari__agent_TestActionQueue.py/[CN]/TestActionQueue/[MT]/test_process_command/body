@@ -1,7 +1,8 @@
 @patch.object(OSCheck, 'os_distribution', new=MagicMock(return_value=os_distro_value))
 @patch('logging.RootLogger.exception')
 @patch.object(ActionQueue, 'execute_command')
-def test_process_command(self, execute_command_mock, log_exc_mock):
+@patch.object(ActionQueue, 'execute_status_command')
+def test_process_command(self, execute_status_command_mock, execute_command_mock, log_exc_mock):
     dummy_controller = MagicMock()
     config = AmbariConfig()
     config.set('agent', 'tolerate_download_failures', 'true')
@@ -11,15 +12,24 @@ def test_process_command(self, execute_command_mock, log_exc_mock):
     wrong_command = {'commandType': 'SOME_WRONG_COMMAND', }
     actionQueue.process_command(wrong_command)
     self.assertFalse(execute_command_mock.called)
+    self.assertFalse(execute_status_command_mock.called)
     self.assertFalse(log_exc_mock.called)
     execute_command_mock.reset_mock()
+    execute_status_command_mock.reset_mock()
     log_exc_mock.reset_mock()
     actionQueue.process_command(execution_command)
     self.assertTrue(execute_command_mock.called)
+    self.assertFalse(execute_status_command_mock.called)
     self.assertFalse(log_exc_mock.called)
     execute_command_mock.reset_mock()
+    execute_status_command_mock.reset_mock()
     log_exc_mock.reset_mock()
+    actionQueue.process_command(status_command)
+    self.assertFalse(execute_command_mock.called)
+    self.assertTrue(execute_status_command_mock.called)
+    self.assertFalse(log_exc_mock.called)
     execute_command_mock.reset_mock()
+    execute_status_command_mock.reset_mock()
     log_exc_mock.reset_mock()
 
     def side_effect(self):
@@ -28,5 +38,6 @@ def test_process_command(self, execute_command_mock, log_exc_mock):
     actionQueue.process_command(execution_command)
     self.assertTrue(log_exc_mock.called)
     log_exc_mock.reset_mock()
+    execute_status_command_mock.side_effect = side_effect
     actionQueue.process_command(execution_command)
     self.assertTrue(log_exc_mock.called)

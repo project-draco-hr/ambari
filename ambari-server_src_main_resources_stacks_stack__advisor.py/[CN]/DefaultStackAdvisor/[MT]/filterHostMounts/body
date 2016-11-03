@@ -1,0 +1,16 @@
+def filterHostMounts(self, hosts, services):
+    '\n    Filter mounts on the host using agent_mounts_ignore_list, by excluding and record with mount-point\n     mentioned in agent_mounts_ignore_list.\n\n    This function updates hosts dictionary\n\n    Example:\n\n      agent_mounts_ignore_list : "/run/secrets"\n\n      Hosts record :\n\n       "disk_info" : [\n          {\n              ...\n            "mountpoint" : "/"\n          },\n          {\n              ...\n            "mountpoint" : "/run/secrets"\n          }\n        ]\n\n      Result would be :\n\n        "disk_info" : [\n          {\n              ...\n            "mountpoint" : "/"\n          }\n        ]\n\n    :type hosts dict\n    :type services dict\n    '
+    if (not services):
+        return hosts
+    cluster_env = self.getServicesSiteProperties(services, 'cluster-env')
+    ignore_list = []
+    if ((not cluster_env) or ('items' not in hosts)):
+        return hosts
+    if (('agent_mounts_ignore_list' in cluster_env) and cluster_env['agent_mounts_ignore_list'].strip()):
+        ignore_list = [x.strip() for x in cluster_env['agent_mounts_ignore_list'].strip().split(',')]
+    for host in hosts['items']:
+        if (('Hosts' not in host) and ('disk_info' not in host['Hosts'])):
+            continue
+        host = host['Hosts']
+        host['disk_info'] = [disk for disk in host['disk_info'] if (disk['mountpoint'] not in ignore_list)]
+    return hosts

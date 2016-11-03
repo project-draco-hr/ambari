@@ -7,7 +7,12 @@
       final AsyncJobRunner asyncJobRunner=new AsyncJobRunnerImpl(context,system.getOperationController(context),system.getActorSystem());
       Optional<Failure> error=asyncJobRunner.getError(jobId,context.getUsername());
       if (error.isPresent()) {
-        throw new Exception(error.get().getError());
+        Throwable th=error.get().getError();
+        if (th instanceof SQLException) {
+          SQLException sqlException=(SQLException)th;
+          if (sqlException.getSQLState().equals("AUTHFAIL") && ConnectionFactory.isLdapEnabled(context))           return Response.status(401).build();
+        }
+        throw new Exception(th);
       }
     }
     JSONObject jsonJob=jsonObjectFromJob(jobController);
