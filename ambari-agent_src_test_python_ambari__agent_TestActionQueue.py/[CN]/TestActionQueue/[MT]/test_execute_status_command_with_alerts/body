@@ -1,0 +1,19 @@
+@patch.object(OSCheck, 'os_distribution', new=MagicMock(return_value=os_distro_value))
+@patch.object(ActionQueue, 'status_update_callback')
+@patch.object(CustomServiceOrchestrator, 'requestComponentStatus')
+@patch.object(CustomServiceOrchestrator, 'requestComponentSecurityState')
+@patch.object(ActionQueue, 'execute_command')
+@patch.object(LiveStatus, 'build')
+@patch.object(CustomServiceOrchestrator, '__init__')
+def test_execute_status_command_with_alerts(self, CustomServiceOrchestrator_mock, requestComponentSecurityState_mock, build_mock, execute_command_mock, requestComponentStatus_mock, status_update_callback):
+    CustomServiceOrchestrator_mock.return_value = None
+    dummy_controller = MagicMock()
+    actionQueue = ActionQueue(AmbariConfig(), dummy_controller)
+    requestComponentStatus_mock.reset_mock()
+    requestComponentStatus_mock.return_value = {'exitcode': 0, 'stdout': 'out', 'stderr': 'err', 'structuredOut': {'alerts': [{'name': 'flume_alert', }], }, }
+    build_mock.return_value = {'somestatusresult': 'aresult', }
+    actionQueue.execute_status_command(self.status_command_for_alerts)
+    report = actionQueue.result()
+    self.assertTrue(requestComponentStatus_mock.called)
+    self.assertEqual(len(report['componentStatus']), 1)
+    self.assertTrue(report['componentStatus'][0].has_key('alerts'))
