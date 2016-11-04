@@ -1,0 +1,40 @@
+{
+  Cluster cluster=upgradeContext.getCluster();
+  Direction direction=upgradeContext.getDirection();
+  Map<String,Object> requestMap=upgradeContext.getUpgradeRequest();
+  String skipFailuresRequestProperty=(String)requestMap.get(UPGRADE_SKIP_FAILURES);
+  if (Boolean.parseBoolean(skipFailuresRequestProperty)) {
+    throw new AmbariException(String.format("The %s property is not valid when creating a %s upgrade.",UPGRADE_SKIP_FAILURES,UpgradeType.HOST_ORDERED));
+  }
+  String skipManualVerification=(String)requestMap.get(UPGRADE_SKIP_MANUAL_VERIFICATION);
+  if (Boolean.parseBoolean(skipManualVerification)) {
+    throw new AmbariException(String.format("The %s property is not valid when creating a %s upgrade.",UPGRADE_SKIP_MANUAL_VERIFICATION,UpgradeType.HOST_ORDERED));
+  }
+  if (!requestMap.containsKey(UPGRADE_HOST_ORDERED_HOSTS)) {
+    throw new AmbariException(String.format("The %s property is required when creating a %s upgrade.",UPGRADE_HOST_ORDERED_HOSTS,UpgradeType.HOST_ORDERED));
+  }
+  List<HostOrderItem> hostOrderItems=extractHostOrderItemsFromRequest(requestMap);
+  List<String> hostsFromRequest=new ArrayList<>(hostOrderItems.size());
+  for (  HostOrderItem hostOrderItem : hostOrderItems) {
+    if (hostOrderItem.getType() == HostOrderActionType.HOST_UPGRADE) {
+      hostsFromRequest.addAll(hostOrderItem.getActionItems());
+    }
+  }
+  Collection<Host> hosts=cluster.getHosts();
+  Set<String> clusterHostNames=new HashSet<>(hosts.size());
+  for (  Host host : hosts) {
+    clusterHostNames.add(host.getHostName());
+  }
+  Collection<String> disjunction=CollectionUtils.disjunction(hostsFromRequest,clusterHostNames);
+  if (CollectionUtils.isNotEmpty(disjunction)) {
+    throw new AmbariException(String.format("The supplied list of hosts must match the cluster hosts in an upgrade of type %s. The following hosts are either missing or invalid: %s",UpgradeType.HOST_ORDERED,StringUtils.join(disjunction,", ")));
+  }
+  HostOrderGrouping hostOrderGrouping=null;
+  List<Grouping> groupings=upgradePack.getGroups(direction);
+  for (  Grouping grouping : groupings) {
+    if (grouping instanceof HostOrderGrouping) {
+      hostOrderGrouping=(HostOrderGrouping)grouping;
+      hostOrderGrouping.setHostOrderItems(hostOrderItems);
+    }
+  }
+}

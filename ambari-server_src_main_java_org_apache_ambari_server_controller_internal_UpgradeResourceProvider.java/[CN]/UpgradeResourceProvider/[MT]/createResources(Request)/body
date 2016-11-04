@@ -16,16 +16,24 @@
     throw new AuthorizationException("The authenticated user does not have authorization to " + "manage upgrade and downgrade");
   }
   final Map<String,String> requestInfoProps=request.getRequestInfoProperties();
+  final String forceDowngrade=requestInfoProps.get(UpgradeResourceDefinition.DOWNGRADE_DIRECTIVE);
+  final Direction direction=Boolean.parseBoolean(forceDowngrade) ? Direction.DOWNGRADE : Direction.UPGRADE;
   UpgradeEntity entity=createResources(new Command<UpgradeEntity>(){
     @Override public UpgradeEntity invoke() throws AmbariException, AuthorizationException {
-      String forceDowngrade=requestInfoProps.get(UpgradeResourceDefinition.DOWNGRADE_DIRECTIVE);
-      if (null == clusterName) {
-        throw new AmbariException(String.format("%s is required",UPGRADE_CLUSTER_NAME));
+      UpgradeType upgradeType=UpgradeType.ROLLING;
+      if (requestMap.containsKey(UPGRADE_TYPE)) {
+        try {
+          upgradeType=UpgradeType.valueOf(requestMap.get(UPGRADE_TYPE).toString());
+        }
+ catch (        Exception e) {
+          throw new AmbariException(String.format("Property %s has an incorrect value of %s.",UPGRADE_TYPE,requestMap.get(UPGRADE_TYPE)));
+        }
       }
-      Direction direction=Boolean.parseBoolean(forceDowngrade) ? Direction.DOWNGRADE : Direction.UPGRADE;
-      UpgradePack up=validateRequest(direction,requestMap);
+      final UpgradeContext upgradeContext=new UpgradeContext(cluster,upgradeType,direction,requestMap);
+      UpgradePack upgradePack=validateRequest(upgradeContext);
+      upgradeContext.setUpgradePack(upgradePack);
       try {
-        return createUpgrade(cluster,direction,up,requestMap);
+        return createUpgrade(upgradeContext);
       }
  catch (      Exception e) {
         LOG.error("Error appears during upgrade task submitting",e);
