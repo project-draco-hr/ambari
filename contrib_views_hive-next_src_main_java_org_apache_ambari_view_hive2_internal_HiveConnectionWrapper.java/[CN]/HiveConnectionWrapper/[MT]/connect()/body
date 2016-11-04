@@ -6,11 +6,29 @@
     throw new ConnectionException(e,"Cannot load the hive JDBC driver");
   }
   try {
-    Connection conn=DriverManager.getConnection(jdbcUrl,username,password);
+    ugi=UserGroupInformation.createProxyUser(username,authParams.getProxyUser());
+  }
+ catch (  IOException e) {
+    throw new ConnectionException(e,"Cannot set kerberos authentication for getting connection.");
+  }
+  try {
+    Connection conn=ugi.doAs(new PrivilegedExceptionAction<Connection>(){
+      @Override public Connection run() throws Exception {
+        return DriverManager.getConnection(jdbcUrl,username,password);
+      }
+    }
+);
     connection=(HiveConnection)conn;
   }
- catch (  SQLException e) {
-    if (isLoginError(e))     this.authFailed=true;
+ catch (  UndeclaredThrowableException exception) {
+    Throwable undeclaredThrowable=exception.getUndeclaredThrowable();
+    if (undeclaredThrowable instanceof SQLException) {
+      SQLException sqlException=(SQLException)undeclaredThrowable;
+      if (isLoginError(sqlException))       authFailed=true;
+      throw new ConnectionException(sqlException,"Cannot open a hive connection with connect string " + jdbcUrl);
+    }
+  }
+catch (  IOException|InterruptedException e) {
     throw new ConnectionException(e,"Cannot open a hive connection with connect string " + jdbcUrl);
   }
 }
