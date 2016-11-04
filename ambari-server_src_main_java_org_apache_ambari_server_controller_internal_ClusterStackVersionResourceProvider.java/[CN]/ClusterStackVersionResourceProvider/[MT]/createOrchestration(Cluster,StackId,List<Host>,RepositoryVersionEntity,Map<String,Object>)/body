@@ -1,0 +1,76 @@
+{
+  final AmbariManagementController managementController=getManagementController();
+  final AmbariMetaInfo ami=managementController.getAmbariMetaInfo();
+  List<OperatingSystemEntity> operatingSystems=repoVersionEnt.getOperatingSystems();
+  Map<String,List<RepositoryEntity>> perOsRepos=new HashMap<String,List<RepositoryEntity>>();
+  for (  OperatingSystemEntity operatingSystem : operatingSystems) {
+    if (operatingSystem.isAmbariManagedRepos()) {
+      perOsRepos.put(operatingSystem.getOsType(),operatingSystem.getRepositories());
+    }
+ else {
+      perOsRepos.put(operatingSystem.getOsType(),Collections.<RepositoryEntity>emptyList());
+    }
+  }
+  RequestStageContainer req=createRequest();
+  Iterator<Host> hostIterator=hosts.iterator();
+  Map<String,String> hostLevelParams=new HashMap<String,String>();
+  hostLevelParams.put(JDK_LOCATION,getManagementController().getJdkResourceUrl());
+  String hostParamsJson=StageUtils.getGson().toJson(hostLevelParams);
+  String clusterHostInfoJson;
+  try {
+    clusterHostInfoJson=StageUtils.getGson().toJson(StageUtils.getClusterHostInfo(cluster));
+  }
+ catch (  AmbariException e) {
+    throw new SystemException("Could not build cluster topology",e);
+  }
+  int maxTasks=configuration.getAgentPackageParallelCommandsLimit();
+  int hostCount=hosts.size();
+  int batchCount=(int)(Math.ceil((double)hostCount / maxTasks));
+  long stageId=req.getLastStageId() + 1;
+  if (0L == stageId) {
+    stageId=1L;
+  }
+  Float successFactor=INSTALL_PACKAGES_SUCCESS_FACTOR;
+  String successFactorProperty=(String)propertyMap.get(CLUSTER_STACK_VERSION_STAGE_SUCCESS_FACTOR);
+  if (StringUtils.isNotBlank(successFactorProperty)) {
+    successFactor=Float.valueOf(successFactorProperty);
+  }
+  boolean hasStage=false;
+  ArrayList<Stage> stages=new ArrayList<Stage>(batchCount);
+  for (int batchId=1; batchId <= batchCount; batchId++) {
+    String stageName;
+    if (batchCount > 1) {
+      stageName=String.format(INSTALL_PACKAGES_FULL_NAME + ". Batch %d of %d",batchId,batchCount);
+    }
+ else {
+      stageName=INSTALL_PACKAGES_FULL_NAME;
+    }
+    Stage stage=stageFactory.createNew(req.getId(),"/tmp/ambari",cluster.getClusterName(),cluster.getClusterId(),stageName,clusterHostInfoJson,"{}",hostParamsJson);
+    stage.getSuccessFactors().put(Role.INSTALL_PACKAGES,successFactor);
+    stage.setStageId(stageId);
+    stageId++;
+    stages.add(stage);
+    Set<String> serviceNames=new HashSet<>();
+    for (int i=0; i < maxTasks && hostIterator.hasNext(); i++) {
+      Host host=hostIterator.next();
+      if (hostHasVersionableComponents(cluster,serviceNames,ami,stackId,host)) {
+        ActionExecutionContext actionContext=getHostVersionInstallCommand(repoVersionEnt,cluster,managementController,ami,stackId,serviceNames,perOsRepos,stage,host);
+        if (null != actionContext) {
+          try {
+            actionExecutionHelper.get().addExecutionCommandsToStage(actionContext,stage,null);
+            hasStage=true;
+          }
+ catch (          AmbariException e) {
+            throw new SystemException("Cannot modify stage",e);
+          }
+        }
+      }
+    }
+  }
+  if (!hasStage) {
+    throw new SystemException(String.format("There are no hosts that have components to install for repository %s",repoVersionEnt.getDisplayName()));
+  }
+  req.addStages(stages);
+  req.persist();
+  return req;
+}
