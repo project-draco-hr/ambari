@@ -4,9 +4,19 @@
   this.failure=new Failure("Cannot connect to hive",ex);
   if (isAsync()) {
     updateJobStatus(jobId.get(),Job.JOB_STATE_ERROR);
+    if (ex instanceof ConnectionException) {
+      ConnectionException connectionException=(ConnectionException)ex;
+      Throwable cause=connectionException.getCause();
+      if (cause instanceof SQLException) {
+        SQLException sqlException=(SQLException)cause;
+        if (isLoginError(sqlException))         return;
+      }
+    }
   }
  else {
     sender().tell(new ExecutionFailed("Cannot connect to hive"),ActorRef.noSender());
   }
-  cleanUpWithTermination();
+  if (!(ex instanceof SQLException) || !((SQLException)ex).getSQLState().equals("AUTHFAIL")) {
+    cleanUpWithTermination();
+  }
 }
