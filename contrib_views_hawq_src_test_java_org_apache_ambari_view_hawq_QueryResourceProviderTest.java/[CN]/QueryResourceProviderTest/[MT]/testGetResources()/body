@@ -1,0 +1,39 @@
+{
+  expect(viewContext.getProperties()).andReturn(prepareViewContextProperties()).anyTimes();
+  expect(dataSource.getConnection("host1","1234","gpadmin-user","gpadmin-password")).andReturn(connection);
+  expect(connection.createStatement()).andReturn(statement);
+  expect(statement.executeQuery(anyString())).andReturn(rs);
+  expect(rs.getMetaData()).andReturn(rsMetaData);
+  expect(rsMetaData.getColumnCount()).andReturn(2);
+  expect(rs.next()).andReturn(true);
+  expect(rsMetaData.getColumnName(1)).andReturn("procpid");
+  expect(rs.getObject(1)).andReturn(10);
+  expect(rsMetaData.getColumnName(2)).andReturn("text");
+  expect(rs.getObject(2)).andReturn("text-10");
+  expect(rs.next()).andReturn(true);
+  expect(rsMetaData.getColumnName(1)).andReturn("procpid");
+  expect(rs.getObject(1)).andReturn(20);
+  expect(rsMetaData.getColumnName(2)).andReturn("text");
+  expect(rs.getObject(2)).andReturn("text-20");
+  expect(rs.next()).andReturn(false);
+  rs.close();
+  expectLastCall().once();
+  statement.close();
+  expectLastCall().once();
+  connection.close();
+  expectLastCall().once();
+  replayAll();
+  Set<QueryResource> results=provider.getResources(null);
+  assertEquals(2,results.size());
+  Set<String> ids=new HashSet<>();
+  ids.add("10");
+  ids.add("20");
+  for (  QueryResource query : results) {
+    String id=query.getId();
+    ids.remove(id);
+    assertEquals(id,query.getAttributes().get("procpid").toString());
+    assertEquals("text-" + id,query.getAttributes().get("text"));
+  }
+  assertTrue(ids.isEmpty());
+  verifyAll();
+}
