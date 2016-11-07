@@ -1,0 +1,50 @@
+{
+  String startTime=request.getFrom();
+  String endTime=request.getTo();
+  SimpleFacetQuery facetQuery=conversionService.convert(request,SimpleFacetQuery.class);
+  startTime=startTime == null ? "" : startTime;
+  endTime=endTime == null ? "" : "_" + endTime;
+  String dataFormat=request.getFormat();
+  FileOutputStream fis=null;
+  try {
+    QueryResponse queryResponse=auditSolrDao.process(facetQuery);
+    if (queryResponse == null) {
+      VResponse response=new VResponse();
+      response.setMsgDesc("Query was not able to execute " + facetQuery);
+      throw RESTErrorUtil.createRESTException(response);
+    }
+    BarGraphDataListResponse vBarUserDataList=graphDataGenerator.generateSecondLevelBarGraphDataResponse(queryResponse,0);
+    BarGraphDataListResponse vBarResourceDataList=graphDataGenerator.generateSecondLevelBarGraphDataResponse(queryResponse,1);
+    String data="";
+    if ("text".equals(dataFormat)) {
+      StringWriter stringWriter=new StringWriter();
+      Template template=freemarkerConfiguration.getTemplate(AUDIT_LOG_TEMPLATE);
+      Map<String,Object> models=new HashMap<>();
+      DownloadUtil.fillUserResourcesModel(models,vBarUserDataList,vBarResourceDataList);
+      template.process(models,stringWriter);
+      data=stringWriter.toString();
+    }
+ else {
+      data="{" + convertObjToString(vBarUserDataList) + ","+ convertObjToString(vBarResourceDataList)+ "}";
+      dataFormat="json";
+    }
+    String fileName="Users_Resource" + startTime + endTime+ ".";
+    File file=File.createTempFile(fileName,dataFormat);
+    fis=new FileOutputStream(file);
+    fis.write(data.getBytes());
+    return Response.ok(file,MediaType.APPLICATION_OCTET_STREAM).header("Content-Disposition","attachment;filename=" + fileName + dataFormat).build();
+  }
+ catch (  IOException e) {
+    logger.error("Error during download file (audit log) " + e);
+    throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+ finally {
+    if (fis != null) {
+      try {
+        fis.close();
+      }
+ catch (      IOException e) {
+      }
+    }
+  }
+}

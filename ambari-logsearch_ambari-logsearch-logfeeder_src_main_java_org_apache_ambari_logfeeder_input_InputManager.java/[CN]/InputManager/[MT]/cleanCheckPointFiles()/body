@@ -1,0 +1,60 @@
+{
+  if (checkPointFolderFile == null) {
+    LOG.info("Will not clean checkPoint files. checkPointFolderFile=" + checkPointFolderFile);
+    return;
+  }
+  LOG.info("Cleaning checkPoint files. checkPointFolderFile=" + checkPointFolderFile.getAbsolutePath());
+  try {
+    String searchPath="*" + checkPointExtension;
+    FileFilter fileFilter=new WildcardFileFilter(searchPath);
+    File[] checkPointFiles=checkPointFolderFile.listFiles(fileFilter);
+    int totalCheckFilesDeleted=0;
+    for (    File checkPointFile : checkPointFiles) {
+      try (RandomAccessFile checkPointReader=new RandomAccessFile(checkPointFile,"r")){
+        int contentSize=checkPointReader.readInt();
+        byte b[]=new byte[contentSize];
+        int readSize=checkPointReader.read(b,0,contentSize);
+        if (readSize != contentSize) {
+          LOG.error("Couldn't read expected number of bytes from checkpoint file. expected=" + contentSize + ", read="+ readSize+ ", checkPointFile="+ checkPointFile);
+        }
+ else {
+          String jsonCheckPointStr=new String(b,0,readSize);
+          Map<String,Object> jsonCheckPoint=LogFeederUtil.toJSONObject(jsonCheckPointStr);
+          String logFilePath=(String)jsonCheckPoint.get("file_path");
+          String logFileKey=(String)jsonCheckPoint.get("file_key");
+          if (logFilePath != null && logFileKey != null) {
+            boolean deleteCheckPointFile=false;
+            File logFile=new File(logFilePath);
+            if (logFile.exists()) {
+              Object fileKeyObj=FileUtil.getFileKey(logFile);
+              String fileBase64=Base64.byteArrayToBase64(fileKeyObj.toString().getBytes());
+              if (!logFileKey.equals(fileBase64)) {
+                deleteCheckPointFile=true;
+                LOG.info("CheckPoint clean: File key has changed. old=" + logFileKey + ", new="+ fileBase64+ ", filePath="+ logFilePath+ ", checkPointFile="+ checkPointFile.getAbsolutePath());
+              }
+            }
+ else {
+              LOG.info("CheckPoint clean: Log file doesn't exist. filePath=" + logFilePath + ", checkPointFile="+ checkPointFile.getAbsolutePath());
+              deleteCheckPointFile=true;
+            }
+            if (deleteCheckPointFile) {
+              LOG.info("Deleting CheckPoint file=" + checkPointFile.getAbsolutePath() + ", logFile="+ logFilePath);
+              checkPointFile.delete();
+              totalCheckFilesDeleted++;
+            }
+          }
+        }
+      }
+ catch (      EOFException eof) {
+        LOG.warn("Caught EOFException. Ignoring reading existing checkPoint file. " + checkPointFile);
+      }
+catch (      Throwable t) {
+        LOG.error("Error while checking checkPoint file. " + checkPointFile,t);
+      }
+    }
+    LOG.info("Deleted " + totalCheckFilesDeleted + " checkPoint file(s). checkPointFolderFile="+ checkPointFolderFile.getAbsolutePath());
+  }
+ catch (  Throwable t) {
+    LOG.error("Error while cleaning checkPointFiles",t);
+  }
+}

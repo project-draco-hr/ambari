@@ -1,0 +1,46 @@
+{
+  checkPointExtension=LogFeederUtil.getStringProperty("logfeeder.checkpoint.extension",DEFAULT_CHECKPOINT_EXTENSION);
+  for (  Input input : inputList) {
+    try {
+      input.init();
+      if (input.isTail()) {
+        isAnyInputTail=true;
+      }
+    }
+ catch (    Exception e) {
+      LOG.error("Error initializing input. " + input.getShortDescription(),e);
+    }
+  }
+  if (isAnyInputTail) {
+    LOG.info("Determining valid checkpoint folder");
+    boolean isCheckPointFolderValid=false;
+    String checkPointFolder=LogFeederUtil.getStringProperty("logfeeder.checkpoint.folder");
+    if (!StringUtils.isEmpty(checkPointFolder)) {
+      checkPointFolderFile=new File(checkPointFolder);
+      isCheckPointFolderValid=verifyCheckPointFolder(checkPointFolderFile);
+    }
+    if (!isCheckPointFolderValid) {
+      String userHome=LogFeederUtil.getStringProperty("user.home");
+      if (userHome != null) {
+        checkPointFolderFile=new File(userHome,CHECKPOINT_SUBFOLDER_NAME);
+        LOG.info("Checking if home folder can be used for checkpoints. Folder=" + checkPointFolderFile);
+        isCheckPointFolderValid=verifyCheckPointFolder(checkPointFolderFile);
+      }
+    }
+    if (!isCheckPointFolderValid) {
+      String tmpFolder=LogFeederUtil.getStringProperty("java.io.tmpdir");
+      if (tmpFolder == null) {
+        tmpFolder="/tmp";
+      }
+      checkPointFolderFile=new File(tmpFolder,CHECKPOINT_SUBFOLDER_NAME);
+      LOG.info("Checking if tmps folder can be used for checkpoints. Folder=" + checkPointFolderFile);
+      isCheckPointFolderValid=verifyCheckPointFolder(checkPointFolderFile);
+      if (isCheckPointFolderValid) {
+        LOG.warn("Using tmp folder " + checkPointFolderFile + " to store check points. This is not recommended."+ "Please set logfeeder.checkpoint.folder property");
+      }
+    }
+    if (isCheckPointFolderValid) {
+      LOG.info("Using folder " + checkPointFolderFile + " for storing checkpoints");
+    }
+  }
+}

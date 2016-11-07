@@ -1,0 +1,23 @@
+{
+  if (!metricsMap.isEmpty() && currMS - lastPublishTimeMS > publishIntervalMS) {
+    try {
+      TimelineMetrics timelineMetrics=new TimelineMetrics();
+      timelineMetrics.setMetrics(new ArrayList<TimelineMetric>(metricsMap.values()));
+      amsClient.emitMetrics(timelineMetrics);
+      LOG.info("Published " + timelineMetrics.getMetrics().size() + " metrics to AMS");
+      metricsMap.clear();
+      lastPublishTimeMS=currMS;
+    }
+ catch (    Throwable t) {
+      LOG.warn("Error sending metrics to AMS.",t);
+      if (currMS - lastFailedPublishTimeMS > maxMetricsBuffer) {
+        LOG.error("AMS was not sent for last " + maxMetricsBuffer / 1000 + " seconds. Purging it and will start rebuilding it again");
+        metricsMap.clear();
+        lastFailedPublishTimeMS=currMS;
+      }
+    }
+  }
+ else {
+    LOG.info("Not publishing metrics. metrics.size()=" + metricsMap.size() + ", lastPublished="+ (currMS - lastPublishTimeMS) / 1000 + " seconds ago, intervalConfigured=" + publishIntervalMS / 1000);
+  }
+}

@@ -1,0 +1,39 @@
+{
+  sortFilters();
+  List<Input> toRemoveInputList=new ArrayList<Input>();
+  for (  Input input : inputManager.getInputList()) {
+    for (    Map<String,Object> map : filterConfigList) {
+      if (map == null) {
+        continue;
+      }
+      mergeBlocks(globalConfigs,map);
+      String value=(String)map.get("filter");
+      if (StringUtils.isEmpty(value)) {
+        LOG.error("Filter block doesn't have filter element");
+        continue;
+      }
+      Filter filter=(Filter)AliasUtil.getClassInstance(value,AliasType.FILTER);
+      if (filter == null) {
+        LOG.error("Filter object could not be found");
+        continue;
+      }
+      filter.loadConfig(map);
+      filter.setInput(input);
+      if (filter.isEnabled()) {
+        filter.setOutputManager(outputManager);
+        input.addFilter(filter);
+        filter.logConfgs(Level.INFO);
+      }
+ else {
+        LOG.debug("Ignoring filter " + filter.getShortDescription() + " for input "+ input.getShortDescription());
+      }
+    }
+    if (input.getFirstFilter() == null) {
+      toRemoveInputList.add(input);
+    }
+  }
+  for (  Input toRemoveInput : toRemoveInputList) {
+    LOG.warn("There are no filters, we will ignore this input. " + toRemoveInput.getShortDescription());
+    inputManager.removeInput(toRemoveInput);
+  }
+}

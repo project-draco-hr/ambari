@@ -1,0 +1,54 @@
+{
+  String defaultFormat="text";
+  SimpleQuery solrQuery=conversionService.convert(request,SimpleQuery.class);
+  String from=request.getFrom();
+  String to=request.getTo();
+  String utcOffset=StringUtils.isBlank(request.getUtcOffset()) ? "0" : request.getUtcOffset();
+  String format=request.getFormat() != null && defaultFormat.equalsIgnoreCase(request.getFormat()) ? ".txt" : ".json";
+  String fileName="Component_Logs_" + DateUtil.getCurrentDateInString();
+  if (!DateUtil.isDateValid(from) || !DateUtil.isDateValid(to)) {
+    logger.error("Not valid date format. Valid format should be" + LogSearchConstants.SOLR_DATE_FORMAT_PREFIX_Z);
+    throw RESTErrorUtil.createRESTException("Not valid date format. Valid format should be" + LogSearchConstants.SOLR_DATE_FORMAT_PREFIX_Z,MessageEnums.INVALID_INPUT_DATA);
+  }
+ else {
+    from=from.replace("T"," ");
+    from=from.replace(".",",");
+    to=to.replace("T"," ");
+    to=to.replace(".",",");
+    to=DateUtil.addOffsetToDate(to,Long.parseLong(utcOffset),"yyyy-MM-dd HH:mm:ss,SSS");
+    from=DateUtil.addOffsetToDate(from,Long.parseLong(utcOffset),"yyyy-MM-dd HH:mm:ss,SSS");
+  }
+  String textToSave="";
+  try {
+    QueryResponse response=serviceLogsSolrDao.process(solrQuery);
+    if (response == null) {
+      throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+    }
+    SolrDocumentList docList=response.getResults();
+    if (docList == null) {
+      throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+    }
+    if (format.toLowerCase(Locale.ENGLISH).equals(".txt")) {
+      Template template=freemarkerConfiguration.getTemplate(SERVICE_LOG_TEMPLATE);
+      Map<String,Object> models=new HashMap<>();
+      DownloadUtil.fillModelsForLogFile(docList,models,request,format,from,to);
+      StringWriter stringWriter=new StringWriter();
+      template.process(models,stringWriter);
+      textToSave=stringWriter.toString();
+    }
+ else     if (format.toLowerCase(Locale.ENGLISH).equals(".json")) {
+      textToSave=convertObjToString(docList);
+    }
+ else {
+      throw RESTErrorUtil.createRESTException("unsoported format either should be json or text",MessageEnums.ERROR_SYSTEM);
+    }
+    File file=File.createTempFile(fileName,format);
+    FileOutputStream fis=new FileOutputStream(file);
+    fis.write(textToSave.getBytes());
+    return Response.ok(file,MediaType.APPLICATION_OCTET_STREAM).header("Content-Disposition","attachment;filename=" + fileName + format).build();
+  }
+ catch (  SolrException|TemplateException|IOException e) {
+    logger.error("Error during solrQuery=" + solrQuery,e);
+    throw RESTErrorUtil.createRESTException(MessageEnums.SOLR_ERROR.getMessage().getMessage(),MessageEnums.ERROR_SYSTEM);
+  }
+}

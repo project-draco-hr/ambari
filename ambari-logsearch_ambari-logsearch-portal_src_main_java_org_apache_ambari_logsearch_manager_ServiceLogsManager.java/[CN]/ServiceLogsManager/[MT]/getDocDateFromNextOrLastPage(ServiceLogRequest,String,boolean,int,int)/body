@@ -1,0 +1,28 @@
+{
+  int lastOrFirstLogIndex;
+  if (isNext) {
+    lastOrFirstLogIndex=((currentPageNumber + 1) * maxRows);
+  }
+ else {
+    if (currentPageNumber == 0) {
+      throw RESTErrorUtil.createRESTException("This is the first Page",MessageEnums.DATA_NOT_FOUND);
+    }
+    lastOrFirstLogIndex=(currentPageNumber * maxRows) - 1;
+  }
+  SimpleQuery sq=conversionService.convert(request,SimpleQuery.class);
+  SolrQuery nextPageLogTimeQuery=new DefaultQueryParser().doConstructSolrQuery(sq);
+  nextPageLogTimeQuery.remove("start");
+  nextPageLogTimeQuery.remove("rows");
+  nextPageLogTimeQuery.setStart(lastOrFirstLogIndex);
+  nextPageLogTimeQuery.setRows(1);
+  QueryResponse queryResponse=serviceLogsSolrDao.process(nextPageLogTimeQuery);
+  if (queryResponse == null) {
+    throw RESTErrorUtil.createRESTException(String.format("Cannot process next page query for \"%s\" ",keyword),MessageEnums.ERROR_SYSTEM);
+  }
+  SolrDocumentList docList=queryResponse.getResults();
+  if (docList == null || docList.isEmpty()) {
+    throw RESTErrorUtil.createRESTException(String.format("Next page element for \"%s\" is not found",keyword),MessageEnums.ERROR_SYSTEM);
+  }
+  SolrDocument solrDoc=docList.get(0);
+  return (Date)solrDoc.get(LOGTIME);
+}

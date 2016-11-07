@@ -3,11 +3,16 @@ def setup_logfeeder():
     Directory([params.logfeeder_log_dir, params.logfeeder_pid_dir, params.logfeeder_checkpoint_folder], mode=493, cd_access='a', create_parents=True)
     Directory([params.logfeeder_dir, params.logsearch_logfeeder_conf], mode=493, cd_access='a', create_parents=True, recursive_ownership=True)
     File(params.logfeeder_log, mode=420, content='')
-    File(format('{logsearch_logfeeder_conf}/logfeeder.properties'), content=Template('logfeeder.properties.j2'))
+    PropertiesFile(format('{logsearch_logfeeder_conf}/logfeeder.properties'), properties=params.logfeeder_properties)
     File(format('{logsearch_logfeeder_conf}/logfeeder-env.sh'), content=InlineTemplate(params.logfeeder_env_content), mode=493)
     File(format('{logsearch_logfeeder_conf}/log4j.xml'), content=InlineTemplate(params.logfeeder_log4j_content))
-    File(format('{logsearch_logfeeder_conf}/grok-patterns'), content=Template('grok-patterns.j2'), encoding='utf-8')
-    for file_name in params.logfeeder_config_file_names:
+    File(format('{logsearch_logfeeder_conf}/grok-patterns'), content=InlineTemplate(params.logfeeder_grok_patterns), encoding='utf-8')
+    for file_name in params.logfeeder_default_config_file_names:
         File(format(('{logsearch_logfeeder_conf}/' + file_name)), content=Template((file_name + '.j2')))
+    for (service, pattern_content) in params.logfeeder_metadata.iteritems():
+        File(format((('{logsearch_logfeeder_conf}/input.config-' + service.replace('-logsearch-conf', '')) + '.json')), content=InlineTemplate(pattern_content, extra_imports=[default]))
+    if params.logfeeder_system_log_enabled:
+        File(format('{logsearch_logfeeder_conf}/input.config-system_messages.json'), content=params.logfeeder_system_messages_content)
+        File(format('{logsearch_logfeeder_conf}/input.config-secure_log.json'), content=params.logfeeder_secure_log_content)
     if params.security_enabled:
         File(format('{logfeeder_jaas_file}'), content=Template('logfeeder_jaas.conf.j2'))

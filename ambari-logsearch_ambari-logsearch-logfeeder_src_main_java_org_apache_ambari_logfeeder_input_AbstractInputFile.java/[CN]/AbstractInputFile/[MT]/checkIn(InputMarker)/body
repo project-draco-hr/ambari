@@ -1,0 +1,31 @@
+{
+  if (checkPointWriter != null) {
+    try {
+      int lineNumber=LogFeederUtil.objectToInt(jsonCheckPoint.get("line_number"),0,"line_number");
+      if (lineNumber > inputMarker.lineNumber) {
+        return;
+      }
+      long currMS=System.currentTimeMillis();
+      if (!isClosed() && (currMS - lastCheckPointTimeMS) < checkPointIntervalMS) {
+        lastCheckPointInputMarker=inputMarker;
+        return;
+      }
+      lastCheckPointTimeMS=currMS;
+      jsonCheckPoint.put("line_number","" + new Integer(inputMarker.lineNumber));
+      jsonCheckPoint.put("last_write_time_ms","" + new Long(currMS));
+      jsonCheckPoint.put("last_write_time_date",new Date());
+      String jsonStr=LogFeederUtil.getGson().toJson(jsonCheckPoint);
+      checkPointWriter.seek(0);
+      checkPointWriter.writeInt(jsonStr.length());
+      checkPointWriter.write(jsonStr.getBytes());
+      if (isClosed()) {
+        String logMessageKey=this.getClass().getSimpleName() + "_FINAL_CHECKIN";
+        LogFeederUtil.logErrorMessageByInterval(logMessageKey,"Wrote final checkPoint, input=" + getShortDescription() + ", checkPointFile="+ checkPointFile.getAbsolutePath()+ ", checkPoint="+ jsonStr,null,LOG,Level.INFO);
+      }
+    }
+ catch (    Throwable t) {
+      String logMessageKey=this.getClass().getSimpleName() + "_CHECKIN_EXCEPTION";
+      LogFeederUtil.logErrorMessageByInterval(logMessageKey,"Caught exception checkIn. , input=" + getShortDescription(),t,LOG,Level.ERROR);
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  boolean solrHasData=false;
+  CloudSolrClient solrClient=new CloudSolrClient(String.format("%s:%d",StoryDataRegistry.INSTANCE.getDockerHost(),StoryDataRegistry.INSTANCE.getZookeeperPort()));
+  StoryDataRegistry.INSTANCE.setCloudSolrClient(solrClient);
+  SolrQuery solrQuery=new SolrQuery();
+  solrQuery.setQuery("*:*");
+  int maxTries=60;
+  for (int tries=1; tries < maxTries; tries++) {
+    QueryResponse queryResponse=solrClient.query(StoryDataRegistry.INSTANCE.getServiceLogsCollection(),solrQuery);
+    SolrDocumentList list=queryResponse.getResults();
+    if (list.size() > 0) {
+      solrHasData=true;
+      break;
+    }
+ else {
+      Thread.sleep(2000);
+      LOG.info("Solr has no data yet, retrying...");
+    }
+  }
+  if (!solrHasData) {
+    throw new IllegalStateException(String.format("Solr has no data after %d tries",maxTries));
+  }
+}

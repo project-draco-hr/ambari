@@ -1,0 +1,72 @@
+{
+  Input input=inputMarker.input;
+  for (  Map.Entry<String,String> entry : input.getContextFields().entrySet()) {
+    if (jsonObj.get(entry.getKey()) == null) {
+      jsonObj.put(entry.getKey(),entry.getValue());
+    }
+  }
+  if (jsonObj.get("type") == null) {
+    jsonObj.put("type",input.getStringValue("type"));
+  }
+  if (jsonObj.get("path") == null && input.getFilePath() != null) {
+    jsonObj.put("path",input.getFilePath());
+  }
+  if (jsonObj.get("path") == null && input.getStringValue("path") != null) {
+    jsonObj.put("path",input.getStringValue("path"));
+  }
+  if (jsonObj.get("host") == null && LogFeederUtil.hostName != null) {
+    jsonObj.put("host",LogFeederUtil.hostName);
+  }
+  if (jsonObj.get("ip") == null && LogFeederUtil.ipAddress != null) {
+    jsonObj.put("ip",LogFeederUtil.ipAddress);
+  }
+  if (jsonObj.get("level") == null) {
+    jsonObj.put("level",LogFeederConstants.LOG_LEVEL_UNKNOWN);
+  }
+  if (input.isUseEventMD5() || input.isGenEventMD5()) {
+    String prefix="";
+    Object logtimeObj=jsonObj.get("logtime");
+    if (logtimeObj != null) {
+      if (logtimeObj instanceof Date) {
+        prefix="" + ((Date)logtimeObj).getTime();
+      }
+ else {
+        prefix=logtimeObj.toString();
+      }
+    }
+    Long eventMD5=MurmurHash.hash64A(LogFeederUtil.getGson().toJson(jsonObj).getBytes(),HASH_SEED);
+    if (input.isGenEventMD5()) {
+      jsonObj.put("event_md5",prefix + eventMD5.toString());
+    }
+    if (input.isUseEventMD5()) {
+      jsonObj.put("id",prefix + eventMD5.toString());
+    }
+  }
+  jsonObj.put("seq_num",new Long(docCounter++));
+  if (jsonObj.get("id") == null) {
+    jsonObj.put("id",UUID.randomUUID().toString());
+  }
+  if (jsonObj.get("event_count") == null) {
+    jsonObj.put("event_count",new Integer(1));
+  }
+  if (inputMarker.lineNumber > 0) {
+    jsonObj.put("logfile_line_number",new Integer(inputMarker.lineNumber));
+  }
+  if (jsonObj.containsKey("log_message")) {
+    String logMessage=(String)jsonObj.get("log_message");
+    logMessage=truncateLongLogMessage(jsonObj,input,logMessage);
+    if (addMessageMD5) {
+      jsonObj.put("message_md5","" + MurmurHash.hash64A(logMessage.getBytes(),31174077));
+    }
+  }
+  if (FilterLogData.INSTANCE.isAllowed(jsonObj,inputMarker)) {
+    for (    Output output : input.getOutputList()) {
+      try {
+        output.write(jsonObj,inputMarker);
+      }
+ catch (      Exception e) {
+        LOG.error("Error writing. to " + output.getShortDescription(),e);
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  boolean logsearchStarted=StoryDataRegistry.INSTANCE.isLogsearchContainerStarted();
+  if (!logsearchStarted) {
+    DockerClient dockerClient=StoryDataRegistry.INSTANCE.getDockerClient();
+    LOG.info("Create new docker container for Log Search ..");
+    URL location=LogSearchDockerSteps.class.getProtectionDomain().getCodeSource().getLocation();
+    String ambariFolder=new File(location.toURI()).getParentFile().getParentFile().getParentFile().getParent();
+    StoryDataRegistry.INSTANCE.setAmbariFolder(ambariFolder);
+    String dockerBaseDirectory=ambariFolder + "/ambari-logsearch/docker";
+    String dockerFileLocation=dockerBaseDirectory + "/Dockerfile";
+    String imageId=dockerClient.buildImageCmd().withTag("ambari-logsearch:v1.0").withBaseDirectory(new File(dockerBaseDirectory)).withDockerfile(new File(dockerFileLocation)).exec(new BuildImageResultCallback()).awaitImageId();
+    LOG.info("Docker image id: {}",imageId);
+    removeLogSearchContainerIfExists();
+    Volume testLogsVolume=new Volume("/root/test-logs");
+    Volume testConfigVolume=new Volume("/root/test-config");
+    Volume ambariVolume=new Volume("/root/ambari");
+    Volume logfeederClassesVolume=new Volume("/root/ambari/ambari-logsearch/ambari-logsearch-logfeeder/target/package/classes");
+    Volume logsearchClassesVolume=new Volume("/root/ambari/ambari-logsearch/ambari-logsearch-portal/target/package/classes");
+    Volume logsearchWebappVolume=new Volume("/root/ambari/ambari-logsearch/ambari-logsearch-portal/target/package/classes/webapps/app");
+    Bind testLogsBind=new Bind(ambariFolder + "/ambari-logsearch/docker/test-logs",testLogsVolume);
+    Bind testConfigBind=new Bind(ambariFolder + "/ambari-logsearch/docker/test-config",testConfigVolume);
+    Bind ambariRootBind=new Bind(ambariFolder,ambariVolume);
+    Bind logfeederClassesBind=new Bind(ambariFolder + "/ambari-logsearch/ambari-logsearch-logfeeder/target/classes",logfeederClassesVolume);
+    Bind logsearchClassesBind=new Bind(ambariFolder + "/ambari-logsearch/ambari-logsearch-portal/target/classes",logsearchClassesVolume);
+    Bind logsearchWebappBind=new Bind(ambariFolder + "/ambari-logsearch/ambari-logsearch-portal/src/main/webapp",logsearchWebappVolume);
+    Ports ports=new Ports();
+    ports.bind(new ExposedPort(5005),new Ports.Binding("0.0.0.0","5005"));
+    ports.bind(new ExposedPort(5006),new Ports.Binding("0.0.0.0","5006"));
+    ports.bind(new ExposedPort(StoryDataRegistry.INSTANCE.getSolrPort()),new Ports.Binding("0.0.0.0","8886"));
+    ports.bind(new ExposedPort(StoryDataRegistry.INSTANCE.getLogsearchPort()),new Ports.Binding("0.0.0.0","61888"));
+    ports.bind(new ExposedPort(StoryDataRegistry.INSTANCE.getZookeeperPort()),new Ports.Binding("0.0.0.0","9983"));
+    LOG.info("Creating docker cointainer...");
+    CreateContainerResponse createResponse=dockerClient.createContainerCmd("ambari-logsearch:v1.0").withHostName("logsearch.apache.org").withName("logsearch").withVolumes(testLogsVolume,testConfigVolume,ambariVolume,logfeederClassesVolume,logsearchClassesVolume,logsearchWebappVolume).withBinds(testLogsBind,testConfigBind,ambariRootBind,logfeederClassesBind,logsearchClassesBind,logsearchWebappBind).withExposedPorts(new ExposedPort(StoryDataRegistry.INSTANCE.getLogsearchPort()),new ExposedPort(5005),new ExposedPort(5006),new ExposedPort(StoryDataRegistry.INSTANCE.getSolrPort()),new ExposedPort(StoryDataRegistry.INSTANCE.getZookeeperPort())).withPortBindings(ports).exec();
+    LOG.info("Created docker container id: {}",createResponse.getId());
+    dockerClient.startContainerCmd(createResponse.getId()).exec();
+    StoryDataRegistry.INSTANCE.setLogsearchContainerStarted(true);
+    String dockerHostFromUri=StoryDataRegistry.INSTANCE.getDockerClientConfig().getDockerHost().getHost();
+    StoryDataRegistry.INSTANCE.setDockerHost(dockerHostFromUri);
+    checkHostAndPortReachable(dockerHostFromUri,StoryDataRegistry.INSTANCE.getLogsearchPort(),"LogSearch");
+    waitUntilSolrHasAnyData();
+    LOG.info("Waiting for logfeeder to finish the test log parsings... (10 sec)");
+    Thread.sleep(10000);
+  }
+}

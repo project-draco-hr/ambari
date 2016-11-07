@@ -1,0 +1,28 @@
+{
+  if (solrClient != null) {
+    LOG.debug("Started thread to get fields for collection=" + solrClient.getDefaultCollection());
+    List<LukeResponse> lukeResponses=null;
+    SchemaResponse schemaResponse=null;
+    try {
+      lukeResponses=getLukeResponsesForCores(solrClient);
+      SolrRequest<SchemaResponse> schemaRequest=new SchemaRequest();
+      schemaRequest.setMethod(SolrRequest.METHOD.GET);
+      schemaRequest.setPath("/schema");
+      schemaResponse=schemaRequest.process(solrClient);
+      LOG.debug("populateSchemaFields() collection=" + solrClient.getDefaultCollection() + ", luke="+ lukeResponses+ ", schema= "+ schemaResponse);
+    }
+ catch (    SolrException|SolrServerException|IOException e) {
+      LOG.error("Error occured while popuplating field. collection=" + solrClient.getDefaultCollection(),e);
+    }
+    if (schemaResponse != null) {
+      extractSchemaFieldsName(lukeResponses,schemaResponse,schemaFieldNameMap,schemaFieldTypeMap);
+      LOG.debug("Populate fields for collection " + solrClient.getDefaultCollection() + " was successful, next update it after "+ solrUserConfigPropsConfig.getPopulateIntervalMins()+ " minutes");
+      retryCount=0;
+      skipCount=(solrUserConfigPropsConfig.getPopulateIntervalMins() * 60) / RETRY_SECOND - 1;
+    }
+ else {
+      retryCount++;
+      LOG.error("Error while populating fields for collection " + solrClient.getDefaultCollection() + ", retryCount="+ retryCount);
+    }
+  }
+}
