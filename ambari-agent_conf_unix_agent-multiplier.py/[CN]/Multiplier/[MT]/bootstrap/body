@@ -1,0 +1,24 @@
+def bootstrap(self):
+    '\n    Bootstrap each Ambari Agent that will run on this host with the directories it needs and configuration file.\n    '
+    for host in self.hosts:
+        host_name = host.host_name
+        host_home_dir = host.home_dir
+        host_log_dir = (host_home_dir + self.log_dir)
+        host_config_dir = (host_home_dir + self.config_dir)
+        host_pid_file = (host_home_dir + self.pid_file)
+        host_pid_dir = os.path.dirname(host_pid_file)
+        if self.verbose:
+            print ('Analyzing host %s with port %d' % (host_name, host.ping_port))
+        for dir in [host_home_dir, host_log_dir, host_config_dir, host_pid_dir]:
+            if (not os.path.isdir(dir)):
+                print ('Creating dir %s' % dir)
+                os.makedirs(dir)
+        host_config_file = os.path.join(host_config_dir, 'ambari-agent.ini')
+        if (not os.path.isfile(host_config_file)):
+            print ('Copying config file %s' % str(host_config_file))
+            shutil.copyfile(self.source_config_file, host_config_file)
+        host_name_script = os.path.join(host_config_dir, 'hostname.sh')
+        self.create_host_name_script(host_name, host_name_script)
+        config_dict = {'ping_port': host.ping_port, 'hostname_script': host_name_script, 'public_hostname_script': host_name_script, 'logdir': host_log_dir, 'piddir': host_pid_dir, }
+        self.change_config(host_config_file, config_dict)
+        self.modify_etc_hosts_file()

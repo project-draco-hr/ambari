@@ -1,0 +1,43 @@
+def process_status_command_result(self, result):
+    '\n    Executes commands of type STATUS_COMMAND\n    '
+    try:
+        (command, component_status_result, component_security_status_result) = result
+        cluster = command['clusterName']
+        service = command['serviceName']
+        component = command['componentName']
+        configurations = command['configurations']
+        if configurations.has_key('global'):
+            globalConfig = configurations['global']
+        else:
+            globalConfig = {}
+        livestatus = LiveStatus(cluster, service, component, globalConfig, self.config, self.configTags)
+        component_extra = None
+        if (component_status_result['exitcode'] == 0):
+            component_status = LiveStatus.LIVE_STATUS
+            if (self.controller.recovery_manager.enabled() and self.controller.recovery_manager.configured_for_recovery(component)):
+                self.controller.recovery_manager.update_current_status(component, component_status)
+        else:
+            component_status = LiveStatus.DEAD_STATUS
+            if (self.controller.recovery_manager.enabled() and self.controller.recovery_manager.configured_for_recovery(component)):
+                if (self.controller.recovery_manager.get_current_status(component) != self.controller.recovery_manager.INSTALL_FAILED):
+                    self.controller.recovery_manager.update_current_status(component, component_status)
+        request_execution_cmd = (self.controller.recovery_manager.requires_recovery(component) and (not self.controller.recovery_manager.command_exists(component, ActionQueue.EXECUTION_COMMAND)))
+        if ('structuredOut' in component_status_result):
+            component_extra = component_status_result['structuredOut']
+        result = livestatus.build(component_status=component_status)
+        if self.controller.recovery_manager.enabled():
+            result['sendExecCmdDet'] = str(request_execution_cmd)
+        result['securityState'] = component_security_status_result
+        if ((component_extra is not None) and (len(component_extra) != 0)):
+            if component_extra.has_key('alerts'):
+                result['alerts'] = component_extra['alerts']
+                del component_extra['alerts']
+            result['extra'] = component_extra
+        logger.debug(((((('Got live status for component ' + component) + ' of service ') + str(service)) + ' of cluster ') + str(cluster)))
+        logger.debug(pprint.pformat(result))
+        if (result is not None):
+            self.commandStatuses.put_command_status(command, result)
+    except Exception as err:
+        traceback.print_exc()
+        logger.warn(err)
+    pass
