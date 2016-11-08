@@ -1,0 +1,23 @@
+{
+  final String clusterName=cluster.getClusterName();
+  final String authName=getManagementController().getAuthName();
+  ClusterVersionEntity clusterVersionEntity=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,stackId,desiredRepoVersion);
+  if (clusterVersionEntity == null) {
+    try {
+      cluster.createClusterVersion(stackId,desiredRepoVersion,authName,repoState);
+      clusterVersionEntity=clusterVersionDAO.findByClusterAndStackAndVersion(clusterName,stackId,desiredRepoVersion);
+    }
+ catch (    AmbariException e) {
+      throw new SystemException(String.format("Can not create cluster stack version %s for cluster %s",desiredRepoVersion,clusterName),e);
+    }
+  }
+ else {
+    cluster.transitionClusterVersion(stackId,desiredRepoVersion,repoState);
+  }
+  cluster.transitionHosts(clusterVersionEntity,repoState);
+  for (  Host host : hosts) {
+    if (!host.hasComponentsAdvertisingVersions(stackId)) {
+      transitionHostVersionToNotRequired(host,cluster,clusterVersionEntity.getRepositoryVersion());
+    }
+  }
+}
