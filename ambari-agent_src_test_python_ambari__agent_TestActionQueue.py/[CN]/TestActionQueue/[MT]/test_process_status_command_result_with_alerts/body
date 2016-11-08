@@ -3,15 +3,14 @@
 @patch.object(ActionQueue, 'execute_command')
 @patch.object(LiveStatus, 'build')
 @patch.object(CustomServiceOrchestrator, '__init__')
-def test_execute_status_command(self, CustomServiceOrchestrator_mock, build_mock, execute_command_mock, status_update_callback):
+def test_process_status_command_result_with_alerts(self, CustomServiceOrchestrator_mock, build_mock, execute_command_mock, status_update_callback):
     CustomServiceOrchestrator_mock.return_value = None
     dummy_controller = MagicMock()
     actionQueue = ActionQueue(AmbariConfig(), dummy_controller)
-    build_mock.return_value = {'dummy report': '', }
-    dummy_controller.recovery_manager = RecoveryManager(tempfile.mktemp())
-    result = (self.status_command, {'exitcode': 0, }, 'UNKNOWN')
+    command_return_value = {'exitcode': 0, 'stdout': 'out', 'stderr': 'err', 'structuredOut': {'alerts': [{'name': 'flume_alert', }], }, }
+    result = (self.status_command_for_alerts, command_return_value, command_return_value)
+    build_mock.return_value = {'somestatusresult': 'aresult', }
     actionQueue.process_status_command_result(result)
     report = actionQueue.result()
-    expected = {'dummy report': '', 'securityState': 'UNKNOWN', }
     self.assertEqual(len(report['componentStatus']), 1)
-    self.assertEqual(report['componentStatus'][0], expected)
+    self.assertTrue(report['componentStatus'][0].has_key('alerts'))
