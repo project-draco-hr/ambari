@@ -3,6 +3,8 @@ import functools
 import hawq_constants
 from resource_management import Script
 from resource_management.core.resources.system import File
+from resource_management.libraries.functions import conf_select
+from resource_management.libraries.functions import stack_select
 from resource_management.libraries.functions.default import default
 from resource_management.libraries.resources.hdfs_resource import HdfsResource
 from resource_management.libraries.resources.xml_config import XmlConfig
@@ -21,6 +23,8 @@ hawq_master_hosts = [host for host in (hawqmaster_host, hawqstandby_host) if hos
 hawq_all_hosts = sorted(set((hawq_master_hosts + hawqsegment_hosts)))
 hdfs_site = config['configurations']['hdfs-site']
 default_fs = config['configurations']['core-site']['fs.defaultFS']
+hadoop_bin_dir = stack_select.get_hadoop_dir('bin')
+hadoop_conf_dir = conf_select.get_hadoop_conf_dir()
 security_enabled = config['configurations']['cluster-env']['security_enabled']
 hdfs_user_keytab = config['configurations']['hadoop-env']['hdfs_user_keytab']
 kinit_path_local = get_kinit_path(default('/configurations/kerberos-env/executable_search_paths', None))
@@ -29,7 +33,7 @@ dfs_nameservice = default('/configurations/hdfs-site/dfs.internal.nameservices',
 if (dfs_nameservice is None):
     dfs_nameservice = default('/configurations/hdfs-site/dfs.nameservices', None)
 hawq_global_rm_type = default('/configurations/hawq-site/hawq_global_rm_type', None)
-HdfsResource = functools.partial(HdfsResource, user=hdfs_superuser, security_enabled=security_enabled, keytab=hdfs_user_keytab, kinit_path_local=kinit_path_local, principal_name=hdfs_principal_name, hdfs_site=hdfs_site, default_fs=default_fs, immutable_paths=get_not_managed_resources())
+HdfsResource = functools.partial(HdfsResource, user=hdfs_superuser, security_enabled=security_enabled, keytab=hdfs_user_keytab, kinit_path_local=kinit_path_local, principal_name=hdfs_principal_name, hadoop_bin_dir=hadoop_bin_dir, hadoop_conf_dir=hadoop_conf_dir, hdfs_site=hdfs_site, default_fs=default_fs, immutable_paths=get_not_managed_resources())
 File = functools.partial(File, owner=hawq_constants.hawq_user, group=hawq_constants.hawq_group, mode=420)
 XmlConfig = functools.partial(XmlConfig, conf_dir=hawq_constants.hawq_config_dir, owner=hawq_constants.hawq_user, group=hawq_constants.hawq_group, mode=420)
 is_pxf_installed = (__get_component_host('pxf_hosts') is not None)
