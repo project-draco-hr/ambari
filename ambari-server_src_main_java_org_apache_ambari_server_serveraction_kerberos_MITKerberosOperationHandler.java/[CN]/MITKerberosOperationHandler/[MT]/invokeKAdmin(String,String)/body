@@ -2,7 +2,7 @@
   if (StringUtils.isEmpty(query)) {
     throw new KerberosOperationException("Missing kadmin query");
   }
-  ShellCommandUtil.Result result;
+  ShellCommandUtil.Result result=null;
   PrincipalKeyCredential administratorCredential=getAdministratorCredential();
   String defaultRealm=getDefaultRealm();
   List<String> command=new ArrayList<String>();
@@ -45,7 +45,26 @@
   if (LOG.isDebugEnabled()) {
     LOG.debug(String.format("Executing: %s",command));
   }
-  result=executeCommand(command.toArray(new String[command.size()]),null,interactiveHandler);
+  int retryCount=configuration.getKerberosOperationRetries();
+  int tries=0;
+  while (tries <= retryCount) {
+    try {
+      result=executeCommand(command.toArray(new String[command.size()]),null,interactiveHandler);
+    }
+ catch (    KerberosOperationException exception) {
+      if (tries == retryCount) {
+        throw exception;
+      }
+    }
+ finally {
+      if (result != null && result.isSuccessful()) {
+        break;
+      }
+      tries++;
+      String message=String.format("Retrying to execute kadmin:\n\tCommand: %s",command);
+      LOG.warn(message);
+    }
+  }
   if (!result.isSuccessful()) {
     String message=String.format("Failed to execute kadmin:\n\tCommand: %s\n\tExitCode: %s\n\tSTDOUT: %s\n\tSTDERR: %s",command,result.getExitCode(),result.getStdout(),result.getStderr());
     LOG.warn(message);
