@@ -1,0 +1,34 @@
+def recommendKMSProxyUsers(self, configurations, services, hosts, requiredServices):
+    servicesList = [service['StackServices']['service_name'] for service in services['services']]
+    putRangerKmsSiteProperty = self.putProperty(configurations, 'kms-site', services)
+    putRangerKmsSitePropertyAttribute = self.putPropertyAttribute(configurations, 'kms-site')
+    if ('forced-configurations' not in services):
+        services['forced-configurations'] = []
+    for index in range(len(requiredServices)):
+        service = requiredServices[index]['service']
+        config_type = requiredServices[index]['config-type']
+        property_name = requiredServices[index]['property-name']
+        proxy_category = requiredServices[index]['proxy-category']
+        if (service in servicesList):
+            if ((config_type in services['configurations']) and (property_name in services['configurations'][config_type]['properties'])):
+                service_user = services['configurations'][config_type]['properties'][property_name]
+                service_old_user = getOldValue(self, services, config_type, property_name)
+                if ('groups' in proxy_category):
+                    putRangerKmsSiteProperty('hadoop.kms.proxyuser.{0}.groups'.format(service_user), '*')
+                if ('hosts' in proxy_category):
+                    putRangerKmsSiteProperty('hadoop.kms.proxyuser.{0}.hosts'.format(service_user), '*')
+                if ('users' in proxy_category):
+                    putRangerKmsSiteProperty('hadoop.kms.proxyuser.{0}.users'.format(service_user), '*')
+                if ((service_old_user is not None) and (service_user != service_old_user)):
+                    if ('groups' in proxy_category):
+                        putRangerKmsSitePropertyAttribute('hadoop.kms.proxyuser.{0}.groups'.format(service_old_user), 'delete', 'true')
+                        services['forced-configurations'].append({'type': 'kms-site', 'name': 'hadoop.kms.proxyuser.{0}.groups'.format(service_old_user), })
+                        services['forced-configurations'].append({'type': 'kms-site', 'name': 'hadoop.kms.proxyuser.{0}.groups'.format(service_user), })
+                    if ('hosts' in proxy_category):
+                        putRangerKmsSitePropertyAttribute('hadoop.kms.proxyuser.{0}.hosts'.format(service_old_user), 'delete', 'true')
+                        services['forced-configurations'].append({'type': 'kms-site', 'name': 'hadoop.kms.proxyuser.{0}.hosts'.format(service_old_user), })
+                        services['forced-configurations'].append({'type': 'kms-site', 'name': 'hadoop.kms.proxyuser.{0}.hosts'.format(service_user), })
+                    if ('users' in proxy_category):
+                        putRangerKmsSitePropertyAttribute('hadoop.kms.proxyuser.{0}.users'.format(service_old_user), 'delete', 'true')
+                        services['forced-configurations'].append({'type': 'kms-site', 'name': 'hadoop.kms.proxyuser.{0}.users'.format(service_old_user), })
+                        services['forced-configurations'].append({'type': 'kms-site', 'name': 'hadoop.kms.proxyuser.{0}.users'.format(service_user), })
