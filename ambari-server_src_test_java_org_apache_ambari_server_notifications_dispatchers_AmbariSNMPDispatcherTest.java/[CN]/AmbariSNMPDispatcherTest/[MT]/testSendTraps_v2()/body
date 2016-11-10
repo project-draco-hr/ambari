@@ -1,0 +1,20 @@
+{
+  AmbariSNMPDispatcher.SnmpVersion snmpVersion=AmbariSNMPDispatcher.SnmpVersion.SNMPv2c;
+  Snmp snmp=mock(Snmp.class);
+  AmbariSNMPDispatcher dispatcher=spy(new AmbariSNMPDispatcher(snmp));
+  PDU trap=mock(PDU.class);
+  Notification notification=new AlertNotification();
+  Map<String,String> properties=new HashMap<String,String>();
+  properties.put(AmbariSNMPDispatcher.COMMUNITY_PROPERTY,"public");
+  properties.put(AmbariSNMPDispatcher.PORT_PROPERTY,"162");
+  notification.DispatchProperties=properties;
+  Recipient rec1=new Recipient();
+  rec1.Identifier="192.168.0.2";
+  notification.Recipients=Arrays.asList(rec1);
+  doReturn(trap).when(dispatcher).prepareTrap(notification,snmpVersion);
+  dispatcher.sendTraps(notification,snmpVersion);
+  ArgumentCaptor<Target> argument=ArgumentCaptor.forClass(Target.class);
+  verify(snmp,times(1)).send(eq(trap),argument.capture());
+  assertEquals("192.168.0.2/162",argument.getValue().getAddress().toString());
+  assertEquals(SnmpConstants.version2c,argument.getValue().getVersion());
+}

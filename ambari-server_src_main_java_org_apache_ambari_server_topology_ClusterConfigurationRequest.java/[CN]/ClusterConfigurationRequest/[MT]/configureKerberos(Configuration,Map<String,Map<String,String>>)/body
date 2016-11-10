@@ -16,14 +16,18 @@
     }
     clusterEnv.put("security_enabled","true");
     for (    String configType : updatedConfigs.keySet()) {
-      Map<String,String> propertyMap=updatedConfigs.get(configType);
-      Map<String,String> clusterConfigProperties=existingConfigurations.get(configType);
-      Map<String,String> stackDefaultConfigProperties=stackDefaultProps.get(configType);
-      for (      String property : propertyMap.keySet()) {
-        if (!propertyHasCustomValue(clusterConfigProperties,stackDefaultConfigProperties,property)) {
-          LOG.debug("Update Kerberos related config property: {} {} {}",configType,property,propertyMap.get(property));
-          clusterConfiguration.setProperty(configType,property,propertyMap.get(property));
-          updatedConfigTypes.add(configType);
+      if (!isOrphanedConfigType(configType,blueprint)) {
+        Map<String,String> propertyMap=updatedConfigs.get(configType);
+        Map<String,String> clusterConfigProperties=existingConfigurations.get(configType);
+        Map<String,String> stackDefaultConfigProperties=stackDefaultProps.get(configType);
+        for (        String property : propertyMap.keySet()) {
+          String currentValue=clusterConfiguration.getPropertyValue(configType,property);
+          String newValue=propertyMap.get(property);
+          if (!propertyHasCustomValue(clusterConfigProperties,stackDefaultConfigProperties,property) && (currentValue == null || !currentValue.equals(newValue))) {
+            LOG.debug("Update Kerberos related config property: {} {} {}",configType,property,propertyMap.get(property));
+            clusterConfiguration.setProperty(configType,property,newValue);
+            updatedConfigTypes.add(configType);
+          }
         }
       }
     }
