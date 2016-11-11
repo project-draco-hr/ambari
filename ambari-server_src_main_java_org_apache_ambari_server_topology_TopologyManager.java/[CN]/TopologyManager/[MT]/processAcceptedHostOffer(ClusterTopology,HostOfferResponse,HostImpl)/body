@@ -24,10 +24,16 @@ catch (  NoSuchHostGroupException e) {
     LOG.error("Exception ocurred while registering host name",e);
     throw new RuntimeException(e);
   }
-  LOG.info("TopologyManager.processAcceptedHostOffer: about to execute tasks for host = {}",hostName);
-  for (  TopologyTask task : response.getTasks()) {
-    LOG.info("Processing accepted host offer for {} which responded {} and task {}",hostName,response.getAnswer(),task.getType());
-    task.init(topology,ambariContext);
-    executor.execute(task);
+  LOG.info("TopologyManager.processAcceptedHostOffer: queue tasks for host = {} which responded {}",hostName,response.getAnswer());
+  if (parallelTaskCreationEnabled) {
+    executor.execute(new Runnable(){
+      @Override public void run(){
+        queueHostTasks(topology,response,hostName);
+      }
+    }
+);
+  }
+ else {
+    queueHostTasks(topology,response,hostName);
   }
 }
